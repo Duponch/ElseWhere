@@ -10,14 +10,18 @@ import { fireNavigationCosts,addFireNavigationCosts } from './fire-navigation.ts
 import { doorWait,isFenceGateSpeedSchema303,isRoomDoor } from './door-rules.ts';
 import { footprintCells, footprintContains } from './definitions.ts';
 import { frameAt, frameCosts, FRAME_TRAVEL_DELAY } from './construction-costs.ts';
-import { LayeredMap,LayeredSet,overlayNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
+import { LayeredMap,LayeredSet,overlayNavigationCosts,captureNavigationCostLayers,captureNavigationCostProgram379,transformNavigationCosts,type NavigationCostLookup } from './navigation-costs.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { isTrapKind357 } from './ied-traps-357.ts';
 import { spikeTrapKnowsOf,spikeTrapNavigationActor,SPIKE_TRAP_SEARCH_COST,SPIKE_TRAP_WALK_DELAY } from './spike-trap-state.ts';
 import type { Cell, StructureKind, World } from './types.ts';
 import { captureStructureNavigation,filteredStructures,type StructureNavigationGeometry } from './structure-navigation.ts';
-import { terrainWriteCount,verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
-import { PILE_CHUNK,PILE_MATERIAL_FLOOR,materialFloorPile,pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
+import { captureTerrainReadCursor,readTerrainJournal,terrainWriteCount,verifyTerrainWriteCaches,type TerrainJournalCursor } from './terrain-mutation-journal.ts';
+import {terrainReadScope,terrainJournalReadOwner} from './terrain-read-scope.ts';
+import { PILE_CHUNK,PILE_MATERIAL_FLOOR,materialFloorPile,pileIndex,capturePileGroundFacts379,captureGroundChunkOrder379,pileIndexMismatch,verifyPileIndex,type PileIndex } from './pile-index.ts';
+import {captureFrameGeometry379} from './frame-geometry-379.ts';
+import {humanById379} from './human-roster-379.ts';
+import type {Pawn} from './types.ts';
 
 /** Core natural floors cost two Core ticks. Historical grass/soil stay neutral. */
 export function terrainTravelDelay(world:World,index:number):number {
@@ -128,7 +132,8 @@ export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGe
     if(indexed!==undefined&&indexed!==chunk)pileIndexMismatch('standable chunk');
     if(chunk)return false;
   }
-  return !world.jobs.some(j=>(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')&&footprintContains(j,cell));
+  const frames=version>=22?captureFrameGeometry379(world):undefined;
+  return frames?!frames.standDenied.has(cell.z*world.width+cell.x):!world.jobs.some(j=>(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')&&footprintContains(j,cell));
 }
 /** For a batch of point queries in one read-only decision. Discard before any
  * world mutation; this is not a shared navigation or cross-actor cache. */
@@ -149,16 +154,17 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   const denied=new Set<number>(),add=(s:Parameters<typeof footprintCells>[0])=>{for(const c of footprintCells(s))denied.add(c.z*world.width+c.x);};
   const structures=geometry?structureDeniedMask(world,geometry,version<22):undefined;
   if(!geometry)for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
-  for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
+  const frameDenied=version>=22?captureFrameGeometry379(world)?.standDenied:undefined;
+  if(!frameDenied)for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
   // Ground chunks: inside a simulation step, a copy of the pile index's facts
   // taken now (the same cells as the chunk list, as a snapshot); else the list.
   const index=version>=28?pileIndex(world):undefined;
-  const chunks=index&&!verifyPileIndex&&index.groundFacts.length===world.width*world.height?index.groundFacts.slice():undefined;
+  const chunks=index&&!verifyPileIndex&&index.groundFacts.length===world.width*world.height?(terrainJournalReadOwner()?capturePileGroundFacts379(index).facts:index.groundFacts.slice()):undefined;
   if(version>=28&&!chunks)for(const p of groundChunkPiles(world))denied.add(p.owner.z*world.width+p.owner.x);
   return cell=>{
     if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=world.width||cell.z>=world.height)return false;
     const i=cell.z*world.width+cell.x,terrain=world.tiles[i]!.terrain;
-    return terrain!=='rock'&&terrain!=='water'&&!structures?.[i]&&!(chunks&&chunks[i]!&PILE_CHUNK)&&!denied.has(i);
+    return terrain!=='rock'&&terrain!=='water'&&!structures?.[i]&&!(chunks&&chunks[i]!&PILE_CHUNK)&&!frameDenied?.has(i)&&!denied.has(i);
   };
 }
 /* Every ground chunk / material-floor pile, in array order: from the pile
@@ -232,27 +238,53 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
 interface TerrainCostLayer {terrain:Uint8Array|Uint16Array;maximum:number;marsh:ReadonlyMap<number,number>}
 /** Per-cell terrain search costs, a pure function of the tiles (terrain, floor,
  * bridge, snow), the schema, site/snow flags and the drafted marsh perception.
- * Without a terrain override, or with one naming its layerKey, the layer is reused while the same Tile[] keeps
- * the same physical write count (every physical cell write marks its cell, see
- * terrain-mutation-journal); flooring can mutate between actors within a tick
- * and is still observed through that count. Consumers only read the layer. */
-const terrainLayers=new WeakMap<readonly World['tiles'][number][],{writes:number;version:number;site:boolean;snow:boolean;layers:Map<string,TerrainCostLayer>}>();
+ * A closed simulation call validates Tile identities on its first read and
+ * then follows marked writes. A new immutable layer copies the prior one and
+ * refreshes precisely those cells when the bounded history is complete;
+ * flooring between actors is observed too. Consumers only read the layer.
+ * Public reads and history/configuration gaps use a complete capture. */
+interface TerrainLayers {writes:number;version:number;site:boolean;snow:boolean;layers:Map<string,TerrainCostLayer>;cursor:TerrainJournalCursor;refs:World['tiles'][number][];scope:number;owner?:object;previous?:Map<string,TerrainCostLayer>;changed?:readonly number[]}
+const terrainLayers=new WeakMap<readonly World['tiles'][number][],TerrainLayers>();
 function terrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
-  const tiles=world.tiles,hasSite=!!world.site;
+  const tiles=world.tiles,hasSite=!!world.site,scope=terrainReadScope(),owner=terrainJournalReadOwner();
   // An override is kept only when it names itself a pure function of the tile.
-  if(terrainOverride&&terrainOverride.layerKey===undefined)return computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
+  // Public mutable fixtures have no closed writer contract: always read them.
+  if(scope===undefined||terrainOverride&&terrainOverride.layerKey===undefined){const old=terrainLayers.get(tiles);if(old&&scope===undefined)old.owner=undefined;return computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);}
   const writes=terrainWriteCount(tiles);let entry=terrainLayers.get(tiles);
-  if(!entry||entry.writes!==writes||entry.version!==version||entry.site!==hasSite||entry.snow!==snow){entry={writes,version,site:hasSite,snow,layers:new Map()};terrainLayers.set(tiles,entry);}
+  if(!entry||entry.version!==version||entry.site!==hasSite||entry.snow!==snow||entry.refs.length!==tiles.length){
+    entry={writes,version,site:hasSite,snow,layers:new Map(),cursor:captureTerrainReadCursor(tiles),refs:tiles.slice(),scope,owner};terrainLayers.set(tiles,entry);
+  }else{
+    let changed:readonly number[]|undefined,complete=true;
+    if(entry.writes!==writes){const delta=readTerrainJournal(tiles,entry.cursor);changed=delta?.indices;complete=!!delta;}
+    // A new call admits external direct Tile replacements too. Within the
+    // call only marked cells can change. Check that proof in verification.
+    const sameObservation=entry.scope===scope||owner!==undefined&&entry.owner===owner;
+    if(complete&&(!sameObservation||verifyTerrainWriteCaches)){
+      let unexpected=false;const allowed=changed?new Set(changed):undefined;
+      for(let i=0;i<tiles.length;i++)if(entry.refs[i]!==tiles[i]&&!allowed?.has(i)){unexpected=true;break;}
+      if(unexpected){if(sameObservation&&verifyTerrainWriteCaches)throw Error('Unmarked terrain replacement within navigation-cost simulation scope');complete=false;}
+    }
+    if(entry.writes!==writes||!complete){
+      const previous=complete?entry.layers:undefined,refs=entry.refs;
+      if(complete){for(const i of changed??[])refs[i]=tiles[i]!;}else for(let i=0;i<tiles.length;i++)refs[i]=tiles[i]!;
+      entry={writes,version,site:hasSite,snow,layers:new Map(),cursor:captureTerrainReadCursor(tiles),refs,scope,owner,previous,changed};terrainLayers.set(tiles,entry);
+    }else {entry.scope=scope;entry.owner=owner;}
+  }
   const slot=`${drafted?1:0}${terrainOverride?.layerKey??''}`,cached=entry.layers.get(slot);
   if(cached){
     if(verifyTerrainWriteCaches){const fresh=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);
       if(fresh.maximum!==cached.maximum||fresh.terrain.length!==cached.terrain.length||fresh.terrain.some((v,i)=>v!==cached.terrain[i])||fresh.marsh.size!==cached.marsh.size||[...fresh.marsh].some(([k,v])=>cached.marsh.get(k)!==v))throw Error('Unmarked terrain write under an unchanged Tile[] count');}
     return cached;
   }
-  const layer=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);entry.layers.set(slot,layer);return layer;
+  // No override: all built-in terrain costs fit the stored integer layer.
+  // A custom override retains its complete evaluation and maximum contract.
+  const previous=!terrainOverride?entry.previous?.get(slot):undefined;
+  const layer=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride,previous,previous?entry.changed:undefined);entry.layers.set(slot,layer);
+  if(verifyTerrainWriteCaches){const fresh=computeTerrainCostLayer(world,version,drafted,snow,hasSite,terrainOverride);if(fresh.maximum!==layer.maximum||fresh.terrain.some((v,i)=>v!==layer.terrain[i])||fresh.marsh.size!==layer.marsh.size||[...fresh.marsh].some(([i,v])=>layer.marsh.get(i)!==v))throw Error('Incremental terrain navigation costs differ from a complete capture');}
+  return layer;
 }
-function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,hasSite:boolean,terrainOverride?:DuckTerrainOverride256):TerrainCostLayer {
-  let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;const marshPerceptionCosts=new Map<number,number>();
+function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow:boolean,hasSite:boolean,terrainOverride?:DuckTerrainOverride256,previous?:TerrainCostLayer,changed?:readonly number[]):TerrainCostLayer {
+  let terrain:Uint8Array|Uint16Array=previous?previous.terrain.slice():new Uint8Array(world.tiles.length);let terrainMaximum=previous?.maximum??0,maximumRemoved=false;const marshPerceptionCosts=new Map<number,number>(previous?.marsh);
   // Capture terrain on every decision: flooring can mutate between actors
   // within a tick. Read floor definitions when a floor is present, like the
   // scalar travel rule, without scanning the whole map through that helper.
@@ -267,7 +299,8 @@ function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow
     const captured=definition?{pathCost:Math.round(definition.pathCostCore/30*1000),perceivedCore,perceivedCost:Math.round(perceivedCore/30*1000)}:null;
     naturalByKind.set(kind,captured);return captured;
   };
-  for(let i=0;i<tiles.length;i++){
+  for(let k=0;k<(changed?.length??tiles.length);k++){
+    const i=changed?changed[k]!:k;
     const tile=tiles[i]!,kind=tile.terrain;
     let cost=tile.floor?Math.round(FLOOR_DEFINITIONS[tile.floor].pathCost/10/3*1000):kind==='rough-stone'||kind==='rich-soil'||kind==='gravel'||hasSite&&kind==='grass'||isCorePhysicalSchema297(Number(version))&&(kind==='grass'||kind==='soil')?67:0;
     const natural=readNatural(kind);
@@ -276,10 +309,12 @@ function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow
     const override=terrainOverride?.coreCost(tile);if(override!==undefined)cost=Math.round(override/30*1000);
     if(snow)cost=Math.max(cost,snowSearchCost(tile.snowDepth??0));
     const perceivedOverride=terrainOverride?.perceivedCore(tile),perception=perceivedOverride??(natural?natural.perceivedCore:isWetTerrain(kind)?marshPerception:0);
-    if(perception&&!tile.bridge&&!tile.floor)marshPerceptionCosts.set(i,perceivedOverride==null&&natural?natural.perceivedCost:Math.round(perception/30*1000));
+    if(perception&&!tile.bridge&&!tile.floor)marshPerceptionCosts.set(i,perceivedOverride==null&&natural?natural.perceivedCost:Math.round(perception/30*1000));else if(previous)marshPerceptionCosts.delete(i);
     if(cost>255&&terrain instanceof Uint8Array){const wide:Uint16Array=new Uint16Array(terrain.length);wide.set(terrain);terrain=wide;}
-    if(cost){terrain[i]=cost;if(cost>terrainMaximum)terrainMaximum=cost;}
+    if(previous&&terrain[i]===previous.maximum&&cost<previous.maximum)maximumRemoved=true;
+    terrain[i]=cost;if(cost>terrainMaximum)terrainMaximum=cost;
   }
+  if(maximumRemoved){terrainMaximum=0;for(let i=0;i<terrain.length;i++)if(terrain[i]!>terrainMaximum)terrainMaximum=terrain[i]!;}
   return {terrain,maximum:terrainMaximum,marsh:marshPerceptionCosts};
 }
 /* Structure part of the navigation costs, per (immutable) shared geometry.
@@ -289,6 +324,23 @@ function computeTerrainCostLayer(world:World,version:number,drafted:boolean,snow
  * and stop cells, and the spike-trap entries, whose state is still read live. */
 interface StructureTravelBase {costs:ReadonlyMap<number,number>;costMaximum:number;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;traps:readonly StructureNavigationGeometry['entries'][number][]}
 const structureTravelBases=new WeakMap<StructureNavigationGeometry,StructureTravelBase>();
+/** Immutable columns of a shared structural capture. Mutable doors, piles,
+ * frames and terrain remain on the decision's own layers. Zero means absent:
+ * the structural cost map contains only strictly positive furniture delays. */
+interface StructureTravelColumns {size:number;pages:({costs:Float64Array;flags:Uint8Array}|undefined)[]}
+const structureTravelColumns=new WeakMap<StructureTravelBase,StructureTravelColumns>();
+function travelColumns(base:StructureTravelBase,size:number):StructureTravelColumns {
+  let columns=structureTravelColumns.get(base);
+  if(!columns||columns.size!==size){
+    const pages:StructureTravelColumns['pages']=new Array(Math.ceil(size/256));
+    const page=(i:number)=>pages[i>>>8]??=(()=>{const length=Math.min(256,size-(i>>>8)*256);return {costs:new Float64Array(length),flags:new Uint8Array(length)};})();
+    for(const [i,value] of base.costs)if(Number.isInteger(i)&&i>=0&&i<size)page(i).costs[i&255]=value;
+    for(const i of base.repeaters)if(Number.isInteger(i)&&i>=0&&i<size){const flags=page(i).flags;flags[i&255]=flags[i&255]!|1;}
+    for(const i of base.stops)if(Number.isInteger(i)&&i>=0&&i<size){const flags=page(i).flags;flags[i&255]=flags[i&255]!|2;}
+    columns={size,pages};structureTravelColumns.set(base,columns);
+  }
+  return columns;
+}
 function structureTravelBase(geometry:StructureNavigationGeometry):StructureTravelBase {
   let base=structureTravelBases.get(geometry);if(base)return base;
   const costs=new Map<number,number>(),repeaters=new Set<number>(),stops=new Set<number>(),traps:StructureTravelBase['traps'][number][]=[];
@@ -312,15 +364,30 @@ export function knownSpikeTrapCosts(world:World,geometry?:StructureNavigationGeo
   return traps;
 }
 /** Captured once per synchronous search. The terrain layer is shared only on an
- * exact unchanged-tiles proof (terrainCostLayer); every other part is fresh. */
-export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry,layered=false):{costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}} {
+ * exact unchanged-tiles proof (terrainCostLayer). Closed simulation scopes use
+ * private overlays of the immutable structure base; all mutable facts are
+ * captured now, so no subsequent edit can change this decision's lookups.
+ * Standalone public callers retain the native Map/Set capture contract. */
+type NavigationCapture={costs:NavigationCostLookup|undefined;repeaters:ReadonlySet<number>;stops:ReadonlySet<number>;floors:NavigationCostLookup;coreMoveCosts297?:{cardinal:number;diagonal:number}};
+function humanMovementCost(world:World,human:Pawn):{cardinal:number;diagonal:number} {
+ const factor=humanMoveSpeedFactor297(world,human),base=60/(4.6*factor);
+ return {cardinal:Math.round(Math.min(450,Math.max(1,base))),diagonal:Math.round(Math.min(450,Math.max(1,base*1.41421)))};
+}
+export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry,layered=terrainReadScope()!==undefined):NavigationCapture {
+ return computeNavigationCosts(world,origin,terrainOverride,geometry,layered);
+}
+function computeNavigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry,layered=terrainReadScope()!==undefined):NavigationCapture {
   const version=world.schemaVersion,width=world.width,snow=!!world.snow;
   geometry??=captureStructureNavigation(world);
   // Repeaters and stops start with the structure cells, in the same order.
   const structureBase=version>=22&&geometry?structureTravelBase(geometry):undefined,frames=frameCosts(world);
   // layered: the same reads over the shared structure part instead of copies
   // of it (no copy for a short search; slower lookups for a long one).
-  const costs:Map<number,number>|LayeredMap=layered&&structureBase&&!frames?new LayeredMap(structureBase.costs,structureBase.costMaximum):structureBase&&!frames?new Map(structureBase.costs):new Map(frames);
+  const costs:Map<number,number>|LayeredMap=layered&&structureBase?new LayeredMap(structureBase.costs,structureBase.costMaximum):structureBase?new Map(structureBase.costs):new Map(frames);
+  // Structure entries overwrite frames. Copy that larger native map once,
+  // then add only the frame cells it did not set. The private map's iteration
+  // order is immaterial: its only aggregate is the maximum integer cost.
+  if(structureBase&&frames)for(const [i,v] of frames)if(!structureBase.costs.has(i))costs.set(i,v);
   const repeaters:Set<number>|LayeredSet=layered?new LayeredSet(structureBase?.repeaters):new Set<number>(structureBase?.repeaters),stops:Set<number>|LayeredSet=layered?new LayeredSet(structureBase?.stops):new Set<number>(structureBase?.stops);
   const actor=version>=226?spikeTrapNavigationActor(world,origin):undefined,knows=!!actor&&spikeTrapKnowsOf(world,actor),traps=new Map<number,number>();
   if(version>=22) {
@@ -332,7 +399,6 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
     };
     if(structureBase){
       if(knows)for(const {structure,cells} of structureBase.traps)if(structure.spikeTrap)for(const i of cells)traps.set(i,SPIKE_TRAP_SEARCH_COST);
-      if(frames)for(const [i,v] of structureBase.costs)costs.set(i,v);
     }
     else for(const s of world.structures)for(const c of footprintCells(s))add(s,c.z*width+c.x);
     for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))stops.add(c.z*width+c.x);
@@ -340,14 +406,14 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   const floors=new Map<number,number>();
   // A single captured byte per cell replaces two mostly dense Maps on a site.
   // Objects remain sparse; both lookups retain the same terrain floor.
-  let terrain:Uint8Array|Uint16Array=new Uint8Array(world.tiles.length);let terrainMaximum=0;
-  let marshPerceptionCosts:ReadonlyMap<number,number>=new Map<number,number>();
+  let terrain:Uint8Array|Uint16Array,terrainMaximum=0;
+  let marshPerceptionCosts:ReadonlyMap<number,number>;
   if(version>=28) {
     for(const p of groundChunkPiles(world)){const i=p.owner.z*width+p.owner.x;costs.set(i,Math.max(costs.get(i)??0,1400));repeaters.add(i);stops.add(i);}
     const drafted=!!actor&&'draft' in actor&&!!actor.draft;
     const layer=terrainCostLayer(world,version,drafted,snow,terrainOverride);
     terrain=layer.terrain;terrainMaximum=layer.maximum;marshPerceptionCosts=layer.marsh;
-  }
+  }else{terrain=new Uint8Array(world.tiles.length);marshPerceptionCosts=new Map();}
   if(version>=29)for(const p of groundMaterialFloorPiles(world)){const i=p.owner.z*width+p.owner.x;floors.set(i,Math.max(floors.get(i)??0,467));costs.set(i,Math.max(costs.get(i)??0,467));}
   // Door wait is added after the terrain/object/material maximum, not compared
   // with it. Preserve present zero entries for fully open doors on bare floors.
@@ -363,11 +429,11 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
   // Trap avoidance is additive after the ordinary terrain/object maximum, like
   // fire danger. Its 800 Core cost already includes avoidance: do not add the
   // separate 40 Core physical walk delay to the search a second time.
-  const result={costs:addFireNavigationCosts(addFireNavigationCosts(addFireNavigationCosts(costs.size||terrainMaximum?overlayNavigationCosts(terrain,terrainMaximum,costs):undefined,fire),traps),marshPerceptionCosts),repeaters,stops,floors:addFireNavigationCosts(addFireNavigationCosts(addFireNavigationCosts(overlayNavigationCosts(terrain,terrainMaximum,floors),fire),traps),marshPerceptionCosts)!};
-  const human=isCorePhysicalSchema297(Number(version))&&origin&&'id'in origin?world.pawns.find(p=>p.id===origin.id):undefined;
+  const additions=[fire,traps,marshPerceptionCosts];
+  const result={costs:captureNavigationCostLayers(terrain,terrainMaximum,costs,additions,!!(costs.size||terrainMaximum)),repeaters,stops,floors:captureNavigationCostLayers(terrain,terrainMaximum,floors,additions)!};
+  const human=isCorePhysicalSchema297(Number(version))&&origin&&'id'in origin?humanById379(world.pawns,origin.id):undefined;
   if(!human)return result;
-  const factor=humanMoveSpeedFactor297(world,human),base=60/(4.6*factor);
-  return {...result,costs:coreNavigationUnits297(result.costs),floors:coreNavigationUnits297(result.floors)!,coreMoveCosts297:{cardinal:Math.round(Math.min(450,Math.max(1,base))),diagonal:Math.round(Math.min(450,Math.max(1,base*1.41421)))}};
+  return {...result,costs:coreNavigationUnits297(result.costs),floors:coreNavigationUnits297(result.floors)!,coreMoveCosts297:humanMovementCost(world,human)};
 }
 
 /** navigationCosts(world, undefined, terrainOverride, geometry) for an animal
@@ -379,20 +445,43 @@ export function navigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
  * map-wide capture. Iterating repeaters or stops is not supported. Falls back to
  * the full capture before schema 29 or outside a simulation step. */
 export function lazyAnimalNavigationCosts(world:World,terrainOverride?:DuckTerrainOverride256,geometry?:StructureNavigationGeometry):ReturnType<typeof navigationCosts> {
-  const version=world.schemaVersion,width=world.width,size=world.width*world.height,snow=!!world.snow;
+  const version=world.schemaVersion,size=world.width*world.height;
   geometry??=captureStructureNavigation(world);
   const index=version>=29?pileIndex(world):undefined;
   if(!geometry||!index||verifyPileIndex||index.groundFacts.length!==size)return navigationCosts(world,undefined,terrainOverride,geometry,true);
-  const base=structureTravelBase(geometry),frames=frameCosts(world),facts=index.groundFacts.slice();
-  const frameStops=new Set<number>();
-  for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))frameStops.add(c.z*width+c.x);
-  const layer=terrainCostLayer(world,version,false,snow,terrainOverride),terrain=layer.terrain;
+  return captureLazyNavigation379(world,terrainOverride,geometry,index);
+}
+/** The real closed human search borrows the same producer-owned terrain,
+ * structure/frame ordinal columns and ground facts as wildlife. Only door
+ * waits, trap knowledge, fire and movement speed need a fresh observation.
+ * Unlike the full-program cache trial this never duplicates a capture or
+ * checks an unrelated actor's program before building its own. */
+export function navigationSearchCosts379(world:World,origin:Cell,geometry?:StructureNavigationGeometry):NavigationCapture {
+ const human=terrainJournalReadOwner()&&world.schemaVersion>=379&&'id' in origin&&!('species' in origin)&&!('mechKind' in origin)?humanById379(world.pawns,origin.id):undefined;
+ const index=human?pileIndex(world):undefined,size=world.width*world.height;
+ if(!human||!index||index.groundOutside||verifyPileIndex||index.groundFacts.length!==size)return navigationCosts(world,origin,undefined,geometry);
+ geometry??=captureStructureNavigation(world);const capture=captureLazyNavigation379(world,undefined,geometry,index,human);
+ if(verifyTerrainWriteCaches){const fresh=navigationCosts(world,origin,undefined,geometry);
+  for(const key of ['costs','floors'] as const){const a=capture[key],b=fresh[key];if(a?.maximum!==b?.maximum)throw Error('Owned human navigation maximum changed');for(let i=0;i<size;i++)if(!Object.is(a?.get(i),b?.get(i))||a?.has(i)!==b?.has(i))throw Error('Owned human navigation cost changed');}
+  for(let i=0;i<size;i++)if(capture.repeaters.has(i)!==fresh.repeaters.has(i)||capture.stops.has(i)!==fresh.stops.has(i))throw Error('Owned human navigation membership changed');
+  if(!sameList([...capture.repeaters],[...fresh.repeaters])||!sameList([...capture.stops],[...fresh.stops])||capture.coreMoveCosts297!.cardinal!==fresh.coreMoveCosts297!.cardinal||capture.coreMoveCosts297!.diagonal!==fresh.coreMoveCosts297!.diagonal)throw Error('Owned human navigation source order or speed changed');
+ }
+ return capture;
+}
+function captureLazyNavigation379(world:World,terrainOverride:DuckTerrainOverride256|undefined,geometry:StructureNavigationGeometry,index:PileIndex,human?:Pawn):NavigationCapture {
+  const version=world.schemaVersion,width=world.width,size=width*world.height,snow=!!world.snow;
+  const base=structureTravelBase(geometry),columns=travelColumns(base,size),frames=frameCosts(world),pileFacts=capturePileGroundFacts379(index),facts=pileFacts.facts;
+  let frameStops=captureFrameGeometry379(world)?.standDenied;
+  if(!frameStops){const captured=new Set<number>();for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))captured.add(c.z*width+c.x);frameStops=captured;}
+  const layer=terrainCostLayer(world,version,!!human?.draft,snow,terrainOverride),terrain=layer.terrain;
   const now=isCorePhysicalSchema297(Number(version))?effectiveLocal297(world):world.tick;
   // Room doors in the capture's order: each adds its wait after the maximum.
-  const doors=new Map<number,number[]>();
-  for(const s of geometry.roomDoors??world.structures)if(isRoomDoor(s.kind)){const i=s.z*width+s.x,list=doors.get(i);const wait=Math.round(doorWait(s,now)/3*1000);if(list)list.push(wait);else doors.set(i,[wait]);}
-  let anyChunk=false,anyFloor=false;for(let i=0;i<size;i++){const f=facts[i]!;if(f&PILE_CHUNK)anyChunk=true;if(f&PILE_MATERIAL_FLOOR)anyFloor=true;if(anyChunk&&anyFloor)break;}
-  const initial=(i:number):number|undefined=>{const v=base.costs.get(i);return v!==undefined||!frames?v:frames.get(i);};
+  const doors=new Map<number,number[]>(),roomDoors=new Set<number>();
+  const addDoor=(s:World['structures'][number]):number=>{const i=s.z*width+s.x,list=doors.get(i),wait=Math.round(doorWait(s,now)/3*1000);if(list)list.push(wait);else doors.set(i,[wait]);return i;};
+  for(const s of geometry.roomDoors??world.structures)if(isRoomDoor(s.kind)){const i=addDoor(s);if(human)roomDoors.add(i);}
+  if(human&&isFenceGateSpeedSchema303(version))for(const s of filteredStructures(world,'fence-gates',s=>s.kind==='fence-gate'))addDoor(s);
+  const anyChunk=!!(pileFacts.mask&PILE_CHUNK),anyFloor=!!(pileFacts.mask&PILE_MATERIAL_FLOOR);
+  const initial=(i:number):number|undefined=>{const value=columns.pages[Math.floor(i/256)]?.costs[i%256],v=value===undefined&&(!Number.isInteger(i)||i<0||i>=size)?base.costs.get(i):value||undefined;return v!==undefined||!frames?v:frames.get(i);};
   /** The capture's object cost at i (its `costs` map entry). */
   const sparse=(i:number):number|undefined=>{
     let v=initial(i);const f=facts[i]!;
@@ -409,15 +498,21 @@ export function lazyAnimalNavigationCosts(world:World,terrainOverride?:DuckTerra
   const overlay=(extra:(i:number)=>number|undefined,extraMaximum:number):NavigationCostLookup=>({
     get(i){const floor=terrain[i]||undefined,value=extra(i);return value===undefined?floor:Math.max(value,floor??0);},
     has:i=>!!terrain[i]||extra(i)!==undefined,maximum:Math.max(layer.maximum,extraMaximum)});
-  const fire=fireNavigationCosts(world);
-  const costs=anySparse||layer.maximum?addFireNavigationCosts(addFireNavigationCosts(overlay(sparse,sparseMaximum),fire),layer.marsh):addFireNavigationCosts(addFireNavigationCosts(undefined,fire),layer.marsh);
+  const fire=fireNavigationCosts(world),traps=human&&spikeTrapKnowsOf(world,human)?knownSpikeTrapCosts(world,geometry):undefined;
+  const addLayers=(lookup:NavigationCostLookup|undefined)=>{const withFire=addFireNavigationCosts(lookup,fire),withTraps=traps?addFireNavigationCosts(withFire,traps):withFire;return addFireNavigationCosts(withTraps,layer.marsh);};
+  const costs=addLayers(anySparse||layer.maximum?overlay(sparse,sparseMaximum):undefined);
   const floorExtra=(i:number)=>facts[i]!&PILE_MATERIAL_FLOOR?467:undefined;
-  const floors=addFireNavigationCosts(addFireNavigationCosts(overlay(floorExtra,anyFloor?467:-Infinity),fire),layer.marsh)!;
+  const floors=addLayers(overlay(floorExtra,anyFloor?467:-Infinity))!;
   const unsupported=():never=>{throw Error('Lazy navigation sets cannot be iterated');};
-  const lazySet=(has:(i:number)=>boolean):ReadonlySet<number>=>({has,get size():number{return unsupported();},forEach:unsupported,entries:unsupported,keys:unsupported,values:unsupported,[Symbol.iterator]:unsupported}) as ReadonlySet<number>;
-  const repeaters=lazySet(i=>(base.repeaters.has(i)||!!(facts[i]!&PILE_CHUNK))&&!doors.has(i));
-  const stops=lazySet(i=>base.stops.has(i)||frameStops.has(i)||!!(facts[i]!&PILE_CHUNK));
-  return {costs,repeaters,stops,floors};
+  const lazySet=(has:(i:number)=>boolean,materialize?:()=>Set<number>):ReadonlySet<number>=>{
+   if(!materialize)return {has,get size():number{return unsupported();},forEach:unsupported,entries:unsupported,keys:unsupported,values:unsupported,[Symbol.iterator]:unsupported} as ReadonlySet<number>;
+   let rows:Set<number>|undefined;const read=()=>rows??=materialize();const view:ReadonlySet<number>={has,get size(){return read().size;},forEach(callback,thisArg){for(const value of read())callback.call(thisArg,value,value,view);},entries:()=>read().entries(),keys:()=>read().keys(),values:()=>read().values(),[Symbol.iterator]:()=>read().values()};return view;
+  };
+  const removedRepeaters=human?roomDoors:doors,chunks=human?captureGroundChunkOrder379(index,pileFacts):undefined;
+  const repeaters=lazySet(i=>{const flags=columns.pages[Math.floor(i/256)]?.flags[i%256];return ((flags===undefined?(!Number.isInteger(i)||i<0||i>=size)&&base.repeaters.has(i):!!(flags&1))||!!(facts[i]!&PILE_CHUNK))&&!removedRepeaters.has(i);},chunks?()=>{const result=new Set(base.repeaters);for(const i of chunks)result.add(i);for(const i of roomDoors)result.delete(i);return result;}:undefined);
+  const stops=lazySet(i=>{const flags=columns.pages[Math.floor(i/256)]?.flags[i%256];return (flags===undefined?(!Number.isInteger(i)||i<0||i>=size)&&base.stops.has(i):!!(flags&2))||frameStops.has(i)||!!(facts[i]!&PILE_CHUNK);},chunks?()=>{const result=new Set(base.stops);for(const i of frameStops)result.add(i);for(const i of chunks)result.add(i);return result;}:undefined);
+  const capturedCosts=captureNavigationCostProgram379(costs,size),capturedFloors=captureNavigationCostProgram379(floors,size)!;
+  return human?{costs:coreNavigationUnits297(capturedCosts),repeaters,stops,floors:coreNavigationUnits297(capturedFloors)!,coreMoveCosts297:humanMovementCost(world,human)}:{costs:capturedCosts,repeaters,stops,floors:capturedFloors};
 }
 /** navigationCosts(world, origin, terrainOverride, geometry) for an animal
  * origin, on demand: the trap-free costs of lazyAnimalNavigationCosts, plus
@@ -429,10 +524,11 @@ export function animalNavigationCosts(world:World,origin:Cell,terrainOverride?:D
   const lazy=lazyAnimalNavigationCosts(world,terrainOverride,geometry);
   if(!actor||!spikeTrapKnowsOf(world,actor))return lazy;
   const traps=knownSpikeTrapCosts(world,geometry);
-  return {...lazy,costs:addFireNavigationCosts(lazy.costs,traps),floors:addFireNavigationCosts(lazy.floors,traps)!};
+  const size=world.width*world.height;
+  return {...lazy,costs:captureNavigationCostProgram379(addFireNavigationCosts(lazy.costs,traps),size),floors:captureNavigationCostProgram379(addFireNavigationCosts(lazy.floors,traps),size)!};
 }
 /** Converts the captured legacy integer normalization back into integer Core
  * costs. No new dense map, actor lookup or allocation in the search loop. */
 export function coreNavigationUnits297(costs:NavigationCostLookup|undefined):NavigationCostLookup|undefined {
- return costs?{get(index){const value=costs.get(index);return value===undefined?undefined:Math.round(value*.03);},has:index=>costs.has(index),maximum:Math.round(costs.maximum*.03)}:undefined;
+ return transformNavigationCosts(costs,.03,true);
 }

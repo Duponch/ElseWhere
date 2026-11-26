@@ -1,11 +1,14 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {validPhaseCore297} from '../sim/core-phase-297';
 import {ResidentMotionRecorder} from './resident-motion';
+import {SourceMotionPhasePublisher297} from './source-motion-phase-publisher-297';
+import {encodeCorePhaseWire379} from './core-phase-wire-379';
 /// <reference lib="webworker" />
 import {startSimulationWorker} from './simulation-runtime';
 import {residentPublication} from './resident-protocol';
 import {TerrainJournalSnapshotEncoder} from './terrain-journal-encoder';
 import {ResidentAuxiliaryEncoder} from './resident-auxiliary-sections';
+import {withJournalTerrainReadScope} from '../sim/terrain-read-scope';
 import type {World} from '../sim/types';
 import type {SnapshotMessage} from './snapshots';
 import {WorkerNaturalAppearance} from './worker-natural-appearance';
@@ -88,6 +91,7 @@ type NaturalCommit={world:World;epoch:number;revision:number;tick:number;schema:
 
 /** Fixed entry only. A sidecar is computed before encode exposes its packet. */
 class FixedPresentationEncoder extends TerrainJournalSnapshotEncoder {
+ protected override usesClosedResourceJournal=true;
  private readonly natural=new EncoderNatural();
  private committed:NaturalCommit|undefined;
  private pending:{packet:SnapshotMessage<true>;appearance:ReturnType<WorkerNaturalAppearance['capture']>}|undefined;
@@ -120,14 +124,38 @@ class FixedPresentationEncoder extends TerrainJournalSnapshotEncoder {
 }
 
 const scope=self as unknown as DedicatedWorkerGlobalScope;
-const snapshots=new FixedPresentationEncoder();
-const auxiliary=new ResidentAuxiliaryEncoder();
+// The direct Worker output remains the literal test/replay/public lane. The
+// fixed MAIN factory may bind exactly one private output port as its FIRST
+// message on the already ordered command channel. Every response (including
+// phases, progress and acknowledgements) then uses that same port.
+let privateOutput379:MessagePort|undefined,inputStarted379=false;
+const postOutput379=(message:unknown,transfer?:Transferable[]):void=>{
+ const target=privateOutput379??scope;
+ if(transfer?.length)target.postMessage(message,transfer);else target.postMessage(message);
+};
+const publicationSourceOwner={};
+const snapshots=new FixedPresentationEncoder(publicationSourceOwner);
+const auxiliary=new ResidentAuxiliaryEncoder(true,true,true,publicationSourceOwner);
 startSimulationWorker(scope,message=>{
  if(message.type==='campaign-only'){snapshots.clearNatural();auxiliary.clear();}
- scope.postMessage(residentPublication(message));
+ postOutput379(residentPublication(message));
 },snapshots,(world,publication,originalPacket)=>{
  // Natural observes the complete confirmed value before auxiliary capture
  // replaces both retained sections and ordered filth with private wire data.
- const appearance=snapshots.takeNatural(originalPacket),resident=auxiliary.capture(publication);
- scope.postMessage(residentPublication(resident.publication,appearance,resident.auxiliary));
-},()=>new ResidentMotionRecorder(),(_world,phase)=>scope.postMessage(phase));
+ const appearance=snapshots.takeNatural(originalPacket),resident=withJournalTerrainReadScope(publicationSourceOwner,()=>auxiliary.capture(publication,world));
+ postOutput379(residentPublication(resident.publication,appearance,resident.auxiliary));
+},()=>new ResidentMotionRecorder(true),(_world,phase)=>{
+ const packed=encodeCorePhaseWire379(phase);
+ if(packed)postOutput379(packed.message,packed.transfer);else postOutput379(phase);
+},publicationSourceOwner,()=>new SourceMotionPhasePublisher297(publicationSourceOwner));
+const runtimeInput379=scope.onmessage;
+if(!runtimeInput379)throw Error('Missing actual simulation command owner');
+scope.onmessage=event=>{
+ const value=event.data,kind=value&&typeof value==='object'?Object.getOwnPropertyDescriptor(value,'type'):undefined;
+ if(kind&&'value'in kind&&kind.value==='bind-native-presentation-port379'){
+  const port=Object.getOwnPropertyDescriptor(value,'port');
+  if(inputStarted379||privateOutput379||!event.isTrusted||Object.getPrototypeOf(value)!==Object.prototype||Reflect.ownKeys(value).length!==2||!kind.enumerable||!port?.enumerable||!('value'in port)||!(port.value instanceof MessagePort)||event.ports.length!==1||event.ports[0]!==port.value)throw Error('Invalid private presentation output bootstrap');
+  privateOutput379=port.value;return;
+ }
+ inputStarted379=true;runtimeInput379.call(scope,event);
+};

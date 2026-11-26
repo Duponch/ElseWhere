@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isDoubleBedKind} from './bed-kinds.ts';
 import {isPlayerCasket271,cryptosleepInteraction271} from './cryptosleep-state-271.ts';
 import { captureAllowedArea,allowedAreaAllows,type AllowedAreaPolicy } from './allowed-area-state.ts';
@@ -11,7 +12,7 @@ export function allowedAreaRecreationAllowed(world:World,pawn:Pawn,task:Recreati
   if(!policy)return true;
   if(task.activity==='read'){
     if(task.stage==='pickup'){
-      const pile=world.piles.find(p=>p.id===task.bookId);
+      const pile=pileById(world,task.bookId);
       return !!pile&&(pile.owner.type==='ground'?allowedAreaAllows(world,pawn,pile.owner,policy):(pile.owner.type==='pawn'||pile.owner.type==='inventory')&&pile.owner.pawnId===pawn.id);
     }
     // Like another admitted work contact, pickup can end just across a border.
@@ -43,7 +44,7 @@ export function allowedAreaServicesAllowed(world:World,pawn:Pawn):boolean {
   const building=(id:number)=>cell(structureById(world,id));
   const source=(id:number|null|undefined)=>{
     if(id===undefined||id===null||id===0)return true;
-    const pile=world.piles.find(p=>p.id===id);return !!pile&&pile.owner.type==='ground'&&cell(pile.owner);
+    const pile=pileById(world,id);return !!pile&&pile.owner.type==='ground'&&cell(pile.owner);
   };
   const paste=(request:{dispenserId:number;spot:Cell;producedAt?:number}|undefined)=>!request||request.producedAt!==undefined
     ||building(request.dispenserId)&&cell(request.spot);

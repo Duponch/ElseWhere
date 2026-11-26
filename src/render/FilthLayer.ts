@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { Fn, attribute, cos, sin, positionLocal, texture, uv, varyingProperty, vec2, vec3 } from 'three/tsl';
 import type { FilthRecord } from '../sim/filth-rules';
+import type {World} from '../sim/types';
 import { createFilthAtlas, FILTH_ATLAS } from './filth-appearance';
 import { prepareGrassBloodMasks } from './grass-blood-mask';
 import { material } from './primitives';
@@ -64,6 +65,14 @@ export class FilthLayer {
    * Standalone callers without a surface retain the historical .071 height. */
   update(items: readonly FilthRecord[], reset = false, surface?: FilthSurface): void {
     const frame=this.presentation.read(items,reset,surface);
+    this.apply(frame);
+  }
+  /** Only the closed scene application calls this. The presentation owner
+   * obtains its own exact predecessor suffix, rather than trusting a flag. */
+  updateWorld(world:World,reset=false):void {
+    this.apply(this.presentation.readWorld(world,reset));
+  }
+  private apply(frame:ReturnType<FilthPresentationPieces['read']>):void {
     if(!frame.changed)return;
     this.revision++;
     const count=frame.count,resized=count>this.capacity;

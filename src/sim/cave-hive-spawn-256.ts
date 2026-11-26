@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -54,7 +55,7 @@ export function spawnActualHive256(w:World,cell:number,random:Pick<WorldGenerati
  const hiveId=allocate(w),chosenKind=kind(0,random),hive:ActualHive256={id:hiveId,kind:'insect-hive',x,z,orientation:0,footprint:'standard',factionId:faction[0]!.id,caveHive:{revision:1,madeAtCore,awakeAtCore:options.dormant&&!options.spawnInsectsImmediately?null:madeAtCore,...options.canSpawnHives?{temple:true as const}:{},chosenKind,spawnedPawnIds:[],canSpawnPawns:options.canSpawnInsects,nextPawnSpawnCore:-1,canSpawnHives:options.canSpawnHives,nextHiveSpawnCore:-1,wasActivated:false,jellyLeftCore:0,podLeftCore:0,healCore:0,maintenanceCore:0}};
  // MakeThing allocates before Initialize(chosenKind); allocator and RNG are
  // independent but retain this explicit original identity at the one spawn.
- w.structures.push(hive);
+ appendStructureEntries(w,hive);
  const c=hive.caveHive;
  c.nextHiveSpawnCore=hiveNextReproductionCore256(madeAtCore,roomHiveCount(w,cell),context.enemyReproductionRateFactor,random);
  c.jellyLeftCore=random.integer(26000,30001);c.podLeftCore=random.integer(30000,60001);
@@ -85,7 +86,7 @@ export function spawnActualHive256(w:World,cell:number,random:Pick<WorldGenerati
   closewalk=captureRandomClosewalk256(w,options.runtime?captureHiveClosewalk256(w).reach:undefined);const reach=captureGeographicGenerationReachability256(w);
   const near=tryRandomClosewalkCellNear256(closewalk,cell,5,random,i=>!terrainIsWater256(w.tiles[i]!.terrain)&&reach.canReach(cell,i,'closed-dry')&&!reach.physical.edifice(i));
   if(near===null)continue;
-  const glow:ActualGlowPod256={id:allocate(w),kind:'glow-pod',x:near%w.width,z:Math.floor(near/w.width),orientation:0,footprint:'standard',factionId:hive.factionId,glowPod:{revision:1,madeAtCore,ageCore:-1}};w.structures.push(glow);
+  const glow:ActualGlowPod256={id:allocate(w),kind:'glow-pod',x:near%w.width,z:Math.floor(near/w.width),orientation:0,footprint:'standard',factionId:hive.factionId,glowPod:{revision:1,madeAtCore,ageCore:-1}};appendStructureEntries(w,glow);
  }
  return {status:'ready',hive};
 }

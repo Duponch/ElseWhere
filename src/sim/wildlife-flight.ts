@@ -1,4 +1,5 @@
 import type { Cell,World } from './types.ts';
+import {markActorPathCreated297} from './actor-path-source-297.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import type { animalNavigation } from './wildlife-navigation.ts';
 
@@ -21,5 +22,5 @@ export function animalEscape(w:World,a:WildAnimal,nav:ReturnType<typeof animalNa
   }
   if(best===start)return;
   const path:Cell[]=[];for(let c=best;c!==start;c=parents.get(c.z*w.width+c.x)!)path.push(c);
-  return path.reverse();
+  return markActorPathCreated297(path.reverse());
 }

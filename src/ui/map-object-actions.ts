@@ -16,6 +16,7 @@ import { isRoofJob } from '../sim/roof-rules';
 import type { Cell, Command, Job, MaterialPile, Resource, Structure, World } from '../sim/types';
 import { mapObjectCells, type MapObjectSelection } from './map-object-selection';
 import { mapObjectGroupCells } from './map-object-group-selection';
+import {constructionForbidTarget379} from '../sim/construction-forbid-379';
 
 export type MapObjectActionId = 'strip' | 'material-permission' | 'power-toggle' | 'claim' | 'mine' | 'smooth-wall' |'chop' | 'harvest' | 'cut' | 'haul-chunks' | 'deconstruct' | 'cancel' | 'extract' | 'replant';
 export interface MapObjectAction { id: MapObjectActionId; label: string; command?: Command; placementPileId?:number }
@@ -45,6 +46,10 @@ export function requestedPowerToggle(world:World,structure:Structure,lookups?:Gr
   return {active:pending??actualDeviceSwitch(structure),command:on=>({type:'power-flick',structureId:structure.id,on})};
 }
 function permissionToggle(world:World,object:MapObjectSelection,lookups:GroupLookups):ToggleFact|undefined {
+  if(object.kind==='job'&&Number(world.schemaVersion)>=379){
+    const job=constructionForbidTarget379(world,object.id);if(!job)return;
+    return {active:!job.forbidden379,command:active=>({type:'construction-forbid-379',jobId:object.id,forbidden:!active})};
+  }
   if(object.kind==='structure'){
     const s=lookups.structures?.get(object.id);if(!s?.door||!targetBuildingPlayerUse263(world,s))return;
     return {active:!s.door.forbidden,command:active=>({type:'door-policy',structureId:s.id,setting:'forbidden',value:!active})};
@@ -119,6 +124,8 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
     ownsJob = job => job.deconstruction?.structureId === selected.id&&job.wallDoor296?.manual!==false || job.furniture?.structureId === selected.id || job.flick?.structureId === selected.id;
   } else if (selected.kind === 'packed') ownsJob = job => job.furniture?.structureId === selected.id;
   else if (selected.kind === 'job') {
+    const permission=permissionToggle(world,selected,lookups??{});
+    if(permission)actions.push({id:'material-permission',label:permission.active?'Interdire':'Autoriser',command:permission.command(!permission.active)});
     if(world.jobs.some(job=>job.wallDoor296?.plan?.id===selected.id))actions.push({id:'cancel',label:'Annuler le plan de porte',command:{type:'cancel-job',jobId:selected.id}});
     else ownsJob = job => job.id === selected.id&&job.wallDoor296?.manual!==false;
   }

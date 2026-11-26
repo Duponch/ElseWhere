@@ -5,7 +5,7 @@ import {animalExecutionPart256} from './animal-execution-v256.ts';
 import {createAnimalMedicalRecord256} from './animal-clinical-age-v256.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
 import { isColonist } from './affiliation.ts';
-import { violentWorkRefusal } from './colonist-backgrounds.ts';
+import { backgroundWorkRefusal,violentWorkRefusal } from './colonist-backgrounds.ts';
 import { animalClaimed } from './animal-rest-state.ts';
 import { animalBodySize } from './animal-life.ts';
 import { autoSlaughterTargets,slaughterIntent } from './auto-slaughter.ts';
@@ -36,7 +36,7 @@ export function slaughterContact(world:World,a:Cell,b:Cell):boolean {
 }
 
 export function slaughterHandlerAvailable(pawn:Pawn):boolean {
-  return isColonist(pawn)&&workPriority(pawn,'handle')>0&&!violentWorkRefusal(pawn)
+  return isColonist(pawn)&&(workPriority(pawn,'handle')>0||pawn.animalHandling?.forced378===true&&!backgroundWorkRefusal(pawn,'handle'))&&!violentWorkRefusal(pawn)
     &&!pawn.draft&&!pawn.mental?.crisis&&!pawn.flee&&!pawn.burning&&!pawn.stun&&!pawn.interruptedCargo&&!medicalWorkRefusal(pawn)
     &&pawnBody(pawn).capacities.moving>0&&pawnBody(pawn).capacities.manipulation>0;
 }
@@ -57,10 +57,10 @@ export function slaughterWanted(world:World,pawn:Pawn):boolean {
   const targets=autoSlaughterTargets(world);
   return !!world.wildlife?.animals.some(a=>allowedAreaAllows(world,pawn,a)&&slaughterTargetAvailable(world,a,undefined,targets));
 }
-export function slaughterProposal(world:World,pawn:Pawn,reach:Reachability):SlaughterProposal|undefined {
+export function slaughterProposal(world:World,pawn:Pawn,reach:Reachability,animalId?:number):SlaughterProposal|undefined {
   if(world.schemaVersion<220||!slaughterHandlerAvailable(pawn))return;
   const targets=autoSlaughterTargets(world);
-  const animals=(world.wildlife?.animals??[]).filter(a=>allowedAreaAllows(world,pawn,a)&&slaughterTargetAvailable(world,a,undefined,targets))
+  const animals=(world.wildlife?.animals??[]).filter(a=>(animalId===undefined||a.id===animalId)&&allowedAreaAllows(world,pawn,a)&&slaughterTargetAvailable(world,a,animalId===undefined?undefined:pawn,targets))
     .sort((a,b)=>(a.x-pawn.x)**2+(a.z-pawn.z)**2-((b.x-pawn.x)**2+(b.z-pawn.z)**2)||a.id-b.id);
   for(const animal of animals){
     const path=slaughterContact(world,pawn,animal)?[]:routeToJob(world,animal,reach,false);if(!path)continue;

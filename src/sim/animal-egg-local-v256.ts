@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {splicePileEntries} from './pile-identity-directory.ts';
 import {markPileWrite} from './pile-index.ts';
 import {attachNewbornAnimalGrowth256} from './animal-growth-runtime-256.ts';
 import {heldDuckAnimal256} from './duck-owner-capture-256.ts';
@@ -17,6 +19,7 @@ import {isEggBoxSchema374} from './egg-box-state-374.ts';
 import {addEggsToBox374,eggBoxAccepts374,eggBoxLayChoice374,installedEggBox374} from './egg-box-374.ts';
 import {freshRot} from './food-preservation.ts';
 import {TemperatureView} from './temperature.ts';
+import {eggPileSnapshot379} from './perishable-pile-owners-379.ts';
 import type {ThermalLayout} from './thermal-topology.ts';
 import {pawnContentsLocation} from './human-corpses.ts';
 import {RoomTopologyCache} from './room-topology.ts';
@@ -133,7 +136,7 @@ function hatch(world:World,pile:MaterialPile,species:EggSpecies256,cell:Cell):bo
   if(egg.faction==='player')a.domestic={since:world.tick,care:world.wildlife?.animals.find(m=>m.id===egg.motherId)?.domestic?.care??'herbal',tameness:5,nextDecay:world.tick+6000};
   return a;
  });
- wildlife.animals.push(...newborns);world.piles.splice(world.piles.indexOf(pile),1);return true;
+ wildlife.animals.push(...newborns);splicePileEntries(world.piles,world.piles.indexOf(pile),1);return true;
 }
 /** One pass over actual local pile owners after thermal/animal movement. */
 export function advanceLocalEggs256(world:World,layout?:ThermalLayout):void {
@@ -141,18 +144,22 @@ export function advanceLocalEggs256(world:World,layout?:ThermalLayout):void {
  let temperature:TemperatureView|undefined,changed=false;
  // Piles before the first egg pile are skipped without any effect: start the
  // copied pass there (none at all on most ticks).
- const piles=world.piles;let first=0;
- while(first<piles.length&&!(eggSpeciesForItem256(piles[first]!.item)&&piles[first]!.egg))first++;
- if(first>=piles.length)return;
- for(const pile of piles.slice(first)){
+ let eggs=eggPileSnapshot379(world);
+ if(!eggs){
+  const piles=world.piles;let first=0;
+  while(first<piles.length&&!(eggSpeciesForItem256(piles[first]!.item)&&piles[first]!.egg))first++;
+  if(first>=piles.length)return;
+  eggs=piles.slice(first);
+ }
+ for(const pile of eggs){
   const species=eggSpeciesForItem256(pile.item);if(!species||!pile.egg)continue;
   // Skyfaller does not tick its nested Pawn/ThingOwner. Preserve the actual
   // egg anchor as well as progress for compact capture at personalTick.
   if(pile.owner.type==='inventory'&&heldDuckAnimal256(world,pile.owner.pawnId))continue;
   const location=eggLocation(world,pile);temperature??=new TemperatureView(world,layout);
-  const result=evolveFertilizedEgg256(pile.egg,species,{tick:world.tick,temperature:location?temperature.at(world,location.cell):temperature.outside,suspended:!location||location.suspended});pile.egg=result.state;
+  const result=evolveFertilizedEgg256(pile.egg,species,{tick:world.tick,temperature:location?temperature.at(world,location.cell):temperature.outside,suspended:!location||location.suspended});markPileContentWrite379(pile).egg=result.state;
   if(result.action==='ruin'){
-   pile.item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;markPileWrite();delete pile.egg;Object.assign(pile,freshRot(pile.item,world.tick));changed=true;
+   markPileContentWrite379(pile).item=ANIMAL_EGG_CONTENT_256[species].unfertilizedItem;markPileWrite();delete markPileContentWrite379(pile).egg;Object.assign(pile,freshRot(pile.item,world.tick));changed=true;
   }else if(result.action==='hatch'&&location&&!location.suspended)changed=hatch(world,pile,species,location.cell)||changed;
  }
  if(changed)refreshStock(world);

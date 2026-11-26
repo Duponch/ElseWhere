@@ -1,4 +1,5 @@
 import type { PowerParentReader } from './power-parent-validation.ts';
+import {carryQuantityBound379} from './carry-quantity-379.ts';
 import type { StagingGeometryReader } from './staging-validation.ts';
 import { captureHumanOwners } from './human-owners.ts';
 import { footprintCells } from './definitions.ts';
@@ -99,7 +100,7 @@ export function validBiofuelTransport(w:World,version:number,powerTopology?:Powe
         if(slot.kind!=='map'||target?.kind!=='chemfuel-generator'||!pile||pile.item!==fuelItem(target.kind)||task.whole!==undefined
           ||!obj(task)||!keys(task as unknown as Record<string,unknown>,['sourcePileId','quantity','phase','destination','carryPileId'],queued?[]:['pickupCell','serviceProgress'])
           ||!obj(task.destination)||!keys(task.destination as unknown as Record<string,unknown>,['type','structureId'],['forced'])
-          ||!int(task.sourcePileId,1,w.nextId-1)||!int(task.quantity,1,10)||!['pickup','deliver'].includes(task.phase)
+          ||!int(task.sourcePileId,1,w.nextId-1)||!int(task.quantity,1,carryQuantityBound379(w,pile.item))||!['pickup','deliver'].includes(task.phase)
           ||Object.hasOwn(task.destination,'forced')&&task.destination.forced!==true||queued&&(task.phase!=='pickup'||task.destination.forced!==true)
           ||!queued&&(task.destination.forced===true?pawn.orders.active!=='haul':pawn.orders.active!==null)
           ||task.pickupCell!==undefined&&(!obj(task.pickupCell)||!keys(task.pickupCell as unknown as Record<string,unknown>,['x','z'])||!int(task.pickupCell.x,0,w.width-1)||!int(task.pickupCell.z,0,w.height-1))

@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 /** Shared contact pickup without merging away a receipt identity. */
 import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
@@ -39,7 +41,7 @@ export function inventoryPickupCurrent(world:World,plan:InventoryPickupPlan):boo
  * Full source retains object+ID; partial creates exactly one real split identity. */
 export function commitInventoryPickup(world:World,plan:InventoryPickupPlan):boolean {
   if(!inventoryPickupCurrent(world,plan))return false;
-  if(plan.split){plan.source.quantity-=plan.quantity;world.nextId++;world.piles.push(plan.carried);}
+  if(plan.split){markPileContentWrite379(plan.source).quantity-=plan.quantity;world.nextId++;appendPileEntries(world.piles,plan.carried);}
   else assignPileOwner(plan.source,{type:'inventory',pawnId:plan.pawnId});
   return true;
 }

@@ -1,4 +1,5 @@
 import type {ShipCasketPatient277,ShipCasketOccupant277} from './ship-casket-state-277.ts';
+import {humanCarrierCandidates} from './rescue-state.ts';
 import type {Pawn,World} from './types.ts';
 
 export function shipCasketSubject277(w:World,p:ShipCasketPatient277):ShipCasketOccupant277|undefined {
@@ -7,8 +8,8 @@ export function shipCasketSubject277(w:World,p:ShipCasketPatient277):ShipCasketO
  const mech=w.mechanoids?.find(q=>q.id===p.id);return mech?{kind:'mechanical',mech}:undefined;
 }
 export const shipCasketCarrying277=(p:Pawn):boolean=>p.shipCasketTask277?.action==='carry'&&(p.shipCasketTask277.phase==='carry'||p.shipCasketTask277.phase==='closing');
-export const shipCasketPatientClaimed277=(w:World,patient:ShipCasketPatient277,except?:number):boolean=>w.pawns.some(p=>p.id!==except&&(p.shipCasketTask277?.action==='carry'&&p.shipCasketTask277.patient?.kind===patient.kind&&p.shipCasketTask277.patient.id===patient.id||patient.kind==='human'&&p.id===patient.id&&p.shipCasketTask277?.action==='enter'));
-export const shipCasketCarrierOf277=(w:World,patient:ShipCasketPatient277):Pawn|undefined=>w.pawns.find(p=>shipCasketCarrying277(p)&&p.shipCasketTask277!.patient?.kind===patient.kind&&p.shipCasketTask277!.patient!.id===patient.id);
+export const shipCasketPatientClaimed277=(w:World,patient:ShipCasketPatient277,except?:number):boolean=>humanCarrierCandidates(w.pawns).some(p=>p.id!==except&&(p.shipCasketTask277?.action==='carry'&&p.shipCasketTask277.patient?.kind===patient.kind&&p.shipCasketTask277.patient.id===patient.id||patient.kind==='human'&&p.id===patient.id&&p.shipCasketTask277?.action==='enter'));
+export const shipCasketCarrierOf277=(w:World,patient:ShipCasketPatient277):Pawn|undefined=>humanCarrierCandidates(w.pawns).find(p=>shipCasketCarrying277(p)&&p.shipCasketTask277!.patient?.kind===patient.kind&&p.shipCasketTask277!.patient!.id===patient.id);
 /** All three species retain their original physical edge. A recovered patient
  * stays claimed until commit or release; no position-only visual substitute. */
 export function syncShipCasketPassenger277(w:World,carrier:Pawn):void {

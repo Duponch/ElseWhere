@@ -30,7 +30,7 @@ export function colonistMoodThreshold346(pawn:Pawn):MoodThreshold346 {
  * asleep, fleeing, attacking or idle (from the first whole day); then burning.
  * then inspired (schema 360). Slave, ideoligion role and extra faction icons
  * have no Elsewhere owner. Read only: no RNG, no write. */
-export function colonistBarState346(world:World,pawn:Pawn):ColonistBarState346 {
+export function colonistBarState346(world:World,pawn:Pawn,structureById?:(id:number)=>World['structures'][number]|undefined):ColonistBarState346 {
   const dead=pawn.state==='dead'||!!pawn.health?.death,downed=pawn.state==='downed';
   const threshold=dead?'none':colonistMoodThreshold346(pawn);
   if(dead)return {threshold,tint:false,icons:[]};
@@ -38,7 +38,7 @@ export function colonistBarState346(world:World,pawn:Pawn):ColonistBarState346 {
   if(groupOnMapMember(world,pawn.id))icons.push({kind:'forming-caravan',label:'Prépare une caravane'});
   const crisis=pawn.mental?.crisis;
   const bedId=pawn.need?.kind==='sleep'&&pawn.need.phase==='sleep'?pawn.need.bedId:null;
-  const medicalBed=bedId!==null&&!!world.structures.find(structure=>structure.id===bedId)?.medical;
+  const medicalBed=bedId!==null&&!!(structureById?structureById(bedId):world.structures.find(structure=>structure.id===bedId))?.medical;
   if(crisis)icons.push({kind:isAggressiveCrisis(pawn.mental)?'mental-aggro':'mental',label:mentalCrisisLabel(crisis.kind)});
   else if(medicalBed)icons.push({kind:'medical-rest',label:'Repos médical'});
   else if(pawn.state==='sleeping'||pawn.medicalSleep&&bedId!==null)icons.push({kind:'sleeping',label:'Dort'});

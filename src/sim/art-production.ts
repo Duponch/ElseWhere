@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { artisticSkill, artWorkTotal, isArtRecipe } from './art-rules.ts';
 import { craftingQuality } from './crafting-quality.ts';
 import { healthRandom } from './health.ts';
@@ -26,7 +27,7 @@ export function completeArtProduction(world: World,pawn: Pawn,task: CookingTask,
   const quality = craftingQuality(artisticSkill(pawn).level,() => healthRandom(random),useInspiration360(world,pawn,'creativity'));
   const building: Structure = {id:world.nextId,kind:work.recipe,x:task.spot.x,z:task.spot.z,
     orientation:0,footprint:'standard',material:work.material,quality,art:{authorId:pawn.id,createdAt:world.tick}};
-  world.piles = world.piles.filter(p => p !== workpiece);
+  world.piles = filterPileEntries(world.piles,p => p !== workpiece);
   world.packed.push({building,owner:{type:'pawn',pawnId:pawn.id}});
   world.nextId++;
   world.rng = random.rng;

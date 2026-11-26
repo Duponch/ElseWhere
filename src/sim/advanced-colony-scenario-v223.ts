@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { invalidateTerrainJournal } from './terrain-mutation-journal.ts';
 import { createScenarioWorld } from './new-game.ts';
 import { startingPawn } from './starting-pawns.ts';
@@ -76,7 +77,7 @@ export function prepareAdvancedColonyScenario(): World {
   if (landscaped.size) invalidateTerrainJournal(world.tiles);
   world.structures = []; world.jobs = []; world.packed = []; world.stockpiles = [];
   world.growingZones = []; world.growingCursor = 0; world.events = [];
-  world.piles = world.piles.filter(pile => pile.owner.type === 'apparel');
+  world.piles = filterPileEntries(world.piles,pile => pile.owner.type === 'apparel');
   delete world.relationships;
   if (world.scenario) world.scenario.landing = { x: 129, z: 122 };
 

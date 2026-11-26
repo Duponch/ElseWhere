@@ -1,3 +1,4 @@
+import {revokeActorRecordSource297} from './actor-record-source-297.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isSchema286OrLater} from './schema-compatibility-257.ts';
 import {captureDuckMapRemovedOwners256} from './duck-owner-capture-256.ts';
@@ -69,7 +70,7 @@ export function prepareLinkedStorageMapRemoval286(input:CampaignState,map:World,
    begin(){if(!current())throw Error('Stale linked storage MapRemoved admission');begun=true;},
    commit(){
     if(!beforeWrites())throw Error('Stale admitted linked storage MapRemoved recipients');
-    for(const write of writes){if(write.present){if(Object.hasOwn(write.object,write.key)){if(!Reflect.set(write.object,write.key,write.value))throw Error('Admitted storage-removal write failed');}
+    for(const write of writes){revokeActorRecordSource297(write.object);if(write.present){if(Object.hasOwn(write.object,write.key)){if(!Reflect.set(write.object,write.key,write.value))throw Error('Admitted storage-removal write failed');}
      else Object.defineProperty(write.object,write.key,{value:write.value,writable:true,enumerable:true,configurable:true});}
      else if(!Reflect.deleteProperty(write.object,write.key))throw Error('Admitted storage-removal deletion failed');}
     applied=true;if(!afterWrites())throw Error('Unexpected linked storage MapRemoved result');

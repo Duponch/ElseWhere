@@ -1,3 +1,4 @@
+import {structureFamily379} from './structure-family-379.ts';
 import { weatherRainRate } from './weather.ts';
 import { isRoofed } from './roof-rules.ts';
 import { deconstructionReserved } from './deconstruction-rules.ts';
@@ -45,7 +46,7 @@ export function burnFuel(world: World): boolean {
   let torchExtinguished=false;
   // RainRate includes snowfall; compute once, then use the current roof at each torch.
   const wet=weatherRainRate(world)>.4;
-  for (const fire of world.structures) if (isFueledBuilding(fire.kind) && fire.kind!=='fueled-stove'&&fire.kind!=='fueled-smithy' && fire.fuel && fire.fuel.ticks>0 && fire.power?.switchOn!==false&&!fire.breakdown) {
+  for (const fire of structureFamily379(world,'fueled-buildings',isFueledBuilding)) if (isFueledBuilding(fire.kind) && fire.kind!=='fueled-stove'&&fire.kind!=='fueled-smithy' && fire.fuel && fire.fuel.ticks>0 && fire.power?.switchOn!==false&&!fire.breakdown) {
     const f=fire.fuel;let amount=1;
     if(fire.kind==='torch-lamp'){const total=(f.burnRemainder??0)+(wet&&!isRoofed(world,fire.z*world.width+fire.x)?19:1);amount=Math.floor(total/5);f.burnRemainder=total%5;}
     else if(fire.kind==='wood-generator'){const total=(f.burnRemainder??0)+11;amount=Math.floor(total/5);f.burnRemainder=total%5;}

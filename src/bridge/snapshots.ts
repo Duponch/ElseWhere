@@ -1,4 +1,8 @@
 import {validFrameOwners301} from '../sim/finish-frame-save-301.ts';
+import {validPersonalOrdersTransport378,validPersonalOrdersProjection378} from './personal-orders-transport-378.ts';
+import {validateBanishedDepartures378} from '../sim/pawn-banish-save-378.ts';
+import {validConstructionTransport379,validateConstructionForbid379} from '../sim/construction-forbid-save-379.ts';
+import {validateCarryQuantities379} from '../sim/carry-quantity-379.ts';
 import {validHumanIngestionOwners299} from '../sim/human-ingestion-save-299.ts';
 import {validIdleWanderOwners300} from '../sim/idle-wander-save-300.ts';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
@@ -706,8 +710,28 @@ const equalResourceBase = (a: Resource, b: Resource): boolean => a.id === b.id &
  * rebuilds `next` from the record it holds and these three numbers. */
 function plantLifeOnlyChange(previous:Resource,next:Resource):boolean {
   const before=previous.plantLife,after=next.plantLife;
-  if(!before||!after||typeof after.age!=='number'||typeof after.darkTicks!=='number'||typeof after.nextCheck!=='number')return false;
-  return equalPileValue({...previous,plantLife:{...before,age:after.age,darkTicks:after.darkTicks,nextCheck:after.nextCheck}},next);
+  if(!before||!after||typeof next!=='object'||typeof after!=='object'||Array.isArray(next)||Array.isArray(after)||typeof after.age!=='number'||typeof after.darkTicks!=='number'||typeof after.nextCheck!=='number')return false;
+  // The usual age record already owns all three fields. Compare the exact
+  // hypothetical replacement without allocating two spread objects. Keep the
+  // spread oracle for old sparse records, where replacement appends keys.
+  if(!Object.prototype.propertyIsEnumerable.call(previous,'plantLife')||!Object.prototype.propertyIsEnumerable.call(before,'age')
+    ||!Object.prototype.propertyIsEnumerable.call(before,'darkTicks')||!Object.prototype.propertyIsEnumerable.call(before,'nextCheck'))
+    return equalPileValue({...previous,plantLife:{...before,age:after.age,darkTicks:after.darkTicks,nextCheck:after.nextCheck}},next);
+  const left=Object.keys(previous),right=Object.keys(next);
+  if(left.length!==right.length)return false;
+  for(let i=0;i<left.length;i++){
+    const key=left[i]!;if(key!==right[i])return false;
+    if(key==='plantLife'){
+      const lifeKeys=Object.keys(before),afterKeys=Object.keys(after);
+      if(lifeKeys.length!==afterKeys.length)return false;
+      for(let j=0;j<lifeKeys.length;j++){
+        const name=lifeKeys[j]!;if(name!==afterKeys[j])return false;
+        if(name!=='age'&&name!=='darkTicks'&&name!=='nextCheck'
+          &&!equalPileValue((before as unknown as Record<string,unknown>)[name],(after as unknown as Record<string,unknown>)[name]))return false;
+      }
+    }else if(!equalPileValue((previous as unknown as Record<string,unknown>)[key],(next as unknown as Record<string,unknown>)[key]))return false;
+  }
+  return true;
 }
 const copyResource=(r:Resource):Resource=>({...r,...r.plantLife?{plantLife:{...r.plantLife}}:{},...r.blight?{blight:{...r.blight}}:{}});
 
@@ -716,8 +740,29 @@ function equalPileValue(a:unknown,b:unknown):boolean {
   if(Object.is(a,b))return true;
   if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
   const left=Object.keys(a),right=Object.keys(b);
-  return left.length===right.length&&left.every((key,index)=>key===right[index]&&Object.hasOwn(b,key)
-    &&equalPileValue((a as Record<string,unknown>)[key],(b as Record<string,unknown>)[key]));
+  if(left.length!==right.length)return false;
+  for(let index=0;index<left.length;index++){
+    const key=left[index]!;
+    if(key!==right[index]||!Object.hasOwn(b,key)||!equalPileValue((a as Record<string,unknown>)[key],(b as Record<string,unknown>)[key]))return false;
+  }
+  return true;
+}
+/** Only the encoder's PRIVATE structure copies enter this map. Outgoing
+ * upserts are separate clones, so callers can never change these key lists.
+ * Every current value and its ordered own keys are still read on each call. */
+const structureCaptureKeys=new WeakMap<object,readonly string[]>();
+function equalCapturedStructure(a:unknown,b:unknown):boolean {
+  if(Object.is(a,b))return true;
+  if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)!==Array.isArray(b))return false;
+  let left=structureCaptureKeys.get(a);
+  if(!left){left=Object.keys(a);structureCaptureKeys.set(a,left);}
+  const right=Object.keys(b);
+  if(left.length!==right.length)return false;
+  for(let index=0;index<left.length;index++){
+    const key=left[index]!;
+    if(key!==right[index]||!Object.hasOwn(b,key)||!equalCapturedStructure((a as Record<string,unknown>)[key],(b as Record<string,unknown>)[key]))return false;
+  }
+  return true;
 }
 const copyPile=(pile:MaterialPile):MaterialPile=>structuredClone(pile);
 /** The pile a rot tuple stands for: `old` with its rot clock replaced by
@@ -730,8 +775,16 @@ export function pileWithRot(old:MaterialPile,progress:number,atTick:number,rate:
  * identical. The receiver then rebuilds `next` from the pile it holds. */
 function pileRotOnlyChange(previous:MaterialPile,next:MaterialPile):boolean {
   const rot=next.rot;
-  if(!rot||typeof rot.progress!=='number'||typeof rot.atTick!=='number'||rot.rate!==undefined&&(typeof rot.rate!=='number'||Number.isNaN(rot.rate)))return false;
-  return equalPileValue(pileWithRot(previous,rot.progress,rot.atTick,rot.rate??NaN),next);
+  if(!rot||typeof next!=='object'||typeof rot!=='object'||Array.isArray(next)||Array.isArray(rot)||typeof rot.progress!=='number'||typeof rot.atTick!=='number'||rot.rate!==undefined&&(typeof rot.rate!=='number'||Number.isNaN(rot.rate)))return false;
+  if(!Object.prototype.propertyIsEnumerable.call(previous,'rot'))return equalPileValue(pileWithRot(previous,rot.progress,rot.atTick,rot.rate??NaN),next);
+  const left=Object.keys(previous),right=Object.keys(next),rotKeys=Object.keys(rot);
+  if(left.length!==right.length||rotKeys.length!==(rot.rate===undefined?2:3)
+    ||rotKeys[0]!=='progress'||rotKeys[1]!=='atTick'||rot.rate!==undefined&&rotKeys[2]!=='rate')return false;
+  for(let i=0;i<left.length;i++){
+    const key=left[i]!;
+    if(key!==right[i]||key!=='rot'&&!equalPileValue((previous as unknown as Record<string,unknown>)[key],(next as unknown as Record<string,unknown>)[key]))return false;
+  }
+  return true;
 }
 
 /** A transport array has no holes or enumerable side properties. */
@@ -943,6 +996,25 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
   protected trackNaturalInputs=false;
   protected naturalInputsUnchanged=false;
   protected createTileCache():TileSnapshotCache {return new TileSnapshotCache();}
+  /** Closed Worker hook only. Public encoders always discover every value. */
+  protected resourceCandidates(_world:World):{readonly indices?:readonly number[];readonly dirtyIds:ReadonlySet<number>;
+    readonly rows?:readonly Resource[];
+    readonly membership?:{readonly changed:boolean;readonly removed:readonly number[];readonly order?:readonly number[]}}|undefined {return undefined;}
+  /** Closed codec fallback only: reconstitute its last published order from
+   * the resident membership owner, before exhaustive discovery resumes. */
+  protected restoreResourceOrder(ids:readonly number[]):void {this.orderedResources=ids.map(id=>this.resources.get(id)!);}
+  protected resetResourceCandidates(_world:World):void {}
+  /** Private fixed producer only: ordinary pile non-rot content comes from
+   * actual writer versions. Public encoders retain full value discovery. */
+  protected pileBaseUnchanged(_pile:MaterialPile,_previous:MaterialPile):boolean {return false;}
+  protected capturedPileCopy(_pile:MaterialPile,_copy:MaterialPile):void {}
+  protected pileCandidates(_world:World):{readonly rows:readonly MaterialPile[];readonly membership:{readonly changed:boolean;readonly removed:readonly number[];readonly order?:readonly number[]}}|undefined {return undefined;}
+  protected restorePileOrder(ids:readonly number[]):void {this.orderedPiles=ids.map(id=>this.piles.get(id)!);}
+  protected resetPileCandidates(_world:World):void {}
+  /** Private, proven unchanged structure membership, in exact source order.
+   * Omitted slots have frozen ordinary values, not just equal geometry. */
+  protected structureCandidates(_world:World):readonly number[]|undefined {return undefined;}
+  protected resetStructureCandidates(_world:World):void {}
   reserveDraftPreview(owner:import('../sim/world-geography-owner-256.ts').CampaignGeography256){return this.geographicTransport.reserveDraftPreview(owner);}
   authorizeDraftPreview(owner:import('../sim/world-geography-owner-256.ts').CampaignGeography256,id:number):void {this.geographicTransport.authorizeDraftPreview(owner,id);}
   discardDraftPreview():void {this.geographicTransport.discardDraftPreview();}
@@ -984,11 +1056,14 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
       this.tiles.reset(world.tiles);
       this.orderedResources = world.resources.map(copyResource);
       this.resources = new Map(this.orderedResources.map(resource => [resource.id, resource]));
-      this.orderedPiles = world.piles.map(copyPile);
+      this.resetResourceCandidates(world);
+      this.orderedPiles = world.piles.map(pile=>{const copy=copyPile(pile);this.capturedPileCopy(pile,copy);return copy;});
       this.piles = new Map(this.orderedPiles.map(pile => [pile.id, pile]));
+      this.resetPileCandidates(world);
       if(this.structureDelta){
         this.orderedStructures=world.structures.map(s=>structuredClone(s));
         this.structures=new Map(this.orderedStructures.map(s=>[s.id,s]));
+        this.resetStructureCandidates(world);
       }else if(this.orderedStructures.length){
         this.orderedStructures=[];this.structures.clear();
       }
@@ -999,17 +1074,27 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
     const upserted: Resource[] = [];
     const growthValues:number[]=[],growthUpdates:Resource[]=[];
     const lifeValues:number[]=[],lifeUpdates:Resource[]=[];
-    let nextOrder: Resource[] | undefined = world.resources.length !== this.orderedResources.length ? [] : undefined;
-    let naturalSame=this.trackNaturalInputs&&world.resources.length===this.orderedResources.length;
-    for (let index = 0; index < world.resources.length; index++) {
-      const resource = world.resources[index]!;
-      const ordered = this.orderedResources[index];
+    const resourceCandidates=this.resourceCandidates(world);
+    const residentMembership=resourceCandidates?.membership;
+    let nextOrder: Resource[] | undefined = !residentMembership&&world.resources.length !== this.orderedResources.length ? [] : undefined;
+    let naturalSame=this.trackNaturalInputs&&(residentMembership?!residentMembership.changed:world.resources.length===this.orderedResources.length);
+    const resourceRows=resourceCandidates?.rows,resourceIndices=resourceCandidates?.indices,resourceVisitCount=resourceRows?.length??resourceIndices?.length??world.resources.length;
+    for (let visit=0;visit<resourceVisitCount;visit++) {
+      const index=resourceIndices?resourceIndices[visit]!:visit;
+      const resource = resourceRows?resourceRows[visit]!:world.resources[index]!;
+      const ordered = residentMembership?this.resources.get(resource.id):this.orderedResources[index];
       const sameSlot = ordered?.id === resource.id;
-      if (!sameSlot && !nextOrder) nextOrder = this.orderedResources.slice(0, index);
+      if (!residentMembership&&!sameSlot && !nextOrder) nextOrder = this.orderedResources.slice(0, index);
       // Most publications preserve order. Avoid hashing every unchanged plant,
       // but still compare values: simulation edits objects in place.
       const previous = sameSlot ? ordered : this.resources.get(resource.id);
       let cached = previous;
+      // A closed writer journal certifies all fields and own-property
+      // presence of untouched survivors, including during membership edits.
+      if(previous&&resourceCandidates&&!resourceCandidates.dirtyIds.has(resource.id)){
+        if(naturalSame&&!sameSlot)naturalSame=false;
+        nextOrder?.push(previous);continue;
+      }
       const sameBase=previous!==undefined&&equalResourceBase(previous,resource);
       if(naturalSame&&(!sameSlot||!sameBase||!Object.is(previous!.growth,resource.growth)||!Object.is(previous!.growthTick,resource.growthTick)
         ||!Object.is(previous!.growthThermalFactor,resource.growthThermalFactor)||!Object.is(previous!.plantLife?.leaflessAt,resource.plantLife?.leaflessAt)
@@ -1025,17 +1110,18 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
           // numbers instead of the complete identity, and no base change.
           const life=resource.plantLife!;lifeValues.push(resource.id,life.age,life.darkTicks,life.nextCheck);lifeUpdates.push(copy);
         }else upserted.push(copy);
-        if (sameSlot) this.orderedResources[index] = copy;
+        if (sameSlot&&!residentMembership) this.orderedResources[index] = copy;
         cached = copy;
       }
       nextOrder?.push(cached!);
     }
     let changes: ResourceChanges | undefined;
-    if (upserted.length || growthUpdates.length || lifeUpdates.length || nextOrder) {
-      const removed: number[] = [];
+    if (upserted.length || growthUpdates.length || lifeUpdates.length || nextOrder || residentMembership?.changed) {
+      const removed: number[] = residentMembership?[...residentMembership.removed]:[];
       changes = { removed, upserted };
       if(growthValues.length)changes.growth=new Float64Array(growthValues);
       if(lifeValues.length)changes.life=new Float64Array(lifeValues);
+      if(residentMembership?.order)changes.order=[...residentMembership.order];
       // Metadata/quantities alone cannot alter membership or ordering. Only
       // structural edits need the ID set and an optional explicit order.
       if (nextOrder) {
@@ -1056,27 +1142,32 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
     }
     const pileUpserts:MaterialPile[]=[];
     const rotValues:number[]=[],rotUpdates:MaterialPile[]=[];
-    let nextPileOrder:MaterialPile[]|undefined=world.piles.length!==this.orderedPiles.length?[]:undefined;
-    for(let index=0;index<world.piles.length;index++){
-      const pile=world.piles[index]!,ordered=this.orderedPiles[index],sameSlot=ordered?.id===pile.id;
-      if(!sameSlot&&!nextPileOrder)nextPileOrder=this.orderedPiles.slice(0,index);
+    const pileCandidates=this.pileCandidates(world),pileMembership=pileCandidates?.membership,pileRows=pileCandidates?.rows??world.piles;
+    let nextPileOrder:MaterialPile[]|undefined=!pileMembership&&world.piles.length!==this.orderedPiles.length?[]:undefined;
+    for(let index=0;index<pileRows.length;index++){
+      const pile=pileRows[index]!,ordered=pileMembership?this.piles.get(pile.id):this.orderedPiles[index],sameSlot=ordered?.id===pile.id;
+      if(!pileMembership&&!sameSlot&&!nextPileOrder)nextPileOrder=this.orderedPiles.slice(0,index);
       const previous=sameSlot?ordered:this.piles.get(pile.id);
       let cached=previous;
-      if(!previous||!equalPileValue(previous,pile)){
+      const stableBase=previous!==undefined&&this.pileBaseUnchanged(pile,previous);
+      const sameValue=previous!==undefined&&(stableBase?Object.hasOwn(previous,'rot')===Object.hasOwn(pile,'rot')&&equalPileValue(previous.rot,pile.rot):equalPileValue(previous,pile));
+      if(!sameValue){
         if(this.pileRotDelta&&previous!==undefined&&pileRotOnlyChange(previous,pile)){
           // Stored food re-anchors its rot clock at every rate change: three
           // numbers instead of the complete pile, rebuilt from the held one.
           const rot=pile.rot!,rate=rot.rate??NaN;rotValues.push(pile.id,rot.progress,rot.atTick,rate);
           cached=pileWithRot(previous,rot.progress,rot.atTick,rate);rotUpdates.push(cached);
         }else{const copy=copyPile(pile);pileUpserts.push(copy);cached=copy;}
-        if(sameSlot)this.orderedPiles[index]=cached;
+        if(sameSlot&&!pileMembership)this.orderedPiles[index]=cached;
       }
+      if(cached&&(!stableBase||cached!==previous))this.capturedPileCopy(pile,cached);
       nextPileOrder?.push(cached!);
     }
     let pileChanges:PileChanges|undefined;
-    if(pileUpserts.length||rotUpdates.length||nextPileOrder){
-      const removed:number[]=[];pileChanges={removed,upserted:pileUpserts};
+    if(pileUpserts.length||rotUpdates.length||nextPileOrder||pileMembership?.changed){
+      const removed:number[]=pileMembership?[...pileMembership.removed]:[];pileChanges={removed,upserted:pileUpserts};
       if(rotValues.length)pileChanges.rotClock=new Float64Array(rotValues);
+      if(pileMembership?.order)pileChanges.order=[...pileMembership.order];
       if(nextPileOrder){
         const currentIds=new Set(world.piles.map(p=>p.id)),implicitOrder:number[]=[];
         for(const pile of this.orderedPiles){
@@ -1097,14 +1188,16 @@ export class SnapshotEncoder<SparseStructures extends boolean = false> {
     if(this.structureDelta){
       const upserted:Structure[]=[],cacheUpdates:Structure[]=[];
       let nextOrder:Structure[]|undefined=world.structures.length!==this.orderedStructures.length?[]:undefined;
-      for(let index=0;index<world.structures.length;index++){
+      const indices=this.structureCandidates(world);
+      for(let visit=0;visit<(indices?.length??world.structures.length);visit++){
+        const index=indices?indices[visit]!:visit;
         const structure=world.structures[index]!,ordered=this.orderedStructures[index],sameSlot=ordered?.id===structure.id;
         if(!sameSlot&&!nextOrder)nextOrder=this.orderedStructures.slice(0,index);
         const previous=sameSlot?ordered:this.structures.get(structure.id);
         let cached=previous;
         // Never use mutable World identity or tick as a value witness. This
         // walks all nested own fields, exact doubles and property presence.
-        if(!previous||!equalPileValue(previous,structure)){
+        if(!previous||!equalCapturedStructure(previous,structure)){
           cached=structuredClone(structure);
           cacheUpdates.push(cached);
           // Outgoing records also cannot expose the private comparison cache.
@@ -1216,6 +1309,8 @@ export class SnapshotDecoder {
     const refuse=()=>({status:'resync' as const,reason:'Campagne sans carte illisible.'});
     if(!Number.isSafeInteger(packet.epoch)||packet.epoch<1||!Number.isSafeInteger(packet.revision)||packet.revision<1||!Number.isFinite(packet.stepMs)||packet.stepMs<0||![0,1,3,6].includes(packet.speed))return refuse();
     if(packet.epoch<this.epoch||packet.epoch===this.epoch&&packet.revision<=this.revision)return {status:'stale'};
+    if('banishedDepartures378'in packet.summary||!validPersonalOrdersTransport378(packet.summary,Number(packet.summary.schemaVersion)))return refuse();
+    if(!validConstructionTransport379(packet.summary,Number(packet.summary.schemaVersion)))return refuse();
     if(!validPhaseCore297(packet.summary,packet.summary.schemaVersion)||!validCorePathBudget297(packet.summary,packet.summary.schemaVersion,packet.summary.tick,isCorePhysicalSchema297(Number(packet.summary.schemaVersion))?Number(Object.getOwnPropertyDescriptor(packet.summary,'phaseCore297')?.value):0,false))return refuse();
     if(!validVictoryContentHistorical298(packet.summary,packet.summary.schemaVersion))return refuse();
     if(!validShipEscapeHistorical298(packet.summary,packet.summary.schemaVersion)||!validEscapedShipsProjection298(packet.summary,packet.summary.schemaVersion,packet.summary.tick,packet.summary.nextId,isSchema298OrLater(Number(packet.summary.schemaVersion))&&'escapedShipsSummary298' in packet.summary?effectiveCore297(packet.summary):undefined))return refuse();
@@ -1227,6 +1322,7 @@ export class SnapshotDecoder {
     const geographic=this.geographicTransport.prepare(packet.summary,packet.geography,Object.hasOwn(packet,'geography'),packet.epoch!==this.epoch);if(!geographic.ok)return refuse();
     if(!validCampaignSummary(geographic.state)||!validFirefoamWorld290(geographic.state)||!validBillPauseWorld289(geographic.state)||!validAnimalThermalRefugeWorld288(geographic.state)||!validAnimalAreaWorld287(geographic.state))return refuse();const summary=geographic.state.worldPawns?.nativeOrder?{...geographic.state}:geographic.state,view=groupWorld(summary,null);if(!view||!this.validGeographicCalendar(view,packet.epoch,summary))return refuse();
     const proof=this.planetValidation.prepare(view,view.schemaVersion,packet.epoch);if(!proof.ok)return refuse();
+    if(!validPersonalOrdersProjection378(view))return refuse();
     if(packet.epoch===this.epoch&&!sameNativeWorldPawnBirth256(this.confirmedNativeWorldPawnBirth,view.worldPawns))return refuse();
     if(packet.epoch===this.epoch&&!sameFactionInitializations256(this.confirmedFactionInitializations,view.worldFactions))return refuse();
     const ids=new Set<number>();
@@ -1243,6 +1339,8 @@ export class SnapshotDecoder {
     if (!Number.isSafeInteger(packet.epoch) || packet.epoch < 1
       || !Number.isSafeInteger(packet.revision) || packet.revision < 1) return resync('Révision de snapshot invalide.');
     if (packet.epoch < this.epoch || (packet.epoch === this.epoch && packet.revision <= this.revision)) return { status: 'stale' };
+    if(!validPersonalOrdersTransport378(packet,Number(packet.world.schemaVersion)))return resync('Invalid or future personal orders transport.');
+    if(!validConstructionTransport379(packet,Number(packet.world.schemaVersion)))return resync('Invalid or future construction permission/material provenance.');
     if (!Number.isSafeInteger(packet.world.schemaVersion) || packet.world.schemaVersion < 1
       || packet.world.schemaVersion > SCHEMA_VERSION) return resync('Version de schéma du snapshot invalide.');
     if(!validPhaseCore297(packet.world,packet.world.schemaVersion)||!validCorePathBudget297(packet.world,packet.world.schemaVersion,packet.world.tick,isCorePhysicalSchema297(Number(packet.world.schemaVersion))?Number(Object.getOwnPropertyDescriptor(packet.world,'phaseCore297')?.value):0,true))return resync('Invalid physical clock or local path-budget owner.');
@@ -1601,6 +1699,8 @@ export class SnapshotDecoder {
     // Old packets cannot introduce the new local inventory combination via
     // retained piles and a changed visitor owner either. Current253 is O(1).
     if(!validGroupFreightHistoricalTransport(next,next.schemaVersion))return resync('Fret collectif futur.');
+    if(!validPersonalOrdersProjection378(next))return resync('Invalid personal identity, ordered queue, animal work or banishment owner.');
+    if(validateConstructionForbid379(next,Number(next.schemaVersion)).length||validateCarryQuantities379(next,Number(next.schemaVersion)).length)return resync('Invalid construction permission/material provenance or carried quantity.');
     if(!this.validateDeteriorationTransport(next,geometryReuse))return resync('Horloge ou propriétaire de détérioration invalide.');
     if(!validTorchTransport(next,next.schemaVersion))return resync('Lampe-torche, carburant ou propriétaire de recharge invalide.');
     if(!validPemmicanCatalogueDomains(next,next.schemaVersion)||!validPemmicanResearchTransport(next,next.schemaVersion))return resync('Pemmican, recherche ou production future/invalide.');
@@ -1771,7 +1871,7 @@ export class SnapshotDecoder {
     // owners reserve the same namespace as the map and cannot become a wave.
     const shelves=next.structures.some(s=>s.shelf!==undefined)||next.packed.some(p=>p.building.shelf!==undefined);
     const startingArrival=Object.hasOwn(next,'startingArrival'),ancientCaskets=next.structures.some(isAncientCasket256),playerCaskets=next.structures.some(s=>isPlayerCasket271(s)||isShipCasket277(s));
-    if(next.jobs.some(j=>j.wallDoor296?.plan)||next.ancientShrineWarnings||mineableIds.size||next.geysers||next.wildlife?.flyers?.length||collapsedRockIds.size||next.jobs.some(j=>j.tree)||next.piles.some(p=>p.innerResource)||startingArrival||ancientCaskets||playerCaskets||shelves||relationships||Object.hasOwn(next,'orbital')||Object.hasOwn(next,'mechanoids')||next.raids?.mechActive||next.raids?.extraMechActive261?.length||mechanicalCorpseIds.size||Object.hasOwn(next,'projectiles')||Object.hasOwn(next,'bombWaves')||next.pawns.some(p=>Object.hasOwn(p,'bombRefuge')||p.shooting!==undefined)){
+    if(next.banishedDepartures378||next.jobs.some(j=>j.wallDoor296?.plan)||next.ancientShrineWarnings||mineableIds.size||next.geysers||next.wildlife?.flyers?.length||collapsedRockIds.size||next.jobs.some(j=>j.tree)||next.piles.some(p=>p.innerResource)||startingArrival||ancientCaskets||playerCaskets||shelves||relationships||Object.hasOwn(next,'orbital')||Object.hasOwn(next,'mechanoids')||next.raids?.mechActive||next.raids?.extraMechActive261?.length||mechanicalCorpseIds.size||Object.hasOwn(next,'projectiles')||Object.hasOwn(next,'bombWaves')||next.pawns.some(p=>Object.hasOwn(p,'bombRefuge')||p.shooting!==undefined)){
       // Only the closed MAIN context can reuse its resource facts. Keep RAW
       // and non-strict collection/getter evaluation on the historical path.
       const owned=validation.resourceFacts&&(next.jobs.some(j=>j.wallDoor296?.plan)||startingArrival||ancientCaskets||playerCaskets||shelves||relationships||Object.hasOwn(next,'orbital'))
@@ -1786,7 +1886,7 @@ export class SnapshotDecoder {
           ...(next.wildlife?.animals??[]),...(next.filth?.items??[]),...(next.fires?.items??[]),...(next.fires?.embers??[]),
           ...next.packed.map(p=>p.building),...shelfIdentityOwners(next),...next.structures.flatMap(s=>s.bills??[]),...next.packed.flatMap(p=>p.building.bills??[]),
         ];
-        ids=new NumericMembership();strictIds=next.jobs.some(j=>!!j.wallDoor296?.plan)||!!next.ancientShrineWarnings||mineableIds.size>0||!!next.geysers||!!next.wildlife?.flyers?.length||collapsedRockIds.size>0||startingArrival||ancientCaskets||playerCaskets||shelves||relationships||Object.hasOwn(next,'orbital')||next.schemaVersion>=235&&(next.jobs.some(j=>j.tree!==undefined||j.plantTarget!==undefined)||next.piles.some(p=>p.kind==='plant')||next.resources.some(hasPausedTreeClock));
+        ids=new NumericMembership();strictIds=!!next.banishedDepartures378||next.jobs.some(j=>!!j.wallDoor296?.plan)||!!next.ancientShrineWarnings||mineableIds.size>0||!!next.geysers||!!next.wildlife?.flyers?.length||collapsedRockIds.size>0||startingArrival||ancientCaskets||playerCaskets||shelves||relationships||Object.hasOwn(next,'orbital')||next.schemaVersion>=235&&(next.jobs.some(j=>j.tree!==undefined||j.plantTarget!==undefined)||next.piles.some(p=>p.kind==='plant')||next.resources.some(hasPausedTreeClock));
         for(const owner of owners){if(strictIds&&(!Number.isSafeInteger(owner.id)||owner.id<1||owner.id>=next.nextId||ids.has(owner.id)))return resync('Identité dupliquée ou invalide dans le registre relationnel.');if(mechanicalCorpseIds.has(owner.id)&&ids.has(owner.id))return resync('Identité de carcasse mécanique dupliquée.');ids.add(owner.id);}
       }
       if(next.geysers&&!registerGeyserIdentities256(next.geysers,ids))return resync('Duplicate geyser identity.');
@@ -1838,6 +1938,7 @@ export class SnapshotDecoder {
       if(validateBombRefuges(next,[],ids).length)return resync('Refuge ou danger Bomb incohérent.');
       if(registerProjectedFactionOwners256(next,ids).length)return resync('Faction, chef ou propriétaire projeté incohérent.');
       if(registerProjectedWorldPawns256(next,ids).length)return resync('Invalid projected WorldPawns owner or namespace.');
+      if(next.banishedDepartures378&&validateBanishedDepartures378(next,Number(next.schemaVersion),new Set(ids)).length)return resync('Invalid or duplicate banishment departure identity.');
       if(registerProjectedWorldSites263(next,ids).length||registerProjectedTradeRequests284(next,ids).length)return resync('Invalid projected263 Site holder or map parent.');
     }
     if(!everyHumanPawnOwner(next,p=>validWorldAffiliationFields259(p as unknown as Record<string,unknown>,next.schemaVersion)&&validWorldAffiliationForeignKeys259(p,next.worldFactions)))return resync('Faction/hôte d’un original invalide.');

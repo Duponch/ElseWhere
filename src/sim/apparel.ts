@@ -1,4 +1,6 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {assignPileOwner} from './pile-index.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import { apparelDefinition,apparelLabel,conflictsWith,hasApparelParts,wornApparel } from './apparel-rules.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
 import { adjacent } from './pathfinding.ts';
@@ -13,7 +15,7 @@ export function apparelReason(world:World,pawn:Pawn,pile:MaterialPile|undefined,
   if(action==='remove')return pile.owner.type==='apparel'&&pile.owner.pawnId===pawn.id?undefined:'Ce vêtement n’est pas porté par ce colon.';
   if(!hasApparelParts(pawn,pile))return 'Aucune partie du corps ne peut porter ce vêtement.';
   if(pile.owner.type!=='ground')return 'Ce vêtement n’est plus au sol.';
-  if(reservedSource(world,pile.id,pawn.id)>0)return 'Ce vêtement est réservé.';
+  if(orderedTargetClaimed378(world,'pile',pile.id,pawn.id)||reservedSource(world,pile.id,pawn.id)>0)return 'Ce vêtement est réservé.';
   if(accepted&&pile.apparel.forbidden)return 'Ce vêtement est interdit.';
 }
 function report(world:World,message:string):void{world.events.push({tick:world.tick,type:'job',message});if(world.events.length>80)world.events.shift();}
@@ -30,15 +32,15 @@ export function processApparel(world:World,pawn:Pawn,pile:MaterialPile,context:N
     // incompatible piece per update; it does not wait until the final swap.
     if(old&&task.progress>=apparelDefinition(old).equipTicks) {
       if(!dropRetainingIdentity(world,old,pawn)){report(world,`${pawn.name} ne peut pas déposer ${apparelLabel(old)}.`);releaseWork(world,pawn);return;}
-      delete old.apparel!.forbidden;delete old.apparel!.forced;
+      delete markPileContentWrite379(old.apparel!).forbidden;delete old.apparel!.forced;
     }
   }
   if(task.progress<task.duration!)return;
   if(task.action==='remove') {
-    if(dropRetainingIdentity(world,pile,pawn)){delete pile.apparel!.forced;pile.apparel!.forbidden=true;report(world,`${pawn.name} retire ${apparelLabel(pile)}.`);}
+    if(dropRetainingIdentity(world,pile,pawn)){delete pile.apparel!.forced;markPileContentWrite379(pile.apparel!).forbidden=true;report(world,`${pawn.name} retire ${apparelLabel(pile)}.`);}
     else report(world,`${pawn.name} conserve ${apparelLabel(pile)} : aucun dépôt disponible.`);
   } else if(!wornApparel(world,pawn).some(p=>conflictsWith(p,pile))) {
-    assignPileOwner(pile,{type:'apparel',pawnId:pawn.id});delete pile.apparel!.forbidden;if(task.automatic)delete pile.apparel!.forced;else pile.apparel!.forced=true;report(world,`${pawn.name} porte ${apparelLabel(pile)}.`);
+    assignPileOwner(pile,{type:'apparel',pawnId:pawn.id});delete markPileContentWrite379(pile.apparel!).forbidden;if(task.automatic)delete pile.apparel!.forced;else pile.apparel!.forced=true;report(world,`${pawn.name} porte ${apparelLabel(pile)}.`);
   }
   releaseWork(world,pawn);
 }

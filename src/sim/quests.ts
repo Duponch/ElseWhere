@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {giveBornTraits361} from './trait-generation-361.ts';
 import {notePopulationGain320} from './population-intent-320.ts';
 import {journalLetter352} from './letter-producers-352.ts';
@@ -62,7 +63,7 @@ function arrive(w:World,q:JoinerQuest):void {
   const shirt={id:w.nextId+1,kind:'apparel' as const,item:'cloth-shirt' as const,quantity:1,owner:{type:'apparel' as const,pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)};
   const relationships=prepareRelationshipAdmission(w,p,q.relationship);
   if(relationships===null)return;
-  w.nextId+=2;w.pawns.push(p);w.piles.push(shirt);
+  w.nextId+=2;w.pawns.push(p);appendPileEntries(w.piles,shirt);
   if(relationships!==undefined)w.relationships=relationships;
   q.pawnId=p.id;q.entry=entry;q.arrivedAt=w.tick;notePopulationGain320(w);
   log(w,`${q.name} entre au bord de la carte et rejoint la colonie. Ses poursuivants sont toujours attendus.`);

@@ -1,3 +1,6 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {IED_COMMON_357,isIedSchema357,isIedTrapKind357,startIedWick357} from './ied-traps-357.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {notifyShipRootDestruction298} from './ship-root-destruction-proof-298.ts';
@@ -52,6 +55,7 @@ import type { BombInstigatorKey } from './mini-turret-state.ts';
 import { pileDamage,pileMaxHp,resourceMaxHp,structureMaxHp } from './thing-damage-rules.ts';
 import type { MaterialPile,Pawn,Resource,Structure,World } from './types.ts';
 import { wallDoorBlueprint296 } from './wall-door-state-296.ts';
+import {markResourceChanged,markResourceArrayChanged} from './resource-mutation-journal.ts';
 export { pileDamage,pileMaxHp,resourceMaxHp,structureMaxHp,copyThingDamage,mergeThingDamage } from './thing-damage-rules.ts';
 
 const positive=(n:number)=>Number.isSafeInteger(n)&&n>0;
@@ -78,14 +82,14 @@ function withoutResource(list:readonly Resource[],r:Resource):Resource[] {
 /** Shared destructive plant boundary; the cause never creates a harvest. */
 export function damageResource(world:World,r:Resource,amount:number,reason:'fire'|'frost'|'darkness'|'age'|'bullet'|'bomb'|'rotting'|'blight'|'roof'|'fallout'='fire'):boolean {
   const max=resourceMaxHp(r);if(!max||!positive(amount)||!world.resources.includes(r))return false;
-  const damage=(r.damage??0)+amount;if(damage<max){r.damage=damage;return true;}
+  const damage=(r.damage??0)+amount;if(damage<max){markPileContentWrite379(r).damage=damage;markResourceChanged(world,r);return true;}
   const ledger=reason==='fire'?ensureFireState(world).ledger:undefined;
   const woodPotential=r.kind==='tree'?r.amount:0;
   const neutral=reason==='bullet'||reason==='bomb'||reason==='roof'||reason==='fallout'?neutralLossPlan(world,{resources:{[r.kind]:1},...(woodPotential?{woodPotentialLost:woodPotential}:{})}):undefined;
   if(neutral===null)return false;
   if(ledger&&(!addSafe(ledger.resources[r.kind]??0,1)||!addSafe(ledger.woodPotentialLost,woodPotential)))return false;
   const jobs=new Set(world.jobs.filter(j=>at(j,r)&&['mine','chop','cut','harvest','extract-tree'].includes(j.kind)).map(j=>j.id));
-  removeJobs(world,jobs,reason==='roof');world.resources=withoutResource(world.resources,r);
+  removeJobs(world,jobs,reason==='roof');const beforeResources=world.resources;world.resources=withoutResource(world.resources,r);markResourceArrayChanged(world,beforeResources,[],[r]);
   // The clearance step ended without a harvest. Keep its construction intent,
   // materials and unrelated queued work, but release this now-obsolete claim:
   // an unsupplied blueprint cannot retain a finishing-work reservation.
@@ -114,7 +118,7 @@ export function damagePile(world:World,pile:MaterialPile,amount:number,cause:'fi
   if(cause==='deterioration'&&(world.schemaVersion<252||pile.owner.type!=='ground'||!isDeteriorationItem(pile.item)))return false;
   const max=pileMaxHp(pile,world.schemaVersion);if(!max&&cause!=='roof-thick'||!positive(amount)||!(knownIndex!==undefined&&Number.isInteger(knownIndex)&&knownIndex>=0&&knownIndex<world.piles.length&&world.piles[knownIndex]===pile||world.piles.includes(pile)))return false;
   const damage=pileDamage(pile)+amount;
-  if(damage<max){if(pile.apparel)pile.apparel.hitPoints=max-damage;else if(pile.weapon)pile.weapon.hitPoints=max-damage;else pile.damage=damage;return true;}
+  if(damage<max){markPileContentWrite379(pile);if(pile.apparel)pile.apparel.hitPoints=max-damage;else if(pile.weapon)pile.weapon.hitPoints=max-damage;else markPileContentWrite379(pile).damage=damage;return true;}
   if(pile.kind==='plant')return destroyMinifiedTree(world,pile);
   if(pile.humanCorpse){
     if(cause==='deterioration'||!destroyHumanCorpse(world,pile,cause==='roof-thick'?'roof':cause))return false;
@@ -135,7 +139,7 @@ export function damagePile(world:World,pile:MaterialPile,amount:number,cause:'fi
   const neutral=cause==='fire'?undefined:neutralLossPlan(world,{items:{[pile.item]:pile.quantity}});if(neutral===null)return false;
   const state=cause==='fire'?ensureFireState(world):undefined,loss=state?.ledger.items[pile.item]??0;if(state&&!addSafe(loss,pile.quantity))return false;
   // Retire the source before releasing consumers; releasing must not drop a burnt pile back onto the ground.
-  world.piles=world.piles.filter(p=>p!==pile);
+  world.piles=filterPileEntries(world.piles,p=>p!==pile);
   for(const p of world.pawns){
     if(p.droppedWeaponId===pile.id)delete p.droppedWeaponId;
     if(referencesPile(p,pile.id))interruptWork(world,p,cause==='deterioration'||cause==='roof'||cause==='roof-thick');
@@ -167,7 +171,7 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
   if(foam&&(!Number.isSafeInteger(core+150)||foamDetonates&&(world.firefoam290?.waves.length??0)>=world.width*world.height))return false;
   if(explosive&&!Number.isSafeInteger(core+240)||detonates&&(!Number.isSafeInteger(core+5)||world.bombWaves&&world.bombWaves.length>=world.width*world.height))return false;
   const damage=emits?max:(s.damage??0)+amount;
-  if(damage<max){s.damage=damage;if(cause!=='fire')world.rng=rng;
+  if(damage<max){markPileContentWrite379(s).damage=damage;structureDamageChanged379(world,s);if(cause!=='fire')world.rng=rng;
     // IED: startWickOnDamageTaken Bullet/Arrow, then the 20 % hit-point threshold.
     if(ied){if(cause==='bullet'||max-damage<=IED_COMMON_357.startWickHitPoints)startIedWick357(s,core,external?.instigatorKey);}
     else if(explosive&&max-damage<=Math.round(max*.2))startTurretWick(world,s,core,external?.instigatorKey);if(foam&&cause==='fire')startFirefoamWick290(world,s,core);return true;}
@@ -225,7 +229,7 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
     const pack=world.packed.find(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id);
     if(pack&&drops.has(pack.building.id))releaseFurniture(world,p,drops);
   }
-  if(delivered.length)world.piles=world.piles.filter(p=>!delivered.includes(p));
+  if(delivered.length)world.piles=filterPileEntries(world.piles,p=>!delivered.includes(p));
   if(state){if(salvage||plan.rubble)state.rng=salvage?.rng??plan.rubble!.rng;}else world.rng=salvage?.rng??plan.rubble?.rng??rng;
   if(salvage)for(const drop of salvage.drops){addMaterial(world,ITEM_DEFINITIONS[drop.item].kind,drop.quantity,{type:'ground',...drop.cell},drop.item);if('forbidden'in drop&&typeof drop.forbidden==='boolean'){const pile=world.piles.find(p=>p.item===drop.item&&p.owner.type==='ground'&&p.owner.x===drop.cell.x&&p.owner.z===drop.cell.z)!;setMaterialForbidden256(pile,drop.forbidden);}}
   for(const p of actors)interruptWork(world,p,true);

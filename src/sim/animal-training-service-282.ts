@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
@@ -100,7 +102,7 @@ export function processAnimalTraining282(w:World,p:Pawn,task:AnimalTrainingTask2
   ||animalClaimed(w,a.id,p.id)||(p.skills.animals?.level??0)<(animalHandlingSkill256(a.species)??Infinity)
   ||task.finalStartedCore===undefined&&nextTrainable282(w,a)!==task.trainable){stop();return;}
  if(task.phase==='pickup'){
-  const source=w.piles.find(i=>i.id===task.sourcePileId);
+  const source=pileById(w,task.sourcePileId);
   if(!source||source.owner.type!=='ground'||source.forbidden||!eggAllowedForPlayer256(source)||!animalTrainingFood282(a,source.item)
    ||source.quantity-reservedSource(w,source.id,p.id)<task.quantity){stop();return;}
   if(!adjacent(p,source.owner)&&(p.x!==source.owner.x||p.z!==source.owner.z)){ctx.move(source.owner,false);return;}
@@ -108,8 +110,8 @@ export function processAnimalTraining282(w:World,p:Pawn,task:AnimalTrainingTask2
   if(source.quantity===task.quantity){assignPileOwner(source,{type:'pawn',pawnId:p.id});task.carryPileId=source.id;}
   else{
    if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){stop();return;}
-   source.quantity-=task.quantity;task.carryPileId=w.nextId++;
-   w.piles.push({id:task.carryPileId,kind:'food',item:source.item,quantity:task.quantity,owner:{type:'pawn',pawnId:p.id},...copyPileCondition(source)});
+   markPileContentWrite379(source).quantity-=task.quantity;task.carryPileId=w.nextId++;
+   appendPileEntries(w.piles,{id:task.carryPileId,kind:'food',item:source.item,quantity:task.quantity,owner:{type:'pawn',pawnId:p.id},...copyPileCondition(source)});
   }
   task.phase='approach';p.path=[];p.state='moving';return;
  }
@@ -139,8 +141,8 @@ export function processAnimalTraining282(w:World,p:Pawn,task:AnimalTrainingTask2
  task.progress=0;
  if(feeding){
   const consumed=food!,risk={item:consumed.item,...consumed.foodPoison?{foodPoison:{...consumed.foodPoison}}:{}};
-  consumed.quantity-=task.feedUnits;task.quantity-=task.feedUnits;
-  if(!consumed.quantity){w.piles.splice(w.piles.indexOf(consumed),1);task.carryPileId=null;}
+  markPileContentWrite379(consumed).quantity-=task.feedUnits;markPileContentWrite379(task).quantity-=task.feedUnits;
+  if(!consumed.quantity){splicePileEntries(w.piles,w.piles.indexOf(consumed),1);task.carryPileId=null;}
   a.food=Math.min(animalNutritionMax(a),a.food+task.feedUnits*ITEM_DEFINITIONS[consumed.item].nutrition/100);
   ingestFoodRisk(w,a,risk,false);
   delete task.feedDuration;

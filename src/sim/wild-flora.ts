@@ -71,7 +71,7 @@ function freeCell(world:World,index:number):boolean {
 function spawn(world:World,index:number,species:ReturnType<typeof weightedSpecies>):void {
   const definition=FLORA_DEFINITIONS[species],x=index%world.width,z=Math.floor(index/world.width);
   const resource:Resource={id:world.nextId++,x,z,kind:definition.kind,amount:definition.yield,species,growth:.0001,growthTick:world.tick};
-  resource.plantLife=createPlantLife(world,resource,true);world.resources=[...world.resources,resource];
+  resource.plantLife=createPlantLife(world,resource,true);const beforeResources=world.resources;world.resources=[...world.resources,resource];markResourceArrayChanged(world,beforeResources,[resource],[]);
 }
 
 /** One bounded prospective renewal. It approaches the generation capacity over
@@ -93,3 +93,4 @@ export function advanceWildFlora(world:World):void {
     spawn(world,index,species);
   }
 }
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';

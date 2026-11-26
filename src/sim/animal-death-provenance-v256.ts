@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {validAnimalGrowthTracker256,validAnimalGrowthClinicalOwner256,trackedAnimalLifeStage256} from './animal-growth-runtime-256.ts';
 import {animalStageAgeTicks256} from './animal-core-v256.ts';
 import type {MiniTurretBombWave} from './bomb-state.ts';
@@ -10,7 +11,7 @@ export const animalDeathExplosionRadius256=(proof:AnimalDeathExplosion256):numbe
  * identity. A retained body/pile must attest the exact clinical death. */
 export function validAnimalDeathExplosionOwner256(world:World,wave:MiniTurretBombWave):boolean {
  const proof=wave.animalDeath;if(!proof)return true;
- const animal=(Array.isArray(world.wildlife?.animals)?world.wildlife.animals:[]).find(a=>a&&a.id===wave.sourceId),pile=world.piles.find(p=>p.id===wave.sourceId);
+ const animal=(Array.isArray(world.wildlife?.animals)?world.wildlife.animals:[]).find(a=>a&&a.id===wave.sourceId),pile=pileById(world,wave.sourceId);
  const body=animal?animal.state==='dead'?animal:undefined:pile?.corpse;
  if(animal&&!body||pile&&!pile.corpse)return false;
  if(!body)return ![...world.pawns,...world.structures,...world.jobs,...world.resources,...world.packed.map(p=>p.building),...(world.mechanoids??[])].some(o=>o.id===wave.sourceId);

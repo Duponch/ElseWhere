@@ -1,4 +1,5 @@
 import { resourceAt } from './farming.ts';
+import {structureFamily379} from './structure-family-379.ts';
 import { WindObstructionView,windClearance,windPowerOutput } from './wind-rules.ts';
 import type { Cell,CommandResult,World } from './types.ts';
 
@@ -16,7 +17,7 @@ export function setWindAutoCut(w:World,id:number,enabled:unknown):CommandResult 
  * never trees; clearance is not improved until their real removal. */
 export function advanceWind(w:World,designateChop:(cell:Cell)=>void):void {
   let obstacles:WindObstructionView|undefined;
-  for(const s of w.structures){
+  for(const s of structureFamily379(w,'wind-turbines',kind=>kind==='wind-turbine')){
     const state=s.wind;if(s.kind!=='wind-turbine'||!state)continue;
     if(!s.power?.on){state.cachedWatts=0;}
     else if(++state.updateCounter>=25){state.updateCounter=0;obstacles??=new WindObstructionView(w);state.cachedWatts=Math.round(windPowerOutput(w,s,obstacles));}

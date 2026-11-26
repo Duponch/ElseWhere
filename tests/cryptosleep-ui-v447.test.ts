@@ -21,7 +21,7 @@ function prepared(count=2){
  w.structures.push(c);return {w,p,c};
 }
 
-test('context menus read both casket cells and the real patient, preserve originals, and refuse queued actions',()=>{
+test('context menus read both casket cells and the real patient, preserve originals, and admit queued actions only from 378',()=>{
  const {w,p,c}=prepared(),patient=w.pawns[1]!;Object.assign(patient,{state:'downed',x:14,z:10});const before=structuredClone(w);
  for(const cell of [c,{x:c.x,z:c.z+1}]){
   const options=cryptosleepOptions271(w,p.id,cell);
@@ -29,7 +29,9 @@ test('context menus read both casket cells and the real patient, preserve origin
   expect(options.find(o=>o.command.type==='order-carry-cryptosleep')).toMatchObject({enabled:true,command:{patientId:patient.id,casketId:c.id}});
  }
  expect(cryptosleepOptions271(w,p.id,patient).find(o=>o.command.type==='order-carry-cryptosleep')?.enabled).toBe(true);
- expect(cryptosleepOptions271(w,p.id,c,true).every(o=>!o.enabled)).toBe(true);
+ expect(cryptosleepOptions271(w,p.id,c,true).filter(o=>o.command.type==='order-enter-cryptosleep'||o.command.type==='order-carry-cryptosleep').map(o=>o.enabled)).toEqual([true,true]);
+ const historical={...w,schemaVersion:377 as typeof w.schemaVersion};
+ expect(cryptosleepOptions271(historical,p.id,c,true).every(o=>!o.enabled)).toBe(true);
  expect(w).toEqual(before);expect(w.pawns[1]).toBe(patient);expect(c.cryptosleep.human).toBeNull();
  w.pawns.pop();c.cryptosleep.human=patient;
  expect(cryptosleepOptions271(w,p.id,c)).toMatchObject([{enabled:true,command:{type:'order-open-cryptosleep',pawnId:p.id,casketId:c.id}}]);

@@ -1,3 +1,4 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -36,7 +37,7 @@ export function damageCaveHiveProp256(w:World,s:Structure,amount:number,cause:St
  if(!max||!isSchema256Or257(w.schemaVersion)||!spawned&&!pack||!Number.isSafeInteger(amount)||amount<1||!validCaveHiveBuilding256(s,256,w,!!pack))return false;
  const core=external?.core??(isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):w.tick*10);if(!Number.isSafeInteger(core)||(isCorePhysicalSchema297(Number(w.schemaVersion))?core!==effectiveCore297(w):core<Math.max(0,(w.tick-1)*10)||core>w.tick*10))return false;
  const next=(s.damage??0)+amount;
- if(next<max){s.damage=next;if(cause!=='fire')w.rng=rng;
+ if(next<max){s.damage=next;structureDamageChanged379(w,s);if(cause!=='fire')w.rng=rng;
   if(s.kind==='insect-hive'){const lord=findActualHiveLord256(w,s)?.id;if(lord!==undefined){if(hiveInstigatorFaction256(w,external?.instigatorKey).hasFaction&&cause!=='roof'&&cause!=='roof-thick')receiveHiveMemo256(w,'attacked',core,lord);if(cause==='fire'&&max-next<max*.3)receiveHiveMemo256(w,'burned',core,lord);}}return true;
  }
  const jobs=w.jobs.filter(j=>j.repair?.structureId===s.id||j.deconstruction?.structureId===s.id||j.furniture?.structureId===s.id),ids=new Set(jobs.map(j=>j.id));

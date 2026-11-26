@@ -1,7 +1,7 @@
 import {isDoubleBedKind} from '../sim/bed-kinds';
 import { isColonist } from '../sim/affiliation';
 import { isBedKind } from '../sim/bed-kinds';
-import { bedAssignmentReason,bedSlotCell,bedSlotClaimed,bedSlotsCount,civilBedShareAllowed,pawnBedSlot } from '../sim/bed-slots';
+import { bedAssignmentReason,bedSlotCell,captureBedSlotClaimReader,bedSlotsCount,civilBedShareAllowed,pawnBedSlot } from '../sim/bed-slots';
 import { captureActorBeds256 } from '../sim/actor-bed-local-256';
 import { registeredCampaign } from '../sim/world-map-context';
 import {captureFoodReadability,type FoodReadability} from '../sim/food-readability';
@@ -9,7 +9,7 @@ import { ITEM_DEFINITIONS } from '../sim/items';
 import { ticksUntilRot } from '../sim/food-preservation';
 import { foodStationUsable,isStove } from '../sim/food-workstations';
 import { PRODUCTION_RECIPES,stationAccepts } from '../sim/production-recipes';
-import { harvestable } from '../sim/plants';
+import { createPlantGrowthReader,harvestable } from '../sim/plants';
 import { storageCells,storageCellAccepts } from '../sim/shelf-storage';
 import { structureMaxHp } from '../sim/thing-damage-rules';
 import { workPriority } from '../sim/work-types';
@@ -32,37 +32,43 @@ export interface FirstDayGuideCallbacks {onAction:(action:FirstDayGuideAction)=>
 const civil=(p:Pawn)=>isColonist(p)&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue&&p.state!=='dead'&&!p.health?.death;
 const foodCrop=(kind:string)=>kind==='rice'||kind==='potato'||kind==='corn';
 const aliveBuilding=(s:Structure)=>s.kind==='sleeping-spot'||s.kind==='double-sleeping-spot'||(s.damage??0)<structureMaxHp(s);
-const retiring=(w:World,s:Structure)=>w.jobs.some(j=>j.deconstruction?.structureId===s.id||j.furniture?.structureId===s.id&&j.kind==='uninstall');
 const localPile=(ids:ReadonlySet<number>,p:MaterialPile)=>p.quantity>0&&(p.owner.type==='ground'||p.owner.type==='pawn'&&ids.has(p.owner.pawnId));
 
 /** A wholly free double bed admits one automatic owner. Its second place is
  * counted after an owner makes the sharing rule decidable. No route prediction. */
-function civilianPlaces(world:World,people:readonly Pawn[]):number {
-  const slots=world.structures.filter(s=>isBedKind(s.kind)&&!s.medical&&!s.prisoner&&aliveBuilding(s)&&!retiring(world,s))
+function civilianPlaces(world:World,people:readonly Pawn[],retiring:ReadonlySet<number>):number {
+  const localOwners=new Set(world.pawns.filter(p=>p.state!=='dead').map(p=>p.bedId));
+  const slots=world.structures.filter(s=>isBedKind(s.kind)&&!s.medical&&!s.prisoner&&aliveBuilding(s)&&!retiring.has(s.id))
     .flatMap(bed=>{
-      const unownedDouble=isDoubleBedKind(bed.kind)&&!world.pawns.some(p=>p.state!=='dead'&&p.bedId===bed.id);
-      return Array.from({length:unownedDouble?1:bedSlotsCount(bed)},(_,slot)=>({bed,slot:slot as BedSlot}));
+      const unownedDouble=isDoubleBedKind(bed.kind)&&!localOwners.has(bed.id);
+      return Array.from({length:unownedDouble?1:bedSlotsCount(bed)},(_,slot)=>({bed,slot:slot as BedSlot,cell:bedSlotCell(bed,slot as BedSlot),claimed:undefined as ReturnType<typeof captureBedSlotClaimReader>|undefined}));
     });
   // One capture of the campaign's beds for all the questions below (the same
   // World is read throughout), instead of one per person and place.
   let beds:ReturnType<typeof captureActorBeds256>|undefined;
   const actorBeds=()=>beds??=captureActorBeds256(registeredCampaign(world));
-  const options=people.map(p=>slots.flatMap(({bed,slot},index)=>{
+  const options=people.map(p=>slots.flatMap((place,index)=>{
+    const {bed,slot,cell}=place;
     const owned=pawnBedSlot(p,bed);
-    if(bedAssignmentReason(world,bed,p,slot)||bedSlotClaimed(world,bed,slot,p.id,actorBeds))return [];
-    if(isDoubleBedKind(bed.kind)&&(!civilBedShareAllowed(world,bed,p)||owned!==undefined&&owned!==slot))return [];
-    const cell=bedSlotCell(bed,slot);
+    if(bedAssignmentReason(world,bed,p,slot)||(place.claimed??=captureBedSlotClaimReader(world,bed,slot,actorBeds))(p.id))return [];
+    if(isDoubleBedKind(bed.kind)&&(!civilBedShareAllowed(world,bed,p,actorBeds)||owned!==undefined&&owned!==slot))return [];
     return cell&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height?[index]:[];
   }));
-  const assigned=new Map<number,number>();
-  const assign=(person:number,seen:Set<number>):boolean=>{
-    for(const slot of options[person]!)if(!seen.has(slot)){
-      seen.add(slot);const previous=assigned.get(slot);
-      if(previous===undefined||assign(previous,seen)){assigned.set(slot,person);return true;}
+  // Only the cardinality is shown, never the matching itself. Any augmenting
+  // path has the same maximum-cardinality result; take an immediately free
+  // compatible slot first instead of recursively displacing all earlier
+  // colonists in a room full of interchangeable, unassigned beds.
+  const assigned=new Int32Array(slots.length).fill(-1),seen=new Uint32Array(slots.length);
+  const assign=(person:number,mark:number):boolean=>{
+    const candidates=options[person]!;
+    for(const slot of candidates)if(assigned[slot]===-1&&seen[slot]!==mark){seen[slot]=mark;assigned[slot]=person;return true;}
+    for(const slot of candidates)if(seen[slot]!==mark){
+      seen[slot]=mark;const previous=assigned[slot]!;
+      if(assign(previous,mark)){assigned[slot]=person;return true;}
     }
     return false;
   };
-  return people.reduce((count,_,index)=>count+Number(assign(index,new Set())),0);
+  return people.reduce((count,_,index)=>count+Number(assign(index,index+1)),0);
 }
 
 /** Current facts from one confirmed snapshot. No milestone, reservation,
@@ -72,13 +78,21 @@ export function readFirstDayGuide(world:World,food:FoodReadability=captureFoodRe
   const enabled=(work:'haul'|'build'|'grow'|'cook')=>workers.some(p=>workPriority(p,work)>0);
   const coverage=[['haul','Transport'],['build','Construction'],['grow','Culture']] as const;
   const missingWork=coverage.filter(([work])=>!enabled(work)).map(([,label])=>label);
-  const cells=storageCells(world).filter(c=>c.capacity>0&&c.priority>0&&c.x>=0&&c.z>=0&&c.x<world.width&&c.z<world.height
+  const retiring=new Set<number>();
+  for(const job of world.jobs){
+    if(job.deconstruction)retiring.add(job.deconstruction.structureId);
+    if(job.kind==='uninstall'&&job.furniture)retiring.add(job.furniture.structureId);
+  }
+  const availableShelfIds=new Set(world.structures.filter(s=>(s.kind==='shelf'||s.kind==='small-shelf')&&aliveBuilding(s)&&!retiring.has(s.id)).map(s=>s.id));
+  // This UI read does not need the full spatial structure index just to list
+  // shelf policies. The same provider has a direct-list decision view.
+  const cells=storageCells({stockpiles:world.stockpiles,structures:world.structures,schemaVersion:world.schemaVersion,worldFactions:world.worldFactions}).filter(c=>c.capacity>0&&c.priority>0&&c.x>=0&&c.z>=0&&c.x<world.width&&c.z<world.height
     &&!['water','rock'].includes(world.tiles[c.z*world.width+c.x]!.terrain)
-    &&(c.shelfId===undefined||world.structures.some(s=>s.id===c.shelfId&&aliveBuilding(s)&&!retiring(world,s))));
+    &&(c.shelfId===undefined||availableShelfIds.has(c.shelfId)));
   const woodCells=cells.filter(c=>storageCellAccepts(world,c,'wood')).length;
   const foodCells=cells.filter(c=>storageCellAccepts(world,c,'survival-meal')).length;
   const shelfPlans=world.jobs.filter(j=>j.kind==='shelf'||j.kind==='small-shelf').length;
-  const beds=civilianPlaces(world,people);
+  const beds=civilianPlaces(world,people,retiring);
   const bedPlans=world.jobs.filter(j=>isBedKind(j.kind)).length;
   const piles=world.piles.filter(p=>localPile(ids,p)&&ticksUntilRot(p,world.tick)>0);
   const nutrition=food.freshNutrition,survival=food.survivalMeals;
@@ -87,14 +101,15 @@ export function readFirstDayGuide(world:World,food:FoodReadability=captureFoodRe
   const zones=world.growingZones.filter(z=>foodCrop(z.plant)&&z.cells.length>0);
   const zoneCells=new Set(zones.flatMap(z=>z.cells));
   const crops=world.resources.filter(r=>foodCrop(r.kind)&&zoneCells.has(r.z*world.width+r.x));
-  const harvest=crops.filter(r=>harvestable(world,r)).length;
-  const stations=world.structures.filter(s=>(isStove(s.kind)||s.kind==='campfire')&&aliveBuilding(s)&&!retiring(world,s));
+  const growth=createPlantGrowthReader(world),harvest=crops.filter(r=>harvestable(world,r,()=>growth(r))).length;
+  const stations=world.structures.filter(s=>(isStove(s.kind)||s.kind==='campfire')&&aliveBuilding(s)&&!retiring.has(s.id));
   const configured=stations.filter(s=>(s.bills??[]).some(b=>(b.recipe==='simple-meal'||b.recipe==='cook-simple-meal-bulk')
     &&stationAccepts(s,b.recipe)&&!b.suspended&&(b.mode==='forever'||b.target>0)
     &&PRODUCTION_RECIPES[b.recipe].inputs.some(item=>b.filters[item]===true)));
   const usable=configured.filter(s=>foodStationUsable(s)&&!s.breakdown);
   const groundWeapons=piles.filter(p=>p.kind==='weapon'&&p.owner.type==='ground'&&(p.weapon?.hitPoints??1)>0);
-  const equipped=people.filter(p=>world.piles.some(item=>item.kind==='weapon'&&item.quantity>0&&item.owner.type==='equipment'&&item.owner.pawnId===p.id&&(item.weapon?.hitPoints??1)>0)).length;
+  const weaponOwners=new Set<number>();for(const item of world.piles)if(item.kind==='weapon'&&item.quantity>0&&item.owner.type==='equipment'&&(item.weapon?.hitPoints??1)>0)weaponOwners.add(item.owner.pawnId);
+  const equipped=people.filter(p=>weaponOwners.has(p.id)).length;
   const noPeople=people.length===0,research=readResearchReadiness(world),project=researchProjects.find(p=>p.id===research.activeProject);
   const availability=readAvailabilityStatusAlerts(world),absence=availability[0];
   const absenceTarget=absence?.targets[0];

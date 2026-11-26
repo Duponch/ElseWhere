@@ -4,7 +4,7 @@ import { ResourceTargetTint } from './resource-target-tint';
 /** Authored IDs identify exact instance slots. Build their lookup only while a
  * preview is active; normal rendering performs no selection scan per frame. */
 export class InstanceTargetTint {
-  constructor(private readonly changed435?:()=>void){}
+  constructor(private readonly changed435?:()=>void,private readonly residentRanges=false){}
   private readonly tint = new ResourceTargetTint();
   private attribute: THREE.BufferAttribute | undefined;
   private targets: readonly (number | undefined)[] = [];
@@ -19,7 +19,7 @@ export class InstanceTargetTint {
     this.attribute = attribute; this.targets = targets; this.index = undefined;
     // These producers historically publish the whole RGB buffer. A pending
     // restore or a new sparse tint must not turn that full upload into K-only.
-    if (attribute.updateRanges.length || this.selected.size) {
+    if (!this.residentRanges&&(attribute.updateRanges.length || this.selected.size)) {
       attribute.clearUpdateRanges(); attribute.addUpdateRange(0, attribute.array.length);
     }
     this.apply();

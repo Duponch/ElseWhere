@@ -17,7 +17,7 @@ import { medicalWorkRefusal } from './health-rules.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
 import { updatePawnHealth } from './health.ts';
 import { rescueBedAvailable,rescueBedPlaces,medicalBedPreference } from './medical-beds.ts';
-import { carrierOf,rescueClaim,syncPatient } from './rescue-state.ts';
+import { carrierOf,rescueClaim,syncPatient,markHumanCarrierCandidatesDirty } from './rescue-state.ts';
 import { blockedCells,reachableCells,routeToCell,type Reachability } from './pathfinding.ts';
 import { clearQueuedOrders } from './player-orders.ts';
 import { processPrisonerRelease,reconcileRelease } from './prisoner-release.ts';
@@ -94,6 +94,7 @@ export function startRescue(world:World,actor:Pawn,proposal:RescueProposal,force
   // leave an ordinary bed owner behind if the order is cancelled before pickup.
   if(!bed.medical&&!capture&&(!isRescuableVisitor(patient)||isAdmittedVisitorGuest(patient)))claimLocalActorBed256(world,patient,bed,isDoubleBedKind(bed.kind)?proposal.bedSlot:undefined);
   actor.rescue={patientId:proposal.patientId,bedId:proposal.bedId,phase:'approach',...(isDoubleBedKind(bed.kind)?{bedSlot:proposal.bedSlot}:{}),...(capture?{capture:true as const}:{})};
+  markHumanCarrierCandidatesDirty();
   actor.path=proposal.path;actor.state='moving';actor.planCooldown=0;
   if(forced)actor.orders.active='rescue';
 }

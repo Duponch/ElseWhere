@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 /** Creation-only GenStep970 join. The ORIGINAL physical result supplies its
  * elevation and rock identities; every mask below is captured from its SAME
@@ -55,7 +56,7 @@ export function populateGeographicRockChunks256(physical:PhysicalResult256,conte
  // The plan already allocated CHUNKS AND RUBBLE in their true interleaved
  // spawn order. Never call addMaterial/addFilth here to allocate a second ID
  // or consume an unrelated runtime RNG. All checks precede these commits.
- world.piles.push(...newPiles);
+ appendPileEntries(world.piles,...newPiles);
  if(plan.rubble.length){const filth=ensureFilth(world);for(const row of plan.rubble){const original=originals.get(row.id);if(original){original.thickness=row.thickness;original.grownCore=row.grownCore;}}filth.items.push(...newFilth);}
  world.nextId=plan.nextId;refreshStock(world);
  return {chunkIds:plan.chunks.map(row=>row.id),rubbleIds:plan.rubble.map(row=>row.id),adjacentPermutation:plan.adjacentPermutation,adjacentUses:plan.adjacentUses,random:plan.random,noiseSeed:plan.noiseSeed};

@@ -13,7 +13,7 @@ import type {RelationshipPeople,RelationshipPerson} from './relationship-state.t
 import type {GroupDepartureBaseline,GroupLoss,GroupState} from './group-state.ts';
 
 export type HumanOwnerKind='map'|'world-lost'|'ancient-casket'|'player-casket'|'ship-casket'|'starting-pod'|'scout-away'|'commercial-away'|'group-away'|'group-loss'
-  |'visitor-departure'|'pod-departure'|'raid-departure'|'prison-departure'|'world-pawn'|'caravan-encounter';
+  |'visitor-departure'|'pod-departure'|'banished-departure'|'raid-departure'|'prison-departure'|'world-pawn'|'caravan-encounter';
 export type HumanSimulation='local'|'world'|'frozen'|'identity-only';
 export type HumanPlace={kind:'map'}|{kind:'ancient-casket';casketId:number}|{kind:'player-casket';casketId:number}|{kind:'ship-casket';casketId:number}|{kind:'starting-pod';podId:number}|{kind:'planet';tile:number}|{kind:'legacy-trip'}|{kind:'archive'}|{kind:'world-pawn'};
 export interface HumanOwnerSlot {
@@ -89,6 +89,7 @@ export function everyHumanPawnOwner(realWorld:World,predicate:(pawn:Pawn,kind:Hu
   for(const loss of explicit.losses??realWorld.groupLosses??[])if(!predicate(loss.pawn,'group-loss'))return false;
   for(const departure of realWorld.visitors?.departed??[])if(!predicate(departure.pawn,'visitor-departure'))return false;
   for(const departure of realWorld.podRescues?.departed??[])if(!predicate(departure.pawn,'pod-departure'))return false;
+  for(const departure of realWorld.banishedDepartures378??[])if(!predicate(departure.pawn,'banished-departure'))return false;
   return true;
 }
 
@@ -173,6 +174,7 @@ export function captureHumanOwners(realWorld:World,explicit:ExplicitWorldHumanOw
   }
   for(const departure of realWorld.visitors?.departed??[])addPawn(departure.pawn,'visitor-departure','frozen',{kind:'archive'},departure.tick,departure.items,departure.packed??[]);
   for(const departure of realWorld.podRescues?.departed??[])addPawn(departure.pawn,'pod-departure','frozen',{kind:'archive'},departure.tick,departure.items,departure.packed??[]);
+  for(const departure of realWorld.banishedDepartures378??[])addPawn(departure.pawn,'banished-departure','frozen',{kind:'archive'},departure.tick,departure.items,departure.packed);
   for(const departure of realWorld.raids?.departed??[])add({id:departure.pawnId,name:departure.name,kind:'raid-departure',simulation:'identity-only',
     place:{kind:'archive'},status:'departed',validationTick:departure.tick,items:Object.freeze([...departure.items]),packed:[]});
   for(const departure of realWorld.prisonDepartures??[])add({id:departure.pawnId,name:departure.name,kind:'prison-departure',simulation:'identity-only',

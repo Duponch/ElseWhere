@@ -3,6 +3,8 @@ import { FoliageAmbience } from '../src/audio/ambience';
 import { FoliageAmbience as ReferenceFoliageAmbience } from './scenarios/foliage-ambience-baseline-v224';
 import { createWorld } from '../src/sim/index';
 import type { Resource, World } from '../src/sim/types';
+import {ResidentCollectionJournal379} from '../src/bridge/resident-collection-journal-379';
+import type {ResourceStructureCandidate} from '../src/bridge/snapshots';
 
 type Census={density:Float32Array;columns:number;rows:number};
 const bits=(census:FoliageAmbience|ReferenceFoliageAmbience)=>{
@@ -64,4 +66,20 @@ test('census dimensions, empty replacement and resumed immutable ownership match
   const taller={...wider,width:32,height:64};read(taller);
   const empty={...taller,resources:[]};read(empty);read({...empty,tick:12000});
   read({...world,tick:12000});read(world,false);read({...world,tick:12001});
+});
+
+test('resident canopy folds its ordered member directory exactly across skipped publications, growth and reorder',()=>{
+ const initial=camp(),journal=new ResidentCollectionJournal379('resources'),read=oracle(),slots=(world:World)=>new Map(world.resources.map((p,i)=>[p.id,i]));
+ let previous=initial,revision=1;journal.reset(previous,1,revision,slots(previous));read(previous);
+ const append=(world:World,edge:ResourceStructureCandidate|undefined)=>{journal.append(previous,world,1,++revision,slots(world),edge);previous=world;};
+ const emptyEdge=(world:World):ResourceStructureCandidate=>({beforeCount:previous.resources.length,afterCount:world.resources.length,removed:[],added:[],updated:[]});
+ for(const tick of [1500,5999,6000,6001]){const next={...previous,tick};append(next,emptyEdge(next));read(next);}
+ const removed=previous.resources[8]!,edited={...previous.resources[29]!,x:27,growth:.56,growthTick:6001},added:Resource={id:initial.nextId++,kind:'tree',species:'oak',x:12,z:14,amount:8,growth:.22,growthTick:6001};
+ const values=previous.resources.filter(p=>p.id!==removed.id).map(p=>p.id===edited.id?edited:p).concat(added),next={...previous,resources:values};
+ append(next,{beforeCount:previous.resources.length,afterCount:values.length,removed:[{id:removed.id,beforeOrdinal:8}],added:[{id:added.id,afterOrdinal:values.length-1}],updated:[{id:edited.id,afterOrdinal:values.findIndex(p=>p.id===edited.id)}]});
+ // Deliberately consume more than one edge at once.
+ const later={...previous,tick:12000};append(later,emptyEdge(later));read(later);
+ const reordered={...previous,resources:previous.resources.slice().reverse()};append(reordered,undefined);read(reordered);
+ const nextTick={...previous,tick:18000};append(nextTick,emptyEdge(nextTick));read(nextTick);
+ read(structuredClone(nextTick),false);
 });

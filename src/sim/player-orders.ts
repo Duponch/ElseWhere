@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {factionCommsTask298} from './faction-comms-state-298.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
@@ -31,7 +32,7 @@ import { deconstructionAvailable } from './deconstruction-rules.ts';
 import { rememberPriorityWork, expirePriorityWork } from './priority-work-state.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { cancelMelee } from './melee-state.ts';
-import { isCookingOrder } from './order-types.ts';
+import { isCookingOrder,orderRecoveryReason,orderedTarget378,orderedTargetClaimed378,queuedOrderCount378,type OrderedCommand378 } from './order-types.ts';
 import { advanceCookingOrder, planCookingOrder, queuedCookingReason, startCookingOrder } from './player-cooking.ts';
 import { footprintCells } from './definitions.ts';
 import { constructionSkillRequired,constructionSupplied } from './construction-materials.ts';
@@ -51,12 +52,17 @@ import { interruptDraftWork } from './drafting.ts';
 import { consumeReason,consumeProposal,consumeWarnings,isForcedConsuming } from './consuming.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { equipmentOrderReason } from './equipment.ts';
+import {animalRescueReason,animalRescueOrderReason378} from './animal-rescue.ts';
+import {isForcedPersonalAnimalOrder378} from './personal-animal-order-state-378.ts';
+import {queryPersonalAnimalOrderOptions378} from './personal-animal-orders-378.ts';
+import {constructionJobAllowed379} from './construction-state-379.ts';
+import {constructionMissingLabel379} from './construction-supply-379.ts';
 import { apparelLabel } from './apparel-rules.ts';
 import { equippedWeapon,weaponLabel,type EquipmentAction } from './equipment-rules.ts';
 
 export interface PlayerOrders { active: number | 'bury' | 'equipment' | 'haul' | 'cook' | 'feed' | 'tend' | 'rescue' | 'consume' | null; queue: import('./order-types.ts').QueuedOrder[] }
 export type OrderCommand = { type:'order-cook';pawnId:number;structureId:number;queue:boolean } | { type: 'order-job'; pawnId: number; jobId: number; queue: boolean } | { type:'order-haul';pawnId:number;target:HaulOrderTarget;queue:boolean } | { type: 'clear-orders'; pawnId: number };
-export interface OrderOption { jobId: number; openCasketId?:number; stripTargetId?:number; consumePileId?:number; warnings?:string[]; arrestPatientId?:number; capturePatientId?:number; equipmentItemId?:number; equipmentAction?:EquipmentAction; cookStationId?:number; rescuePatientId?:number; tendPatientId?:number; feedPatientId?:number; haulTarget?:HaulOrderTarget; label: string; enabled: boolean; reason?: string }
+export interface OrderOption { jobId: number; animalId?:number;animalAction?:'hunt'|'tame'|'slaughter';animalRescueId?:number; openCasketId?:number; stripTargetId?:number; consumePileId?:number; warnings?:string[]; arrestPatientId?:number; capturePatientId?:number; equipmentItemId?:number; equipmentAction?:EquipmentAction; cookStationId?:number; rescuePatientId?:number; tendPatientId?:number; feedPatientId?:number; haulTarget?:HaulOrderTarget; label: string; enabled: boolean; reason?: string }
 export const MAX_QUEUED_ORDERS = 32;
 const labels: Record<Job['kind'], string> = {'egg-box':'Construire la boîte à œufs','tool-cabinet':'Construire l’armoire à outils','ship-computer':'Construire l’ordinateur de vaisseau','ship-sensors':'Construire les capteurs de vaisseau','firefoam-popper':'Construire le diffuseur de mousse','smooth-wall':'Lisser le mur','smooth-floor':'Lisser le sol','ship-cryptosleep-casket':'Construire le caisson spatial','ship-beam':'Construire la poutre structurelle de vaisseau','ship-engine':'Construire le moteur Johnson–Tanaka','ship-reactor':'Construire le réacteur stellaire','cryptosleep-casket':'Construire le caisson de cryptosommeil','fueled-smithy':'Construire la forge à combustible','electric-smithy':'Construire la forge électrique',brewery:'Construire la brasserie','fermenting-barrel':'Construire le tonneau de fermentation',column:'Construire la colonne',urn:'Construire l’urne','stele-large':'Construire la grande stèle','stele-grand':'Construire la stèle monumentale',sarcophagus:'Construire le sarcophage','torch-lamp':'Construire la lampe-torche','build-bridge':'Construire le pont','remove-bridge':'Retirer le pont',vent:'Construire la bouche d’aération','extract-tree':'Déraciner cet arbre','replant-tree':'Replanter cet arbre',shelf:'Construire l’étagère','small-shelf':'Construire la petite étagère','spike-trap':'Construire le piège à pointes','ied-high-explosive':'Construire le piège EEI explosif','ied-incendiary':'Construire le piège EEI incendiaire','double-bed':'Construire le lit double','electric-crematorium':'Construction du crématorium électrique','electric-smelter':'Construire la fonderie électrique','sleeping-spot':'Placer le couchage au sol','animal-sleeping-spot':'Placer le couchage animal','biofuel-refinery':'Construire la raffinerie de biocarburant','geothermal-generator':'Construire la centrale géothermique','chemfuel-generator':'Construire le générateur à biocarburant','nutrient-paste-dispenser':'Construire le distributeur de pâte nutritive',hopper:'Construire la trémie','orbital-beacon':'Construire une balise orbitale','comms-console':'Construire la console de communication','deep-drill':'Construire une foreuse profonde','ground-scanner':'Construire le scanner souterrain', 'vitals-monitor':'Construire le moniteur vital', 'drug-lab':'Construire le laboratoire de chimie', 'hydroponics-basin':'Construire le bac hydroponique', 'mini-turret':'Construire la mini-tourelle', 'tube-television':'Construire la télévision cathodique', sandbags:'Construire les sacs de sable', autodoor:'Construire la porte automatique', fence:'Construire la clôture','fence-gate':'Construire le portillon','pen-marker':'Construire le marqueur d’enclos', 'art-bench':'Construire l’atelier de sculpture','small-sculpture':'Petite sculpture','large-sculpture':'Grande sculpture',grave:'Creuser une tombe','lay-floor':'Poser un sol','remove-floor':'Retirer un sol',heater:'Radiateur','wind-turbine':'Éolienne',flick:'Actionner l’interrupteur','power-conduit':'Construire le conduit','power-switch':'Construire l’interrupteur',battery:'Construire la batterie','solar-generator':'Construire le panneau solaire', 'fueled-stove':'Construire la cuisinière à bois', 'electric-stove':'Construire la cuisinière électrique', 'butcher-table':'Construire la table de boucherie', 'butcher-spot':'boucherie', cooler:'Construire le climatiseur', 'research-bench':'Bureau de recherche','tailor-bench':'Établi de tailleur','electric-tailor-bench':'Établi de tailleur électrique','machining-table':'Construire l’atelier d’usinage','fabrication-bench':'Construire l’établi de fabrication','hi-tech-research-bench':'Construire le bureau de recherche haute technologie','multi-analyzer':'Construire le multi-analyseur', 'crafting-spot':'Placer l’artisanat', repair:'réparer', 'fix-breakdown':'Remplacer le composant en panne', 'wood-generator':'construire le générateur à bois', 'sun-lamp':'construire la lampe horticole', 'standing-lamp':'construire la lampe', 'passive-cooler':'Construire le refroidisseur passif', 'build-roof':'Poser le toit', 'remove-roof':'Retirer le toit', door:'Construire la porte', stonecutter:'Construire la table de taille', mine:'Miner', uninstall:'Désinstaller',install:'Réinstaller', deconstruct:'Déconstruire', chop:'Abattre',harvest:'Récolter',cut:'Couper',sow:'Semer',wall:'Construire le mur',bedroll:'Construire le sac de couchage',bed:'Construire le lit','hospital-bed':'Construire le lit d’hôpital',table:'Construire la table','table-square':'Construire la table carrée','table-long':'Construire la table longue','table-large':'Construire la grande table','couch':'Construire le canapé','double-bedroll':'Construire le sac de couchage double','double-sleeping-spot':'Placer le couchage au sol double','wall-lamp':'Construire l’applique murale',stool:'Construire le tabouret','dining-chair':'Construire la chaise',armchair:'Construire le fauteuil','end-table':'Construire la table de chevet',dresser:'Construire la commode','flower-pot':'Construire le pot de fleurs',campfire:'Construire le feu',horseshoes:'Construire le piquet','chess-table':'Construire la table d’échecs','hoopstone-ring':'Construire l’anneau de lancer de pierres','billiards-table':'Construire la table de billard','game-of-ur-board':'Construire le plateau du jeu royal d’Ur','poker-table':'Construire la table de poker' };
 const fail = (reason: string): CommandResult => ({ok:false,code:'invalid-command',reason});
@@ -67,6 +73,7 @@ const orderLabel=(world:World,job:Job)=>clearingPlant(world,job)?'Couper la plan
 /** This provider orders one executable job, never an entire construction chain.
  * Quantity-based delivery is handled separately by player-hauling. */
 export function orderReadiness(world: World, pawn: Pawn, job: Job, accepted=false, queued=false): string | undefined {
+  if(world.schemaVersion>=379&&!constructionJobAllowed379(job))return 'Construction interdite.';
   if(!wallDoorHasIntent296(job)&&(!accepted||queued))return 'Le plan et la désignation de ce retrait ont été annulés.';
   const areaReason=allowedAreaReason(world,pawn,job);if(areaReason)return areaReason;
   if(!isColonist(pawn)||pawn.prisoner)return 'Seul un colon libre peut recevoir un ordre de travail.';
@@ -95,7 +102,7 @@ export function orderReadiness(world: World, pawn: Pawn, job: Job, accepted=fals
     if((!accepted||job.clearance)&&plant&&plant.kind!=='rock')return;
     if(job.clearance)return 'La plante à dégager a disparu.';
     const skill=constructionSkillRequired(job.kind,world.schemaVersion);if(pawn.skills.construction.level<skill)return `Construction ${skill} nécessaire pour finir cet ouvrage.`;
-    if (!constructionSupplied(world,job)) return 'Approvisionnement nécessaire ; choisissez Livrer les matériaux.';
+    if (!constructionSupplied(world,job)) return world.schemaVersion>=379?`Approvisionnement nécessaire : ${constructionMissingLabel379(world,job)} ; choisissez Livrer les matériaux.`:'Approvisionnement nécessaire ; choisissez Livrer les matériaux.';
     if (!constructionSiteFree(world,job,pawn.id)) return 'Chantier gêné ; dégagez les piles ou attendez le passage des colons.';
   }
   if(job.furniture&&!furnitureReady(world,job,pawn))return 'Meuble utilisé ou emplacement encombré.';
@@ -118,14 +125,14 @@ function preflight(world:World,pawn:Pawn,job:Job,queue=false):string|undefined {
   return orderReadiness(world,pawn,job,false,queue&&(busy(pawn)||pawn.orders.queue.length>0));
 }
 /** Called only for a menu query in the worker, not on render frames/snapshots. */
-export function queryOrderOptions(world:World,pawnId:number,cell:Cell,queue=false):OrderOption[] {
+export function queryOrderOptions(world:World,pawnId:number,cell:Cell,queue=false,futureAdmission378=false):OrderOption[] {
   if(world.pawns.some(p=>p.id===pawnId&&(!isColonist(p)||p.prisoner)))return [];
   const pawn=world.pawns.find(p=>p.id===pawnId);if(!pawn)return [];
   if(pawn.mental?.crisis)return [{jobId:0,label:mentalCrisisLabel(pawn.mental.crisis.kind),enabled:false,reason:mentalCrisisRefusal(pawn)}];
   const jobs=world.jobs.filter(j=>footprintCells(j).some(c=>c.x===cell.x&&c.z===cell.z));
   const job=jobs.find(j=>!isRoofJob(j))??jobs[0],piles=groundPilesAt(world,cell),pile=piles[0],options:OrderOption[]=[];
   for(const casket of world.structures.filter(isAncientCasket256))if(footprintCells(casket).some(c=>c.x===cell.x&&c.z===cell.z)){
-    let reason=queue?'Ouvrir une capsule est un ordre direct, sans mise en file.':exhausted(world,pawn);
+    let reason=queue&&world.schemaVersion<378?'Ouvrir une capsule est un ordre direct, sans mise en file.':exhausted(world,pawn);
     if(!reason){const intent=ancientCasketOpenIntent256(world,{type:'order-open-casket',pawnId,casketId:casket.id});if(!intent.ok)reason=intent.reason;}
     if(!reason&&!planCommandDrops(world,{type:'clear-orders',pawnId}))reason='La cargaison doit pouvoir être déposée avant l’ouverture.';
     // Read-only real release preflight, on this explicit worker query only.
@@ -135,7 +142,7 @@ export function queryOrderOptions(world:World,pawnId:number,cell:Cell,queue=fals
     options.push({jobId:0,openCasketId:casket.id,label:'Ouvrir la capsule ancienne',enabled:!reason,...reason?{reason}:{}});
   }
   for(const food of piles)if(food.kind==='food'||isSchema265OrLater(world.schemaVersion)&&food.kind==='beer'&&food.item==='beer'){
-    const reason=queue?'La consommation directe ne peut pas être mise en file.':consumeReason(world,pawn,food)??(!consumeProposal(world,pawn,food)?'Aucun accès libre au contact de cette nourriture.':undefined);
+    const reason=queue&&world.schemaVersion<378?'La consommation directe ne peut pas être mise en file.':consumeReason(world,pawn,food)??(!consumeProposal(world,pawn,food)?'Aucun accès libre au contact de cette nourriture.':undefined);
     options.push({jobId:0,consumePileId:food.id,label:(food.kind==='beer'?'Boire ':'Consommer ')+ITEM_DEFINITIONS[food.item].label,enabled:!reason,warnings:consumeWarnings(world,pawn,food),...reason?{reason}:{}});
   }
   for(const target of jobs) {
@@ -147,12 +154,12 @@ export function queryOrderOptions(world:World,pawnId:number,cell:Cell,queue=fals
   if(!weapons.length&&pawn.x===cell.x&&pawn.z===cell.z&&primary)weapons.push(primary);
   for(const weapon of weapons){
     const action=weapon===primary?'drop':'equip';
-    const reason=queue?'La file d’équipement n’est pas encore disponible.':equipmentOrderReason(world,pawn,weapon,action)
+    const reason=queue&&world.schemaVersion<378?'La file d’équipement n’est pas encore disponible.':equipmentOrderReason(world,pawn,weapon,action)
       ??(action==='equip'&&routeToJob(world,cell,reachableCells(world,pawn,blockedCells(world),new Set()),true)===null?'Aucun accès praticable à cette arme.':undefined);
     options.push({jobId:0,equipmentItemId:weapon.id,equipmentAction:action,label:`${action==='equip'?'Équiper':'Déposer'} ${weaponLabel(weapon)}`,enabled:!reason,...reason?{reason}:{}});
   }
   for(const apparel of piles.filter(p=>p.kind==='apparel')){
-    const reason=queue?'La file d’équipement n’est pas encore disponible.':equipmentOrderReason(world,pawn,apparel,'wear')
+    const reason=queue&&world.schemaVersion<378?'La file d’équipement n’est pas encore disponible.':equipmentOrderReason(world,pawn,apparel,'wear')
       ??(routeToJob(world,cell,reachableCells(world,pawn,blockedCells(world),new Set()),true)===null?'Aucun accès praticable à ce vêtement.':undefined);
     options.push({jobId:0,equipmentItemId:apparel.id,equipmentAction:'wear',label:`Porter ${apparelLabel(apparel)}`,enabled:!reason,...reason?{reason}:{}});
   }
@@ -179,38 +186,83 @@ export function queryOrderOptions(world:World,pawnId:number,cell:Cell,queue=fals
   }
   if(world.schemaVersion>=213)for(const patient of world.pawns)if(patient!==pawn&&patient.x===cell.x&&patient.z===cell.z&&isColonist(patient)&&!patient.prisoner&&patient.mental?.crisis&&patient.state!=='dead'){
     const admission=exhausted(world,pawn)??arrestReason(world,pawn,patient);
-    const reason=queue?'L’arrestation est un ordre direct, sans mise en file.':admission
+    const reason=queue&&world.schemaVersion<378?'L’arrestation est un ordre direct, sans mise en file.':admission
       ??(!arrestProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucun lit de prison accessible et disponible.':undefined);
     const chance=admission?undefined:patient.state==='downed'||violentWorkRefusal(patient)?1:arrestSuccessChance(pawn);
     options.push({jobId:0,arrestPatientId:patient.id,label:`Arrêter ${patient.name}${chance!==undefined?` · acceptation ${Number((chance*100).toFixed(1)).toLocaleString('fr-FR')} %`:''}`,enabled:!reason,...reason?{reason}:{}});
   }
   for(const patient of world.pawns)if(patient!==pawn&&patient.x===cell.x&&patient.z===cell.z&&!isColonist(patient)&&!patient.prisoner&&patient.state!=='dead'){
-    const reason=queue?'La capture ne peut pas encore être ajoutée à une file.':exhausted(world,pawn)??captureReason(world,pawn,patient)
+    const reason=queue&&world.schemaVersion<378?'La capture ne peut pas encore être ajoutée à une file.':exhausted(world,pawn)??captureReason(world,pawn,patient)
       ??(!captureProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucun lit de prison accessible et disponible.':undefined);
     options.push({jobId:0,capturePatientId:patient.id,label:`Capturer ${patient.name}`,enabled:!reason,...reason?{reason}:{}});
   }
   for(const patient of world.pawns)if(patient.id!==pawn.id&&patient.x===cell.x&&patient.z===cell.z&&wantsRescue(patient,true)){
-    const reason=queue?'Le secours direct ne peut pas encore être ajouté à une file.':exhausted(world,pawn)??rescueReason(world,pawn,patient,true)
+    const reason=queue&&world.schemaVersion<378?'Le secours direct ne peut pas encore être ajouté à une file.':exhausted(world,pawn)??rescueReason(world,pawn,patient,true)
       ??(!rescueProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()),true)?'Aucun couchage accessible et disponible.':undefined);
     options.push({jobId:0,rescuePatientId:patient.id,label:`Secourir ${patient.name}`,enabled:!reason,...reason?{reason}:{}});
   }
   for(const patient of world.pawns)if(patient!==pawn&&patient.x===cell.x&&patient.z===cell.z&&lyingPatient(patient)){
-    const reason=queue?'La file de soins n’est pas encore disponible.':tendingReason(world,pawn,patient)??(!tendingProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucune place accessible au chevet.':undefined);
+    const reason=queue&&world.schemaVersion<378?'La file de soins n’est pas encore disponible.':tendingReason(world,pawn,patient)??(!tendingProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucune place accessible au chevet.':undefined);
     options.push({jobId:0,tendPatientId:patient.id,label:`Soigner ${patient.name}`,enabled:!reason,...reason?{reason}:{}});
-    const feedReason=queue?'La file d’alimentation assistée n’est pas encore disponible.':feedingReason(world,pawn,patient)??(!feedingProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucun aliment autorisé ou accès au chevet.':undefined);
+    const feedReason=queue&&world.schemaVersion<378?'La file d’alimentation assistée n’est pas encore disponible.':feedingReason(world,pawn,patient)??(!feedingProposal(world,pawn,patient,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucun aliment autorisé ou accès au chevet.':undefined);
     options.push({jobId:0,feedPatientId:patient.id,label:`Nourrir ${patient.name}`,enabled:!feedReason,...feedReason?{reason:feedReason}:{}});
   }
   // Schema 351: FloatMenuOptionProvider_Strip, one option per strippable thing of the cell.
   for(const target of stripTargetsAt351(world,cell))if(target.pawn!==pawn){
-    const intent=queue?undefined:stripOrderIntent351(world,pawn.id,target.pawn.id),reason=queue?'Dépouiller est un ordre direct, sans mise en file.':intent!.ok?undefined:intent!.reason;
+    const intent=queue&&world.schemaVersion<378?undefined:stripOrderIntent351(world,pawn.id,target.pawn.id),reason=queue&&world.schemaVersion<378?'Dépouiller est un ordre direct, sans mise en file.':intent!.ok?undefined:intent!.reason;
     const warning=stripGoodwillWarning351(world,target);
     options.push({jobId:0,stripTargetId:target.pawn.id,label:`Dépouiller ${target.dead?`le corps de ${target.pawn.name}`:target.pawn.name}`,enabled:!reason,...warning?{warnings:[warning]}:{},...reason?{reason}:{}});
   }
   if(pawn.x===cell.x&&pawn.z===cell.z){
-    const reason=queue?'La file de soins n’est pas encore disponible.':tendingReason(world,pawn,pawn)??(!tendingProposal(world,pawn,pawn,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucune place pour se soigner.':undefined);
+    const reason=queue&&world.schemaVersion<378?'La file de soins n’est pas encore disponible.':tendingReason(world,pawn,pawn)??(!tendingProposal(world,pawn,pawn,reachableCells(world,pawn,blockedCells(world),new Set()))?'Aucune place pour se soigner.':undefined);
     options.push({jobId:0,tendPatientId:pawn.id,label:'Se soigner',enabled:!reason,...reason?{reason}:{}});
   }
+  if(world.schemaVersion>=378)for(const a of world.wildlife?.animals??[])if(a.x===cell.x&&a.z===cell.z&&a.domestic&&a.state==='downed'){
+    const reason=queue?animalRescueOrderReason378(world,pawn,a.id):animalRescueReason(world,pawn,a);
+    options.push({jobId:0,animalRescueId:a.id,label:'Secourir cet animal',enabled:!reason,...reason?{reason}:{}});
+  }
+  if(world.schemaVersion>=378)options.push(...queryPersonalAnimalOrderOptions378(world,pawnId,cell,queue));
+  if(world.schemaVersion>=378)for(const option of options){
+    const c=orderOptionCommand378(pawn.id,option),target=orderedTarget378(c);
+    const reason=queue&&queuedOrderCount378(pawn)>=MAX_QUEUED_ORDERS?`File limitée à ${MAX_QUEUED_ORDERS} travaux.`
+      :target&&orderedTargetClaimed378(world,target.kind,target.id,pawn.id)?'Cette cible est réservée par un ordre en file.':undefined;
+    if(reason){option.enabled=false;option.reason=reason;}
+  }
+  // Recovery is a physical consequence of a completed attack, not an order
+  // that a direct civilian order may erase. The ancient-casket provider is
+  // dispatched earlier and has its own admission. For future intents keep the
+  // direct provider's reservation view but let the FIFO wait for recovery.
+  const recovery=Number(world.schemaVersion)>=378&&(queue||futureAdmission378)?undefined:orderRecoveryReason(pawn);
+  if(recovery)for(const option of options)if(option.enabled&&option.openCasketId===undefined){option.enabled=false;option.reason=recovery;}
   return options;
+}
+export function orderOptionCommand378(pawnId:number,o:OrderOption):OrderedCommand378 {
+ if(o.animalId!==undefined&&o.animalAction)return {type:'order-animal-378',pawnId,animalId:o.animalId,action:o.animalAction,queue:false};
+ if(o.animalRescueId!==undefined)return {type:'order-animal-rescue',pawnId,animalId:o.animalRescueId};
+ if(o.openCasketId!==undefined)return {type:'order-open-casket',pawnId,casketId:o.openCasketId};
+ if(o.stripTargetId!==undefined)return {type:'order-strip',pawnId,targetId:o.stripTargetId};
+ if(o.consumePileId!==undefined)return {type:'order-consume',pawnId,pileId:o.consumePileId,queue:false};
+ if(o.equipmentItemId!==undefined)return {type:'order-equipment',pawnId,itemId:o.equipmentItemId,action:o.equipmentAction!,queue:false};
+ for(const [field,type] of [['arrestPatientId','order-arrest'],['capturePatientId','order-capture'],['feedPatientId','order-feed'],['tendPatientId','order-tend'],['rescuePatientId','order-rescue']] as const)if(o[field]!==undefined)return {type,pawnId,patientId:o[field]!,queue:false};
+ if(o.cookStationId!==undefined)return {type:'order-cook',pawnId,structureId:o.cookStationId,queue:false};
+ if(o.haulTarget)return {type:'order-haul',pawnId,target:o.haulTarget,queue:false};
+ return {type:'order-job',pawnId,jobId:o.jobId,queue:false};
+}
+/** Same actual float-menu predicates for a future command, without mutation. */
+export function playerOrderCommandReason378(w:World,c:OrderedCommand378):string|undefined {
+ const actorId='pawnId' in c?c.pawnId:c.pawnIds[0]!;
+ let cell:Cell|undefined;
+ if(c.type==='order-job')cell=w.jobs.find(j=>j.id===c.jobId);
+ else if(c.type==='order-haul'){const t=c.target;cell=t.type==='pile'?pileById(w,t.pileId)?.owner.type==='ground'?pileById(w,t.pileId)!.owner as Cell:undefined:t.type==='job'||t.type==='clear'||t.type==='clear-sow'?w.jobs.find(j=>j.id===t.jobId):w.structures.find(s=>s.id===t.structureId);if(!cell&&t.type==='furniture'){const pack=w.packed.find(p=>p.building.id===t.structureId);if(pack?.owner.type==='ground')cell=pack.owner;}}
+ else if(c.type==='order-cook')cell=w.structures.find(s=>s.id===c.structureId);
+ else if(c.type==='order-equipment'||c.type==='order-consume'){const id=c.type==='order-equipment'?c.itemId:c.pileId,p=pileById(w,id);cell=p?.owner.type==='ground'?p.owner:c.type==='order-equipment'?w.pawns.find(p=>p.id===actorId):undefined;}
+ else if('patientId' in c)cell=w.pawns.find(p=>p.id===c.patientId);
+ else if(c.type==='order-strip'){const intent=stripOrderIntent351(w,actorId,c.targetId);return intent.ok?undefined:intent.reason;}
+ else if(c.type==='order-open-casket')cell=w.structures.find(s=>s.id===c.casketId);
+ if(!cell)return 'La cible de cet ordre a disparu.';
+ const same=(a:unknown,b:unknown):boolean=>a===b||!!a&&!!b&&typeof a==='object'&&typeof b==='object'&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>same((a as Record<string,unknown>)[k],(b as Record<string,unknown>)[k]));
+ const option=queryOrderOptions(w,actorId,cell,false,true).find(o=>same(orderOptionCommand378(actorId,o),c));
+ return !option?'Cet ordre ne peut pas être donné sur cette cible.':option.enabled?undefined:option.reason??'Ordre indisponible.';
 }
 const exhausted=(world:World,pawn:Pawn)=>(carrierOf(world,pawn.id)?'Ce colon est transporté.':undefined)??medicalWorkRefusal(pawn)??(pawn.interruptedCargo?'Ce colon doit d’abord déposer sa cargaison interrompue. Libérez une case de sol à proximité.':pawn.collapsePending||world.restRules==='legacy'&&pawn.rest===0?'Ce colon doit récupérer de son épuisement.':undefined);
 function orderView(world:World,pawn:Pawn,queue:boolean):World {
@@ -221,6 +273,7 @@ export function clearQueuedOrders(world:World,pawn:Pawn):void {
   const ids=new Set(pawn.orders.queue);
   for(const job of world.jobs)if(ids.has(job.id)&&job.reservedBy===pawn.id){delete job.clearance;delete job.installationWork;job.reservedBy=null;job.status='pending';}
   pawn.orders.queue=[];
+  delete pawn.orderedQueue378;
 }
 export function startJobOrder(pawn:Pawn,job:Job,path:Cell[]):void {
   if(job.kind==='install')job.installationWork??=asBuilder(pawn)?'build':'haul';
@@ -234,7 +287,7 @@ export function applyOrderCommand(world:World,command:OrderCommand):CommandResul
   if(!pawn)return fail('Colon introuvable.');
   if(command.type==='clear-orders') {
     if(isForcedConsuming(pawn)){interruptDraftWork(world,pawn);return {ok:true};}
-    const active=pawn.orders.active!==null||!!pawn.shipCasketTask277||!!pawn.cryptosleepTask||!!pawn.openCasket||!!pawn.strip351?.forced||!!pawn.firefoamTask290||!!pawn.orbitalTrade||!!factionCommsTask298(pawn)||!!pawn.allowedAreaReturn||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))&&pawn.recreation.task?.activity==='read'&&pawn.recreation.task.manual===true;
+    const active=pawn.orders.active!==null||!!pawn.shipCasketTask277||!!pawn.cryptosleepTask||!!pawn.openCasket||!!pawn.strip351?.forced||!!pawn.firefoamTask290||!!pawn.orbitalTrade||!!factionCommsTask298(pawn)||!!pawn.allowedAreaReturn||world.schemaVersion>=378&&(isForcedPersonalAnimalOrder378(pawn)||!!pawn.animalRescue?.forced||!!pawn.cleaning?.forced||!!pawn.firefighting?.forced)||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))&&pawn.recreation.task?.activity==='read'&&pawn.recreation.task.manual===true;
     const drops=active?planCommandDrops(world,command):new Map();
     if(!drops)return fail('Pas de place pour déposer la cargaison.');
     if(active&&!releaseWork(world,pawn,drops))return fail('Impossible d’interrompre ce travail.');

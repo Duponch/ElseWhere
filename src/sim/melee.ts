@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import { combatCell297,combatTarget,isAnimalTarget,meleeThreatTarget,retaliationPermission,type LivingTarget } from './combat-target.ts';
@@ -52,7 +53,7 @@ function mentalAttempt(pawn:Pawn):void {
   if(c.kind==='tantrum'){c.attempted=true;cancelMelee(pawn);}
   else if(c.kind==='berserk'&&!pawn.melee.order.structure){c.targetId=null;c.jobUntilCore=null;cancelMelee(pawn);}
 }
-export function applyMeleeCommand(world:World,command:MeleeCommand):CommandResult {
+export function applyMeleeCommand(world:World,command:MeleeCommand,preview=false):CommandResult {
   const refuse=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason});
   if(!Array.isArray(command.pawnIds)||!command.pawnIds.length||command.pawnIds.some(id=>!Number.isSafeInteger(id))||new Set(command.pawnIds).size!==command.pawnIds.length||!Number.isSafeInteger(command.targetId))return refuse('Ordre de mêlée invalide.');
   if(command.structure!==undefined&&command.structure!==true)return refuse('Type de cible invalide.');
@@ -68,6 +69,7 @@ export function applyMeleeCommand(world:World,command:MeleeCommand):CommandResul
     if(!path)return refuse('Aucune place de mêlée accessible et libre.');
     const end=path.at(-1)??pawn;claimed.add(end.z*world.width+end.x);plans.push({pawn,path});
   }
+  if(preview)return {ok:true};
   for(const {pawn,path} of plans) {
     const strike=pawn.melee?.strike??null;cancelShooting(pawn);interruptDraftWork(world,pawn);
     pawn.melee={order:{targetId:target.id,startedDowned:'state' in target&&target.state==='downed',...(command.structure?{structure:true as const}:{})},strike};
@@ -172,7 +174,7 @@ export function processMelee(world:World,pawn:Pawn,getBlocked:NavigationGrid,bud
     if(door){m.order={...m.order,targetId:door.id,startedDowned:false,structure:true};pawn.path=[];pawn.state='idle';pawn.planCooldown=0;return;}
   }
   if(step){pawn.state='moving';if(startTravel(world,pawn,step,getLight)){
-    pawn.path.shift();
+    shiftActorPath297(pawn.path);
     // An exhausted successful route may need another goal when this edge
     // finishes. Failed searches retain their backoff; they commit no step.
     if(!pawn.path.length)pawn.planCooldown=0;

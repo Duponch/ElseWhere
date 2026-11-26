@@ -11,7 +11,7 @@ import { updatePawnHealth } from './health.ts';
 import { hasReachableCell,routeToCell,type Reachability } from './pathfinding.ts';
 import { clearQueuedOrders } from './player-orders.ts';
 import { capturePrisonTopology,prisonRoom } from './prison-space.ts';
-import { carrierOf,rescueClaim,syncPatient,type RescueTask } from './rescue-state.ts';
+import { carrierOf,rescueClaim,syncPatient,markHumanCarrierCandidatesDirty,type RescueTask } from './rescue-state.ts';
 import { workPriority } from './work-types.ts';
 import { releasedHealthyPrisoner350 } from './mood-pool-350.ts';
 import { planCommandDrops,releaseWork } from './work-release.ts';
@@ -64,7 +64,7 @@ export function releaseProposal(world:World,actor:Pawn,patient:Pawn,reach:Reacha
 }
 
 export function startPrisonerRelease(actor:Pawn,proposal:PrisonerReleaseProposal):void {
-  actor.rescue=proposal.task;actor.path=proposal.path;actor.state='moving';actor.planCooldown=0;
+  actor.rescue=proposal.task;markHumanCarrierCandidatesDirty();actor.path=proposal.path;actor.state='moving';actor.planCooldown=0;
 }
 
 function destinationValid(world:World,task:RescueTask,patient:Pawn):boolean {

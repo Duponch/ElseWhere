@@ -1,9 +1,11 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries,splicePileEntries,pileById} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
-import { ANIMAL_FEED_TICKS,animalFeedingDoctorReady,animalFeedingReason,animalFeedPlaceValid,animalFeedQuantity,type AnimalFeedTask } from './animal-feeding-rules.ts';
+import { ANIMAL_FEED_TICKS,animalFeedingDoctorReady,animalFeedingReason,knownAnimalFeedingReason379,animalFeedPlaceValid,animalFeedQuantity,type AnimalFeedTask } from './animal-feeding-rules.ts';
 import { animalPileFood } from './wildlife-food.ts';
 import { animalNutritionMax } from './animal-life.ts';
 import { animalSpecies } from './animal-species.ts';
@@ -20,18 +22,21 @@ import { releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import type { Cell,Pawn,World } from './types.ts';
+import {animalById379} from './animal-identity-directory-379.ts';
+import {animalServiceDecisionCandidates379} from './source-reservation-candidates-379.ts';
 
 export interface AnimalFeedingProposal {task:AnimalFeedTask;path:Cell[];target:WildAnimal}
 export function animalFeedingWanted(w:World,doctor:Pawn):boolean {
-  return animalFeedingDoctorReady(w,doctor)&&!!w.wildlife?.animals.some(a=>!animalFeedingReason(w,doctor,a));
+  return animalFeedingDoctorReady(w,doctor)&&!!w.wildlife?.animals.some(a=>!knownAnimalFeedingReason379(w,doctor,a));
 }
 /** Patient/spot and quantitative source reservations are proposals only. No
  * animal is frozen by a distant approach, and stock stays physical. */
 export function animalFeedingProposal(w:World,doctor:Pawn,reach:Reachability):AnimalFeedingProposal|undefined {
-  if(!animalFeedingWanted(w,doctor))return;
-  const reserved=reservedServiceCells(w,doctor.id);
-  const patients=w.wildlife!.animals.filter(a=>!animalFeedingReason(w,doctor,a))
+  if(!animalFeedingDoctorReady(w,doctor))return;
+  const patients=(w.wildlife?.animals??[]).filter(a=>!knownAnimalFeedingReason379(w,doctor,a))
     .sort((a,b)=>(a.x-doctor.x)**2+(a.z-doctor.z)**2-(b.x-doctor.x)**2-(b.z-doctor.z)**2||a.id-b.id);
+  if(!patients.length)return;
+  const reserved=reservedServiceCells(w,doctor.id);
   for(const target of patients){
     let bedside:{spot:Cell;cost:number}|undefined;
     for(const spot of workNeighbours(target))if(canStandAt(w,spot)&&!reserved.has(spot.z*w.width+spot.x)){
@@ -55,7 +60,7 @@ export function startAnimalFeeding(doctor:Pawn,proposal:AnimalFeedingProposal):v
 function taskValid(w:World,doctor:Pawn,a:WildAnimal,t:AnimalFeedTask):boolean {
   if(!allowedAreaServicesAllowed(w,doctor))return false;
   if(animalFeedingReason(w,doctor,a,true)||!animalFeedPlaceValid(w,t,a))return false;
-  const food=w.piles.find(p=>p.id===(t.phase==='pickup'?t.sourcePileId:t.carryPileId));
+  const food=pileById(w,t.phase==='pickup'?t.sourcePileId:t.carryPileId);
   return !!food&&food.kind==='food'&&animalPileFood(w,a,food)&&(t.phase==='pickup'
     ?t.carryPileId===null&&food.owner.type==='ground'&&reservedSource(w,food.id)<=food.quantity&&food.quantity>=t.quantity
     :food.owner.type==='pawn'&&food.owner.pawnId===doctor.id&&food.quantity===t.quantity);
@@ -63,31 +68,31 @@ function taskValid(w:World,doctor:Pawn,a:WildAnimal,t:AnimalFeedTask):boolean {
 function releaseFeeding(w:World,doctor:Pawn):void {if(!releaseWork(w,doctor))interruptWork(w,doctor);}
 export function reconcileAnimalFeeding(w:World):void {
   for(const doctor of w.pawns)if(doctor.animalFeed){
-    const t=doctor.animalFeed,a=w.wildlife?.animals.find(a=>a.id===t.animalId);
+    const t=doctor.animalFeed,a=animalById379(w,t.animalId);
     if(!a||!taskValid(w,doctor,a,t))releaseFeeding(w,doctor);
   }
 }
 export function animalFeedingInProgress(w:World,a:WildAnimal):boolean {
-  return w.pawns.some(doctor=>doctor.animalFeed?.animalId===a.id&&doctor.animalFeed.phase==='feed'
+  return (animalServiceDecisionCandidates379(w)??w.pawns).some(doctor=>doctor.animalFeed?.animalId===a.id&&doctor.animalFeed.phase==='feed'
     &&taskValid(w,doctor,a,doctor.animalFeed)&&doctor.state==='working'&&doctor.moveCooldown===0
     &&(!doctor.motion||doctor.motion.end<=w.tick)&&!doctor.path.length
     &&doctor.x===doctor.animalFeed.spot.x&&doctor.z===doctor.animalFeed.spot.z);
 }
 export function processAnimalFeeding(w:World,doctor:Pawn,ctx:NeedContext):void {
   const t=doctor.animalFeed;if(!t)return;
-  const a=w.wildlife?.animals.find(a=>a.id===t.animalId);
+  const a=animalById379(w,t.animalId);
   if(a?.health&&!a.health.death&&a.health.tick<w.tick)advanceAnimalHealth(w,a);
   if(!a||!taskValid(w,doctor,a,t)){releaseFeeding(w,doctor);return;}
   if(doctor.moveCooldown>0||(doctor.motion?.end??0)>w.tick||(doctor.stun?.untilCore??0)>w.tick*10)return;
-  const food=w.piles.find(p=>p.id===(t.phase==='pickup'?t.sourcePileId:t.carryPileId))!;
+  const food=pileById(w,t.phase==='pickup'?t.sourcePileId:t.carryPileId)!;
   if(t.phase==='pickup'){
     if(food.owner.type!=='ground'||!eggAllowedForPlayer256(food)){releaseFeeding(w,doctor);return;}
     if(!adjacent(doctor,food.owner)&&(doctor.x!==food.owner.x||doctor.z!==food.owner.z)){ctx.move(food.owner,false);return;}
     if(food.quantity===t.quantity){assignPileOwner(food,{type:'pawn',pawnId:doctor.id});t.carryPileId=food.id;}
     else{
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){releaseFeeding(w,doctor);return;}
-      food.quantity-=t.quantity;t.carryPileId=w.nextId++;
-      w.piles.push({id:t.carryPileId,kind:'food',item:food.item,quantity:t.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(food)});
+      markPileContentWrite379(food).quantity-=t.quantity;t.carryPileId=w.nextId++;
+      appendPileEntries(w.piles,{id:t.carryPileId,kind:'food',item:food.item,quantity:t.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(food)});
     }
     t.phase='deliver';doctor.path=[];doctor.state='moving';return;
   }
@@ -99,7 +104,7 @@ export function processAnimalFeeding(w:World,doctor:Pawn,ctx:NeedContext):void {
     ||wildlife.eatenNutrition+nutrition>Number.MAX_SAFE_INTEGER)return;
   // Physiology was settled above under the old hunger. Only the actual held
   // ration is consumed; there is no Medicine XP, medicine or human thought.
-  w.piles.splice(w.piles.indexOf(food),1);a.food=Math.min(animalNutritionMax(a),a.food+nutrition);
+  splicePileEntries(w.piles,w.piles.indexOf(food),1);a.food=Math.min(animalNutritionMax(a),a.food+nutrition);
   wildlife.eatenItems+=t.quantity;wildlife.eatenNutrition+=nutrition;
   ctx.event(`${doctor.name} a nourri ${animalSpecies(a.species).label} ${a.id} avec ${t.quantity} × ${ITEM_DEFINITIONS[food.item].label}.`);
   releaseFeeding(w,doctor);ingestFoodRisk(w,a,food,false);

@@ -1,3 +1,5 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
+import {markActorRecordSource297} from './actor-record-source-297.ts';
 import {roofCells} from './roof-rules.ts';
 import {annualNaturalLight} from './environment.ts';
 import {terrainWriteCount} from './terrain-mutation-journal.ts';
@@ -19,12 +21,15 @@ import {isDraftedEquipment346} from './drafted-orders-346.ts';
 import {blockedCells,canStep} from './pathfinding.ts';
 import {CIVIL_TRANSIT_BLOCKERS} from './travel.ts';
 import {captureStructureNavigation} from './structure-navigation.ts';
-import {carrierOf} from './rescue-state.ts';
+import {createPhysicalHumanCarrierReader} from './rescue-state.ts';
 import {medicallyStopped} from './health-rules.ts';
 import {isStunned} from './stun.ts';
 import {sharedLightEnvironmentCache,type LightEnvironmentCache,type LightReader} from './light-environment.ts';
 import type {SearchBudget} from './work-planner.ts';
 import type {Cell,World} from './types.ts';
+import {beginHumanThreatCandidates379} from './human-threat-candidates-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {recordMovementMotionCandidates379} from './core-motion-publication-receipt-379.ts';
 
 /** No needs, work production or autonomous planner is run at the physical rate. */
 export function createCoreMovement297(world:World){
@@ -59,15 +64,35 @@ export function createCoreMovement297(world:World){
   advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;topologyChanged:boolean;deferredChange297:boolean;doorsMoved297:readonly number[]}{
    lightPass=undefined;lightKey=undefined;
    const now=effectiveLocal297(world),core=effectiveCore297(world),changed:number[]=[];let changedCells=false,requiresFull=false,deferredChange297=false;
+   const closedMotion=!!terrainJournalReadOwner();let motionCandidates:number[]|undefined,pureCooldown=false;
+   const keepMotion=(id:number)=>{if(closedMotion)(motionCandidates??=[]).push(id);};
+   // This physical pass moves existing owners and may release them; it never
+   // assigns a new human rescue/casket/kidnap task. Re-read the live mandates
+   // of possible carriers, captured in pawn order for this advance only.
+   const readCarrier=createPhysicalHumanCarrierReader(world);
    const touchPassengers=(carrier:World['pawns'][number])=>{
     passengers??=captureCorePassengers297(world);
-    for(const mirror of passengers.get(carrier.id)??[]){if(Object.hasOwn(mirror,'moveCooldown'))mirror.moveCooldown=carrier.moveCooldown;if(!changed.includes(mirror.id))changed.push(mirror.id);}
+    for(const mirror of passengers.get(carrier.id)??[]){if(Object.hasOwn(mirror,'moveCooldown'))mirror.moveCooldown=carrier.moveCooldown;if(!changed.includes(mirror.id))changed.push(mirror.id);
+     // A mirror may itself appear later in the movement roster. Keep every
+     // passenger conservative, including a copied or stopped carried edge.
+     keepMotion(mirror.id);}
    };
-   for(const pawn of world.pawns){
+   // This pass never assigns new affiliation or melee tasks. The broad
+   // hostility directory still reads live positions/states and retains any
+   // prisoner, foreigner or berserk actor; it ends before animal decisions.
+   const closeThreatCandidates=beginHumanThreatCandidates379(world);
+   try{for(const pawn of world.pawns){
+    markActorRecordSource297('human',pawn);
     const before=pawn.moveCooldown;pawn.moveCooldown=Math.max(0,(pawn.motion?.end??now)-now);
-    if(before!==pawn.moveCooldown){changed.push(pawn.id);touchPassengers(pawn);}
+    if(before!==pawn.moveCooldown){changed.push(pawn.id);
+     // This actual writer is about to continue without motion/path work while
+     // the existing edge is still in flight. The integer tick (history expiry
+     // clock) has not changed. Arrival, idle release and all later producers
+     // remain candidates; only this pure ongoing payment can be omitted.
+     if(pawn.moveCooldown>0)pureCooldown ||=closedMotion;else keepMotion(pawn.id);
+     touchPassengers(pawn);}
     if(before>0&&pawn.moveCooldown===0)changedCells=true;
-    if(before>0&&pawn.moveCooldown===0&&!carrierOf(world,pawn.id)){
+    if(before>0&&pawn.moveCooldown===0&&!readCarrier(pawn.id)){
       const m=pawn.motion,index=m?m.to.z*world.width+m.to.x:-1,depth=index<0?undefined:world.tiles[index]?.snowDepth;
       finishSnowStep(world,pawn);const snowChanged=index>=0&&world.tiles[index]?.snowDepth!==depth;
       // Footprint filth and trodden snow are ground presentation, and a released
@@ -75,7 +100,7 @@ export function createCoreMovement297(world:World){
       // dependency check) publishes them, not a hard Full.
       deferredChange297=recordFilthMovement297(world,pawn)||snowChanged||deferredChange297;
     }
-    if(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);deferredChange297=true;}
+    if(isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move'&&!idleMotionAllowed300(world,pawn)){releaseIdleWander300(pawn,!idleOtherActivity300(pawn));if(!changed.includes(pawn.id))changed.push(pawn.id);keepMotion(pawn.id);deferredChange297=true;}
     if(pawn.moveCooldown>0)continue;
     // Clinical/task invalidation stays authoritative. A stale path is never
     // extended after an impact, command, retirement or ownership transfer.
@@ -83,7 +108,7 @@ export function createCoreMovement297(world:World){
     const tactical=!!pawn.draft&&!isForcedConsuming(pawn)&&!isDraftedTending(pawn)&&!isDraftedRescue(world,pawn)&&!isDraftedEquipment346(world,pawn);
     const target=pawn.draft?.target,tacticalActive=tactical&&(pawn.draft!.queue.length>0||!!target&&(target.x!==pawn.x||target.z!==pawn.z)||before>0);
     if(!pawn.path.length&&!tacticalActive)continue;
-    if(medicallyStopped(pawn)||isStunned(pawn,core)||carrierOf(world,pawn.id))continue;
+    if(medicallyStopped(pawn)||isStunned(pawn,core)||readCarrier(pawn.id))continue;
     const x=pawn.x,z=pawn.z,m=pawn.motion;
     if(tactical)processDraft(world,pawn,grid,budget,readLight);
     // The shared structure index (validated on each read) answers the door-corner
@@ -91,17 +116,19 @@ export function createCoreMovement297(world:World){
     // startTravel is admitted: the stun/medical/carrier tests above and canStep's
     // actorStepAllowed(world, pawn, next) were just answered, nothing changed since.
     else if(roperHeld377(world,pawn,core))continue;
-    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight,undefined,false,true))pawn.path.shift();}
-    if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);touchPassengers(pawn);changedCells=true;}
-   }
-   const animal=animals.advance();for(const id of animal.actorsChanged)if(!changed.includes(id))changed.push(id);
+    else {const next=pawn.path[0];if(next&&canStep(world,pawn,next,grid(),CIVIL_TRANSIT_BLOCKERS,captureStructureNavigation(world))&&startTravel(world,pawn,next,readLight,undefined,false,true))shiftActorPath297(pawn.path);}
+    if(m!==pawn.motion||x!==pawn.x||z!==pawn.z){if(!changed.includes(pawn.id))changed.push(pawn.id);keepMotion(pawn.id);touchPassengers(pawn);changedCells=true;}
+   }}finally{closeThreatCandidates();}
+   const animal=animals.advance();for(const id of animal.actorsChanged){if(!changed.includes(id))changed.push(id);keepMotion(id);}
    changedCells||=animal.changedCells;requiresFull||=animal.requiresFull;deferredChange297||=animal.deferredChange297;
    const doors=advancePhysicalDoors297(world);if(doors.topologyChanged)animals.invalidate();
    // Re-entering an open door or extending its close deadline changes nothing
    // visible; doors that open or close are reported for a door patch; a door
    // that reveals fog keeps the hard barrier.
    if(doors.changed&&!doors.moved297.length&&!doors.exploration297)deferredChange297=true;
-   return {actorsChanged:changed,changedCells,requiresFull:doors.exploration297||requiresFull,topologyChanged:doors.topologyChanged,deferredChange297,doorsMoved297:doors.moved297.map(s=>s.id)};
+   const result={actorsChanged:changed,changedCells,requiresFull:doors.exploration297||requiresFull,topologyChanged:doors.topologyChanged,deferredChange297,doorsMoved297:doors.moved297.map(s=>s.id)};
+   if(pureCooldown)recordMovementMotionCandidates379(result,world,motionCandidates??[]);
+   return result;
   }
  };
 }

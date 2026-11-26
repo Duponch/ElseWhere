@@ -1,3 +1,4 @@
+import {revokeActorRecordSource297} from './actor-record-source-297.ts';
 import {isSchema286OrLater} from './schema-compatibility-257.ts';
 import {prepareLinkedStorageRemoval286} from './linked-storage-plan-286.ts';
 import {isShelfKind} from './shelf-storage.ts';
@@ -46,7 +47,7 @@ export function prepareLinkedCasketVanish286(world:World,casket:Structure,key:'c
     // leaves/registry remain under this bounded phase seal, not the old full
     // casket JSON. The parent checked that original JSON before begin().
     if(!begun||done||!sameContext()||!holderCurrent()||!rootCurrent()||!seal(0)||!removalWritesMutable259(writes))throw Error('Stale admitted casket storage recipients');
-    for(const w of writes){if(w.present){if(Object.hasOwn(w.object,w.key)){if(!Reflect.set(w.object,w.key,w.value))throw Error('Admitted casket storage write failed');}else Object.defineProperty(w.object,w.key,{value:w.value,writable:true,enumerable:true,configurable:true});}else if(!Reflect.deleteProperty(w.object,w.key))throw Error('Admitted casket storage deletion failed');}
+    for(const w of writes){revokeActorRecordSource297(w.object);if(w.present){if(Object.hasOwn(w.object,w.key)){if(!Reflect.set(w.object,w.key,w.value))throw Error('Admitted casket storage write failed');}else Object.defineProperty(w.object,w.key,{value:w.value,writable:true,enumerable:true,configurable:true});}else if(!Reflect.deleteProperty(w.object,w.key))throw Error('Admitted casket storage deletion failed');}
     done=true;if(!seal(2)||!removalWritesApplied259(writes))throw Error('Unexpected casket storage retirement result');
    },
   }};

@@ -12,7 +12,7 @@ function core(stage:(attempt:number)=>SharedSurfacePreparationBatch|undefined){
   const owner:object=Object.assign(Object.create(SceneRenderCore.prototype),{
     disposed:false,closingPresentation:false,fatalError:undefined,preparing:true,holdSurfaceWorld:true,presentationSuspendedUntilFrame325:false,
     backend:'WebGL',texturesEnabled:false,graphicsStyle:{origami:false,surfacePreparation:registry},
-    hostPort:{hidden:()=>false},presentation:{clear:vi.fn()},resources:{assertFixedTreeDrawReady:vi.fn()},
+    hostPort:{hidden:()=>false},presentation:{clear:vi.fn(),discardThrough:vi.fn()},coreFullInputs297:new WeakMap(),resources:{assertFixedTreeDrawReady:vi.fn()},
     applyAdmittedWorld:vi.fn(),uploadSharedSurfaceAssets:vi.fn(),reportFailure:vi.fn(),invalidatePausedShadow:vi.fn(),
     presentCorePhases297:vi.fn(),updateSelectedObject:vi.fn(),updateHover:vi.fn(),
     stageCoordinatedSurfaces:vi.fn(async()=>stage(attempts++)),

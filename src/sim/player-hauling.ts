@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {eggAllowedForPlayer256} from './animal-egg-permission-v256.ts';
 import { storageCells,storageCellAccepts } from './shelf-storage.ts';
 import { workPriority } from './work-types.ts';
@@ -9,7 +10,10 @@ import { validSowingClearance } from './sowing-clearance.ts';
 import { planServiceHaul, type ServiceHaulTarget } from './player-service-hauling.ts';
 import { candidateAccess } from './candidate-access.ts';
 import { asBuilder, constructionHaulPriority, constructionSiteFree, isConstruction } from './construction-rules.ts';
-import { CARRY_CAPACITY } from './definitions.ts';
+import { carryStackLimit379 } from './carry-quantity-379.ts';
+import {constructionJobAllowed379} from './construction-state-379.ts';
+import {constructionSupplyRefusal379} from './construction-supply-379.ts';
+import {planConstructionBatch379,queuedConstructionBatchReason379} from './construction-batch-379.ts';
 import { storageCapacity,createGroundCapacityReader } from './ground-placement.ts';
 import { withoutQueuedOrder } from './haul-reservations.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
@@ -36,14 +40,15 @@ export function planHaulOrder(world:World,pawn:Pawn,target:HaulOrderTarget,acces
   const refusal=backgroundWorkRefusal(pawn,work);if(refusal)return no(refusal);
   if(target.type!=='pile'&&target.type!=='job')return no('Cible de transport invalide.');
   if(target.type==='pile'?!workPriority(pawn,'haul'):!Number.isFinite(constructionHaulPriority(pawn)))return no('Ce travail est désactivé dans le tableau Travail.');
-  const source=target.type==='pile'?world.piles.find(p=>p.id===target.pileId):undefined;
+  const source=target.type==='pile'?pileById(world,target.pileId):undefined;
   const job=target.type==='job'?world.jobs.find(j=>j.id===target.jobId):undefined;
   if(target.type==='pile'&&source&&!eggAllowedForPlayer256(source))return no('Ce bien est interdit.');
   if(target.type==='pile'&&source?.owner.type!=='ground')return no('La pile n’est plus au sol.');
   if(target.type==='job'&&(!job||!isConstruction(job)))return no('Chantier introuvable.');
+  if(job&&!constructionJobAllowed379(job))return no('Ce chantier est interdit. Autorisez-le avant de livrer les matériaux.');
   const areaReason=job?allowedAreaReason(world,pawn,job):source?.owner.type==='ground'?allowedAreaReason(world,pawn,source.owner):undefined;if(areaReason)return no(areaReason);
   if(job&&!constructionSiteFree(world,job,pawn.id))return no('Le chantier doit être dégagé avant la livraison.');
-  if(job&&!constructionRecipe(job).ingredients.some(c=>constructionCapacity(world,job,c.item)>0))return no('Les matériaux sont déjà livrés ou réservés.');
+  if(job&&!constructionRecipe(job).ingredients.some(c=>constructionCapacity(world,job,c.item)>0))return no(Number(world.schemaVersion)>=379?constructionSupplyRefusal379(world,pawn,job):'Les matériaux sont déjà livrés ou réservés.');
   const reach=access??candidateAccess(world,pawn,blockedCells(world),new Set());
   if(job&&!canReach(world,job,reach,false))return no('Aucun accès praticable au chantier.');
   const cells=storageCells(world),byCell=new Map(cells.map(c=>[c.z*world.width+c.x,c]));
@@ -66,23 +71,27 @@ export function planHaulOrder(world:World,pawn:Pawn,target:HaulOrderTarget,acces
         .map(z=>({destination:{type:'stockpile' as const,stockpileId:z.id},cell:z,rank:-z.priority,capacity:storageCapacity(world,z,pile,undefined,undefined,placementFacts)}));
     for(const dest of destinations) {
       if(budget.pairs--<=0){budget.pairs=0;return no('Décision reportée : budget de recherche atteint.');}
-      const quantity=Math.min(CARRY_CAPACITY,available,dest.capacity);if(quantity<=0||!canReach(world,dest.cell,reach,!job))continue;
+      const quantity=Math.min(carryStackLimit379(world,pawn,pile.item),available,dest.capacity);if(quantity<=0||!canReach(world,dest.cell,reach,!job))continue;
       const cost=distance(pawn,pile.owner)+distance(pile.owner,dest.cell),id=job?pile.id:dest.cell.id;
       if(!best||dest.rank<best.rank||dest.rank===best.rank&&(cost<best.distance||cost===best.distance&&id<best.id))
         best={task:{sourcePileId:pile.id,quantity,phase:'pickup',destination:dest.destination,carryPileId:null},source:pile.owner,rank:dest.rank,distance:cost,id};
     }
   }
-  if(!best)return no(job?'Aucun matériau requis disponible et accessible.':'Aucune réserve accessible de meilleure priorité avec une place compatible, ou pile déjà réservée.');
+  if(!best)return no(job?Number(world.schemaVersion)>=379?constructionSupplyRefusal379(world,pawn,job,reach):'Aucun matériau requis disponible et accessible.':'Aucune réserve accessible de meilleure priorité avec une place compatible, ou pile déjà réservée.');
   const path=routeToJob(world,best.source,reach,true);if(!path)return no('Aucun accès praticable à la pile.');
-  const item=world.piles.find(p=>p.id===best.task.sourcePileId)!;
-  return {task:best.task,path,label:`${label} (${best.task.quantity} ${ITEM_DEFINITIONS[item.item].label})`};
+  const item=pileById(world,best.task.sourcePileId)!,task=job?planConstructionBatch379(world,pawn,best.task,reach):best.task;
+  return {task,path,label:`${label} (${task.quantity} ${ITEM_DEFINITIONS[item.item].label})`};
 }
 
 /** Own waiting reservation is excluded exactly once, never the rest of its queue. */
 export function queuedHaulReason(world:World,task:HaulTask,pawn?:Pawn):string|undefined {
+  if(task.constructionBatch379){
+    if(!pawn)return 'Le propriétaire de cette livraison groupée est introuvable.';
+    return queuedConstructionBatchReason379(world,task,pawn);
+  }
   if(pawn){const source=haulOrderCell(world,task),target=destinationCell(world,task.destination),reason=(source?allowedAreaReason(world,pawn,source):undefined)??(target?allowedAreaReason(world,pawn,target):undefined);if(reason)return reason;}
   if(task.whole)return furnitureHaulValid(withoutQueuedOrder(world,task),task)?undefined:'Le meuble ou son emplacement réservé n’est plus disponible.';
-  const view=withoutQueuedOrder(world,task),pile=world.piles.find(p=>p.id===task.sourcePileId);
+  const view=withoutQueuedOrder(world,task),pile=pileById(world,task.sourcePileId);
   if(!pile||!eggAllowedForPlayer256(pile)||pile.owner.type!=='ground'||pile.quantity-reservedSource(view,pile.id)<task.quantity)return 'La pile ou sa quantité réservée n’est plus disponible.';
   if(destinationCapacity(view,task.destination,pile.kind,undefined,pile)<task.quantity)return 'La destination n’accepte plus la quantité réservée.';
   const destination=task.destination;
@@ -94,7 +103,7 @@ export function queuedHaulReason(world:World,task:HaulTask,pawn?:Pawn):string|un
 
 export function haulOrderCell(world:World,task:HaulTask):Cell|undefined {
   if(task.whole){const pack=world.packed.find(p=>p.building.id===task.sourcePileId);return pack?.owner.type==='ground'?pack.owner:undefined;}
-  const pile=world.piles.find(p=>p.id===task.sourcePileId);
+  const pile=pileById(world,task.sourcePileId);
   return pile?.owner.type==='ground'?pile.owner:undefined;
 }
 export function startHaulOrder(pawn:Pawn,task:HaulTask,path:Cell[]):void {

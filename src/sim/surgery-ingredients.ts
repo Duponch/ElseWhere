@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {artificialPartIngredient273} from './artificial-parts-rules.ts';
 import {isProstheticItem273} from './prosthetic-content-273.ts';
@@ -66,7 +68,7 @@ export function validImplantTaskRelations(w:World,doctor:Pawn,patient:Pawn|undef
       if(medicine&&medicine!==i.item)return false;medicine=i.item;doses+=i.quantity;
     }else return false;
     if(i.stage==='placed'){if(open)return false;}else {if(i.stage==='held'&&open)return false;open=true;}
-    const pile=w.piles.find(p=>p.id===i.pileId);if(!pile||pile.item!==i.item||pile.quantity<i.quantity||isProstheticItem273(task.implant)&&!materialAllowedForPlayer256(pile))return false;
+    const pile=pileById(w,i.pileId);if(!pile||pile.item!==i.item||pile.quantity<i.quantity||isProstheticItem273(task.implant)&&!materialAllowedForPlayer256(pile))return false;
     if(i.stage==='held'){
       held++;if(pile.owner.type!=='pawn'||pile.owner.pawnId!==doctor.id||pile.quantity!==i.quantity)return false;
     }else {
@@ -84,7 +86,7 @@ export function validImplantTaskRelations(w:World,doctor:Pawn,patient:Pawn|undef
 export function gatherImplantIngredient(w:World,doctor:Pawn,task:SurgeryTask,context:NeedContext):boolean {
   const ingredient=task.ingredients?.find(i=>i.stage!=='placed');if(!ingredient)return true;
   if(!allowedAreaAllows(w,doctor,ingredient.cell))return false;
-  const pile=w.piles.find(p=>p.id===ingredient.pileId);if(!pile)return false;
+  const pile=pileById(w,ingredient.pileId);if(!pile)return false;
   if(ingredient.stage==='source'){
     if(!materialAllowedForPlayer256(pile)||pile.owner.type!=='ground'||!allowedAreaAllows(w,doctor,pile.owner)||reservedSource(w,pile.id)>pile.quantity)return false;
     if(!near(doctor,pile.owner)){context.move(pile.owner,false);return true;}
@@ -94,7 +96,7 @@ export function gatherImplantIngredient(w:World,doctor:Pawn,task:SurgeryTask,con
     else {
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return false;
       const carried:MaterialPile={id:w.nextId++,item:pile.item,kind:pile.kind,quantity:ingredient.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)};
-      pile.quantity-=ingredient.quantity;w.piles.push(carried);ingredient.pileId=carried.id;
+      markPileContentWrite379(pile).quantity-=ingredient.quantity;appendPileEntries(w.piles,carried);ingredient.pileId=carried.id;
     }
     ingredient.stage='held';task.phase='approach';doctor.path=[];doctor.state='moving';refreshStock(w);return true;
   }
@@ -114,17 +116,17 @@ export function implantIngredientsReady(w:World,doctor:Pawn,patient:Pawn,task:Su
 }
 export function consumeImplantIngredients(w:World,task:SurgeryTask):void {
   for(const i of task.ingredients!){
-    const pile=w.piles.find(p=>p.id===i.pileId)!;pile.quantity-=i.quantity;
-    if(!pile.quantity)w.piles.splice(w.piles.indexOf(pile),1);
+    const pile=pileById(w,i.pileId)!;markPileContentWrite379(pile).quantity-=i.quantity;
+    if(!pile.quantity)splicePileEntries(w.piles,w.piles.indexOf(pile),1);
   }
   delete task.ingredients;refreshStock(w);
 }
 /** New industrial surgery consumes the first real dose at anesthesia. The
  * piece and the remaining dose stay physically staged until the final toil. */
 export function consumeImplantAnestheticDose273(w:World,task:SurgeryTask):void {
-  const i=task.ingredients!.find(i=>isMedicine(i.item))!,pile=w.piles.find(p=>p.id===i.pileId)!;
-  pile.quantity--;i.quantity--;
-  if(!pile.quantity)w.piles.splice(w.piles.indexOf(pile),1);
+  const i=task.ingredients!.find(i=>isMedicine(i.item))!,pile=pileById(w,i.pileId)!;
+  markPileContentWrite379(pile).quantity--;markPileContentWrite379(i).quantity--;
+  if(!pile.quantity)splicePileEntries(w.piles,w.piles.indexOf(pile),1);
   if(!i.quantity)task.ingredients=task.ingredients!.filter(j=>j!==i);
   refreshStock(w);
 }

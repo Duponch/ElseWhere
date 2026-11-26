@@ -3,6 +3,7 @@ import {SnapshotDecoder,SnapshotEncoder,type SnapshotMessage} from '../src/bridg
 import {fixture} from './resident-presentation-fixtures-v427';
 import {addFilth,advanceFilth,removeFilth} from '../src/sim/filth';
 import type {World} from '../src/sim/types';
+import {newCorePathBudget297} from '../src/sim/core-path-budget-297';
 import {ResidentFilthEncoder,ResidentFilthFrameOwner,readResidentFilthFrame,type ResidentFilthDelta,type ResidentFilthPublication} from '../src/bridge/resident-filth-section';
 
 type Wire={publication:ResidentFilthPublication;filth:ResidentFilthDelta};
@@ -48,7 +49,7 @@ test('same-tick row edits and exact physical nextCheckCore changes send complete
  const b=h.send(),section=b.wire.filth.section;if(section.mode!=='items')throw Error('Expected item section');
  expect(section.upserted).toHaveLength(1);expect(section.upserted[0]).toStrictEqual(h.world.filth!.items[1]);expect(b.world.filth!.items[0]).toBe(a.world.filth!.items[0]);
  expect(b.world.filth!.items[1]).not.toBe(a.world.filth!.items[1]);expect(a.world).toStrictEqual(before);
- h.world.tick++;advanceFilth(h.world,0);const c=h.send(),next=c.wire.filth.section;if(next.mode!=='items')throw Error('Expected item section');
+ h.world.tick++;h.world.corePathBudget297=newCorePathBudget297(h.world.tick);if(h.world.deterioration)h.world.deterioration.lastTick=h.world.tick;advanceFilth(h.world,0);const c=h.send(),next=c.wire.filth.section;if(next.mode!=='items')throw Error('Expected item section');
  expect(next.upserted).toHaveLength(1);expect(next.upserted[0]!.id).toBe(h.world.filth!.items[0]!.id);expect(next.upserted[0]!.nextCheckCore).toBe(h.world.filth!.items[0]!.nextCheckCore);
  expect(b.world.filth!.items[0]!.nextCheckCore).toBe(before.tick*10+5);
 });

@@ -211,8 +211,8 @@ export function paintNativeTabCard(ctx:CanvasRenderingContext2D,card:NativeTabCa
     ctx.restore();
     if(region.contentHeight>region.h){
       const track=NATIVE_WINDOW.scrollbar,max=region.contentHeight-region.h,thumb=Math.max(28,region.h*region.h/region.contentHeight),top=oy+region.y+(region.h-thumb)*(offset/max);
-      ctx.fillStyle=NATIVE_INK.scrollTrack;ctx.fillRect(ox+region.x+region.w-track+4,oy+region.y,track-8,region.h);
-      ctx.fillStyle=NATIVE_INK.scrollThumb;ctx.fillRect(ox+region.x+region.w-track+4,top,track-8,thumb);
+      ctx.fillStyle=NATIVE_INK.scrollTrack;ctx.fillRect(ox+region.x+region.w-track,oy+region.y,track,region.h);
+      ctx.fillStyle=NATIVE_INK.scrollThumb;ctx.fillRect(ox+region.x+region.w-track,top,track,thumb);
     }
   }
   ctx.restore();

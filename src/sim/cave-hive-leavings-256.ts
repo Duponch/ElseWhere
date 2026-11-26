@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 /** Actual KillFinalize leavings, reused by the ordinary structure transaction.
  * No recipe-quarter refund is invented for Hive or GlowPod. */
@@ -32,8 +34,8 @@ export function planCaveHiveKill256(w:World,s:Structure,at:Cell,rng:number,spawn
    const id=part.quantity===remaining?productId:view.nextId++,target=view.piles.find(p=>p.item==='insect-jelly'&&p.owner.type==='ground'&&p.owner.x===part.cell.x&&p.owner.z===part.cell.z&&materialAllowedForPlayer256(p)!==forbidden&&p.quantity+part.quantity<=75);
    if(!target&&view.piles.length>=32768)return null;
    products.push({id,targetId:target?.id??null,before:target?.quantity??0,quantity:part.quantity,cell:part.cell,forbidden});
-   if(target){mergeThingDamage(target,part.quantity,0,60);target.quantity+=part.quantity;}
-   else{const p:MaterialPile={id,kind:'food',item:'insect-jelly',quantity:part.quantity,owner:{type:'ground',...part.cell}};setMaterialForbidden256(p,forbidden);view.piles.push(p);}
+   if(target){mergeThingDamage(target,part.quantity,0,60);markPileContentWrite379(target).quantity+=part.quantity;}
+   else{const p:MaterialPile={id,kind:'food',item:'insect-jelly',quantity:part.quantity,owner:{type:'ground',...part.cell}};setMaterialForbidden256(p,forbidden);appendPileEntries(view.piles,p);}
    remaining-=part.quantity;
   }
   if(remaining)return null;
@@ -44,7 +46,7 @@ export function planCaveHiveKill256(w:World,s:Structure,at:Cell,rng:number,spawn
  * Commit neither creates another ID nor converts leavings into abstract stock. */
 export function commitHiveKilledProducts256(w:World,rows:readonly HiveKilledProduct256[]):void {
  for(const row of rows){
-  if(row.targetId!==null){const target=w.piles.find(p=>p.id===row.targetId&&p.item==='insect-jelly'&&p.owner.type==='ground'&&p.owner.x===row.cell.x&&p.owner.z===row.cell.z);if(!target||target.quantity!==row.before||materialAllowedForPlayer256(target)===row.forbidden)throw Error('Preflighted actual Jelly merge changed');mergeThingDamage(target,row.quantity,0,60);target.quantity+=row.quantity;}
-  else{if(w.piles.some(p=>p.id===row.id))throw Error('Preflighted actual Jelly identity reused');const p:MaterialPile={id:row.id,kind:'food',item:'insect-jelly',quantity:row.quantity,owner:{type:'ground',...row.cell}};setMaterialForbidden256(p,row.forbidden);w.piles.push(p);}
+  if(row.targetId!==null){const target=w.piles.find(p=>p.id===row.targetId&&p.item==='insect-jelly'&&p.owner.type==='ground'&&p.owner.x===row.cell.x&&p.owner.z===row.cell.z);if(!target||target.quantity!==row.before||materialAllowedForPlayer256(target)===row.forbidden)throw Error('Preflighted actual Jelly merge changed');mergeThingDamage(target,row.quantity,0,60);markPileContentWrite379(target).quantity+=row.quantity;}
+  else{if(w.piles.some(p=>p.id===row.id))throw Error('Preflighted actual Jelly identity reused');const p:MaterialPile={id:row.id,kind:'food',item:'insect-jelly',quantity:row.quantity,owner:{type:'ground',...row.cell}};setMaterialForbidden256(p,row.forbidden);appendPileEntries(w.piles,p);}
  }
 }

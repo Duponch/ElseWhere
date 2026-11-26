@@ -2,6 +2,8 @@ import {queryFirefoamUseReason290} from '../sim/firefoam-manual-290';
 import {footprintContains} from '../sim/definitions';
 import {firefoamResearchUnlocked290} from '../sim/firefoam-content-290';
 import type {Cell,Command,Structure,World} from '../sim/types';
+import {personalOrderCommands378} from './order-queue-378';
+import {orderedIntentReason378} from '../sim/ordered-queue-378';
 import {isSchema290OrLater} from '../sim/schema-compatibility-257.ts';
 
 type RebuildCommand=Extract<Command,{type:'firefoam-auto-rebuild'}>;
@@ -45,14 +47,15 @@ export function updateFirefoamControls290(parent:ParentNode,world:World,structur
 
 /** Uses the same pure authority as the SIM command. The action is direct,
  * unqueued and acquires neither contact time nor wick on the UI side. */
-export function appendFirefoamOptions290(parent:HTMLElement,world:World,pawnId:number,cell:Cell,queue:boolean,actions:{close():void;send(command:TriggerCommand):Promise<unknown>;report(message:string,error?:boolean):void}):number {
+export function appendFirefoamOptions290(parent:HTMLElement,world:World,pawnId:number,cell:Cell,queue:boolean,actions:{close():void;send(command:Command):Promise<unknown>;report(message:string,error?:boolean):void}):number {
  if(!isSchema290OrLater(world.schemaVersion))return 0;
  const structures=world.structures.filter(s=>s.kind==='firefoam-popper'&&footprintContains(s,cell)).sort((a,b)=>a.id-b.id);
  for(const structure of structures){
-  const reason=queue?'Déclenchement direct ; relâchez Maj.':queryFirefoamUseReason290(world,pawnId,structure.id);
+  const command:TriggerCommand={type:'firefoam-trigger',pawnId,structureId:structure.id};
+  const reason=queue?Number(world.schemaVersion)>=378?orderedIntentReason378(world,command):'Déclenchement direct ; relâchez Maj.':queryFirefoamUseReason290(world,pawnId,structure.id);
   const button=parent.ownerDocument.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.dataset.orderFirefoam=String(structure.id);
   button.textContent='Déclencher sur place : mousse anti-incendie'+(reason?` — ${reason}`:'');button.disabled=!!reason;
-  button.onclick=event=>{if(reason)return;if(event.shiftKey){actions.report('Déclenchement direct ; relâchez Maj.',true);return;}actions.close();void actions.send({type:'firefoam-trigger',pawnId,structureId:structure.id}).then(()=>actions.report('Déclenchement demandé : trajet et travail au contact.')).catch(error=>actions.report(error instanceof Error?error.message:String(error),true));};
+  button.onclick=event=>{if(reason)return;if(event.shiftKey&&Number(world.schemaVersion)<378){actions.report('Déclenchement direct ; relâchez Maj.',true);return;}actions.close();void actions.send(personalOrderCommands378(world,command,queue||event.shiftKey)[0]!).then(()=>actions.report('Déclenchement demandé : trajet et travail au contact.')).catch(error=>actions.report(error instanceof Error?error.message:String(error),true));};
   parent.append(button);
  }
  return structures.length;

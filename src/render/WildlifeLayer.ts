@@ -1,6 +1,7 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
 import {ActorPlayback435} from './ActorPlayback435';
+import {WorldCoordinateGroup} from './WorldCoordinateGroup';
 import {arrivalRotationYaw256} from '../sim/arrival-rotation-256';
 import {actorExplorationMaterial256} from './ExplorationMask256';
 import {animalCore256,isAnimalSpecies256} from '../sim/animal-core-v256';
@@ -314,6 +315,7 @@ class SpeciesRig {
   private springValid297=new Uint8Array(0);
   private springReset297=new Uint8Array(0);
   private springActive297=new Uint8Array(0);
+  private readonly springSlots297=new Set<number>();
   private springGait297=new Float32Array(0);
   private springSeed297=new Float32Array(0);
   /** Keyed moving/eating/posture behind the arrival tail, the tail flag and
@@ -411,7 +413,12 @@ class SpeciesRig {
       for(const[name,a]of Object.entries(this.mesh.geometry.attributes))if(a instanceof THREE.InstancedBufferAttribute||a instanceof THREE.InterleavedBufferAttribute&&a.data instanceof THREE.InstancedInterleavedBuffer)geometry.setAttribute(name,a);geometry.instanceCount=(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount;geometry.userData.animationCache=this.animationCache;
       material=graphics.createWearMaterial(this.plainMaterial.positionNode,attribute('animalPaintUv','vec2'));actorExplorationMaterial256(material);material.maskNode=this.plainMaterial.maskNode;material.maskShadowNode=this.plainMaterial.maskShadowNode;
       effect=new THREE.Mesh(geometry,material);this.bodyProgram.binder.attach(effect,this);effect.name=`Wild ${this.species} — optional physical paint wear`;effect.frustumCulled=false;effect.castShadow=false;effect.receiveShadow=true;effect.userData.origamiTexturesEnabled=this.texturesEnabled;
-      releaseGeometry=graphics.trackWearGeometry(geometry);releaseObject=graphics.trackEdgeObject(effect,'wear');this.origamiWear=effect;this.mesh.add(effect);this.installOrigamiPartUnions();this.refreshOrigamiPartUnion();
+      releaseGeometry=graphics.trackWearGeometry(geometry);releaseObject=graphics.trackEdgeObject(effect,'wear');this.origamiWear=effect;this.mesh.add(effect);
+      // This optional real producer adds a nested child after the fixed
+      // world-coordinate rig was admitted. Settle that child without reopening
+      // every other species' invisible matrix branch.
+      if(this.mesh.parent instanceof WorldCoordinateGroup)effect.updateWorldMatrix(true,false);
+      this.installOrigamiPartUnions();this.refreshOrigamiPartUnion();
       const freeGeometry=releaseGeometry,freeObject=releaseObject;this.wearCleanup=()=>{try{freeObject();}finally{freeGeometry();}};attached=true;
     }finally{
       const errors:unknown[]=[];
@@ -519,16 +526,16 @@ class SpeciesRig {
     const keyed=new Float32Array(capacity*3),tail=new Uint8Array(capacity),plan=new Float32Array(capacity*5);keyed.set(this.springState297);tail.set(this.springTail297);plan.set(this.springTailPlan297);
     this.springState297=keyed;this.springTail297=tail;this.springTailPlan297=plan;
   }
-  private resetSpring297():void {this.rootTweener297.reset();this.springValid297.fill(0);this.springReset297.fill(1);this.springActive297.fill(0);this.springGait297.fill(0);this.springTail297.fill(0);}
+  private resetSpring297():void {this.rootTweener297.reset();this.springValid297.fill(0);this.springReset297.fill(1);this.springActive297.fill(0);this.springGait297.fill(0);this.springTail297.fill(0);this.springSlots297.clear();}
   private captureSpring297(slot:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,state:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):void {
     this.rawFrom297.setXYZW(slot,from.getX(slot),from.getY(slot),from.getZ(slot),from.getW(slot));
     this.rawTo297.setXYZW(slot,to.getX(slot),to.getY(slot),to.getZ(slot),to.getW(slot));
     this.rawTravel297.setXYZW(slot,travel.getX(slot),travel.getY(slot),travel.getZ(slot),travel.getW(slot));
-    this.springSeed297[slot]=state.getW(slot);this.springValid297[slot]=1;this.springActive297[slot]=1;
+    this.springSeed297[slot]=state.getW(slot);this.springValid297[slot]=1;this.springActive297[slot]=1;this.springSlots297.add(slot);
     this.springState297[3*slot]=state.getX(slot);this.springState297[3*slot+1]=state.getY(slot);this.springState297[3*slot+2]=state.getZ(slot);
   }
   /** A confirmed hit pushed this settled animal: its drawn root moves again. */
-  wakeSpring297(id:number):void {const slot=this.phaseIndices297.get(id);if(slot!==undefined&&slot<this.springCapacity297&&this.springValid297[slot])this.springActive297[slot]=1;}
+  wakeSpring297(id:number):void {const slot=this.phaseIndices297.get(id);if(slot!==undefined&&slot<this.springCapacity297&&this.springValid297[slot]){this.springActive297[slot]=1;this.springSlots297.add(slot);}}
   /** The same confirmed-root recurrence as humans. Original edge primitives
    * remain resident; only the displayed streams change. Idle settled roots
    * skip this path, and carrier/corpse streams never enter it. */
@@ -567,7 +574,7 @@ class SpeciesRig {
     }
     const timed=this.rawTravel297.getY(slot)>this.rawTravel297.getX(slot)&&this.travelTime.value<this.rawTravel297.getY(slot);
     // No epsilon snap: retain the recurrence's actual Float32 terminal pose.
-    if(!stepping&&!tail&&!struck&&!pushed&&speed>0&&dt>0&&!timed&&!changed)this.springActive297[slot]=0;
+    if(!stepping&&!tail&&!struck&&!pushed&&speed>0&&dt>0&&!timed&&!changed){this.springActive297[slot]=0;this.springSlots297.delete(slot);}
     return changed;
   }
   updateClock(tick:number,pawns?:PawnLayer):void {
@@ -606,14 +613,15 @@ class SpeciesRig {
     const animals=this.animals;g.instanceCount=animals.length;this.setOrigamiCount(animals.length);let dirty=false,springDirty=false;
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(animals.length);
     this.playback435.prepare(world,animals,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
-    if(changed||reset){this.carrierSlots.clear();if(reset)this.animationCache.reset();}
-    animals.forEach((a,i)=>{
+    if(changed||reset){this.carrierSlots.clear();this.springSlots297.clear();if(reset)this.animationCache.reset();}
+    const scheduled=playback?this.playback435.frameIndices435(timeline,tick,origin):undefined;
+    const updateSlot=(a:VisualAnimal,i:number)=>{
       // These bodies have equal endpoints and no local clocks or handoff.
       // New snapshots (even at the same tick), resets and transferred bodies
       // still refresh their complete primitives through the ordinary path.
       if(!changed&&!reset&&a.corpsePile?.owner.type==='ground'&&a.carrierId===undefined)return;
       const springActor=spring&&!a.corpsePile&&a.carrierId===undefined&&a.state!=='dead'&&a.state!=='downed';
-      if(!springActor){this.springValid297[i]=0;this.springActive297[i]=0;this.springReset297[i]=1;}
+      if(!springActor){this.springValid297[i]=0;this.springActive297[i]=0;this.springReset297[i]=1;this.springSlots297.delete(i);}
       const prepared=playback?this.playback435.select(i,timeline,tick,origin):undefined;
       if(playback&&!prepared){if(springActor)springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;return;}
       const blood=g.getAttribute('aBodyBlood'),absent=g.getAttribute('aAbsent'),carrierState=g.getAttribute('aCarrier'),transfer=g.getAttribute('aCorpseHandoff'),transferFrom=g.getAttribute('aCorpseFrom'),transferTo=g.getAttribute('aCorpseTo');
@@ -705,7 +713,17 @@ class SpeciesRig {
         gaitPhase??(a.strike?coreTimeSeconds(a.strike.atCore,origin):a.state==='downed'?downedWigglePhase(a.id,origin):a.id%30));
       scale.setX(i,growth);
       if(springActor){this.captureSpring297(i,from,to,times,state);springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;}
-    });
+    };
+    if(scheduled&&scheduled.length===animals.length)animals.forEach(updateSlot);
+    else if(scheduled){
+      const changedSlots=new Set(scheduled),visit=new Set(scheduled);
+      if(spring)for(const i of this.springSlots297)if(i<animals.length)visit.add(i);
+      for(const i of [...visit].sort((a,b)=>a-b)){
+        const a=animals[i]!;
+        if(changedSlots.has(i))updateSlot(a,i);
+        else if(spring)springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;
+      }
+    }else animals.forEach(updateSlot);
     if(dirty)for(const a of [from,to,times,state,scale,g.getAttribute('aBodyBlood'),g.getAttribute('aAbsent'),g.getAttribute('aCarrier'),g.getAttribute('aCorpseHandoff'),g.getAttribute('aCorpseFrom'),g.getAttribute('aCorpseTo')])a.needsUpdate=true;
     else if(springDirty)for(const a of [from,to,times,state])a.needsUpdate=true;
     if(changed||reset||dirty){
@@ -747,7 +765,7 @@ class SpeciesRig {
 /** Resident species batches; prospective species start at16, grow together,
  * and participate in the existing initial shadow preparation. */
 export class WildlifeLayer {
-  readonly mesh=new THREE.Group();readonly flames=new THREE.Group();readonly travelTime=uniform(0).setGroup(renderGroup);
+  readonly mesh:THREE.Group;readonly flames:THREE.Group;readonly travelTime=uniform(0).setGroup(renderGroup);
   private readonly surfaceTextures={soft:createAnimalCoatTexture('soft'),short:createAnimalCoatTexture('short'),shaggy:createAnimalCoatTexture('shaggy')};
   private texturesEnabled=true;
   private readonly models=new AnimalModels();
@@ -766,7 +784,8 @@ export class WildlifeLayer {
   private selected:ReadonlySet<number>=new Set();
   private readonly meleeRecoil=new MeleeRecoilTracker();
   private readonly rigById=new Map<number,SpeciesRig>();
-  constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail()){
+  constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail(),ownedGpuMatrices435=false){
+    this.mesh=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();this.flames=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();
     const graphics=currentGraphicsStyle();this.graphicsContext=graphics??new GraphicsStyleContext();this.ownsGraphicsContext=!graphics;
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
     this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure,this.markerStyle);

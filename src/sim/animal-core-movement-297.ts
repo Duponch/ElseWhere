@@ -1,4 +1,5 @@
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
+import {markActorRecordSource297} from './actor-record-source-297.ts';
 import {createAnimalNavigationReader,moveAnimal} from './wildlife-navigation.ts';
 import {captureAnimalPathGuards297,animalPathContinuationAllowed297} from './wildlife.ts';
 import {animalCarrier} from './animal-rest-state.ts';
@@ -59,6 +60,7 @@ export function createAnimalCoreMovement297(world:World){
   advance():{actorsChanged:number[];changedCells:boolean;requiresFull:boolean;deferredChange297:boolean}{
    arrivals();const now=effectiveLocal297(world),core=effectiveCore297(world);
    for(const a of rows()){
+    markActorRecordSource297('animal',a);
     expire(a,core);
     if(!a.path.length||a.motion&&a.motion.end>now)continue;
     guards??=captureAnimalPathGuards297(world);

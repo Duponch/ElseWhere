@@ -18,6 +18,8 @@ import { captureRelationshipPeople } from './relationship-namespace.ts';
 import type { RelationshipPeople } from './relationship-state.ts';
 import type { Pawn,Structure,World } from './types.ts';
 import { filteredStructures } from './structure-navigation.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 const stateFor=(w:World,p:Pawn):SocialState=>p.social??={rng:socialSeed(w.seed,p.id),memories:[]};
 export function canSocialize(world:World,pawn:Pawn,initiate:boolean,carried?:ReadonlySet<number>):boolean {
@@ -140,6 +142,31 @@ export function visitSocialExchange(world:World,visitor:Pawn,patient:Pawn):boole
   const kind=socialRandom(stateFor(world,visitor))<.8?'chitchat':'deep-talk';
   return exchangeSocial(world,visitor,patient,kind);
 }
+/** Broad candidates for one synchronous, non-moving social interval. Buckets
+ * contain all humans (including prisoners and incapacitated actors); the live
+ * eligibility and exact radius tests remain on the reader. Preserve opening
+ * array order, because the shared social stream chooses an ordinal. */
+class SocialSpatial379 {
+ private readonly cells=new Map<number,number[]>();
+ private readonly columns:number;
+ readonly usable:boolean;
+ constructor(readonly world:World,readonly source:readonly Pawn[]){
+  this.columns=Math.ceil(world.width/8);this.usable=Number.isSafeInteger(this.columns)&&this.columns>0;
+  for(let i=0;this.usable&&i<source.length;i++){
+   const p=source[i]!;if(!this.contains(p)){this.usable=false;break;}
+   const key=Math.floor(p.z/8)*this.columns+Math.floor(p.x/8),row=this.cells.get(key);if(row)row.push(i);else this.cells.set(key,[i]);
+  }
+ }
+ private contains(p:Pawn):boolean{return Number.isFinite(p.x)&&Number.isFinite(p.z)&&p.x>=0&&p.z>=0&&p.x<this.world.width&&p.z<this.world.height;}
+ near(p:Pawn):readonly Pawn[]{
+  if(!this.usable||!this.contains(p)||this.source!==this.world.pawns)return this.world.pawns;
+  const x=Math.floor(p.x/8),z=Math.floor(p.z/8),height=Math.ceil(this.world.height/8),ordinals:number[]=[];
+  for(let row=Math.max(0,z-1);row<=Math.min(height-1,z+1);row++)for(let col=Math.max(0,x-1);col<=Math.min(this.columns-1,x+1);col++){
+   const members=this.cells.get(row*this.columns+col);if(members)for(const i of members)ordinals.push(i);
+  }
+  ordinals.sort((a,b)=>a-b);return ordinals.map(i=>this.source[i]!);
+ }
+}
 /** Hash checks: 60 Core ticks; pending attempts retry every 91 Core ticks.
  * Recipients are sampled uniformly among eligible nearby colonists. */
 export function advanceSocial(world:World):void {
@@ -149,10 +176,15 @@ export function advanceSocial(world:World):void {
     const other=world.pawns.find(q=>q.id===p.social!.fight!.opponentId);
     if(!other||other.social?.fight?.opponentId!==p.id||p.melee?.order?.auto!=='social'||other.melee?.order?.auto!=='social')finishSocialFight(world,p);
   }
+  const owned=!!terrainJournalReadOwner();let spatial:SocialSpatial379|undefined,requests=0;
   const carried=new Set(world.pawns.flatMap(p=>p.rescue?.phase==='carry'?[p.rescue.patientId]:[]));
   for(const p of world.pawns){
     expireSocialMemories(p,world.tick);
     if(p.recreation.task?.activity==='visit-sick'&&p.recreation.task.phase==='active')continue;
+    // With no own pending marker, a non-due actor cannot consume the social
+    // BodyAssessment or clear a request. Do not skip expiry, draft cleanup of
+    // an existing marker, or any pending/ready actor's original checks.
+    if(owned&&!p.social?.wants&&(!p.social||!Object.hasOwn(p.social,'wants'))&&((world.tick+p.id)%6!==0||world.tick<=(p.social?.last?.tick??-1000)+32))continue;
     if(!socialMember(world,p,true,carried)){if(p.social)delete p.social.wants;continue;}
     if(p.draft&&p.social)delete p.social.wants;
     const prior=p.social,last=prior?.last?.tick??-1000,pending=!!prior?.wants;
@@ -162,13 +194,22 @@ export function advanceSocial(world:World):void {
     const intensive=(p.recreation.task?.activity==='social-relax'||p.recreation.task?.activity==='billiards')&&p.recreation.task.phase==='active'&&p.state==='recreating';
     if(!pending&&socialRandom(s)>=60/(p.draft?22000:intensive?550:6600))continue;
     if(world.tick-last<12)continue;
-    const candidates=world.pawns.filter(q=>q!==p&&distanceSquared(p,q)<=36&&sameSocialCircle325(p,q)&&socialMember(world,q,false,carried));
+    // At small populations or on the first two queries, the literal scan is
+    // cheaper. Only build a page directory for repeated queries, and invalidate
+    // it at the actual exchange boundary where a fight can drop passengers.
+    if(owned&&++requests>=3&&world.pawns.length>=64&&(!spatial||spatial.source!==world.pawns))spatial=new SocialSpatial379(world,world.pawns);
+    const eligibleCandidate=(q:Pawn)=>q!==p&&distanceSquared(p,q)<=36&&sameSocialCircle325(p,q)&&socialMember(world,q,false,carried);
+    const candidates=(spatial?.near(p)??world.pawns).filter(eligibleCandidate);
+    if(verifyTerrainWriteCaches&&spatial){const expected=world.pawns.filter(eligibleCandidate);if(expected.length!==candidates.length||expected.some((q,i)=>q!==candidates[i]))throw Error('Social spatial candidates changed outside their interval');}
     if(candidates.length){grid??=socialSight(world);const eligible=candidates.filter(q=>goodSocialPosition(world,p,q,grid));
       if(eligible.length){const other=eligible[Math.floor(socialRandom(s)*eligible.length)]!;
         if(world.schemaVersion>=195)people??=captureRelationshipPeople(world);
         const weights=passiveSocialWeights(world,p,other,people),total=weights.chitchat+weights['deep-talk']+weights['kind-words']+weights.slight+weights.insult+weights['romance-attempt']+weights.breakup;
         const roll=socialRandom(s)*total;
         const kind=roll<weights.chitchat?'chitchat':roll<weights.chitchat+weights['deep-talk']?'deep-talk':roll<weights.chitchat+weights['deep-talk']+weights['kind-words']?'kind-words':roll<weights.chitchat+weights['deep-talk']+weights['kind-words']+weights.slight?'slight':roll<weights.chitchat+weights['deep-talk']+weights['kind-words']+weights.slight+weights.insult?'insult':roll<total-weights.breakup?'romance-attempt':'breakup';
+        // Even a future provider with a new physical notifier cannot retain the
+        // old broad positions after the exchange. State checks always stay live.
+        spatial=undefined;requests=0;
         if(exchangeSocial(world,p,other,kind,grid))continue;
       }
     }

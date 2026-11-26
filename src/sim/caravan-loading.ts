@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import { candidateAccess } from './candidate-access.ts';
 import { refreshStock,reservedSource } from './materials.ts';
@@ -96,9 +98,9 @@ export function processScoutLoading(w:World,p:Pawn,ctx:NeedContext):boolean {
       assignPileOwner(source,{type:'inventory',pawnId:p.id});
       foodPileId=source.id;
     }else{
-      source.quantity-=s.quantity;
+      markPileContentWrite379(source).quantity-=s.quantity;
       foodPileId=w.nextId++;
-      w.piles.push({id:foodPileId,kind:'food',item:'survival-meal',quantity:s.quantity,
+      appendPileEntries(w.piles,{id:foodPileId,kind:'food',item:'survival-meal',quantity:s.quantity,
         owner:{type:'inventory',pawnId:p.id},...copyPileCondition(source)});
     }
     refreshStock(w);

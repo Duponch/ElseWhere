@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {freshRot} from './food-preservation.ts';
 import {ITEM_DEFINITIONS,type ItemId} from './items.ts';
 import {APPAREL} from './apparel-definitions.ts';
@@ -201,7 +202,7 @@ export function generateCaravanStock332(seed:number,pawnId:number,nextId:number,
     while(quantity>0){
       if(!Number.isSafeInteger(nextId+1))throw new RangeError('Caravan stock identity overflow.');
       const part=Math.min(quantity,definition.stackLimit),pile:MaterialPile={id:nextId++,kind:definition.kind,item,quantity:part,owner:{type:'inventory',pawnId},...freshRot(item,tick)};
-      if(quality){const condition={quality,hitPoints:tradeCatalogueEntry(item)!.maxHitPoints};if(definition.kind==='weapon')pile.weapon=condition;else pile.apparel={...condition,material:APPAREL[item as keyof typeof APPAREL].material,corpseWear284:false};}
+      if(quality){const condition={quality,hitPoints:tradeCatalogueEntry(item)!.maxHitPoints};if(definition.kind==='weapon')markPileContentWrite379(pile).weapon=condition;else markPileContentWrite379(pile).apparel={...condition,material:APPAREL[item as keyof typeof APPAREL].material,corpseWear284:false};}
       piles.push(pile);quantity-=part;
     }
   };

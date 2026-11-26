@@ -1,3 +1,4 @@
+import {splicePileEntries} from './pile-identity-directory.ts';
 import {mechRaidGroups261} from './mechanical-raid-groups-261.ts';
 import {validBombWaveShape} from './bomb-state.ts';
 import {validAnimalDeathExplosionOwner256} from './animal-death-provenance-v256.ts';
@@ -77,7 +78,7 @@ export function spikeTrapImpactProjection(world:World){
         ||patches.some(p=>encoded(p.original)!==p.before))return false;
       used=true;
       for(const p of patches)replace(p.original,p.after);
-      for(const p of removedPiles){const i=world.piles.indexOf(p);if(i>=0)world.piles.splice(i,1);}
+      for(const p of removedPiles){const i=world.piles.indexOf(p);if(i>=0)splicePileEntries(world.piles,i,1);}
       if(hiveLordsChanged&&world.wildlife)world.wildlife.hiveLords=view.wildlife?.hiveLords;
       if(eventsChanged)world.events.splice(0,world.events.length,...view.events);
       if(economyChanged)world.economy=view.economy;

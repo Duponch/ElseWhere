@@ -8,6 +8,7 @@ import {WildlifeLayer} from '../src/render/WildlifeLayer';
 import {MechanoidLayer} from '../src/render/MechanoidLayer';
 import {MotionTimeline} from '../src/render/MotionTimeline';
 import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
+import {WorldCoordinateGroup} from '../src/render/WorldCoordinateGroup';
 import {CARGO_HANDOFF_TICKS} from '../src/render/cargo-handoff';
 import {itemCargoKind} from '../src/render/item-presentation';
 import {TICKS_PER_SECOND} from '../src/sim/types';
@@ -104,4 +105,38 @@ test('mechanical playback retains confirmed positions and fractions across the l
   timeline.tick=1023;machines.update(world,timeline,true);const g=namedMesh(machines.group,'scyther bodies and carcasses — original GPU rig').geometry;expectEdge(g,10,11,1022,1026);
   timeline.tick=1024.5;machines.update(world,timeline);expectEdge(g,10,11,-2,2);expect(JSON.stringify(world)).toBe(before);
  }finally{machines.dispose();}
+});
+
+test('closed immutable histories schedule only real endpoint/dependency changes and preserve all physical actor stream bytes',()=>{
+ const seed=fixture();seed.schemaVersion=379;seed.tick=108;const human=seed.pawns[0]!,stationary=structuredClone(human);stationary.id=seed.nextId++;Object.assign(stationary,{x:8,z:8,state:'idle',motion:null});seed.pawns.push(stationary);
+ const hare={id:seed.nextId++,species:'hare' as const,sex:'female' as const,ageTicks:100000,x:11,z:10,food:.2,rest:1,state:'moving' as const,path:[],nextDecision:200,motion:edge()};
+ const still={...hare,id:seed.nextId++,state:'idle' as const,motion:undefined,x:8,z:8};
+ seed.wildlife={profile:'temperate-hares-v1',rng:43,animals:[hare,still],eatenPlants:0,eatenNutrition:0,eatenItems:0};
+ const mech={id:seed.nextId++,mechKind:'scyther' as const,state:'moving' as const,x:11,z:10,path:[],motion:edge(),heading:0,moveCooldown:0,planCooldown:0};seed.mechanoids=[mech,{...mech,id:seed.nextId++,state:'idle',motion:undefined,x:8,z:8}];
+ const moving=[human.id,hare.id,mech.id],history=(pieces:PresentationSegment[])=>{for(const piece of pieces){Object.freeze(piece.from);Object.freeze(piece.to);Object.freeze(piece);}Object.freeze(pieces);return pieces;};
+ const first=history([edge(100,104),{from:{x:11,z:10},to:{x:12,z:10},start:104,end:108}]);
+ const one=(reference:boolean)=>{const world=structuredClone(seed),timeline=new MotionTimeline(),pawns=new PawnLayer(undefined,undefined,!reference),wildlife=new WildlifeLayer(undefined,undefined,undefined,!reference),machines=new MechanoidLayer(undefined,undefined,!reference),scene=new THREE.Scene(),parent=new THREE.Group();ownActorPlaybackWorld435(world,true);timeline.adopt(108,1,moving.map(id=>({id,segments:first})),0,true,true);expect(timeline.playbackOwned435).toBe(true);
+  scene.matrixAutoUpdate=false;parent.matrixAutoUpdate=false;scene.add(parent);parent.add(pawns.group,wildlife.mesh,wildlife.flames,machines.group);
+  if(reference)Reflect.set(timeline,'playbackChanged435',undefined);pawns.update(world,1,true);return{world,timeline,pawns,wildlife,machines,scene,parent};};
+ const candidate=one(false),reference=one(true),both=[reference,candidate];
+ const streams=(h:typeof candidate)=>[h.pawns.feedbackSource!,namedMesh(h.wildlife.mesh,'Wild hare — GPU rig').geometry,namedMesh(h.machines.group,'scyther bodies and carcasses — original GPU rig').geometry].map(g=>['aFrom','aTo','aTravel','aMotion','aAnimal'].flatMap(name=>{const a=g.getAttribute(name);if(!a)return[];const array=a.array;return[...new Uint32Array(array.buffer,array.byteOffset,array.byteLength/4)];}));
+ const frame=(tick:number,dt=1/240,speed=1,reset=false)=>{for(const h of both){h.timeline.tick=tick;h.pawns.blend.value=1;h.pawns.time.value=tick/6%(2*Math.PI);h.pawns.updateTravel(h.world,h.timeline,dt,speed);h.pawns.presentAnimations();h.wildlife.update(h.world,h.timeline,reset,h.pawns,undefined,dt,speed);h.machines.update(h.world,h.timeline,reset);h.scene.updateMatrixWorld();}expect(streams(candidate)).toEqual(streams(reference));};
+ const matrices=(h:typeof candidate)=>{const result:number[][]=[];h.parent.traverse(object=>result.push(object.matrixWorld.elements.slice()));return result;};
+ try{
+  frame(99,1/240,1,true);expect(matrices(candidate)).toEqual(matrices(reference));for(let i=0;i<160;i++)frame(99+i*.06);
+  expect(matrices(candidate)).toEqual(matrices(reference));
+  // A genuinely changed ancestor still propagates as native, despite all
+  // inactive and active GPU-local actor rigs retaining their clean matrices.
+  for(const h of both){h.parent.position.set(2,3,4);h.parent.rotation.y=.25;h.parent.updateMatrix();}
+  frame(108.7);expect(matrices(candidate)).toEqual(matrices(reference));
+  const corrected=history([{from:{x:12,z:10},to:{x:14,z:10},start:108,end:113}]);for(const h of both)h.timeline.adopt(113,1,moving.map(id=>({id,segments:corrected})),100,false,true);
+  for(let i=0;i<150;i++)frame(109+i*.05);
+  for(let i=0;i<30;i++)frame(117,1/240,0);frame(117,.05,3);frame(117,1/240,6);frame(1024.1);frame(1024.2);frame(109.5);frame(110);
+  expect(candidate.pawns.actorPlaybackMetrics435().scheduledFrames).toBeGreaterThan(300);expect(candidate.pawns.actorPlaybackMetrics435().scheduledActors).toBeLessThan(100);
+  expect(candidate.wildlife.actorPlaybackMetrics435()[0]!.scheduledFrames).toBeGreaterThan(300);expect(candidate.machines.actorPlaybackMetrics435()[0]!.scheduledFrames).toBeGreaterThan(300);
+  expect(reference.pawns.actorPlaybackMetrics435().scheduledFrames).toBe(0);
+  expect(matrices(candidate)).toEqual(matrices(reference));
+  for(const group of [candidate.pawns.group,candidate.wildlife.mesh,candidate.wildlife.flames,candidate.machines.group]){expect(group).toBeInstanceOf(WorldCoordinateGroup);expect((group as WorldCoordinateGroup).matrixMetrics().reusedTraversals).toBeGreaterThan(300);expect((group as WorldCoordinateGroup).matrixMetrics().nativeTraversals).toBeLessThan(10);}
+  for(const group of [reference.pawns.group,reference.wildlife.mesh,reference.wildlife.flames,reference.machines.group])expect(group.constructor).toBe(THREE.Group);
+ }finally{for(const h of both){h.pawns.dispose();h.wildlife.dispose();h.machines.dispose();}}
 });

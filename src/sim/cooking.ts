@@ -1,5 +1,8 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {isCookingAnimalProduct353} from './cooking-ingredients-353.ts';
 import {assignPileOwner} from './pile-index.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import {validProstheticIngredients273} from './machining.ts';
 import {isProstheticRecipe273} from './prosthetic-content-273.ts';
 import {beginProstheticWork273} from './prosthetic-work-273.ts';
@@ -55,7 +58,7 @@ import { processProductionOutput, type ProductionContext } from './production-ou
 import { copyPileCondition } from './pile-condition.ts';
 import { freshRot, ticksUntilRot } from './food-preservation.ts';
 import { groundPile } from './ground-placement.ts';
-import { transferPile, reservedSource } from './materials.ts';
+import { transferPile, reservedSource,createSourceReservationRead379 } from './materials.ts';
 import type { MaterialPile, Pawn, World } from './types.ts';
 import { structureById } from './structure-navigation.ts';
 
@@ -71,9 +74,9 @@ function take(world:World,pawn:Pawn,pile:MaterialPile,quantity:number):MaterialP
   if(!eggAllowedForPlayer256(pile)||pile.quantity<quantity||pile.owner.type!=='ground'||world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id))return null;
   if(pile.quantity===quantity){assignPileOwner(pile,{type:'pawn',pawnId:pawn.id});return pile;}
   if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1))return null;
-  pile.quantity-=quantity;
+  markPileContentWrite379(pile).quantity-=quantity;
   const carried:MaterialPile={id:world.nextId++,item:pile.item,kind:pile.kind,quantity,owner:{type:'pawn',pawnId:pawn.id},...copyPileCondition(pile)};
-  world.piles.push(carried);return carried;
+  appendPileEntries(world.piles,carried);return carried;
 }
 export function processCooking(world:World,pawn:Pawn,context:ProductionContext):void {
   const task=pawn.cooking!;
@@ -116,19 +119,23 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   const smithingPiece=smithing&&task.ingredients.length===1?world.piles.find(p=>p.id===task.ingredients[0]!.pileId&&p.smithingWork):undefined;
   if(smithing&&!smithingPiece&&!smithingMaterialFromIngredients267(task.recipe as import('./smithing-content-267.ts').SmithingRecipe267,task.ingredients)){context.release();return;}
   if(smithingPiece&&(!bill.filters[smithingPiece.smithingWork!.material]||smithingPiece.smithingWork!.authorId!==pawn.id)){context.release();return;}
+  // No task/pile mutation occurs in this validation loop. Release and all
+  // pickup/movement/production callbacks end or follow it. Split ingredient
+  // entries may name the same pile, and share its exact reservation read.
+  const reservations=task.ingredients.length>1?createSourceReservationRead379(world,task.ingredients.map(i=>i.pileId)):undefined;
   for(const entry of task.ingredients) {
-    const pile=world.piles.find(p=>p.id===entry.pileId);
+    const pile=pileById(world,entry.pileId);
     if((smithing||prostheticRecipe)&&pile&&!materialAllowedForPlayer256(pile)){context.release();return;}
     if(smithing&&(!pile||!smithingPiece&&!bill.filters[entry.item]||entry.stage==='source'&&(pile.owner.type!=='ground'||(pile.owner.x-station.x)**2+(pile.owner.z-station.z)**2>bill.radius**2)||entry.stage==='placed'&&(pile.owner.type!=='ground'||pile.owner.x!==entry.cell.x||pile.owner.z!==entry.cell.z)||entry.stage==='held'&&(pile.owner.type!=='pawn'||pile.owner.pawnId!==pawn.id))){context.release();return;}
     if(cremation&&!canStandAt(world,entry.cell)){context.release();return;}
-    if((pemmican||kibble||biofuel)&&entry.stage!=='placed'&&entry.quantity>10){context.release();return;}
+    if(world.schemaVersion<379&&(pemmican||kibble||biofuel)&&entry.stage!=='placed'&&entry.quantity>10){context.release();return;}
     if((brewing||pemmican||kibble||medicine||biofuel||smelting||cremation||burningApparel)&&(!bill.filters[entry.item]||!pile||burningApparel&&!burnApparelIngredientAllowed(bill,pile)||smelting&&!smeltingIngredientAllowed(bill,pile)
       ||cremation&&(!cremationIngredientAllowed(world,bill,pile)||pile.humanCorpse&&burialClaim(world,pile.humanCorpse.pawnId,pawn.id))
       ||entry.stage==='source'&&(pile.owner.type!=='ground'||(pile.owner.x-station.x)**2+(pile.owner.z-station.z)**2>bill.radius**2)
       ||entry.stage==='placed'&&(pile.owner.type!=='ground'||pile.owner.x!==entry.cell.x||pile.owner.z!==entry.cell.z)
       ||entry.stage==='held'&&(pile.owner.type!=='pawn'||pile.owner.pawnId!==pawn.id))){context.release();return;}
     if((brewing||pemmican||kibble||task.recipe==='chemfuel-from-organics')&&pile&&ticksUntilRot(pile,world.tick)<=0){context.release();return;}
-    if(!pile||!cremation&&isAnimalCorpseItem(pile.item)&&!corpseFresh(pile,world.tick)||(task.recipe==='cook-survival-meal'||task.recipe==='cook-simple-meal-bulk'||task.recipe==='cook-fine-meal-bulk'||task.recipe==='cook-lavish-meal-bulk'||task.recipe==='vegetarian-fine-meal'||task.recipe==='cook-vegetarian-fine-meal-bulk'||task.recipe==='carnivore-fine-meal'||task.recipe==='cook-carnivore-fine-meal-bulk'||task.recipe==='vegetarian-lavish-meal'||task.recipe==='cook-vegetarian-lavish-meal-bulk'||task.recipe==='cook-carnivore-lavish-meal'||task.recipe==='cook-carnivore-lavish-meal-bulk')&&ticksUntilRot(pile,world.tick)<=0||pile.item!==entry.item||pile.quantity<entry.quantity||entry.stage!=='held'&&reservedSource(world,pile.id)>pile.quantity){context.release();return;}
+    if(!pile||!cremation&&isAnimalCorpseItem(pile.item)&&!corpseFresh(pile,world.tick)||(task.recipe==='cook-survival-meal'||task.recipe==='cook-simple-meal-bulk'||task.recipe==='cook-fine-meal-bulk'||task.recipe==='cook-lavish-meal-bulk'||task.recipe==='vegetarian-fine-meal'||task.recipe==='cook-vegetarian-fine-meal-bulk'||task.recipe==='carnivore-fine-meal'||task.recipe==='cook-carnivore-fine-meal-bulk'||task.recipe==='vegetarian-lavish-meal'||task.recipe==='cook-vegetarian-lavish-meal-bulk'||task.recipe==='cook-carnivore-lavish-meal'||task.recipe==='cook-carnivore-lavish-meal-bulk')&&ticksUntilRot(pile,world.tick)<=0||pile.item!==entry.item||pile.quantity<entry.quantity||entry.stage!=='held'&&(reservations?reservations(pile.id):reservedSource(world,pile.id))>pile.quantity){context.release();return;}
     if((cremation||burningApparel)&&reservedSource(world,pile.id,pawn.id)>0){context.release();return;}
     if((task.recipe==='cook-survival-meal'||task.recipe==='cook-simple-meal-bulk'||task.recipe==='cook-fine-meal-bulk'||task.recipe==='cook-lavish-meal-bulk'||task.recipe==='vegetarian-fine-meal'||task.recipe==='cook-vegetarian-fine-meal-bulk'||task.recipe==='carnivore-fine-meal'||task.recipe==='cook-carnivore-fine-meal-bulk'||task.recipe==='vegetarian-lavish-meal'||task.recipe==='cook-vegetarian-lavish-meal-bulk'||task.recipe==='cook-carnivore-lavish-meal'||task.recipe==='cook-carnivore-lavish-meal-bulk')&&(!bill.filters[entry.item]
       ||entry.stage==='source'&&(pile.owner.type!=='ground'||(pile.owner.x-station.x)**2+(pile.owner.z-station.z)**2>bill.radius**2)
@@ -138,7 +145,7 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   const held=task.ingredients.find(i=>i.stage==='held');
   if(held) {
     if(pawn.x!==task.spot.x||pawn.z!==task.spot.z){context.move(task.spot,true);return;}
-    const pile=world.piles.find(p=>p.id===held.pileId)!;
+    const pile=pileById(world,held.pileId)!;
     task.actionCell={...held.cell};
     if(shelfAt(world,held.cell)){context.release();return;}
     if(!transferPile(world,pile,{type:'ground',...held.cell})){context.release();return;}
@@ -146,9 +153,13 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   }
   const source=task.ingredients.find(i=>i.stage==='source');
   if(source) {
-    const pile=world.piles.find(p=>p.id===source.pileId)!;
+    const pile=pileById(world,source.pileId)!;
     if(pile.owner.type!=='ground'){context.release();return;}
     if(!near(pawn,pile.owner)){context.move(pile.owner,false);return;}
+    if(Number(world.schemaVersion)>=379){
+      const limit=carryStackLimit379(world,pawn,pile.item);if(limit<1){context.release();return;}
+      if(source.quantity>limit){const remaining=source.quantity-limit;task.ingredients.splice(task.ingredients.indexOf(source)+1,0,{...source,quantity:remaining,cell:{...source.cell}});markPileContentWrite379(source).quantity=limit;}
+    }
     task.actionCell={x:pile.owner.x,z:pile.owner.z};
     const carried=take(world,pawn,pile,source.quantity);if(!carried){context.release();return;}
     source.pileId=carried.id;source.stage='held';pawn.path=[];pawn.planCooldown=0;pawn.state='working';return;
@@ -200,7 +211,7 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   if(mechanical){finishMechSalvage(world,pawn,bill,context);return;}
   if(task.recipe==='butcher-creature'){finishButchery(world,pawn,bill,context);return;}
   const used=new Map<number,number>();for(const i of task.ingredients)used.set(i.pileId,(used.get(i.pileId)??0)+i.quantity);
-  const freed=[...used].filter(([id,n])=>world.piles.find(p=>p.id===id)?.quantity===n).length;
+  const freed=[...used].filter(([id,n])=>pileById(world,id)?.quantity===n).length;
   if(world.piles.length-freed+1>32768||!Number.isSafeInteger(world.nextId+1))return;
   const agave=task.ingredients.filter(i=>i.item==='agave-fruit').reduce((n,i)=>n+i.quantity,0);
   const animalProducts353=task.ingredients.some(i=>isCookingAnimalProduct353(i.item))?simpleMealParts353(task.ingredients):undefined;
@@ -214,9 +225,9 @@ export function processCooking(world:World,pawn:Pawn,context:ProductionContext):
   const foodPoison=world.schemaVersion>=89&&culinary&&!kibble&&!brewing?foodPoisonFromRecipe(roomCleanliness(world,pawn),(pawn.skills.cooking?.level??0),()=>healthRandom(random)):undefined;
   const medicineSkill=medicine?completedMedicineSkill(pawn,task.workTicks??0):undefined;
   // All preconditions succeeded. Consume once, create once, then store physically.
-  for(const [id,quantity] of used)world.piles.find(p=>p.id===id)!.quantity-=quantity;
-  world.piles=world.piles.filter(p=>p.quantity>0);
-  const id=world.nextId++;world.piles.push({id,item,kind:ITEM_DEFINITIONS[item].kind,quantity:kibble?kibbleOutputUnits(station):recipe.outputUnits,owner:{type:'pawn',pawnId:pawn.id},...freshRot(item,world.tick),...(foodPoison?{foodPoison}:{}),...apparel?{apparel}:{},...(weapon?{weapon}:{})});
+  for(const [id,quantity] of used)markPileContentWrite379(pileById(world,id)!).quantity-=quantity;
+  world.piles=filterPileEntries(world.piles,p=>p.quantity>0);
+  const id=world.nextId++;appendPileEntries(world.piles,{id,item,kind:ITEM_DEFINITIONS[item].kind,quantity:kibble?kibbleOutputUnits(station):recipe.outputUnits,owner:{type:'pawn',pawnId:pawn.id},...freshRot(item,world.tick),...(foodPoison?{foodPoison}:{}),...apparel?{apparel}:{},...(weapon?{weapon}:{})});
   world.rng=random.rng;
   if(medicineSkill)pawn.skills.intellectual=medicineSkill;
   if(isTailoring(task.recipe)){(world.tailoring??={completed:0,cancelled:0,lostCloth:0}).completed++;}

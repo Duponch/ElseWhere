@@ -1,6 +1,9 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
 import {animalCarryLimit282,canAnimalHaul282} from './animal-training-282.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import {animalBody} from './wildlife-health.ts';
 import {animalNutritionMax,animalFoodWantEat256} from './animal-life.ts';
 import {animalClaimed} from './animal-rest-state.ts';
@@ -129,7 +132,7 @@ export function createAnimalHaulingPass282(w:World,readArea:(a:WildAnimal)=>Anim
    const zones=d.zones.filter(c=>inside(c)&&c.priority>priority&&safeCell(w,c)&&storageCellAccepts(w,c,pile))
     .sort((x,y)=>y.priority-x.priority||(x.x-sourceCell.x)**2+(x.z-sourceCell.z)**2-((y.x-sourceCell.x)**2+(y.z-sourceCell.z)**2)||x.id-y.id);
    for(const zone of zones){
-    const quantity=Math.min(pile.quantity-(d.reserved.get(pile.id)??0),animalCarryLimit282(a,pile.item),capacity(w,d,zone,pile,a.id));
+    const quantity=Math.min(pile.quantity-(d.reserved.get(pile.id)??0),Number(w.schemaVersion)>=379?carryStackLimit379(w,a,pile.item):animalCarryLimit282(a,pile.item),capacity(w,d,zone,pile,a.id));
     if(quantity<1||!search.canReach(zone))continue;
     const path=search.pathTo(pile.owner);if(!path)continue;
     a.haul={sourcePileId:pile.id,quantity,phase:'pickup',destination:{type:'stockpile',stockpileId:zone.id},carryPileId:null,startedAtCore:w.tick*10};
@@ -145,7 +148,7 @@ export function createAnimalHaulingPass282(w:World,readArea:(a:WildAnimal)=>Anim
   const zone=d.zones.find(c=>c.id===t.destination.stockpileId);
   const policy=readArea(a),inside=(c:Cell)=>!policy||policy.has(c.z*w.width+c.x);
   if(!pile||!zone||!inside(zone)||!animalHaulPileAllowed282(w,pile)||!safeCell(w,zone)||capacity(w,d,zone,pile,a.id)<t.quantity
-   ||t.phase==='pickup'&&(pile.owner.type!=='ground'||!inside(pile.owner)||!safeCell(w,pile.owner)||pile.quantity<(d.reserved.get(pile.id)??0)||t.quantity>animalCarryLimit282(a,pile.item))
+   ||t.phase==='pickup'&&(pile.owner.type!=='ground'||!inside(pile.owner)||!safeCell(w,pile.owner)||pile.quantity<(d.reserved.get(pile.id)??0)||Number(w.schemaVersion)<379&&t.quantity>animalCarryLimit282(a,pile.item))
    ||t.phase==='deliver'&&(pile.owner.type!=='inventory'||pile.owner.pawnId!==a.id||pile.quantity!==t.quantity)){
    interruptAnimalHaul282(w,a);invalidate();return false;
   }
@@ -156,10 +159,11 @@ export function createAnimalHaulingPass282(w:World,readArea:(a:WildAnimal)=>Anim
   }
   a.path=[];a.state='idle';
   if(t.phase==='pickup'){
+   if(Number(w.schemaVersion)>=379){markPileContentWrite379(t).quantity=Math.min(t.quantity,carryStackLimit379(w,a,pile.item));if(t.quantity<1){interruptAnimalHaul282(w,a);invalidate();return false;}}
    if(pile.quantity<t.quantity||!Number.isSafeInteger(w.nextId+1)||pile.quantity>t.quantity&&w.piles.length>=32768){interruptAnimalHaul282(w,a);invalidate();return false;}
    t.pickupCell={x:pile.owner.type==='ground'?pile.owner.x:a.x,z:pile.owner.type==='ground'?pile.owner.z:a.z};
    if(pile.quantity===t.quantity){assignPileOwner(pile,{type:'inventory',pawnId:a.id});t.carryPileId=pile.id;}
-   else{pile.quantity-=t.quantity;const carry={...pile,...copyPileCondition(pile),id:w.nextId++,quantity:t.quantity,owner:{type:'inventory' as const,pawnId:a.id}};w.piles.push(carry);t.carryPileId=carry.id;}
+   else{markPileContentWrite379(pile).quantity-=t.quantity;const carry={...pile,...copyPileCondition(pile),id:w.nextId++,quantity:t.quantity,owner:{type:'inventory' as const,pawnId:a.id}};appendPileEntries(w.piles,carry);t.carryPileId=carry.id;}
    t.phase='deliver';refreshStock(w);invalidate();return true;
   }
   if(w.tick*10-t.startedAtCore<30)return true;

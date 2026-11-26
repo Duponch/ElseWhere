@@ -228,10 +228,19 @@ export function prisonDecisions(w:World,s:PrisonPlayerState):Decision[] {
     priority(recruit,'grow',2,'Faire participer la nouvelle personne au potager.');
   }
   out.push(...prisonWoodDecisions(w,s.campAnchor,out));
-  // One ordered setting per key: the prison policy's final staffing wins over
-  // the common three-person notebook without conflicting commands in a batch.
+  return prisonStaffingDecisions(w,out);
+}
+/** One setting per key: the prison policy's final staffing wins over the
+ * inherited three-person notebook. A new recruit can have ordinary Core
+ * background incapabilities absent from those original three people; the
+ * scripted player must not click a disabled Work cell in either notebook. */
+export function prisonStaffingDecisions(w:Pick<World,'pawns'>,decisions:Decision[]):Decision[] {
   const keys=new Map<string,Decision>();const plain:Decision[]=[];
-  for(const d of out){const c=d.command;if(c.type==='priority')keys.set(`${c.pawnId}:${c.work}`,d);else plain.push(d);}
+  for(const d of decisions){const c=d.command;if(c.type==='priority'){
+    const actor=w.pawns.find(p=>p.id===c.pawnId);
+    if(c.value>0&&actor&&backgroundWorkRefusal(actor,c.work))continue;
+    keys.set(`${c.pawnId}:${c.work}`,d);
+  }else plain.push(d);}
   return [...keys.values(),...plain];
 }
 export function prisonSummary(w:World,s:PrisonPlayerState){

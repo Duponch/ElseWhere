@@ -5,7 +5,7 @@ import type { NativeControl, NativePage, NativeUiActions, NativeUiState } from '
 import { buildNativeInspector, setNativeInspectorTab } from '../src/ui3d/native-inspector';
 import { layoutNativePage } from '../src/ui3d/native-layout';
 import { NATIVE_INK } from '../src/ui3d/native-ui-scale';
-import { appliedScroll, cardScroll, nativeTabTargets, resetCardScroll, setCardScroll, type NativeTabCard } from '../src/ui3d/native-tab-card';
+import { appliedScroll, cardScroll, nativeTabTargets, paintNativeTabCard, resetCardScroll, setCardScroll, type NativeTabCard } from '../src/ui3d/native-tab-card';
 import { NEEDS_FULL, layoutNeedsTab, needBarGeometry, thoughtOffsetLabel, type NeedsSpec, type NeedBarSpec } from '../src/ui3d/native-tab-needs';
 import { HEALTH_SIZE, layoutHealthTab, type HealthSpec } from '../src/ui3d/native-tab-health';
 import { GEAR_SIZE, gearMassLabel, layoutGearTab, type GearSpec } from '../src/ui3d/native-tab-gear';
@@ -21,6 +21,13 @@ const viewport = { width: 1440, height: 900 };
 const control = (id: string, extra: Partial<NativeControl> = {}): NativeControl => ({ id, label: id, hint: id, onActivate: () => undefined, ...extra });
 const find = (card: NativeTabCard, id: string) => card.targets.find(target => target.id === id)!;
 const need = (id: string, extra: Partial<NeedBarSpec> = {}): NeedBarSpec => ({ id, label: id, major: true, level: .5, thresholds: [.25], arrow: 0, hint: id, ...extra });
+
+it('paints embedded scroll tracks and thumbs across the full16-point reserved gutter',()=>{
+  const fillRect=vi.fn(),ctx={save:vi.fn(),restore:vi.fn(),beginPath:vi.fn(),rect:vi.fn(),clip:vi.fn(),fillRect} as unknown as CanvasRenderingContext2D;
+  const card:NativeTabCard={width:200,height:100,items:[],targets:[],regions:[{id:'track-width',x:10,y:10,w:180,h:80,contentHeight:240}]};
+  paintNativeTabCard(ctx,card,3,4,{} as never);
+  expect(fillRect.mock.calls[0]).toEqual([177,14,16,80]);expect(fillRect.mock.calls[1]).toEqual([177,14,16,28]);
+});
 
 describe('contrast of the colour roles on the paper (WCAG AA)', () => {
   const luminance = (hex: string) => { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * c[0]! + .7152 * c[1]! + .0722 * c[2]!; };

@@ -1,3 +1,4 @@
+import {decodeOwnedCorePhaseWire379} from './core-phase-wire-379';
 /** Representation capture only, never an admission or native-source capability.
  * Called by the fixed lane inside its first trusted MessageEvent listener. */
 const ownKeys=Reflect.ownKeys,descriptor=Object.getOwnPropertyDescriptor,proto=Object.getPrototypeOf;
@@ -80,6 +81,15 @@ function ownedCore297(value:unknown,active:Set<object>,budget:{left:number},dept
 /** Fixed first-listener capture. Historical Full/control capture stays literal;
  * only Core phase data gets the stricter bounds already required by its codec. */
 export function captureNativeMessageForDeferred297(value:unknown):unknown {
+ // The compact lane extracts its own outer descriptors and detached tables.
+ // Never enter the historical generic iterator on a packed wrapper first.
+ if(value!==null&&typeof value==='object'&&descriptor(value,'phaseWire379')){
+  const type=descriptor(value,'type'),kind=type&&descriptor(type,'value')?.value;
+  if(type?.enumerable&&(kind==='actor-phase-297'||kind==='actor-frontier-297')){
+   const captured=decodeOwnedCorePhaseWire379(value);
+   weakAdd297.call(capturedCoreRoots297,captured);return captured;
+  }
+ }
  const copy=outer(value);
  if(copy.type==='actor-phase-297'||copy.type==='actor-frontier-297'){
   const captured=ownedCore297(copy,new Set297<object>(),{left:1048576}) as object;

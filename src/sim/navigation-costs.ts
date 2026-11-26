@@ -1,3 +1,6 @@
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
+
 /** Immutable cost capture for one synchronous navigation decision. The terrain
  * byte array and sparse overlays are owned by the capture, never cached. */
 export interface NavigationCostLookup {
@@ -7,6 +10,93 @@ export interface NavigationCostLookup {
 }
 
 export const EMPTY_NAVIGATION_COSTS:NavigationCostLookup=Object.freeze({get:()=>undefined,has:()=>false,maximum:0});
+
+interface CostPage {readonly values:Float64Array;readonly states:Uint8Array}
+interface CostOperation {readonly factor:number;readonly round:boolean}
+interface CostOwnership {owner:object|undefined}
+const NO_TERRAIN=new Uint8Array(),NO_SPARSE:ReadonlyMap<number,number>=new Map();
+export interface SearchNavigationCostColumns {readonly pages:readonly (CostPage|undefined)[];read(index:number):number|undefined}
+/** One producer-owned program for terrain/object maxima, then ordered additive
+ * layers and normalization. Values remain doubles; no reassociation of sums or
+ * multiplication is allowed. Public/unowned reads execute the live program.
+ * An exclusively owned synchronous decision can retain computed cells in
+ * sparse pages instead of traversing the same program for every incoming edge. */
+class CapturedNavigationCosts implements NavigationCostLookup {
+  readonly pages:(CostPage|undefined)[];
+  readonly maximum:number;
+  constructor(readonly terrain:Uint8Array|Uint16Array,readonly sparse:ReadonlyMap<number,number>,readonly additions:readonly ReadonlyMap<number,number>[],readonly operations:readonly CostOperation[],maximum:number,readonly ownership:CostOwnership,readonly includeBase:boolean,readonly size=terrain.length,readonly source?:NavigationCostLookup){
+    this.maximum=maximum;this.pages=[];
+  }
+  private raw(index:number):number|undefined {
+    if(this.source){let value=this.source.get(index);if(value!==undefined)for(const operation of this.operations){value=value*operation.factor;if(operation.round)value=Math.round(value);}return value;}
+    const floor=this.terrain[index]||undefined,extra=this.includeBase?this.sparse.get(index):undefined;
+    let value=this.includeBase?(extra===undefined?floor:Math.max(extra,floor??0)):undefined;
+    for(const addition of this.additions){const added=addition.get(index);if(value!==undefined||added!==undefined)value=(value??0)+(added??0);}
+    if(value!==undefined)for(const operation of this.operations){value=value*operation.factor;if(operation.round)value=Math.round(value);}
+    return value;
+  }
+  get(index:number):number|undefined {
+    if(!this.owned()||!Number.isInteger(index)||index<0||index>=this.size)return this.raw(index);
+    return this.read(index);
+  }
+  /** Search-only integer/in-range read after its source owner was admitted. */
+  read(index:number):number|undefined {
+    const p=index>>>8,o=index&255,page=this.pages[p]??=({values:new Float64Array(256),states:new Uint8Array(256)}),state=page.states[o];
+    if(state){const value=state===2?page.values[o]:undefined;if(verifyTerrainWriteCaches&&!Object.is(value,this.raw(index)))throw Error('Navigation cost capture changed during its owned search');return value;}
+    const value=this.raw(index);page.states[o]=value===undefined?1:2;if(value!==undefined)page.values[o]=value;return value;
+  }
+  has(index:number):boolean {
+    if(this.owned()&&Number.isInteger(index)&&index>=0&&index<this.size){const state=this.pages[index>>>8]?.states[index&255];if(state){if(verifyTerrainWriteCaches)this.read(index);return state===2;}}
+    if(this.source)return this.source.has(index);
+    if(this.includeBase&&(!!this.terrain[index]||this.sparse.has(index)))return true;
+    for(const addition of this.additions)if(addition.has(index))return true;return false;
+  }
+  transformed(factor:number,round:boolean):CapturedNavigationCosts {
+    this.owned();
+    return new CapturedNavigationCosts(this.terrain,this.sparse,this.additions,[...this.operations,{factor,round}],round?Math.round(this.maximum*factor):this.maximum*factor,this.ownership,this.includeBase,this.size,this.source);
+  }
+  owned():boolean {
+    const owner=this.ownership.owner;if(owner===undefined)return false;
+    if(owner===terrainJournalReadOwner())return true;
+    // A public observation retires every transformed sibling's witness.
+    this.ownership.owner=undefined;return false;
+  }
+}
+
+/** Admission is repeated when a resumable search advances, never by a tick or
+ * guessed revision. Unknown programs and public callers use their live API. */
+export function searchNavigationCostColumns(costs:NavigationCostLookup|undefined):SearchNavigationCostColumns|undefined {
+  return costs instanceof CapturedNavigationCosts&&costs.owned()?costs:undefined;
+}
+
+/** A true cost producer has already captured every mutable fact in `source`.
+ * Give that immutable program the same owned integer-cell pages as the fused
+ * terrain program. Unknown public lookups remain live; callers must not use
+ * this admission for a source whose get() can change during the decision. */
+export function captureNavigationCostProgram379(source:NavigationCostLookup|undefined,size:number):NavigationCostLookup|undefined {
+  const owner=terrainJournalReadOwner();if(!source||!owner)return source;
+  if(source instanceof CapturedNavigationCosts&&source.size===size&&source.owned())return source;
+  return new CapturedNavigationCosts(NO_TERRAIN,NO_SPARSE,[],[],source.maximum,{owner},false,size,source);
+}
+
+/** Same lookup as overlayNavigationCosts followed by addFireNavigationCosts
+ * for each nonempty additive map, in order. A single capture owns the program
+ * and its optional memo pages; it introduces no persistent World state. */
+export function captureNavigationCostLayers(terrain:Uint8Array|Uint16Array,terrainMaximum:number,sparse:ReadonlyMap<number,number>,additions:readonly ReadonlyMap<number,number>[],includeBase=true):NavigationCostLookup|undefined {
+  const layers=additions.filter(layer=>layer.size>0);if(!includeBase&&!layers.length)return;
+  let maximum=includeBase?terrainMaximum:0;
+  if(includeBase){if(sparse instanceof LayeredMap){if(sparse.size)maximum=Math.max(maximum,sparse.maximumValue());}else for(const value of sparse.values())maximum=Math.max(maximum,value);}
+  for(const layer of layers){let added=0;for(const value of layer.values())added=Math.max(added,value);maximum+=added;}
+  return new CapturedNavigationCosts(terrain,sparse,layers,[],maximum,{owner:terrainJournalReadOwner()},includeBase);
+}
+
+/** Preserve each original transform's rounding and evaluation order while
+ * attaching it to an owned program instead of nesting another get closure. */
+export function transformNavigationCosts(costs:NavigationCostLookup|undefined,factor:number,round=false):NavigationCostLookup|undefined {
+  if(!costs)return;
+  if(costs instanceof CapturedNavigationCosts)return costs.transformed(factor,round);
+  return {get(index){const value=costs.get(index);return value===undefined?undefined:round?Math.round(value*factor):value*factor;},has:index=>costs.has(index),maximum:round?Math.round(costs.maximum*factor):costs.maximum*factor};
+}
 
 const NO_KEYS:ReadonlySet<number>=new Set();
 /** A set read as a copy of `base` then edited (add/delete), without copying
@@ -79,5 +169,5 @@ export function overlayNavigationCosts(terrain:Uint8Array|Uint16Array,terrainMax
 /** Preserve already-rounded integer search units (67 becomes 201, not 200).
  * Scaling a lookup does not copy its dense layer or sparse entries. */
 export function scaleNavigationCosts(costs:NavigationCostLookup|undefined,factor:number):NavigationCostLookup|undefined {
-  return costs?{get(index){const value=costs.get(index);return value===undefined?undefined:value*factor;},has:index=>costs.has(index),maximum:costs.maximum*factor}:undefined;
+  return transformNavigationCosts(costs,factor);
 }

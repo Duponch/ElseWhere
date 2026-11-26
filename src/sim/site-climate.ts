@@ -151,6 +151,11 @@ export function adoptSiteClimate(world:World):boolean {
   return true;
 }
 
+interface OutdoorSample {
+  civil:number;mode:number;tile:number|undefined;
+  latitude:number;longitude:number;mean:number;amplitude:number;temperature:number;
+}
+const outdoorSamples=new WeakMap<ClimateWorld,OutdoorSample>();
 /** Base + annual + daily cycle. Weather and incidents remain separate owners. */
 export function seasonalOutdoorTemperature(world:ClimateWorld,tick=world.tick):number {
   // Core caches site temperature for 60 ticks. This profile uses the adopted
@@ -158,9 +163,24 @@ export function seasonalOutdoorTemperature(world:ClimateWorld,tick=world.tick):n
   const sample=world.climate?tick-((tick-world.climate.adoptedAt)%6+6)%6:tick;
   const civil=climateTick(world,sample);
   const definition=siteClimateDefinition(world);
-  if(world.climate?.revision===4&&world.climate.irregular262===true)return geographicOutdoorTemperature262(definition,world.climate.tileId,civil*10-geographicLongitudeOffsetCore256(definition.longitude));
-  const base=world.climate?.revision===4?geographicSeasonTemperature256(definition,civil*10-geographicLongitudeOffsetCore256(definition.longitude)):world.climate?seasonTemperature(definition.latitude,definition.meanTemperature,civil):21;
-  return base+7*Math.cos(2*Math.PI*(civil%TICKS_PER_DAY/TICKS_PER_DAY+.32));
+  // The 60-Core-tick sample is shared by every environmental reader of this
+  // exact site. Its pure dependencies are primitives (not climate identity
+  // or a World.tick guess), so even a public in-place edit of an imported
+  // climate definition, longitude, profile, or clock changes the key.
+  const climate=world.climate,mode=climate?.revision===4?(climate.irregular262===true?3:2):climate?1:0;
+  const tile=mode===3&&(climate?.revision===4)?climate.tileId:undefined;
+  const {latitude,longitude,meanTemperature:mean,amplitude}=definition;
+  const previous=outdoorSamples.get(world);
+  if(previous&&Object.is(previous.civil,civil)&&previous.mode===mode&&Object.is(previous.tile,tile)
+    &&Object.is(previous.latitude,latitude)&&Object.is(previous.longitude,longitude)&&Object.is(previous.mean,mean)&&Object.is(previous.amplitude,amplitude))return previous.temperature;
+  let temperature:number;
+  if(mode===3)temperature=geographicOutdoorTemperature262(definition,tile!,civil*10-geographicLongitudeOffsetCore256(longitude));
+  else{
+    const base=mode===2?geographicSeasonTemperature256(definition,civil*10-geographicLongitudeOffsetCore256(longitude)):mode===1?seasonTemperature(latitude,mean,civil):21;
+    temperature=base+7*Math.cos(2*Math.PI*(civil%TICKS_PER_DAY/TICKS_PER_DAY+.32));
+  }
+  outdoorSamples.set(world,{civil,mode,tile,latitude,longitude,mean,amplitude,temperature});
+  return temperature;
 }
 
 export function climateDate(world:ClimateWorld):{year:number;day:number;quadrum:number;season:string} {

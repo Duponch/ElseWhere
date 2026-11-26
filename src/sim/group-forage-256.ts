@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {groupPhysicalPawns256} from './group-mixed-pawns-256.ts';
 import {caravanPawnCapacityGrams256} from './group-animal-capacity-256.ts';
 import {planetTile} from './planet-geography-256.ts';
@@ -63,7 +64,7 @@ export function advanceGroupForage256(w:World,g:GroupForageOwner256,c:GroupForag
   for(const target of g.items){if(!left)break;if(target.item!==item||target.owner.type!=='inventory'||target.owner.pawnId!==carrier.id)continue;
    const moved=Math.min(left,ITEM_DEFINITIONS[item].stackLimit-target.quantity);if(moved<=0)continue;
    const absorbedPileId=moved<left?w.nextId++:id;
-   mergePileContamination(target,moved);mergeThingDamage(target,moved);mergeRot(target,moved,0,w.tick);target.quantity+=moved;left-=moved;line.merged.push({pileId:target.id,absorbedPileId,quantity:moved});
+   mergePileContamination(target,moved);mergeThingDamage(target,moved);mergeRot(target,moved,0,w.tick);markPileContentWrite379(target).quantity+=moved;left-=moved;line.merged.push({pileId:target.id,absorbedPileId,quantity:moved});
   }
   if(left){g.items.push({id,kind:'food',item,quantity:left,owner:{type:'inventory',pawnId:carrier.id},...freshRot(item,w.tick)});const created=g.items.at(-1)!;if(created.rot&&c.rotRate!==1)created.rot.rate=c.rotRate;line.retainedPileId=id;}
   byId.get(carrier.id)!.grams+=quantity*GROUP_FORAGED_MASS_256[item];remaining-=quantity;g.travel.forage.gathered[item]+=quantity;receipt.push(line);

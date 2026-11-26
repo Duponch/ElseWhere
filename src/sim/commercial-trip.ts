@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {hungerRateFactor361} from './traits.ts';
 import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {medicalElapsedTicks271} from './suspended-human-clock-271.ts';
@@ -83,7 +85,7 @@ export function departCommercial(w:World,p:Pawn):boolean {
   w.commercialTrip={phase:'outbound',pawn:p,items,foodPileId:s.foodPileId,foodQuantity:s.foodQuantity,silverQuantity:s.silverQuantity,
     startedAt:s.startedAt,departedAt:w.tick,arrivesAt:w.tick+COMMERCIAL_LEG_TICKS,entry,consumed:0,silverPaid:0,bought:{medicine:0,component:0},
     ...s.cargo?{cargo:{...s.cargo},sold:emptyCommercialTextiles(),silverEarned:0}:{}};
-  w.pawns=w.pawns.filter(q=>q!==p);w.piles=w.piles.filter(i=>!ids.has(i.id));refreshStock(w);
+  w.pawns=w.pawns.filter(q=>q!==p);w.piles=filterPileEntries(w.piles,i=>!ids.has(i.id));refreshStock(w);
   logCommercial(w,`${p.name} quitte la carte pour le comptoir civil.`);return true;
 }
 export function logCommercial(w:World,message:string):void {
@@ -104,7 +106,7 @@ function consumeRation(w:World,s:CommercialOffMap):void {
   const pile=s.items.find(i=>i.id===s.foodPileId&&i.item==='survival-meal'&&i.owner.type==='inventory'&&i.owner.pawnId===p.id);
   if(!pile||pile.quantity<1)return;
   const ingestedAt299=offMapIngestionCore299(w,p);
-  p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);pile.quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
+  p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);markPileContentWrite379(pile).quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
   if(!pile.quantity)s.items.splice(s.items.indexOf(pile),1);
   logCommercial(w,`${p.name} mange une ration de survie pendant l’expédition commerciale.`);
 }
@@ -134,7 +136,7 @@ export function advanceCommercialTrip(w:World):void {
   const entry=findCivilianReturnEntry(w,s.entry);if(!entry){s.phase='awaiting-entry';return;}
   const areaPlan=w.schemaVersion>=256?prepareSameMapAreaReturn(w,s.pawn):undefined;if(areaPlan)commitMapAreaEntry(s.pawn,areaPlan);
   const p=s.pawn;p.x=entry.x;p.z=entry.z;p.path=[];p.state='idle';p.moveCooldown=0;p.planCooldown=0;delete p.motion;
-  w.pawns.push(p);w.piles.push(...s.items);
+  w.pawns.push(p);appendPileEntries(w.piles,...s.items);
   const pendingPileIds=s.items.filter(i=>i.owner.type==='inventory').map(i=>i.id);
   if(pendingPileIds.length)w.commercialTrip={phase:'unloading',pawnId:p.id,startedAt:w.tick,pendingPileIds};else delete w.commercialTrip;
   refreshStock(w);logCommercial(w,`${p.name} revient avec ses possessions ; déchargement au contact.`);

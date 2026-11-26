@@ -4,16 +4,12 @@ import type {PawnTrack} from './motion-tracks';
 import type {WildAnimal} from '../sim/wildlife-state';
 import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PresentationSegment} from '../sim/travel-timing';
+import {CORE_HUMAN_REQUIRED297,CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_REQUIRED297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_REQUIRED297,CORE_MECH_OPTIONAL297} from '../sim/physical-actor-fields-297';
+export {CORE_HUMAN_REQUIRED297,CORE_HUMAN_OPTIONAL297,CORE_ANIMAL_REQUIRED297,CORE_ANIMAL_OPTIONAL297,CORE_MECH_REQUIRED297,CORE_MECH_OPTIONAL297};
 
 /** Shape only. None of these values grants native admission, World ownership
  * or a renderer capability. The first private trusted-Worker listener alone
  * may redeem one event/source receipt and publish a branded renderer input. */
-export const CORE_HUMAN_REQUIRED297=['x','z','state','moveCooldown','planCooldown','path'] as const;
-export const CORE_HUMAN_OPTIONAL297=['motion','draft','shooting','melee','stun','stagger','arrivalRotation','transitExit','lastAttack'] as const;
-export const CORE_ANIMAL_REQUIRED297=['x','z','state','path','nextDecision'] as const;
-export const CORE_ANIMAL_OPTIONAL297=['motion','stun','stagger','strike','threat','retaliation','predation','flee','arrivalRotation','manhunter','sleepUntilCore'] as const;
-export const CORE_MECH_REQUIRED297=['x','z','state','path','heading','moveCooldown','planCooldown'] as const;
-export const CORE_MECH_OPTIONAL297=['motion','melee','ranged','stun','stagger','emp','meleeThreat'] as const;
 
 type Fields<A,R extends readonly(keyof A)[],O extends readonly(keyof A)[]>=Pick<A,R[number]|O[number]>;
 export type CoreHumanFields297=Fields<Pawn,typeof CORE_HUMAN_REQUIRED297,typeof CORE_HUMAN_OPTIONAL297>;

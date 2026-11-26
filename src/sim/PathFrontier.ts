@@ -1,3 +1,14 @@
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+
+interface FrontierArrays {readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;readonly heads:Int32Array}
+const frontierPools=new WeakMap<object,Map<number,FrontierArrays[]>>();
+function takeFrontierArrays(owner:object,size:number):FrontierArrays|undefined {return frontierPools.get(owner)?.get(size)?.pop();}
+function returnFrontierArrays(owner:object,size:number,arrays:FrontierArrays):void {
+ let sizes=frontierPools.get(owner);if(!sizes){sizes=new Map();frontierPools.set(owner,sizes);}
+ let pool=sizes.get(size);if(!pool){if(sizes.size>=4)sizes.delete(sizes.keys().next().value!);pool=[];sizes.set(size,pool);}
+ if(pool.length<2)pool.push(arrays);
+}
+
 /** Dial queue for bounded nonnegative integer edge costs. One entry per cell.
  * Unlike a heap, decrease-key and extraction avoid log(N) work on full map floods. */
 export class PathFrontier {
@@ -9,13 +20,17 @@ export class PathFrontier {
   private cursor=0;
   private readonly costs:Float64Array;
   private readonly occupancy?:Uint32Array[];
+  private readonly poolOwner?:object;
+  private released=false;
   /** `arrays`: map-sized next/previous/buckets already at -1 (a reused search
    * scratch, see WeightedSearchScratch); else fresh ones. */
-  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false,arrays?:{readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;heads?(length:number):Int32Array}) {this.heads=arrays?.heads?arrays.heads(maxEdgeCost+1):new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;
+  constructor(costs:Float64Array,maxEdgeCost=1414,indexOccupied=false,arrays?:{readonly next:Int32Array;readonly previous:Int32Array;readonly buckets:Int32Array;heads?(length:number):Int32Array}) {
+    this.poolOwner=arrays?undefined:terrainJournalReadOwner();const pooled=this.poolOwner?takeFrontierArrays(this.poolOwner,costs.length):undefined;
+    this.heads=arrays?.heads?arrays.heads(maxEdgeCost+1):pooled?.heads.length===maxEdgeCost+1?pooled.heads:new Int32Array(maxEdgeCost+1).fill(-1);this.costs=costs;
     if(arrays){this.next=arrays.next;this.previous=arrays.previous;this.buckets=arrays.buckets;}else{
       // next/previous are written when a node is queued and only read for
       // queued nodes: their initial values are never read.
-      this.next=new Int32Array(costs.length);this.previous=new Int32Array(costs.length);this.buckets=new Int32Array(costs.length).fill(-1);}
+      this.next=pooled?.next??new Int32Array(costs.length);this.previous=pooled?.previous??new Int32Array(costs.length);this.buckets=pooled?.buckets??new Int32Array(costs.length).fill(-1);}
     if(indexOccupied){this.occupancy=[];let length=this.heads.length;do{length=Math.ceil(length/32);this.occupancy.push(new Uint32Array(length));}while(length>1);}}
   private mark(bucket:number,present:boolean):void {
     if(!this.occupancy)return;
@@ -46,6 +61,18 @@ export class PathFrontier {
   /** Calls `visit` for every node still queued (each once). */
   forEachQueued(visit:(node:number)=>void):void {
     for(let bucket=0;bucket<this.heads.length;bucket++)for(let node=this.heads[bucket]!;node>=0;node=this.next[node]!)visit(node);
+  }
+  /** End the owner of this queue. Search result arrays are separate; only
+   * private links and bucket heads are returned. The remaining nodes are
+   * visited in their ordinary bucket order before their links are retired. */
+  release(visit?:(node:number)=>void):void {
+    if(this.released)return;this.released=true;
+    if(this.count)for(let bucket=0;bucket<this.heads.length;bucket++){
+      for(let node=this.heads[bucket]!;node>=0;node=this.next[node]!){visit?.(node);this.buckets[node]=-1;}
+      this.heads[bucket]=-1;
+    }
+    this.count=0;
+    if(this.poolOwner)returnFrontierArrays(this.poolOwner,this.costs.length,{next:this.next,previous:this.previous,buckets:this.buckets,heads:this.heads});
   }
   pop():number|undefined {
     if(!this.count)return undefined;

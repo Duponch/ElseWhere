@@ -25,6 +25,11 @@ import {captureNativeMessageForDeferred297 as captureNativeMessageForDeferred} f
 import {isOwnedResidentFilthCopyInternal,isOwnedResidentFilthItemListInternal} from './resident-filth-section';
 import {createFirefoamLaneValidatorsInternal290} from '../sim/firefoam-save-290';
 import {ResidentVegetationAssembler} from './resident-vegetation-assembler';
+import {observeNativeResidentOwners379} from './resident-owner-records-379';
+import {readResidentWorkerMessage} from './resident-protocol';
+import {planetTileCount} from '../sim/planet-geography-256';
+import type {NativeSnapshotDispatch379} from './native-snapshot-dispatch-379';
+import {prepareNativeAuxLeaseReader379} from './native-aux-lease-reader-379';
 import type {SnapshotAdoption,SnapshotMessage} from './snapshots';
 import type {CampaignOnlyMessage} from './protocol';
 
@@ -38,7 +43,23 @@ export interface NativeCloneResidentLane {
  close():void;
  diagnostics():Readonly<{fastAdoptions:number;strictAdoptions:number;fastLaneReads:number}>;
 }
+/** Fixed MAIN-only output binding. Neither native Event nor private port is
+ * exposed through this API; only its one-use dispatch ticket can escape. */
+export interface PrivateNativeCloneResidentLane379 extends NativeCloneResidentLane {
+ bindOutput(source:Worker,dispatch:(raw:unknown)=>void,enqueue:(run:()=>void,info?:{arrivalAt?:number;epoch?:number;tick?:number})=>void,invalid:()=>void):void;
+ bindOwnedOutput379(source:Worker,dispatch:(raw:unknown)=>void,enqueue:(run:()=>void,info?:{arrivalAt?:number;epoch?:number;tick?:number})=>void,invalid:()=>void):void;
+ readOwnedSnapshotDispatch379(value:unknown):NativeSnapshotDispatch379|undefined;
+ privateAuxiliaryDiagnostics379():Readonly<{opaqueFulls:number;motion:number;resources:number}>;
+}
 type Packet=SnapshotMessage<true>;
+type PrivateAuxSection379='resources'|'motion';
+const rawAuxLeases379=new WeakMap<object,{readonly sections:Partial<Record<PrivateAuxSection379,unknown>>;readonly resourcePatch:unknown;readonly alive:()=>boolean;readonly observed:(key:PrivateAuxSection379)=>void}>();
+/** Read-only, exact subsection lease. No exported constructor, owner flag or
+ * object wrapper can enroll a public graph or a committed predecessor. */
+export function ownsPrivateNativeAuxSection379(lease:unknown,key:PrivateAuxSection379,value:unknown,resourcePatch?:unknown):boolean {
+ if(!lease||typeof lease!=='object')return false;const held=rawAuxLeases379.get(lease);
+ if(!held||!held.alive()||!Object.hasOwn(held.sections,key)||held.sections[key]!==value||key==='resources'&&held.resourcePatch!==resourcePatch)return false;held.observed(key);return true;
+}
 /** Union of the two Firefoam scanner custody lanes; never terrain/anatomy. */
 const cloneLanes=new Set(['world','summary','dynamic','campaign','map','worldMaps','sites','secondarySite','campaignMap',
  'structures','jobs','packed','building','items','bills','worldGroups','groups','group','state','pending261',
@@ -58,15 +79,21 @@ function nativeEventReader(){
   const trusted=Object.getOwnPropertyDescriptor(sample,'isTrusted')?.get
    ??Object.getOwnPropertyDescriptor(Event.prototype,'isTrusted')?.get;
   if(!current||!data||!trusted)return;
-  return (event:MessageEvent<unknown>,source:Worker):{value:unknown}|undefined=>{
+  return (event:MessageEvent<unknown>,source:Worker|MessagePort):{value:unknown}|undefined=>{
    try{return current.call(event)===source&&trusted.call(event)===true?{value:data.call(event)}:undefined;}
    catch{return;}
   };
  }catch{return;}
 }
 
-export function createNativeCloneResidentLane():NativeCloneResidentLane {
+export function createNativeCloneResidentLane():NativeCloneResidentLane {const {bindOutput:_private,bindOwnedOutput379:_owned,readOwnedSnapshotDispatch379:_read,privateAuxiliaryDiagnostics379:_diagnostics,...literal}=createNativeLane379(false);return literal;}
+/** Only the fixed application factory chooses private ingress. Historical
+ * direct Worker receivers, fixtures and all public shape checks stay literal. */
+export function createPrivateNativeCloneResidentLane379():PrivateNativeCloneResidentLane379 {return createNativeLane379(true);}
+function createNativeLane379(privateStream:boolean):PrivateNativeCloneResidentLane379 {
+ if(privateStream)prepareNativeAuxLeaseReader379();
  let worker:Worker|undefined,closed=false,capture:((event:MessageEvent<unknown>)=>void)|undefined;
+ let output:MessagePort|undefined,unobserveOutput:(()=>void)|undefined,outputBound=false,outputListener:((event:MessageEvent<unknown>)=>void)|undefined,outputError:(()=>void)|undefined;
  const ordinary=new WeakSet<object>(),receipts=new WeakMap<object,Receipt>(),readNative=nativeEventReader();
  interface Deferred {readonly eventRaw:unknown;readonly captured:unknown;readonly arrivalAt:number;receipt:Receipt|undefined;phaseReceipt297?:PhaseReceipt297;taken:boolean;used:boolean;epoch?:number;tick?:number}
  const deferred=new WeakMap<object,Deferred>();
@@ -91,6 +118,9 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
  interface Receipt {readonly raw:unknown;readonly original:Packet;readonly modernFull297?:true;consumed:boolean}
  interface Scope {readonly frame:Receipt;prepared:Packet|undefined}
  let frame:Receipt|undefined,scope:Scope|undefined;
+ let privatePacket379:Packet|undefined;
+ const privateDispatches379=new WeakMap<object,{readonly view:NativeSnapshotDispatch379;readonly alive:()=>boolean}>();
+ const privateMetrics379={opaqueFulls:0,motion:0,resources:0};
  const metrics={fastAdoptions:0,strictAdoptions:0,fastLaneReads:0};
  // Only our first, private native listener calls mark. An ordinary object cannot
  // turn into a Proxy later. Inserted/reused unknown objects remain strict.
@@ -124,6 +154,14 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
  },isOwnedResidentFilthCopyInternal,isOwnedResidentFilthItemListInternal);
 
  class NativeCloneAssembler extends ResidentVegetationAssembler {
+  protected override privateAuxiliaryLease379(original:Packet,raw:unknown):unknown {
+   const held=scope,receipt=held?.frame;
+   if(!privateStream||closed||!held||!receipt||receipt!==frame||receipt.original!==original||privatePacket379!==original||!raw||typeof raw!=='object'||Object.getPrototypeOf(raw)!==Object.prototype)return;
+   const sections:Partial<Record<PrivateAuxSection379,unknown>>={};
+   for(const key of ['resources','motion'] as const){const d=Object.getOwnPropertyDescriptor(raw,key);if(d){if(!d.enumerable||!Object.hasOwn(d,'value'))return;sections[key]=d.value;}}
+   const patch=Object.getOwnPropertyDescriptor(original,'resources');if(patch&&!Object.hasOwn(patch,'value'))return;
+   const lease=Object.freeze({});rawAuxLeases379.set(lease,{sections,resourcePatch:patch?.value,alive:()=>!closed&&scope===held&&frame===receipt&&privatePacket379===original,observed:key=>{privateMetrics379[key]++;}});return lease;
+  }
   protected override preparedPublication(original:Packet,prepared:Packet):void {
    if(!scope||scope.frame!==frame||scope.frame.original!==original)return;
    scope.prepared=prepared;
@@ -177,15 +215,55 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
   }
  }
  const reader=new NativeCloneAssembler();
- return {
+ function bindPrivateOutput379(source:Worker,dispatch:(raw:unknown)=>void,enqueue:(run:()=>void,info?:{arrivalAt?:number;epoch?:number;tick?:number})=>void,invalid:()=>void,opaque:boolean):void {
+  const target=output;if(!privateStream||closed||!target||worker!==source||outputBound)throw Error('Missing or already bound native presentation output');outputBound=true;
+  // Only the truly private fixed port can substitute an opaque Full token.
+  // Neither the event nor its raw World/sidecar escapes before adoption. The
+  // direct C640/public callback route never receives a new raw lease.
+  const relay=(raw:unknown)=>{
+   const receipt=frame;
+   if(!opaque||!receipt?.modernFull297||receipt.raw!==raw||closed||worker!==source||output!==target){dispatch(raw);return;}
+   let decoded:ReturnType<typeof readResidentWorkerMessage>;
+   try{decoded=readResidentWorkerMessage(raw);}catch{dispatch(raw);return;}
+   if(decoded.type!=='snapshot'||decoded!==receipt.original){dispatch(raw);return;}
+   const packet=decoded;
+   let adopted=false,applied=false;
+   const alive=()=>!closed&&worker===source&&output===target&&frame===receipt;
+   const view:NativeSnapshotDispatch379=Object.freeze({epoch:packet.epoch,revision:packet.revision,stepMs:packet.stepMs,speed:packet.speed,urgentThreats:packet.urgentThreats,audioCues:packet.audioCues,
+    acceptsUrgent:(accept:Parameters<NativeSnapshotDispatch379['acceptsUrgent']>[0])=>{
+     if(!alive()||adopted||receipt.consumed)return false;const tick=Object.getOwnPropertyDescriptor(packet.world,'tick');return !!tick&&Object.hasOwn(tick,'value')&&accept(packet.urgentThreats,tick.value,packet.speed,packet.world.planet?planetTileCount(packet.world.planet):undefined);
+    },
+    adopt:(accept:(world:World)=>boolean)=>{
+     if(!alive()||adopted||receipt.consumed||privatePacket379)throw Error('Stale private Native Full dispatch');adopted=true;privatePacket379=packet;
+     try{const result=reader.adopt(packet,accept);applied=result.status==='applied';return result;}finally{privatePacket379=undefined;}
+    },
+    motion:()=>{if(!alive()||!applied)throw Error('Missing admitted private Native Full');return reader.readMotion(packet);},
+    coreInput:()=>{if(!alive()||!applied)throw Error('Missing admitted private Native Full');return reader.readCorePhase297(packet);},
+   });
+   const token=Object.freeze({});privateDispatches379.set(token,{view,alive});privateMetrics379.opaqueFulls++;
+   try{dispatch(token);}finally{privateDispatches379.delete(token);}
+  };
+  outputListener=event=>{
+   if(closed||worker!==source||output!==target)return;
+   const ticket=lane.takeDeferredMessage(source,event,relay);
+   if(ticket)enqueue(ticket.run,ticket);else {const native=readNative?.(event,target);if(native)enqueue(()=>{if(!closed&&worker===source)dispatch(native.value);});}
+  };
+  outputError=()=>{if(!closed&&worker===source)invalid();};
+  target.addEventListener('message',outputListener);target.addEventListener('messageerror',outputError);target.start();
+  source.onmessage=event=>{if(!closed&&worker===source&&readNative?.(event,source))invalid();};source.onmessageerror=outputError;
+ }
+ const lane:PrivateNativeCloneResidentLane379={
   reader,
   createWorker(){
    if(closed||worker)throw Error('Native clone lane already created or closed');
    worker=new Worker(new URL('./presentation.worker.ts',import.meta.url),{type:'module'});
    const source=worker;
+   let transferred:MessagePort|undefined;
+   if(privateStream){const channel=new MessageChannel();output=channel.port1;transferred=channel.port2;}
+   const target=output??source;
    capture=event=>{
     if(closed||worker!==source)return;
-    const native=readNative?.(event,source);if(!native)return;
+    const native=readNative?.(event,target);if(!native)return;
     const arrivalAt=performance.now();
     try{
      const captured=captureNativeMessageForDeferred(native.value);
@@ -221,23 +299,34 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
     }catch{/* ordinary strict reader owns malformed publication refusal */}
    };
    // Registered before exposing the Worker to arbitrary client listeners.
-   worker.addEventListener('message',capture);
+   target.addEventListener('message',capture as EventListener);
+   if(output&&transferred){
+    // Capture/mark before the sole dispatcher, with the exact private target.
+    // Bootstrap is the FIRST command on the original ordered input channel.
+    unobserveOutput=observeNativeResidentOwners379(output);
+    try{source.postMessage({type:'bind-native-presentation-port379',port:transferred},[transferred]);}
+    catch(error){unobserveOutput();output.removeEventListener('message',capture);output.close();transferred.close();source.terminate();output=undefined;closed=true;throw error;}
+   }
    return worker;
   },
+  bindOutput(source,dispatch,enqueue,invalid){bindPrivateOutput379(source,dispatch,enqueue,invalid,false);},
+  bindOwnedOutput379(source,dispatch,enqueue,invalid){bindPrivateOutput379(source,dispatch,enqueue,invalid,true);},
+  readOwnedSnapshotDispatch379(value){if(!value||typeof value!=='object')return;const held=privateDispatches379.get(value);return held?.alive()?held.view:undefined;},
+  privateAuxiliaryDiagnostics379:()=>Object.freeze({...privateMetrics379}),
   adoptCorePhase297(raw){
    const held=phaseFrame297;if(closed||!held||held.consumed||raw!==held.raw&&raw!==held.captured)throw Error('Actor phase lacks its Native one-use receipt');
    held.consumed=true;const prepared=phaseOwner297.prepare(held.captured),projection=phaseOwner297.commit(prepared);return mintPhase297(projection);
   },
   withWorkerMessage(source,event,dispatch){
    if(closed||!worker||source!==worker||frame||phaseFrame297){dispatch();return;}
-   const phase=phaseReceipts297.get(event),nativePhase=readNative?.(event,source);
+   const phase=phaseReceipts297.get(event),nativePhase=readNative?.(event,output??source);
    if(phase&&!phase.consumed&&nativePhase&&nativePhase.value===phase.raw){
     phaseReceipts297.delete(event);const pending=deferredGet(deferred,event);if(pending){pending.used=true;deferredDelete(deferred,event);}
     phaseFrame297=phase;try{dispatch();}finally{phase.consumed=true;phaseFrame297=undefined;}return;
    }
    // Native currentTarget becomes null after dispatch. A synthetic redispatch
    // cannot redeem this exact Event, source and private one-use receipt.
-   const receipt=receipts.get(event),native=readNative?.(event,source);
+   const receipt=receipts.get(event),native=readNative?.(event,output??source);
    if(!receipt||receipt.consumed||!native||native.value!==receipt.raw){dispatch();return;}
    const alternative=deferredGet(deferred,event);if(alternative){alternative.used=true;deferredDelete(deferred,event);}
    receipts.delete(event);frame=receipt;
@@ -245,7 +334,7 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
   },
   takeDeferredMessage(source,event,dispatch){
    if(closed||!worker||source!==worker||frame||phaseFrame297)return;
-   const held=deferredGet(deferred,event),native=readNative?.(event,source);
+   const held=deferredGet(deferred,event),native=readNative?.(event,output??source);
    if(!held||held.taken||held.used||!native||native.value!==held.eventRaw)return;
    held.taken=true;deferredDelete(deferred,event);receipts.delete(event);phaseReceipts297.delete(event);
    const run=()=>{
@@ -263,7 +352,7 @@ export function createNativeCloneResidentLane():NativeCloneResidentLane {
    if(full?.modernFull297)nativeFullAdmission297.set(ticket,{run,alive:()=>!closed&&worker===source&&!held.used&&!full.consumed});
    return ticket;
   },
-  close(){closed=true;phaseGeneration297++;phaseOwner297.clear();if(worker&&capture)worker.removeEventListener('message',capture);frame=undefined;phaseFrame297=undefined;scope=undefined;},
+  close(){closed=true;phaseGeneration297++;phaseOwner297.clear();const target=output??worker;if(target&&capture)target.removeEventListener('message',capture as EventListener);if(output){if(outputListener)output.removeEventListener('message',outputListener);if(outputError)output.removeEventListener('messageerror',outputError);unobserveOutput?.();output.close();output=undefined;}frame=undefined;phaseFrame297=undefined;scope=undefined;},
   diagnostics:()=>Object.freeze({...metrics}),
- };
+ };return lane;
 }

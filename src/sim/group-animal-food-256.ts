@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import {foodPoisonFactor347} from './game-profile.ts';
 import type {MaterialPile,World} from './types.ts';
@@ -58,7 +59,7 @@ export function satisfyCaravanAnimalFood256(w:World,g:Group,a:WildAnimal,c:{temp
  const quantity=Math.min(selected.quantity,ITEM_DEFINITIONS[selected.item].maxIngest,Math.max(1,Math.ceil(wanted/nutrition)));if(!Number.isSafeInteger(quantity)||quantity<1)throw Error('Invalid animal food quantity');
  recordCaravanAnimalConsumption256(g,selected.item,quantity);
  const poison=ingestionFoodPoison(selected,false,foodPoisonFactor347(w),c.random);
- if(quantity===selected.quantity)g.items.splice(g.items.indexOf(selected),1);else selected.quantity-=quantity;
+ if(quantity===selected.quantity)g.items.splice(g.items.indexOf(selected),1);else markPileContentWrite379(selected).quantity-=quantity;
  a.food=Math.min(animalNutritionMax(a),a.food+nutrition*quantity);
  if(poison){a.health??=createAnimalMedicalRecord256(w,a);a.health.foodPoisoning=exposeFoodPoisoningAtRecord(a.health,poison,selected.item,w.tick);}
 }

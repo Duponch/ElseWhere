@@ -1,7 +1,11 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {spikeTrapKnowsOf} from './spike-trap-state.ts';
 import { verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {registerNavigationGrid379,inheritNavigationBase379} from './owned-navigation-grid-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {animalMoveCostCore297} from './animal-move-cost-297.ts';
 import {actualAnimalProfile256,actualAnimalMoveSpeedFactor256} from './actual-animal-profile-256.ts';
@@ -148,7 +152,8 @@ const isPassageDoorStructure=(s:World['structures'][number]):boolean=>isPassageD
  * unless passable or flying, legacy tables): kinds never change, so the set is
  * fixed for a shared geometry. `mask` holds the in-map cells, `cells` every
  * index exactly as the former per-reader Set received them. */
-interface AnimalStaticSolids {width:number;size:number;fence:boolean;legacy:boolean;mask:Uint8Array;cells:Int32Array;base?:{terrain:Uint8Array;revision:number;data:Uint8Array}}
+interface AnimalStaticBase {terrain:Uint8Array;revision:number;data:Uint8Array;corners:ReadonlySet<number>}
+interface AnimalStaticSolids {width:number;size:number;fence:boolean;legacy:boolean;mask:Uint8Array;cells:Int32Array;corners:ReadonlySet<number>;base?:AnimalStaticBase;parentBase?:AnimalStaticBase}
 /* The non-flying route grid before live doors and transit jobs: the shared
  * terrain mask (copied as the former per-reader grid received it) with the
  * in-map solid kind cells, kept while that mask's content revision holds.
@@ -158,19 +163,29 @@ function animalRouteBase(world:World,solids:AnimalStaticSolids,terrain:Uint8Arra
   if(!state||state.mask!==terrain){const data=new Uint8Array(size);data.set(terrain.length<=size?terrain:terrain.subarray(0,size));for(let i=0;i<size;i++)if(solids.mask[i])data[i]=1;return data;}
   let base=solids.base;
   if(!base||base.terrain!==terrain||base.revision!==state.revision){
-    const data=new Uint8Array(size);data.set(terrain.length<=size?terrain:terrain.subarray(0,size));
-    for(let i=0;i<size;i++)if(solids.mask[i])data[i]=1;
-    base=solids.base={terrain,revision:state.revision,data};
-  }
+    let data:Uint8Array=new Uint8Array(size);data.set(terrain.length<=size?terrain:terrain.subarray(0,size));
+    if(terrainJournalReadOwner()){for(const i of solids.cells)if(i>=0&&i<size)data[i]=1;}else for(let i=0;i<size;i++)if(solids.mask[i])data[i]=1;
+    const previous=base??solids.parentBase;if(previous)data=inheritNavigationBase379(data,previous.data,world.width,world.height,solids.corners,previous.corners);
+    base=solids.base={terrain,revision:state.revision,data,corners:solids.corners};solids.parentBase=undefined;
+  }else if(base.corners!==solids.corners){const data=inheritNavigationBase379(base.data,base.data,world.width,world.height,solids.corners,base.corners);base=solids.base={...base,data,corners:solids.corners};}
   return base.data;
 }
 const animalSolidsByGeometry=new WeakMap<StructureNavigationGeometry,AnimalStaticSolids[]>();
+const lastAnimalSolids=new WeakMap<World['tiles'],({owner:object;geometry:StructureNavigationGeometry;entry:AnimalStaticSolids}|undefined)[]>();
 function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fence:boolean,legacy:boolean):AnimalStaticSolids {
   const size=world.width*world.height;let list=animalSolidsByGeometry.get(geometry);if(!list){list=[];animalSolidsByGeometry.set(geometry,list);}
+  const owner=terrainJournalReadOwner(),slot=Number(fence)*2+Number(legacy);let prior=owner?lastAnimalSolids.get(world.tiles)?.[slot]:undefined;
+  if(!prior||prior.owner!==owner||prior.entry.width!==world.width||prior.entry.size!==size)prior=undefined;
   let entry=list.find(e=>e.width===world.width&&e.size===size&&e.fence===fence&&e.legacy===legacy);
-  if(!entry){const mask=new Uint8Array(size),cells:number[]=[];
-    for(const {structure:s,cells:at} of geometry.entries)if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&fence||legacy&&s.kind==='table')for(const i of at){cells.push(i);if(i>=0&&i<size)mask[i]=1;}
-    entry={width:world.width,size,fence,legacy,mask,cells:Int32Array.from(cells)};list.push(entry);}
+  if(!entry){const cells:number[]=[],source=geometry.entries,previous=prior?.geometry.entries,count=previous?.length??0;
+    const append=!!prior&&count<=source.length&&(count===0||source[0]===previous![0]&&source[count-1]===previous![count-1]);
+    for(let k=append?count:0;k<source.length;k++){const {structure:s,cells:at}=source[k]!;if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&fence||legacy&&s.kind==='table')for(const i of at)cells.push(i);}
+    let mask:Uint8Array,allCells:Int32Array;
+    if(append){const old=prior!.entry;mask=cells.length?old.mask.slice():old.mask;allCells=cells.length?(()=>{const rows=new Int32Array(old.cells.length+cells.length);rows.set(old.cells);rows.set(cells,old.cells.length);return rows;})():old.cells;}
+    else{mask=new Uint8Array(size);allCells=Int32Array.from(cells);}
+    for(const i of cells)if(i>=0&&i<size)mask[i]=1;
+    entry={width:world.width,size,fence,legacy,mask,cells:allCells,corners:geometry.corners,...append&&allCells===prior!.entry.cells?{base:prior!.entry.base}:{parentBase:prior?.entry.base}};list.push(entry);}
+  if(owner){const rows=lastAnimalSolids.get(world.tiles)??[];rows[slot]={owner,geometry,entry};lastAnimalSolids.set(world.tiles,rows);}else lastAnimalSolids.delete(world.tiles);
   return entry;
 }
 /* Goal filters: food goals repeat cells (five per food, neighbours overlap).
@@ -220,7 +235,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   };
   if(geometry===captureStructureNavigation(world))for(const s of filteredStructures(world,'passage-doors',isPassageDoorStructure))door(s);
   else for(const {structure:s} of geometry.entries)if(isPassageDoor(s.kind))door(s);
-  for(const j of world.jobs)if(jobBlocksTransit(world,j))add(j);
+  if(world.schemaVersion<16)for(const j of world.jobs)if(jobBlocksTransit(world,j))add(j);
   const liveDoorBlocked=(index:number):boolean=>{
     const doors=liveDoors?.get(index);if(!doors)return false;
     const now=physicalNow!();
@@ -238,20 +253,23 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
     const xSide=a.z*width+b.x,zSide=b.z*width+a.x;
     return !blockedAt(b.z*width+b.x)&&(!dx||!dz||!blockedAt(xSide)&&!blockedAt(zSide)&&!corners.has(xSide)&&!corners.has(zSide));
   };
-  let blocked:Uint8Array|undefined;
+  let blocked:Uint8Array|undefined,compiledBase:Uint8Array|undefined;
+  const routeEdits=liveDoors?new Set([...solids,...liveDoors.keys()]):solids;
   const routeGrid=()=>{
     if(!blocked){blocked=new Uint8Array(width*world.height);
       // Non-flying terrainFree is exactly naturalTerrainWalkable256: reuse the shared mask.
       // With the in-map solid kind cells already in the shared base.
-      if(!flying)blocked.set(animalRouteBase(world,solidKinds,terrainMask()));
+      if(!flying){compiledBase=animalRouteBase(world,solidKinds,terrainMask());blocked.set(compiledBase);}
       // Flying: a cell is blocked when its terrain is not walkable (the shared
       // mask, 1) unless it is deep water; only those cells read their tile.
       else{const mask=terrainMask(),tiles=world.tiles;for(let i=0;i<tiles.length;i++)if(mask[i]===1&&tiles[i]!.terrain!=='water-deep')blocked[i]=1;
         for(const i of solidKinds.cells)blocked[i]=1;}
-      for(const i of solids)blocked[i]=1;}
+      for(const i of solids)blocked[i]=1;
+    }
     // A physical reader retains geometry, never a frozen door phase. Route
     // queries refresh only the sparse door entries; point steps scan no map.
     if(liveDoors)for(const index of liveDoors.keys())blocked[index]=Number(solidAt(index)||!terrainFree(world.tiles[index]?.terrain)||liveDoorBlocked(index));
+    if(compiledBase)registerNavigationGrid379(blocked,width,world.height,corners,compiledBase,routeEdits);
     return blocked;
   };
   // Haul uses OnCell, not Standability: a partial shelf or a chunk can be the
@@ -261,7 +279,7 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
   const haulStaticSolids=()=>{
     if(!haulSolids){const captured=new Set<number>();
       for(const {structure:s,cells} of geometry.entries)if(START_STRUCTURE_PHYSICS_256[s.kind].passability===2)for(const i of cells)captured.add(i);
-      for(const j of world.jobs)if(jobBlocksTransit(world,j))for(const c of footprintCells(j))captured.add(c.z*width+c.x);
+      if(world.schemaVersion<16)for(const j of world.jobs)if(jobBlocksTransit(world,j))for(const c of footprintCells(j))captured.add(c.z*width+c.x);
       haulSolids=captured;
     }
     return haulSolids;
@@ -327,6 +345,11 @@ export function animalNavigation(world:World,allowClosedGate=false,fencePassable
     /** The route grid of this reader (1 = blocked), for readers that work on
      * the whole map; read only. */
     blockedGrid:()=>routeGrid(),
+    /** The immutable producers of the grid after passage-door cells are
+     * removed. Door phases affect exits between regions, never their cells.
+     * Flying terrain and historical transit jobs keep exhaustive validation. */
+    regionTopology:()=>!flying&&world.schemaVersion>=16&&geometry===captureStructureNavigation(world)
+      ?{base:animalRouteBase(world,solidKinds,terrainMask()),portals:geometry.corners}:undefined,
     /** Which obstacle rules this reader applies (its grids compare with the
      * grids of the same key). */
     regionKey:`${flying?'f':'w'}${fencePassable?'u':'o'}${allowClosedGate?'g':''}${roamerGates377?'r':''}`,
@@ -474,5 +497,5 @@ export function moveAnimal(world:World,a:WildAnimal,step:(a:Cell,b:Cell)=>boolea
   }
   if(a.stagger&&a.stagger.untilCore/10>start){a.motion.stagger=mergeSlowIntervals([{start:Math.max(start,a.stagger.sinceCore/10),end:a.stagger.untilCore/10}]);a.motion.end=travelEnd(a.motion);}
   if(world.snow&&animalBodySize(a)>.9)a.motion.snowEntryPending=true;
-  a.x=next.x;a.z=next.z;a.path.shift();a.state='moving';finishSnowStep(world,a,animalBodySize(a));return true;
+  a.x=next.x;a.z=next.z;shiftActorPath297(a.path);a.state='moving';finishSnowStep(world,a,animalBodySize(a));markActorMotionSource297(a.motion);return true;
 }

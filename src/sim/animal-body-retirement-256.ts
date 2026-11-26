@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import type {World,MaterialPile} from './types.ts';
 import {prepareLinkedShelfRetirement286} from './linked-storage-lifecycle-286.ts';
 import {animalContentsOwner256} from './animal-local-contents-256.ts';
@@ -33,7 +34,7 @@ function planAnimalContentsRetirement256(w:World,id:number,includeBody:boolean,c
  let committed=false;return {pileIds,current,commit(){if(committed||!current()||!linked.commit())return false;const ledger=cause==='fire'?ensureFireState(w).ledger:undefined;
   if(ledger){for(const [item,n]of Object.entries(delta))ledger.items[item as MaterialPile['item']]=(ledger.items[item as MaterialPile['item']]??0)+n!;ledger.structures+=packs.length;}
   if(neutral)w.destroyed=neutral;if(packs.length)w.destroyed={...w.destroyed,count,lost};
-  w.piles=w.piles.filter(p=>!pileIds.has(p.id));w.packed=w.packed.filter(p=>!packSet.has(p));for(const b of beds)b?.commit();committed=true;return true;
+  w.piles=filterPileEntries(w.piles,p=>!pileIds.has(p.id));w.packed=w.packed.filter(p=>!packSet.has(p));for(const b of beds)b?.commit();committed=true;return true;
  }};
 }
 import {animalCorpseItem as importedCorpseItem} from './corpses.ts';

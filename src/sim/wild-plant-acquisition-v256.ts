@@ -26,5 +26,6 @@ export function acquireWildPlant256(world:World,index:number,species:PlantSpecie
     world.structures.some(s=>footprintCells(s).some(at))||world.jobs.some(j=>footprintCells(j).some(at))||
     world.piles.some(p=>p.owner.type==='ground'&&at(p.owner))||world.packed.some(p=>p.owner.type==='ground'&&at(p.owner)))return;
   const plant=createWildPlantResource256(world,world.nextId,x,z,species,growth,born);if(!plant)return;
-  world.resources=[...world.resources,plant];world.nextId++;return plant;
+  const beforeResources=world.resources;world.resources=[...world.resources,plant];markResourceArrayChanged(world,beforeResources,[plant],[]);world.nextId++;return plant;
 }
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';

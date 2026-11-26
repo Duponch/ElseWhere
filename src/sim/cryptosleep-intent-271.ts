@@ -8,6 +8,7 @@ import {allowedAreaReason} from './allowed-area-state.ts';
 import {carrierOf,rescueClaim} from './rescue-state.ts';
 import {patientClaimed} from './care-access.ts';
 import {reservedServiceCells} from './service-reservations.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import {deconstructionReserved} from './deconstruction-rules.ts';
 import {groupOnMapMember} from './group-state.ts';
 import {scoutOnMapId} from './caravan-trip.ts';
@@ -44,7 +45,7 @@ export function cryptosleepIntent271(w:World,c:CryptosleepCommand271):Cryptoslee
  if(!pawn||!cryptosleepActorCapable271(w,pawn))return fail('Un colon adulte libre, capable et non mobilisé est requis.');
  if(!casket||!casket.cryptosleep)return fail('Caisson de cryptosommeil de colonie introuvable.');
  const travel=cryptosleepTravelRefusal271(w,pawn);if(travel)return fail(travel);
- if(cryptosleepClaim271(w,casket.id,pawn.id)||deconstructionReserved(w,casket.id,pawn.id))return fail('Ce caisson est déjà réservé.');
+ if(cryptosleepClaim271(w,casket.id,pawn.id)||deconstructionReserved(w,casket.id,pawn.id)||orderedTargetClaimed378(w,'structure',casket.id,pawn.id))return fail('Ce caisson est déjà réservé.');
  if(c.type==='order-enter-cryptosleep'&&cryptosleepLastColonist271(w,pawn.id)&&c.confirmLastColonist!==true)return fail('Confirmez l’entrée du dernier colon libre : ce caisson exige une autre personne pour être ouvert.');
  const opening=c.type==='order-open-cryptosleep';
  if(opening?!casket.cryptosleep.human:!!casket.cryptosleep.human)return fail(opening?'Ce caisson est vide.':'Ce caisson est occupé.');

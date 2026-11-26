@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
@@ -44,14 +46,14 @@ export function pickupMedicine(world:World,doctor:Pawn,context:NeedContext):void
   pickupMedicalMedicine(world,doctor,doctor.tend!,context);
 }
 export function pickupMedicalMedicine(world:World,doctor:Pawn,task:MedicalMedicineTask,context:NeedContext):void {
-  const m=task.medicine!,pile=world.piles.find(p=>p.id===m.sourcePileId);
+  const m=task.medicine!,pile=pileById(world,m.sourcePileId);
   if(!pile||!materialAllowedForPlayer256(pile)||pile.owner.type!=='ground'||!allowedAreaAllows(world,doctor,pile.owner)||reservedSource(world,pile.id)>pile.quantity){interruptWork(world,doctor);return;}
   if((doctor.x!==pile.owner.x||doctor.z!==pile.owner.z)&&!adjacent(doctor,pile.owner)){context.move(pile.owner,false);return;}
   if(pile.quantity===m.quantity){assignPileOwner(pile,{type:'pawn',pawnId:doctor.id});m.carryPileId=pile.id;}
   else {
     if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1)){interruptWork(world,doctor);return;}
-    pile.quantity-=m.quantity;m.carryPileId=world.nextId++;
-    world.piles.push({id:m.carryPileId,kind:'medicine',item:m.item,quantity:m.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)});
+    markPileContentWrite379(pile).quantity-=m.quantity;m.carryPileId=world.nextId++;
+    appendPileEntries(world.piles,{id:m.carryPileId,kind:'medicine',item:m.item,quantity:m.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)});
   }
   // A self-tending patient travels with the doctor. Treat at the pickup position,
   // never walk back to an obsolete personal position captured before collection.
@@ -60,7 +62,7 @@ export function pickupMedicalMedicine(world:World,doctor:Pawn,task:MedicalMedici
 }
 export function consumeMedicine(world:World,task:{medicine?:TendMedicine}):void {
   const m=task.medicine;if(!m)return;
-  const pile=world.piles.find(p=>p.id===m.carryPileId)!;
-  pile.quantity--;m.quantity--;
-  if(!pile.quantity){world.piles.splice(world.piles.indexOf(pile),1);delete task.medicine;}
+  const pile=pileById(world,m.carryPileId)!;
+  markPileContentWrite379(pile).quantity--;markPileContentWrite379(m).quantity--;
+  if(!pile.quantity){splicePileEntries(world.piles,world.piles.indexOf(pile),1);delete task.medicine;}
 }

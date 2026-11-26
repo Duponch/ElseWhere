@@ -1,4 +1,7 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {assignPileOwner} from './pile-index.ts';
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';
+import {splicePileEntries,appendPileEntries} from './pile-identity-directory.ts';
 import {geyserBlocksPlantOrFloor256} from './local-geyser-state-256.ts';
 import {travelPieces} from './travel-timing.ts';
 import {gatherResource,clearingDuration,plantWorkGrowthFactor256} from './gathering.ts';
@@ -151,8 +154,8 @@ function hostFor(w:World,refs?:readonly TreePileRef[]):TreeHost {
       return Number.isSafeInteger(n)&&n>=0&&Number.isSafeInteger(w.nextId+n)
                 &&(!retiring||container.includes(retiring.pile))&&container.length+n-(retiring?1:0)+(w.schemaVersion>=236&&retiring&&retiring.container!=='map'?w.piles.length:0)<=32768;
     },
-    removeResource:r=>{w.resources=w.resources.filter(x=>x!==r);},addResource:r=>{w.resources=[...w.resources,r];},addGroundTree:p=>{w.piles=[...w.piles,p];},
-    removePile:ref=>{const local=ref.container==='map',container=local?w.piles:ref.container as MaterialPile[];const index=container.indexOf(ref.pile);if(index<0)throw Error('Original tree container lost');container.splice(index,1);if(local)w.piles=[...w.piles];},
+    removeResource:r=>{const before=w.resources;w.resources=w.resources.filter(x=>x!==r);markResourceArrayChanged(w,before,[],[r]);},addResource:r=>{const before=w.resources;w.resources=[...w.resources,r];markResourceArrayChanged(w,before,[r],[]);},addGroundTree:p=>{w.piles=[...w.piles,p];},
+    removePile:ref=>{const local=ref.container==='map',container=local?w.piles:ref.container as MaterialPile[];const index=container.indexOf(ref.pile);if(index<0)throw Error('Original tree container lost');splicePileEntries(container,index,1);if(local)w.piles=[...w.piles];},
     expiryYieldFactor:()=>1, // Existing clone difficulty does not alter plant yield.
     expiryOutput:(ref,quantity)=>{
       const p=ref.pile,local=ref.container==='map',container=local?w.piles:ref.container as MaterialPile[];
@@ -176,7 +179,7 @@ function hostFor(w:World,refs?:readonly TreePileRef[]):TreeHost {
       return {outputs,newIds:outputs.length,token:{container,owner:p.owner,local}};
     },
     expiryOutputStillValid:(ref,plan)=>{const token=plan.token as {container:MaterialPile[];owner:MaterialOwner;local:boolean};return (token.local?w.piles:token.container).includes(ref.pile)&&JSON.stringify(ref.pile.owner)===JSON.stringify(token.owner);},
-    commitExpiryOutput:(ref,plan)=>{const token=plan.token as {container:MaterialPile[];local:boolean};for(const output of plan.outputs){if(token.local)addMaterial(w,'wood',output.quantity,output.owner,'wood');else token.container.push({id:w.nextId++,kind:'wood',item:'wood',quantity:output.quantity,owner:{...output.owner}});}},
+    commitExpiryOutput:(ref,plan)=>{const token=plan.token as {container:MaterialPile[];local:boolean};for(const output of plan.outputs){if(token.local)addMaterial(w,'wood',output.quantity,output.owner,'wood');else appendPileEntries(token.container,{id:w.nextId++,kind:'wood',item:'wood',quantity:output.quantity,owner:{...output.owner}});}},
     removeTreeClaims:(id,wrapper,completed,expiry)=>{if(expiry&&w.schemaVersion>=236&&wrapper!==undefined)removeExpiredTreeClaims(w,id,wrapper);else removeTreeClaims(w,id,wrapper,completed);},finish:j=>finish(w,j),growth:r=>plantGrowth(w,r),
     reconcileReplantedGrowth:r=>{delete r.growthThermalFactor;delete r.growthLight;},
   };
@@ -255,7 +258,7 @@ export function advanceMinifiedTrees(w:World):void {
       releaseLostTreeCarrier(w,ref.pile);treeExpiryDomains.delete(w);
       w.events.push({tick:w.tick,type:'job',message:pending?'Les restes de l’arbre mort ont été déposés.':'Un arbre deracine est mort; ses restes sont conserves.'});
     }else if(w.schemaVersion>=236){
-      if(pending)ref.pile.plantPack={...ref.pile.plantPack,pendingExpiry:{quantity:pending.quantity,retryAt:w.tick+20}};
+      if(pending)markPileContentWrite379(ref.pile).plantPack={...ref.pile.plantPack,pendingExpiry:{quantity:pending.quantity,retryAt:w.tick+20}};
       else {
         const death=planPendingTreeExpiry(host,ref);if(!death||!commitPendingTreeExpiry(host,death))throw Error('Expired tree death transaction lost its original');
         w.events.push({tick:w.tick,type:'job',message:'Un arbre déraciné est mort ; ses restes attendent une place.'});

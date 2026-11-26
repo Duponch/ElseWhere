@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {siteAmbushTriggered263} from './world-site-ambush-state-263.ts';
 import {prepareSiteThreatPlacements263} from './world-site-threat-placement-263.ts';
@@ -29,7 +30,7 @@ function activate263(w:World,s:WorldSiteAmbush263,core:number):void {
    const roster=facts?draftForeignRoster261(w,'combat',selected.factionId,Math.max(s.points,facts.combatMinimum),rng):null;
    if(roster){rng=roster.rng;const placed=prepareSiteThreatPlacements263(w,roster.people.length,rng,where);if(placed&&civilianAdmissionFits(w,roster.people.length,roster.items.length)){
     rng=placed.rng;for(let i=0;i<roster.people.length;i++){const p=roster.people[i]!;Object.assign(p,placed.cells[i]!);p.path=[];p.state='idle';p.moveCooldown=0;p.planCooldown=0;delete p.raid;p.tactics=newTactics();humanIds.push(p.id);}
-    w.pawns.push(...roster.people);w.piles.push(...roster.items);w.nextId=roster.nextId;for(const p of roster.people)notifyActualExplorationSpawn256(w,p);
+    w.pawns.push(...roster.people);appendPileEntries(w.piles,...roster.items);w.nextId=roster.nextId;for(const p of roster.people)notifyActualExplorationSpawn256(w,p);
    }}
   }
  }else if(s.payload==='manhunters'){

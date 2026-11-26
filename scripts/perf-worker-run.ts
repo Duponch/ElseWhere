@@ -8,31 +8,43 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { performance } from 'node:perf_hooks';
+import { serialize } from 'node:v8';
 
 const [savePath = 'public/test-saves/v419/les-eclaircies.json', speedArg = '6', secondsArg = '20', warmArg = '5'] = process.argv.slice(2);
 const speed = Number(speedArg), seconds = Number(secondsArg), warmup = Number(warmArg);
 const text = (() => { const t = readFileSync(savePath, 'utf8'); const r = JSON.parse(t); return r.format === 'lisiere-save' ? gunzipSync(Buffer.from(r.payload, 'base64')).toString('utf8') : t; })();
 
-interface Stat { count: number; bytes: number; cloneMs: number }
+interface Stat { count: number; bytes: number; cloneMs: number; wireBytes:number; transferredBytes:number; packed:number }
 const stats = new Map<string, Stat>();
 const keySizes = { count: 0, parts: new Map<string, number>() };
 const phaseSizes = { count: 0, parts: new Map<string, number>() };
-let measuring = false, lastTick = -1, replies: any[] = [];
+let measuring = false, lastTick = -1,lastCore=-1, replies: any[] = [];
 const kindOf = (m: any): string => m?.type === 'snapshot' || m?.kind ? `${m.type ?? '?'}:${m.kind ?? m.resident?.kind ?? ''}` : String(m?.type ?? typeof m);
 const tickOf = (m: any): number | undefined => m?.world?.tick ?? m?.summary?.tick ?? m?.publication?.world?.tick ?? m?.tick;
+const coreOf=(m:any):number|undefined=>{
+ if((m?.type==='actor-frontier-297'||m?.type==='actor-phase-297')&&Number.isSafeInteger(m.toCore))return m.toCore;
+ const w=m?.publication?.world??m?.world;
+ if(Number.isSafeInteger(w?.tick))return w.tick*10+(w.phaseCore297??0);
+};
 const scope: any = {
   onmessage: null,
-  postMessage(message: any) {
+  postMessage(message: any,transfer?:ArrayBuffer[]) {
     if (message?.type === 'reply') replies.push(message);
     const t = tickOf(message); if (typeof t === 'number') lastTick = Math.max(lastTick, t);
+    const core=coreOf(message);if(core!==undefined)lastCore=Math.max(lastCore,core);
     if (!measuring) return;
     // A browser Worker pays structured clone for every postMessage.
-    const s = performance.now(); const copy = structuredClone(message); const cloneMs = performance.now() - s;
-    const k = kindOf(message), row = stats.get(k) ?? { count: 0, bytes: 0, cloneMs: 0 };
+    const transferred=transfer?.reduce((sum,buffer)=>sum+buffer.byteLength,0)??0;
+    const s = performance.now(); const copy = structuredClone(message,transfer?.length?{transfer}:undefined); const cloneMs = performance.now() - s;
+    const k = kindOf(message), row = stats.get(k) ?? { count: 0, bytes: 0, cloneMs: 0,wireBytes:0,transferredBytes:0,packed:0 };
     row.count++; row.cloneMs += cloneMs;
     // SIZES=1 only: the JSON sizing costs as much as the clone and would weigh on
     // the measured Worker (about 7% of each complete publication before 11 November).
-    if (process.env.SIZES && row.count <= 40) row.bytes += JSON.stringify(copy, (_k, v) => ArrayBuffer.isView(v) ? Array.from(v as any).length : v)?.length ?? 0;
+    if (process.env.SIZES && row.count <= 40) {
+      row.bytes += JSON.stringify(copy, (_k, v) => ArrayBuffer.isView(v) ? Array.from(v as any).length : v instanceof ArrayBuffer?v.byteLength:v)?.length ?? 0;
+      if(message?.type==='actor-frontier-297'||message?.type==='actor-phase-297')row.wireBytes+=serialize(copy).byteLength;
+    }
+    if(transfer?.length){row.packed++;row.transferredBytes+=transferred;}
     stats.set(k, row);
     // KEYS=1: JSON size of each part of a complete publication.
     if (process.env.KEYS && message?.type === 'resident-publication' && keySizes.count < 20) {
@@ -50,6 +62,7 @@ const scope: any = {
       const size = (v: unknown) => JSON.stringify(v, (_k, x) => ArrayBuffer.isView(x) ? Array.from(x as any) : x)?.length ?? 0;
       const add = (k: string, n: number) => phaseSizes.parts.set(k, (phaseSizes.parts.get(k) ?? 0) + n);
       for (const [key, value] of Object.entries(copy)) { add(key, size(value)); if (Array.isArray(value)) add(key + '#', 1024 * value.length); }
+      if(copy.phaseWire379){const wire=copy.phaseWire379;add('phaseWire379.words',wire.words.byteLength);add('phaseWire379.numbers',wire.numbers.byteLength);add('phaseWire379.strings',serialize(wire.strings).byteLength);add('phaseWire379.shapes',serialize(wire.shapes).byteLength);}
       for (const row of copy.actors ?? []) for (const [key, value] of Object.entries(row.fields ?? {})) add('actors.fields.' + key, size(value));
       for (const track of copy.tracks ?? []) add('tracks.append#', 1024 * (track.append?.length ?? 0));
     }
@@ -92,14 +105,14 @@ if (process.env.PROFILE) {
   const post = (m: string, p?: object) => new Promise<any>((ok, ko) => session!.post(m, p ?? {}, (e, r) => e ? ko(e) : ok(r)));
   await post('Profiler.enable'); await post('Profiler.setSamplingInterval', { interval: 250 }); await post('Profiler.start');
 }
-const startTick = lastTick; measuring = true;
+const startTick = lastTick,startCore=lastCore; measuring = true;
 const cpuStart = process.cpuUsage(); t = performance.now();
 // Event-loop lag probe: a 10 ms timer; its lateness shows long synchronous tasks.
 const lags: number[] = []; let expected = performance.now() + 10;
 const probe = setInterval(() => { const now = performance.now(); lags.push(now - expected); expected = now + 10; }, 10);
 await new Promise(r => setTimeout(r, seconds * 1000));
 clearInterval(probe); measuring = false;
-const wall = performance.now() - t, cpu = process.cpuUsage(cpuStart), endTick = lastTick;
+const wall = performance.now() - t, cpu = process.cpuUsage(cpuStart), endTick = lastTick,endCore=lastCore;
 if (session) {
   const { profile } = await new Promise<any>((ok, ko) => session!.post('Profiler.stop', (e, r) => e ? ko(e) : ok(r)));
   writeFileSync(process.env.PROFILE!, JSON.stringify(profile));
@@ -110,11 +123,14 @@ const ticks = endTick - startTick, target = speed * 6 * wall / 1000;
 console.log(JSON.stringify({
   save: savePath, speed, wallS: +(wall / 1000).toFixed(1), loadS: +(loadMs / 1000).toFixed(1),
   macroTicks: ticks, targetMacroTicks: +target.toFixed(0), achievedPctOfTarget: +(100 * ticks / target).toFixed(1),
+  // Confirmed physical frontier (including phase packets), not merely the
+  // most recent slow Full publication. Retain the historical metric too.
+  ...(startCore>=0&&endCore>=startCore?{confirmedCoreTicks:endCore-startCore,confirmedCivilTicksPerSecond:+((endCore-startCore)/10/(wall/1000)).toFixed(3),confirmedPctOfTarget:+(100*(endCore-startCore)/10/target).toFixed(2)}:{}),
   workerCpuPct: +(100 * (cpu.user + cpu.system) / 1000 / wall).toFixed(1),
   taskLagMs: { p50: pct(.5), p95: pct(.95), p99: pct(.99), max: +(sorted.at(-1) ?? 0).toFixed(1) },
   fullRequests: Object.fromEntries([...fullReasons].sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, +(v / (wall / 1000)).toFixed(2)])),
   ...(phaseSizes.count ? { phaseKB: Object.fromEntries([...phaseSizes.parts].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => [k, +(v / phaseSizes.count / 1024).toFixed(2)])) } : {}),
   ...(keySizes.count ? { publicationKB: Object.fromEntries([...keySizes.parts].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, +(v / keySizes.count / 1024).toFixed(1)])) } : {}),
-  posted: Object.fromEntries([...stats].map(([k, v]) => [k, { perS: +(v.count / (wall / 1000)).toFixed(1), ...(process.env.SIZES ? { avgKB: +(v.bytes / Math.min(v.count, 40) / 1024).toFixed(1) } : {}), cloneMsEach: +(v.cloneMs / v.count).toFixed(2) }])),
+  posted: Object.fromEntries([...stats].map(([k, v]) => [k, { perS: +(v.count / (wall / 1000)).toFixed(1), ...(process.env.SIZES ? { avgKB: +(v.bytes / Math.min(v.count, 40) / 1024).toFixed(1),...v.wireBytes?{wireKB:+(v.wireBytes/Math.min(v.count,40)/1024).toFixed(2)}:{} } : {}),...v.packed?{packed:v.packed,transferKB:+(v.transferredBytes/v.packed/1024).toFixed(2)}:{}, cloneMsEach: +(v.cloneMs / v.count).toFixed(2) }])),
 }, null, 1));
 process.exit(0);

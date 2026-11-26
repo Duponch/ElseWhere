@@ -23,7 +23,7 @@ const situation=(id:string,label:string,offset:number,description:string):TraitT
  * filtered when read: a trait never changes once born). */
 const PSYCHOPATH_NULLIFIED=[/^death-witnessed-(ally|outsider|family)-death$/,/^death-colonist-died$/,/^death-observed-corpse$/,/^death-colonist-unburied$/,
   /^friend-died-/,/^lost-colonist-lost-/,/^lost-friend-lost-/,/^mood350-(nuzzled|released-prisoner|bonded-animal-died|bonded-animal-lost)$/,
-  /^(not-)?bonded-animal-master$/,/^denied-joining$/];
+  /^(not-)?bonded-animal-master$/,/^denied-joining$/,/^mood350-colonist-banished(-to-die)?$/];
 const CANNIBAL_NULLIFIED=[/^death-observed-corpse$/];
 /** EnvironmentDark nullifyingTraits: NightOwl and (schema 362) Undergrounder. */
 const NIGHT_OWL_NULLIFIED=[/^environment-dark$/];

@@ -141,10 +141,11 @@ export function advanceWildFlora256(world:World,reader:WildPlantMapReader256):vo
  }
  next.lastTick=world.tick;
  // No callbacks or validation can fail after this commit boundary.
- if(newPlants.length)world.resources=[...world.resources,...newPlants];world.nextId=nextId;world.rng=stream.rng;Object.assign(state,next);
+ if(newPlants.length){const beforeResources=world.resources;world.resources=[...world.resources,...newPlants];markResourceArrayChanged(world,beforeResources,newPlants,[]);}world.nextId=nextId;world.rng=stream.rng;Object.assign(state,next);
 }
 /** Only an explicit map-clock rebase, never initialization/load or skipped
  * simulation. All cycle sums and plants' actual ages are retained. */
 export function rebaseWildFloraClock256(state:WildFloraState256,fromTick:number,toTick:number):void {
  if(state.lastTick!==fromTick||!Number.isSafeInteger(toTick)||toTick<0)throw Error('Invalid renewal clock rebase');state.lastTick=toTick;
 }
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';

@@ -16,6 +16,8 @@ import { createOrigamiGroundTuftGeometry } from './origami/flora';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
 import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke,type NaturalSurfaceModels} from './surfaces/NaturalSurfaceModels';
 import {createStylizedSurfaceTexture} from './stylized-surfaces';
+import {SpatialInstanceRanges379} from './SpatialInstanceRanges379';
+import {PlantClusterSpatial379,comparePlantClusterPages379} from './PlantClusterSpatial379';
 
 const BASE_STEMS = [
   { x: 0, z: 0, height: 1, leanX: .04, leanZ: -.025 },
@@ -83,6 +85,9 @@ export class PlantClusterLayer {
   private readonly surfaceModels:NaturalSurfaceModels|undefined;
   private readonly ownedPastel:THREE.DataTexture|undefined;
   private mesh: THREE.InstancedMesh;
+  private spatialDraw!:SpatialInstanceRanges379;
+  private readonly spatialMembership=new PlantClusterSpatial379();
+  private spatialRanges:ReturnType<PlantClusterSpatial379['capture']>;
   private readonly slots = new Map<number, { index: number; signature: string; atlasShape?:string }>();
   private readonly free: number[] = [];
   private readonly transform = new THREE.Object3D();
@@ -102,6 +107,7 @@ export class PlantClusterLayer {
   // which scans every resident slot, including the thousands left unchanged.
   private readonly bounds = new THREE.Box3();
   private readonly transformedBounds = new THREE.Box3();
+  private readonly spatialMatrix = new THREE.Matrix4();
   private used = 0;
   private readonly targetTint=new ResourceTargetTint();
   private targetPreviewIds=new Set<number>();
@@ -147,6 +153,7 @@ export class PlantClusterLayer {
       catch(error){if(!(error instanceof PlantAtlasAdmissionRefusal))throw error;console.warn('Plant atlas model refused; retaining exact direct Source',error);}
     }
     this.mesh = this.createMesh(128);
+    this.spatialDraw=new SpatialInstanceRanges379(this.mesh);
     this.group.name = 'plant-cluster-layer';
     this.group.add(this.mesh);
   }
@@ -157,9 +164,10 @@ export class PlantClusterLayer {
   hasPendingAtlasResources():boolean{return this.slots.size>0&&(this.plantAtlas?.needsPreparation()??false);}
   prepareAtlasResources(renderer:THREE.WebGPURenderer,source:ReturnType<GraphicsStyleContext['prepareAtlasPaint']>,assertExclusive:()=>void){if(this.slots.size===0)return;return this.plantAtlas?.stage(renderer,source,assertExclusive);}
   /** Read-only stage-boundary bridge, no plant admission or mesh traversal. */
-  surfaceBudget():SurfaceBudgetInventory{const value=this.plantAtlas?.surfaceBudget(),textures=new Set<THREE.Texture>(value?.textures??[]);if(this.ownedPastel)textures.add(this.ownedPastel);return{textures:[...textures],gpuBufferBytes:value?.gpuBufferBytes??0,cpuBytes:value?.cpuBytes??0,complete:value?.complete??true,scope:value?.scope??'No prepared Plant owner; any owned Source Pastel ref is supplied. Source model/canonical storage remains separately inventoried.'};}
+  surfaceBudget():SurfaceBudgetInventory{const value=this.plantAtlas?.surfaceBudget(),draw=this.spatialDraw.metrics(),textures=new Set<THREE.Texture>(value?.textures??[]);if(this.ownedPastel)textures.add(this.ownedPastel);return{textures:[...textures],gpuBufferBytes:(value?.gpuBufferBytes??0)+draw.gpuCommandBytes,cpuBytes:(value?.cpuBytes??0)+draw.commandBytes,complete:value?.complete??true,scope:`${value?.scope??'No prepared Plant owner; any owned Source Pastel ref is supplied. Source model/canonical storage remains separately inventoried.'} Plant spatial command table is included at its actual CPU/GPU allocation.`};}
   atlasStatus(){return this.plantAtlas?.stats()??{pipeline:'direct-source',ready:false,refused:true};}
   graphicsComparisonMetadata(){return{active:this.slots.size,model:this.geometry.uuid,material:Array.isArray(this.mesh.material)?this.mesh.material.map(m=>m.uuid):this.mesh.material.uuid,textured:this.texturesEnabled,binsVersion:this.plantAtlasBins.version,atlas:this.plantAtlas?.comparisonMetadata()??null};}
+  spatialMetrics(){return{membership:this.spatialMembership.metrics(),draw:this.spatialDraw.metrics()};}
   setTargetPreview(ids:ReadonlySet<number>):void {
     if(ids.size===this.targetPreviewIds.size&&[...ids].every(id=>this.targetPreviewIds.has(id)))return;
     this.targetTint.restore();this.targetPreviewIds=new Set(ids);this.tintTargets();
@@ -204,6 +212,7 @@ export class PlantClusterLayer {
   private ensureCapacity(required: number): void {
     if (required <= this.mesh.instanceMatrix.count) return;
     const previous = this.mesh;
+    this.spatialDraw.dispose();
     const previousYaw=this.windYaw;
     const previousBasis=this.windBasis,previousBins=this.plantAtlasBins;
     const next = this.createMesh(2 ** Math.ceil(Math.log2(required)));
@@ -216,6 +225,7 @@ export class PlantClusterLayer {
     this.group.remove(previous);
     previous.dispose();
     this.mesh = next;
+    this.spatialDraw=new SpatialInstanceRanges379(next);this.spatialRanges=undefined;
     this.group.add(next);
   }
 
@@ -232,6 +242,7 @@ export class PlantClusterLayer {
       this.middleWind.reset();
       this.clearTargetPreview();
       this.bounds.makeEmpty();
+      this.spatialMembership.clear();this.spatialRanges=undefined;this.spatialDraw.setRanges(undefined);
       this.slots.clear();
       this.free.length = 0;
       this.used = 0;
@@ -240,6 +251,10 @@ export class PlantClusterLayer {
     const plants = !reset&&changes
       ? [...changes.values()].flatMap(({resource})=>resource&&isClusterPlantSpecies(resource.species)?[resource]:[])
       : world.resources.filter(resource => isClusterPlantSpecies(resource.species));
+    // Shader phases, colors and atlas bins are explicit Resource-derived
+    // fields, never ordinal randomness. Group only the first admission; all
+    // later snapshots keep their resident slots and exact source transforms.
+    if(this.used===0)plants.sort(comparePlantClusterPages379);
     const alive = !reset&&changes ? undefined : new Set(plants.map(resource => resource.id));
     if(changes&&!reset&&!plants.length&&![...changes.keys()].some(id=>this.slots.has(id)))return;
     this.targetTint.restore();
@@ -258,6 +273,7 @@ export class PlantClusterLayer {
       firstMatrix = Math.min(firstMatrix, slot.index);
       lastMatrix = Math.max(lastMatrix, slot.index);
       this.slots.delete(id);
+      this.spatialMembership.remove(slot.index);
       this.free.push(slot.index);
     }
     const additions=plants.reduce((count,plant)=>count+(this.slots.has(plant.id)?0:1),0);
@@ -286,6 +302,12 @@ export class PlantClusterLayer {
       this.windBasis.setXYZW(slot.index,Math.cos(presentation.rotation),Math.sin(presentation.rotation),Math.sin(presentation.rotation*3.1),Math.cos(presentation.rotation*3.1));
       if(this.plantAtlas){const shapeKey=`${plant.id}:${plant.species}:${plant.x}:${plant.z}`;if(slot.atlasShape!==shapeKey){const bins=this.plantAtlas.bins([presentation.scaleX,presentation.scaleY,presentation.scaleZ]);if(this.plantAtlasBins.getX(slot.index)!==bins[0]||this.plantAtlasBins.getY(slot.index)!==bins[1]){this.plantAtlasBins.setXY(slot.index,bins[0],bins[1]);firstBins=Math.min(firstBins,slot.index);lastBins=Math.max(lastBins,slot.index);}slot.atlasShape=shapeKey;}}
       this.includeTransformBounds();
+      // The GPU reads the stored Float32 matrix, including its translation.
+      // Publish bounds from those exact bits rather than the double producer
+      // intermediate; this leaves the historical global envelope untouched.
+      this.spatialMatrix.fromArray(this.mesh.instanceMatrix.array,slot.index*16);
+      this.transformedBounds.copy(this.geometry.boundingBox!).applyMatrix4(this.spatialMatrix);
+      this.spatialMembership.set(slot.index,plant.x,plant.z,this.transformedBounds);
       this.mesh.setColorAt(slot.index, this.color.setHex(presentation.color));
       firstMatrix = Math.min(firstMatrix, slot.index);
       lastMatrix = Math.max(lastMatrix, slot.index);
@@ -316,6 +338,7 @@ export class PlantClusterLayer {
     }
     if(lastBins>=0){this.plantAtlasBins.clearUpdateRanges();this.plantAtlasBins.addUpdateRange(firstBins*2,(lastBins-firstBins+1)*2);this.plantAtlasBins.needsUpdate=true;}
     this.tintTargets();
+    const ranges=this.spatialMembership.capture(this.mesh.count);if(ranges!==this.spatialRanges){this.spatialRanges=ranges;this.spatialDraw.setRanges(ranges);}
   }
 
   private includeTransformBounds(): void {
@@ -334,7 +357,7 @@ export class PlantClusterLayer {
 
   dispose(): void {
     this.clearTargetPreview();
-    this.mesh.dispose();this.plantAtlas?.dispose();
+    this.spatialDraw.dispose();this.mesh.dispose();this.plantAtlas?.dispose();
     if(this.surfaceModels)this.surfaceModels.dispose();else this.geometry.dispose();this.ownedPastel?.dispose();
     this.windPlain.dispose();this.windTextured.dispose();
   }

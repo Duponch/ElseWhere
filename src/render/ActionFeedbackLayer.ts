@@ -1,11 +1,14 @@
 import * as THREE from 'three/webgpu';
 import { Fn, If, attribute, mix, positionLocal, uv, vec2, vec3, uint } from 'three/tsl';
-import type { World, Cell } from '../sim/types';
+import type { World, Cell,Job } from '../sim/types';
 import { confirmedRouteEdgeSignature,type ConfirmedIntentRoute } from './confirmed-intent-fields';
 import { pawnPresentationPose } from './pawn-presentation';
 import type { PawnLayer } from './PawnLayer';
 import { actionProgress, selectedConfirmedPath } from './action-feedback';
-import {actionProgressAnchor,type ActionAnchorLookup} from './action-progress-anchor';
+import {actionProgressAnchor,type ActionAnchorLookup,type ActionProgressAnchor} from './action-progress-anchor';
+import {isActorPlaybackWorld435} from './ActorPlayback435';
+import {readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
+import {readSnapshotChanges} from '../bridge/snapshot-changes';
 
 type Clock=Pick<PawnLayer,'blend'|'travelTime'>;
 type Path491={index:number;id:number;route:readonly Readonly<Cell>[];anchor?:Readonly<Cell>};
@@ -13,6 +16,19 @@ type Path491={index:number;id:number;route:readonly Readonly<Cell>[];anchor?:Rea
  * Skip that zero segment; the remaining suffix still starts at that origin. */
 const firstRouteStep491=(item:Path491)=>item.anchor&&item.route[0]?.x===item.anchor.x&&item.route[0]?.z===item.anchor.z?1:0;
 const poseAttributes=['aFrom','aTo','aTravel'] as const;
+type Pawn=World['pawns'][number];
+type PhaseBarRow={pawn:Pawn;job:Job|undefined;anchor:ActionProgressAnchor|undefined;pileIds:readonly number[];clock:boolean};
+type FullBarLookup={world:World;lookup:ActionAnchorLookup;knownCells:Set<number>;knownIds:Set<number>;rows?:PhaseBarRow[];tick?:number;core?:number};
+/** Progress totals can depend on a workpiece or a ground/carry target even
+ * when the actor isn't replaced; keep those real identities, not a counter flag. */
+function phaseBarPileIds(pawn:Pawn,job:Job|undefined):number[]{
+  const ids=[pawn.need?.kind==='eat'?pawn.need.carryPileId:undefined,pawn.feed?.carryPileId,pawn.animalFeed?.carryPileId,
+    pawn.equipmentTask?.itemId,pawn.hunting?.animalId,pawn.cooking?.ingredients[0]?.pileId,job?.tree?.kind==='replant'?job.tree.sourcePileId:undefined];
+  return ids.filter((id):id is number=>typeof id==='number');
+}
+function phaseBarStatic(base:World,view:World):boolean {
+  return view.resources===base.resources&&view.structures===base.structures&&view.tiles===base.tiles&&view.filth===base.filth&&view.research===base.research&&view.packed===base.packed&&view.wildlife===base.wildlife&&view.growingZones===base.growingZones&&view.schemaVersion===base.schemaVersion&&view.width===base.width&&view.height===base.height&&view.seed===base.seed;
+}
 
 function quad():THREE.InstancedBufferGeometry {
   const base=new THREE.PlaneGeometry(1,1),geometry=new THREE.InstancedBufferGeometry();
@@ -30,7 +46,7 @@ export class ActionFeedbackLayer {
   readonly group=new THREE.Group();
   readonly bars:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.SpriteNodeMaterial>;
   readonly path:THREE.Mesh<THREE.InstancedBufferGeometry,THREE.MeshBasicNodeMaterial>;
-  readonly stats={activeBars:0,pathSegments:0,barUploads:0,pathRebuilds:0,travelCopies:0};
+  readonly stats={activeBars:0,pathSegments:0,barUploads:0,pathRebuilds:0,travelCopies:0,phaseRows:0,phaseSkipped:0};
   private readonly clock:Clock;
   private barCapacity=0;
   private pathCapacity=0;
@@ -41,6 +57,10 @@ export class ActionFeedbackLayer {
   private readonly movingSlots:{slot:number;pawnIndex:number}[]=[];
   private source:THREE.InstancedBufferGeometry|undefined;
   private travelStamp='';
+  private fullLookup297:FullBarLookup|undefined;
+  private phaseLookup297:FullBarLookup|undefined;
+  private phaseJobs297:ReadonlyMap<number,Job>|undefined;
+  private phaseDirty297:{humans:ReadonlySet<number>;piles:ReadonlyMap<number,Readonly<World['piles'][number]>|null>}|undefined;
 
   constructor(clock:Clock){
     this.clock=clock;
@@ -82,22 +102,42 @@ export class ActionFeedbackLayer {
   /** Called after PawnLayer.update. Its source may change only when the pawn
    * capacity grows; rebinding does not rebuild shader geometry or material. */
   update(world:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath=false):void {
+    const retained=this.phaseLookup297;if(!retained)this.fullLookup297=undefined;
+    const sameSource=this.source===source;
     this.bindSource(source);
     const action=this.bars.geometry.getAttribute('aAction') as THREE.InstancedBufferAttribute;
     const anchors=this.bars.geometry.getAttribute('aActionAnchor') as THREE.InstancedBufferAttribute;
-    const lookup:ActionAnchorLookup={jobs:new Map(world.jobs.map(job=>[job.id,job])),cleaningStart:this.cleaningStart};
-    if(this.cleaningStart.size)for(const pawn of world.pawns)if(!pawn.cleaning)this.cleaningStart.delete(pawn.id);
+    const lookup:ActionAnchorLookup=retained?.lookup??{cleaningStart:this.cleaningStart};lookup.jobs=this.phaseJobs297??new Map(world.jobs.map(job=>[job.id,job]));
+    const nativeRows=retained?.rows,phase=this.phaseDirty297;
+    const sparse=!!(sameSource&&phase&&nativeRows&&nativeRows.length===world.pawns.length);
+    const rows=sparse?nativeRows!:readSnapshotChanges(world,world)!==undefined&&isActorPlaybackWorld435(world)?[]:undefined;
+    const dirty:number[]=[];
+    if(sparse){
+      const clock=retained!.tick!==world.tick||retained!.core!==world.phaseCore297;
+      // Core actor scenes share exactly the unmodified frozen rows. Reference
+      // checks also catch actor-only frontiers between two feedback applications.
+      for(let index=0;index<world.pawns.length;index++){
+        const pawn=world.pawns[index]!,old=nativeRows![index]!,job=pawn.jobId===null?undefined:lookup.jobs?.get(pawn.jobId);
+        if(pawn!==old.pawn||phase!.humans.has(index)||old.job!==job||clock&&old.clock||old.anchor?.pawnId!==undefined||pawn.state==='working'&&(pawn.tend?.phase==='tend'||pawn.surgery?.phase==='work')||old.pileIds.some(id=>phase!.piles.has(id)))dirty.push(index);
+      }
+      this.stats.phaseRows+=dirty.length;this.stats.phaseSkipped+=world.pawns.length-dirty.length;
+    }else for(let i=0;i<world.pawns.length;i++)dirty.push(i);
+    if(this.cleaningStart.size)for(const index of dirty){const pawn=world.pawns[index]!;if(!pawn.cleaning)this.cleaningStart.delete(pawn.id);}
     // Retain only resources required by visible work counters. Building the
     // simulation's whole-map spatial index on each render snapshot cost ~1 ms
     // at 100 colonists; this linear capture avoids thousands of map entries.
     const cells=new Set<number>(),ids=new Set<number>();
-    for(const pawn of world.pawns)if(pawn.state==='working'&&pawn.jobId!==null){
+    for(const index of dirty){const pawn=world.pawns[index]!;if(pawn.state==='working'&&pawn.jobId!==null){
       const job=lookup.jobs!.get(pawn.jobId);if(!job)continue;
       if(job.clearance)ids.add(job.clearance.resourceId);
       else if(job.tree?.kind==='extract')ids.add(job.tree.resourceId);
       else if(job.kind==='cut'||job.kind==='harvest')cells.add(job.z*world.width+job.x);
+    }}
+    const resourceCells=(retained?.lookup.resourceCells as Map<number,World['resources'][number]>|undefined)??new Map<number,World['resources'][number]>(),resources=(retained?.lookup.resources as Map<number,World['resources'][number]>|undefined)??new Map<number,World['resources'][number]>();
+    const requestedCells=new Set(cells),requestedIds=new Set(ids);
+    if(retained){for(const cell of retained.knownCells)cells.delete(cell);for(const id of retained.knownIds)ids.delete(id);
+      const directory=readResidentCollectionDirectory379(retained.world,'resources');if(directory)for(const id of ids){const source=directory.source(id),resource=source===undefined?undefined:world.resources[source];if(resource)resources.set(id,resource);ids.delete(id);}
     }
-    const resourceCells=new Map<number,World['resources'][number]>(),resources=new Map<number,World['resources'][number]>();
     if(cells.size||ids.size)for(const resource of world.resources){
       const cell=resource.z*world.width+resource.x;
       if(cells.delete(cell))resourceCells.set(cell,resource);
@@ -105,12 +145,15 @@ export class ActionFeedbackLayer {
       if(!cells.size&&!ids.size)break;
     }
     lookup.resourceCells=resourceCells;lookup.resources=resources;
-    let changed=false,anchorChanged=false,active=0,pawnIndices:Map<number,number>|undefined;
-    world.pawns.forEach((pawn,index)=>{
+    const cache:FullBarLookup=retained??{world,lookup,knownCells:new Set<number>(),knownIds:new Set<number>()};for(const cell of requestedCells)cache.knownCells.add(cell);for(const id of requestedIds)cache.knownIds.add(id);
+    let changed=false,anchorChanged=false,active=sparse?this.stats.activeBars:0,pawnIndices:Map<number,number>|undefined;
+    for(const index of dirty){const pawn=world.pawns[index]!;
       const progress=actionProgress(world,pawn,lookup),fraction=Math.fround(progress?.fraction??0),visible=progress?1:0;
+      if(sparse)active-=action.getY(index);
       if(visible)active++;
       if(action.getX(index)!==fraction||action.getY(index)!==visible){action.setXY(index,fraction,visible);changed=true;}
       const anchor=progress?actionProgressAnchor(world,pawn,progress,lookup):undefined;
+      if(rows){const job=pawn.jobId===null?undefined:lookup.jobs?.get(pawn.jobId);rows[index]={pawn,job,anchor,pileIds:phaseBarPileIds(pawn,job),clock:pawn.state==='working'&&job?.kind==='cut'};}
       let x=anchor?.target?.x??0,z=anchor?.target?.z??0;
       if(anchor?.pawnId!==undefined){
         pawnIndices??=new Map(world.pawns.map((p,i)=>[p.id,i]));
@@ -121,7 +164,7 @@ export class ActionFeedbackLayer {
       if(anchors.getX(index)!==ax||anchors.getY(index)!==az||anchors.getZ(index)!==weight||anchors.getW(index)!==offset){
         anchors.setXYZW(index,ax,az,weight,offset);anchorChanged=true;
       }
-    });
+    }
     this.bars.geometry.instanceCount=world.pawns.length;
     this.stats.activeBars=active;
     this.bars.visible=this.barsDetailVisible&&active>0;
@@ -129,6 +172,20 @@ export class ActionFeedbackLayer {
     if(anchorChanged)anchors.needsUpdate=true;
     if(changed||anchorChanged)this.stats.barUploads++;
     if(!externalPath)this.updatePath(world,selected,source);
+    cache.rows=rows;cache.tick=world.tick;cache.core=world.phaseCore297;
+    if(!retained)this.fullLookup297=cache;
+  }
+
+  /** Same progress/anchor arithmetic and presentation clock, with the Full's
+   * immutable section lookups retained across actual native frontier edits. */
+  updatePhase297(base:World,view:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath:boolean,humans:ReadonlySet<number>,piles:ReadonlyMap<number,Readonly<World['piles'][number]>|null>,jobs?:ReadonlyMap<number,Job>):void {
+    const cache=this.fullLookup297;if(!cache||cache.world!==base||!isActorPlaybackWorld435(base)||!phaseBarStatic(base,view)){this.update(view,selected,source,externalPath);return;}
+    const native=!!(cache.rows&&readSnapshotChanges(base,base)!==undefined&&isActorPlaybackWorld435(view)&&Object.isFrozen(view.pawns)&&phaseBarStatic(base,view)&&view.pawns.length===cache.rows.length&&view.pawns.every((p,i)=>p.id===cache.rows![i]!.pawn.id));
+    const lookup=cache.lookup;lookup.sowingWorld=base;
+    if(lookup.pawns){const map=lookup.pawns as Map<number,World['pawns'][number]>;if(native){for(let i=0;i<view.pawns.length;i++){const p=view.pawns[i]!;if(p!==cache.rows![i]!.pawn)map.set(p.id,p);}}else for(const p of view.pawns)map.set(p.id,p);}
+    if(lookup.piles){const map=lookup.piles as Map<number,World['piles'][number]>;for(const [id,pile]of piles){if(pile)map.set(id,pile as World['piles'][number]);else map.delete(id);}}
+    this.fullLookup297=undefined;this.phaseLookup297=cache;this.phaseJobs297=jobs;this.phaseDirty297=native?{humans,piles}:undefined;
+    try{this.update(view,selected,source,externalPath);this.fullLookup297=cache;}finally{this.phaseLookup297=undefined;this.phaseJobs297=undefined;this.phaseDirty297=undefined;}
   }
 
   private bindSource(source:THREE.InstancedBufferGeometry):void {

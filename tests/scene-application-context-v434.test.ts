@@ -84,3 +84,15 @@ test('a failed later consumer leaves pending pile chunks for exact retry and sam
   const masked=context.piles.read(b,new Map([[b.piles[0]!.id,3]]))!;expect(masked.changedChunks[0]!.bundles.map(v=>v.quantity)).toEqual([8,20]);context.acknowledgePiles(masked);expect(context.piles.read(b,new Map([[b.piles[0]!.id,3]]))!.changedChunks).toEqual([]);expect(first.changedChunks).toStrictEqual(held);
  }finally{context.clear();index.clear();}
 });
+
+test('only physical support membership changes rebuild shared support cells, and off-shelf writes retain shelf identities',()=>{
+ const h=fixture(),context=new SceneApplicationContext(),index=new SceneResourceIndex();
+ const adopt=()=>{const w=h.send();prepare(context,index,w);const support=context.readSupports(w)!;expect(support.cells).toStrictEqual(pileSurfaces(w));expect(support.identities).toStrictEqual(pileIdentitySurfaces(w));context.commit(w);return support;};
+ try{
+  const a=adopt();h.world.structures[0]!.x-=2;h.world.structures.push({id:h.world.nextId++,kind:'bed',x:18,z:18,orientation:0,footprint:'standard',material:'wood'});
+  h.world.piles[0]!.quantity+=1;h.world.piles.push({id:h.world.nextId++,kind:'wood',item:'wood',quantity:5,owner:{type:'ground',x:17,z:17}});
+  const b=adopt();expect(b.cells).toBe(a.cells);expect(b.identities).toBe(a.identities);
+  h.world.piles.at(-1)!.owner={type:'ground',x:12,z:12};const c=adopt();expect(c.cells).toBe(a.cells);expect(c.identities).not.toBe(a.identities);expect(c.identities.size).toBe(3);expect(a.identities.size).toBe(2);
+  h.world.structures[3]!.orientation=1;h.world.structures[3]!.x=14;const d=adopt();expect(d.cells).not.toBe(a.cells);expect(d.identities).toBe(c.identities);
+ }finally{context.clear();index.clear();}
+});

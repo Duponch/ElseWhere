@@ -4,6 +4,8 @@ import { isPowerActive } from './power-rules.ts';
 import { SUN_LAMP_RADIUS,SUN_LAMP_OVERLIGHT_RADIUS,sunLampActive } from './sun-lamp.ts';
 import type { Structure, World } from './types.ts';
 import { peekStructureMembershipToken } from './structure-navigation.ts';
+import {structureFamily379} from './structure-family-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 
 export interface LightSource {cell:number;radius:number;red:number;green:number;blue:number;overlightRadius?:number}
 
@@ -37,6 +39,10 @@ export function lightSourcesFromMembers(world:World,members:readonly Structure[]
  * structure, including the stable order of equal cells after sorting. */
 const membersByToken=new WeakMap<object,readonly Structure[]>();
 function lightMembers(world:World):readonly Structure[] {
+  if(terrainJournalReadOwner()){
+    const resident=structureFamily379(world,'light-source-owners',isStructureLightMember);
+    if(resident!==world.structures)return resident;
+  }
   // Only an existing index is used (see peekStructureMembershipToken).
   const token=peekStructureMembershipToken(world);if(!token)return world.structures.filter(s=>memberKinds.has(s.kind));
   let members=membersByToken.get(token);

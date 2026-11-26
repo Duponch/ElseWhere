@@ -21,13 +21,14 @@ export const DESIGNATION_ICON_KINDS = ['mine', 'chop', 'harvest', 'cut', 'extrac
 export type DesignationIconKind = typeof DESIGNATION_ICON_KINDS[number];
 const ICON_INDEX: Readonly<Record<DesignationIconKind, number>> = { mine: 0, chop: 1, harvest: 2, cut: 3, 'extract-tree':80, 'replant-tree':81 };
 const EXTRA_ICON_KINDS = ['smooth-floor','smooth-wall','haul-chunks', 'deconstruct', 'uninstall', 'remove-floor', 'build-roof', 'remove-roof'] as const;
-type MarkerKind = DesignationIconKind | typeof EXTRA_ICON_KINDS[number];
+type MarkerKind = DesignationIconKind | typeof EXTRA_ICON_KINDS[number] | 'construction-forbidden';
 type MarkerTarget = { kind: MarkerKind; x: number; z: number };
 // Includes removal/roof pictograms without changing the historical predicate
 // that selects plant/mining/tree geometry.
 export const hasDesignationPictogram = (kind: string): kind is MarkerKind => isIconDesignationKind(kind)
   || (EXTRA_ICON_KINDS as readonly string[]).includes(kind);
 function iconIndex(kind: MarkerKind): number {
+  if(kind==='construction-forbidden')return 83; // CompForbiddable uses the ordinary forbidden cross.
   // Core draws SmoothFloor and SmoothWall with the same SmoothSurface mark.
   if(kind==='smooth-floor'||kind==='smooth-wall')return 82;
   if (isIconDesignationKind(kind)) return ICON_INDEX[kind];
@@ -89,6 +90,7 @@ function committedTargets(world: World,intents?:ConfirmedIntentFields): MarkerTa
   const targets: MarkerTarget[] = [];
   const roofCells = new Set<string>();
   for (const job of intents?.jobs??world.jobs) {
+    if(Number(world.schemaVersion)>=379&&(job.forbidden379||job.wallDoor296?.plan?.forbidden379))targets.push({kind:'construction-forbidden',x:job.x,z:job.z});
     if (!hasDesignationPictogram(job.kind)) continue;
     targets.push({ kind: job.kind, x: job.x, z: job.z });
     if (job.kind === 'build-roof' || job.kind === 'remove-roof') roofCells.add(`${job.kind}:${job.z * world.width + job.x}`);

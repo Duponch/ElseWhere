@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import {groupCaravanPileMass256} from './group-caravan-mass-256.ts';
 import {groupItemMassGrams} from './group-freight.ts';
@@ -95,7 +96,7 @@ export function draftOwnerTrade(c:CommercialOwnerContext,q:Extract<OwnerQuote,{o
     let id=actual.id;
     if(quantity<actual.quantity){const value=allocate();if(value===null)return false;id=value;}
     const pawnId=toOwner?receiver():undefined;if(toOwner&&pawnId===undefined)return false;
-    if(quantity<actual.quantity)actual.quantity-=quantity;else source.splice(index,1);
+    if(quantity<actual.quantity)markPileContentWrite379(actual).quantity-=quantity;else source.splice(index,1);
     const condition=copyPileCondition(actual);
     if(toOwner)items.push({...actual,id,quantity,owner:{type:'inventory',pawnId:pawnId!},...condition} as MaterialPile);
     else post.stock.push({id,kind:actual.kind,item:actual.item,quantity,...condition});

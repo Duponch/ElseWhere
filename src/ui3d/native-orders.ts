@@ -17,6 +17,10 @@ import {contextConsumesFood, tacticalAttackPolicy, tacticalPawns, tacticalRescue
 import type {NativeControl, NativePage, NativeRow} from './native-contract';
 import {pawnShortName} from '../ui/pawn-short-name';
 import {NATIVE_MESSAGE} from './native-dialog-metrics';
+import {FLOAT_MENU_PRIORITY as Priority} from './native-float-menu';
+import {personalOrderCommands378} from '../ui/order-queue-378';
+import {isSchema290OrLater} from '../sim/schema-compatibility-257';
+import {combatTarget,hostileTarget} from '../sim/combat-target';
 
 /** Methods must be bound by the host. Optional readers preserve the current
  * selection/map while a worker query or a native confirmation is pending. */
@@ -68,13 +72,15 @@ export function cancelNativeOrderPage(): void {
 
 const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error);
 const sameIds = (left: readonly number[], right: readonly number[]): boolean => left.length === right.length && [...left].sort((a, b) => a - b).every((id, index) => id === [...right].sort((a, b) => a - b)[index]);
-const optionKey = (option: OrderOption): string => JSON.stringify([option.jobId, option.openCasketId, option.stripTargetId, option.consumePileId, option.arrestPatientId, option.capturePatientId, option.equipmentItemId, option.equipmentAction, option.feedPatientId, option.tendPatientId, option.rescuePatientId, option.cookStationId, option.haulTarget]);
+const optionKey = (option: OrderOption): string => JSON.stringify([option.jobId, option.openCasketId, option.stripTargetId, option.consumePileId, option.arrestPatientId, option.capturePatientId, option.equipmentItemId, option.equipmentAction, option.feedPatientId, option.tendPatientId, option.rescuePatientId, option.cookStationId, option.haulTarget,option.animalId,option.animalAction,option.animalRescueId]);
 
 function optionCommand(option: OrderOption, pawnId: number, queue: boolean): Command {
+  if(option.animalId!==undefined&&option.animalAction)return {type:'order-animal-378',pawnId,animalId:option.animalId,action:option.animalAction,queue};
+  if(option.animalRescueId!==undefined)return {type:'order-animal-rescue',pawnId,animalId:option.animalRescueId};
   if (option.openCasketId !== undefined) return {type: 'order-open-casket', pawnId, casketId: option.openCasketId};
   if (option.stripTargetId !== undefined) return {type: 'order-strip', pawnId, targetId: option.stripTargetId};
-  if (option.consumePileId !== undefined) return {type: 'order-consume', pawnId, pileId: option.consumePileId, queue: false};
-  if (option.arrestPatientId !== undefined) return {type: 'order-arrest', pawnId, patientId: option.arrestPatientId, queue: false};
+  if (option.consumePileId !== undefined) return {type: 'order-consume', pawnId, pileId: option.consumePileId, queue:false};
+  if (option.arrestPatientId !== undefined) return {type: 'order-arrest', pawnId, patientId: option.arrestPatientId, queue};
   if (option.capturePatientId !== undefined) return {type: 'order-capture', pawnId, patientId: option.capturePatientId, queue};
   if (option.equipmentItemId !== undefined) {
     if (!option.equipmentAction) throw new Error('Action d’équipement indisponible.');
@@ -86,6 +92,14 @@ function optionCommand(option: OrderOption, pawnId: number, queue: boolean): Com
   if (option.cookStationId !== undefined) return {type: 'order-cook', pawnId, structureId: option.cookStationId, queue};
   if (option.haulTarget) return {type: 'order-haul', pawnId, target: option.haulTarget, queue};
   return {type: 'order-job', pawnId, jobId: option.jobId, queue};
+}
+
+/** FloatMenuOption Priority from Core providers; ordinary WorkGiver orders
+ * are Default, not sorted by their translated names or work-table priority. */
+function optionPriority(option:OrderOption):number {
+  if(option.rescuePatientId!==undefined||option.capturePatientId!==undefined||option.animalRescueId!==undefined)return Priority.RescueOrCapture;
+  if(option.arrestPatientId!==undefined||option.openCasketId!==undefined||option.equipmentItemId!==undefined&&option.equipmentAction!=='drop')return Priority.High;
+  return Priority.Default;
 }
 
 /** The context is 3D-page data. x/y are retained for the renderer callback
@@ -121,8 +135,8 @@ export async function nativeOrderPage(
   const latest = (): World => client.currentWorld ? client.currentWorld() ?? world : world;
   // Core Pawn_JobTracker.TryTakeOrderedJob reads KeyBindingDefOf.QueueOrder
   // (Shift) when the option is chosen, not when the menu opened.
-  let chosenWithShift = false;
-  const shift = (): boolean => queue || chosenWithShift || (client.queueHeld?.() ?? false);
+  let chosenWithShift: boolean|undefined;
+  const shift = (): boolean => chosenWithShift ?? client.queueHeld?.() ?? queue;
   const read = (): World | undefined => {
     if (!current()) return;
     const live = client.currentWorld ? client.currentWorld() : world;
@@ -153,21 +167,28 @@ export async function nativeOrderPage(
     if (client.close) client.close();
     else show({id: 'native-order-result', title: 'Ordre accepté', modal: true, rows: [{id: 'order-result', label: text}]});
   };
-  const run = async (prepare: (live: World) => Command | undefined | Promise<Command | undefined>, text: string): Promise<void> => {
+  type PreparedOrders = Command|readonly Command[]|undefined;
+  const run = async (prepare: (live: World) => PreparedOrders | Promise<PreparedOrders>, text: string): Promise<void> => {
     if (busy) return;
     const live = read(); if (!live) return;
     busy = true;
     try {
       const command = await prepare(live);
       if (!command || !read()) return;
-      await client.command(command);
+      const commands:readonly Command[]=Array.isArray(command)?command:[command as Command];
+      let accepted=0;
+      for(const order of commands){
+        if(!read())return;
+        try{await client.command(order);accepted++;}
+        catch(error){if(accepted)throw new Error(`${accepted}/${commands.length} ordres acceptés. ${errorText(error)}`);throw error;}
+      }
       finish(text);
     } catch (error) { fail(error); }
     finally { busy = false; }
   };
-  const commandRow = (id: string, label: string, enabled: boolean, reason: string | undefined, prepare: (live: World) => Command | undefined | Promise<Command | undefined>, success: string, detail?: string): NativeRow => ({
+  const commandRow = (id: string, label: string, enabled: boolean, reason: string | undefined, prepare: (live: World) => PreparedOrders | Promise<PreparedOrders>, success: string, detail?: string,priority:number=Priority.Default): NativeRow => ({
     id, label, ...(reason ? {value: reason} : {}), ...(detail ? {detail} : {}),
-    controls: [{id: `${id}-execute`, label: enabled ? label : 'Indisponible', disabled: !enabled, hint: reason, onActivate: gesture => { chosenWithShift = !!gesture?.shift; return run(prepare, success); }}]
+    controls: [{id: `${id}-execute`, label: enabled ? label : 'Indisponible', disabled: !enabled, hint: reason, floatMenuPriority:priority, onActivate: gesture => { chosenWithShift = gesture===undefined?undefined:!!gesture.shift; return run(prepare, success); }}]
   });
 
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z) || at.x < 0 || at.z < 0 || at.x >= world.width || at.z >= world.height) { message('Ordres', 'Cette case est hors de la carte.'); return; }
@@ -177,7 +198,7 @@ export async function nativeOrderPage(
   // options (Equip, Wear, DropEquipment, Ingest, CapturePawn: Drafted = true,
   // Multiselect = false) beside its drafted goto and attacks.
   const actor346 = draftedOrdinaryActor346(world, ids, selected);
-  const service = world.structures.some(structure => (isAncientCasket256(structure) || structure.kind === 'cryptosleep-casket' || structure.kind === 'ship-cryptosleep-casket' || [290, 291, 292, 293,294,295,296,297,298,299,300,301,302].includes(world.schemaVersion) && structure.kind === 'firefoam-popper') && footprintContains(structure, at) && (targetId === undefined || targetId === structure.id))
+  const service = world.structures.some(structure => (isAncientCasket256(structure) || structure.kind === 'cryptosleep-casket' || structure.kind === 'ship-cryptosleep-casket' || isSchema290OrLater(world.schemaVersion) && structure.kind === 'firefoam-popper') && footprintContains(structure, at) && (targetId === undefined || targetId === structure.id))
     || !actor346 && contextConsumesFood(world, selection, at, targetId)
     || targetId === undefined && world.structures.some(structure => structure.kind === 'mini-turret' && structure.x === at.x && structure.z === at.z);
   const orderRow = (option: OrderOption, pawnId: number, cell: Cell = at): NativeRow => {
@@ -185,13 +206,13 @@ export async function nativeOrderPage(
     const label = option.enabled && !direct ? `${queue ? 'Mettre en file :' : 'Prioriser :'} ${option.label}` : option.label;
     return commandRow(`order-${optionKey(option)}`, label, option.enabled, option.reason, async () => {
       const queued = shift();
-      if (queued && option.openCasketId !== undefined) throw new Error('Ouvrir est un ordre direct ; relâchez Maj.');
-      if (queued && option.consumePileId !== undefined) throw new Error('Consommer est un ordre direct ; relâchez Maj.');
+      if (Number(world.schemaVersion)<378&&queued && option.openCasketId !== undefined) throw new Error('Ouvrir est un ordre direct ; relâchez Maj.');
+      if (Number(world.schemaVersion)<378&&queued && option.consumePileId !== undefined) throw new Error('Consommer est un ordre direct ; relâchez Maj.');
       const fresh = (await client.orderOptions(pawnId, cell.x, cell.z, queued)).find(candidate => optionKey(candidate) === optionKey(option));
       if (!read()) return;
       if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Ce travail ou cet objet n’est plus disponible sur cette case.');
-      return optionCommand(fresh, pawnId, queued);
-    }, option.arrestPatientId !== undefined ? 'Tentative d’arrestation demandée ; l’acceptation sera vérifiée au contact.' : 'Ordre accepté.', option.warnings?.join(' · '));
+      return personalOrderCommands378(latest(),optionCommand(fresh, pawnId, queued),queued);
+    }, option.arrestPatientId !== undefined ? 'Tentative d’arrestation demandée ; l’acceptation sera vérifiée au contact.' : 'Ordre accepté.', option.warnings?.join(' · '),optionPriority(option));
   };
   /** The worker's own option query, kept to the drafted providers. */
   const draftedRows346 = async (actorId: number, self: boolean, cell: Cell = at): Promise<NativeRow[] | undefined> => {
@@ -204,9 +225,9 @@ export async function nativeOrderPage(
     const tacticalIds = new Set(selected.map(pawn => pawn.id));
     const cell346 = !!actor346 && (targetId === undefined || targetId === actor346.id) && draftedCellContext346(world, actor346, at);
     if (targetId === undefined || cell346) {
-      const pawns = tacticalPawns(world, tacticalIds);
+      const pawns = tacticalPawns(world, tacticalIds,queue);
       const move = (live: World): Command => {
-        const eligible = tacticalPawns(live, tacticalIds);
+        const eligible = tacticalPawns(live, tacticalIds,shift());
         if (!eligible.length) throw new Error('Mobilisez un colon libre et capable de se déplacer.');
         return {type: 'draft-move', pawnIds: eligible.map(pawn => pawn.id), target: at, queue: shift()};
       };
@@ -216,7 +237,7 @@ export async function nativeOrderPage(
         try {
           const rows = await draftedRows346(actor346!.id, true); if (!rows) return;
           const reason = pawns.length ? undefined : 'Mobilisez un colon libre et capable de se déplacer.';
-          rows.push(commandRow('drafted-goto', 'Aller ici', !reason, reason, move, moved));
+          rows.push(commandRow('drafted-goto', 'Aller ici', !reason, reason, move, moved,undefined,Priority.GoHere));
           // Core FloatMenu title: the single selected pawn's LabelCap.
           present({id: 'native-orders', title: pawnShortName(actor346!.name), rows});
         } catch (error) { fail(error); }
@@ -234,26 +255,27 @@ export async function nativeOrderPage(
       for (const option of shipCasketOptions277(world, actor, at, queue, targetId)) rows.push(commandRow(`ship-${JSON.stringify(option.command)}`, option.label, option.enabled, option.reason, live => {
         const fresh = shipCasketOptions277(live, actor, at, shift(), targetId).find(candidate => JSON.stringify(candidate.command) === JSON.stringify(option.command));
         if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Cette action de caisson spatial n’est plus disponible.');
-        return fresh.command;
-      }, 'Ordre de caisson spatial accepté.'));
+        return personalOrderCommands378(live,fresh.command,shift());
+      }, 'Ordre de caisson spatial accepté.',undefined,option.command.type==='order-carry-ship-casket'?Priority.RescueOrCapture:Priority.High));
     }
     if (rescue) rows.push(commandRow('tactical-rescue', rescue.label, rescue.enabled, rescue.reason, live => {
       const fresh = tacticalRescuePolicy(live, tacticalIds, targetId, shift());
       if (!fresh?.enabled || fresh.pawnId === undefined) throw new Error(fresh?.reason ?? 'Secours indisponible.');
-      return {type: 'order-rescue', pawnId: fresh.pawnId, patientId: fresh.patientId, queue: false};
-    }, `Secours demandé pour ${policy.target}.`));
+      return {type: 'order-rescue', pawnId: fresh.pawnId, patientId: fresh.patientId, queue: Number(live.schemaVersion)>=378&&shift()};
+    }, `Secours demandé pour ${policy.target}.`,undefined,Priority.RescueOrCapture));
     if (tending) rows.push(commandRow('tactical-tend', tending.label, tending.enabled, tending.reason, live => {
       const fresh = tacticalTendingPolicy(live, tacticalIds, targetId, shift());
       if (!fresh?.enabled || fresh.pawnId === undefined) throw new Error(fresh?.reason ?? 'Soins mobilisés indisponibles.');
-      return {type: 'order-drafted-tend', pawnId: fresh.pawnId, patientId: fresh.patientId, queue: false};
+      return personalOrderCommands378(live,{type: 'order-drafted-tend', pawnId: fresh.pawnId, patientId: fresh.patientId, queue:false},shift());
     }, `Soins sans médicament demandés pour ${policy.target}.`));
     if (!policy.reason) {
       if (policy.drafted < policy.selected) rows.push({id: 'tactical-excluded', label: `${policy.selected - policy.drafted} membre(s) non mobilisé(s) ou indisponible(s) exclus.`});
+      const target=combatTarget(world,targetId),attackPriority=target&&selected.some(p=>hostileTarget(p,target))?Priority.AttackEnemy:Priority.VeryLow;
       for (const option of policy.options) rows.push(commandRow(`attack-${option.kind}`, option.label, option.enabled, option.reason, live => {
         const fresh = tacticalAttackPolicy(live, tacticalIds, targetId, shift()), accepted = fresh.options.find(candidate => candidate.kind === option.kind);
         if (!accepted?.enabled) throw new Error(fresh.reason ?? accepted?.reason ?? 'Cette attaque n’est plus disponible.');
-        return {type: option.kind, pawnIds: accepted.pawnIds, targetId};
-      }, `${option.kind === 'shoot' ? 'Tir' : 'Mêlée'} demandé sur ${policy.target}.`));
+        return personalOrderCommands378(live,{type: option.kind, pawnIds: accepted.pawnIds, targetId},shift());
+      }, `${option.kind === 'shoot' ? 'Tir' : 'Mêlée'} demandé sur ${policy.target}.`,undefined,attackPriority));
     }
     const captive346 = actor346 ? draftedTarget346(world, targetId) : undefined;
     if (actor346 && captive346) {
@@ -275,14 +297,14 @@ export async function nativeOrderPage(
     const live = read(); if (!live) return;
     const rows: NativeRow[] = [];
     let firefoamCount = 0;
-    if ([290, 291, 292, 293,294,295,296,297,298,299,300,301,302].includes(live.schemaVersion)) {
+    if (isSchema290OrLater(live.schemaVersion)) {
       for (const structure of live.structures.filter(structure => structure.kind === 'firefoam-popper' && footprintContains(structure, at)).sort((a, b) => a.id - b.id)) {
         firefoamCount++;
-        const reason = queue ? 'Déclenchement direct ; relâchez Maj.' : queryFirefoamUseReason290(live, pawn.id, structure.id);
+        const reason = queue&&Number(live.schemaVersion)<378 ? 'Déclenchement direct ; relâchez Maj.' : queryFirefoamUseReason290(live, pawn.id, structure.id);
         rows.push(commandRow(`firefoam-${structure.id}`, 'Déclencher sur place : mousse anti-incendie', !reason, reason, currentWorld => {
-          const refusal = shift() ? 'Déclenchement direct ; relâchez Maj.' : queryFirefoamUseReason290(currentWorld, pawn.id, structure.id);
+          const refusal = shift()&&Number(currentWorld.schemaVersion)<378 ? 'Déclenchement direct ; relâchez Maj.' : queryFirefoamUseReason290(currentWorld, pawn.id, structure.id);
           if (refusal) throw new Error(refusal);
-          return {type: 'firefoam-trigger', pawnId: pawn.id, structureId: structure.id};
+          return personalOrderCommands378(currentWorld,{type: 'firefoam-trigger', pawnId: pawn.id, structureId: structure.id},shift());
         }, 'Déclenchement demandé : trajet et travail au contact.'));
       }
     }
@@ -290,25 +312,25 @@ export async function nativeOrderPage(
     for (const option of ship) rows.push(commandRow(`ship-${JSON.stringify(option.command)}`, option.label, option.enabled, option.reason, currentWorld => {
       const fresh = shipCasketOptions277(currentWorld, pawn.id, at, shift()).find(candidate => JSON.stringify(candidate.command) === JSON.stringify(option.command));
       if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Cette action de caisson spatial n’est plus disponible.');
-      return fresh.command;
-    }, 'Ordre de caisson spatial accepté.'));
+      return personalOrderCommands378(currentWorld,fresh.command,shift());
+    }, 'Ordre de caisson spatial accepté.',undefined,option.command.type==='order-carry-ship-casket'?Priority.RescueOrCapture:Priority.High));
 
     const cryptosleep = cryptosleepOptions271(live, pawn.id, at, queue);
     for (const option of cryptosleep) {
-      const prepare = (currentWorld: World, confirmed = false): Command | undefined => {
+      const prepare = (currentWorld: World, confirmed = false): PreparedOrders => {
         const fresh = cryptosleepOptions271(currentWorld, pawn.id, at, shift()).find(candidate => JSON.stringify(candidate.command) === JSON.stringify(option.command));
         if (!fresh?.enabled) throw new Error(fresh?.reason ?? 'Cette action de cryptosommeil n’est plus disponible.');
         if (fresh.confirmLast && fresh.command.type === 'order-enter-cryptosleep') {
-          if (confirmed) return {...fresh.command, confirmLastColonist: true};
+          if (confirmed) return personalOrderCommands378(currentWorld,{...fresh.command, confirmLastColonist: true},shift());
           const name = currentWorld.pawns.find(person => person.id === pawn.id)?.name ?? 'Ce colon';
           const cancel: NativeControl = {id: 'cryptosleep-cancel', label: 'Annuler', onActivate: () => nativeOrderPage(latest(), ids, at, _x, _y, queue, targetId, client, show)};
           const accept: NativeControl = {id: 'cryptosleep-confirm', label: 'Entrer en cryptosommeil', onActivate: () => run(next => prepare(next, true), 'Ordre de cryptosommeil accepté.')};
           present({id: 'native-cryptosleep-confirm', title: 'Dernier colon hors des caissons', layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{id: 'last-colon', label: `${name} est le dernier colon libre encore présent hors des caissons. Une autre personne devra ouvrir son caisson sur place. Continuer ?`}], actions: [cancel, accept]});
           return;
         }
-        return fresh.command;
+        return personalOrderCommands378(currentWorld,fresh.command,shift());
       };
-      rows.push(commandRow(`cryptosleep-${JSON.stringify(option.command)}`, option.label, option.enabled, option.reason, currentWorld => prepare(currentWorld), 'Ordre de cryptosommeil accepté.'));
+      rows.push(commandRow(`cryptosleep-${JSON.stringify(option.command)}`, option.label, option.enabled, option.reason, currentWorld => prepare(currentWorld), 'Ordre de cryptosommeil accepté.',undefined,option.command.type==='order-carry-cryptosleep'?Priority.RescueOrCapture:Priority.High));
     }
 
     for (const option of options) rows.push(orderRow(option, pawn.id));
@@ -316,7 +338,7 @@ export async function nativeOrderPage(
     if (fire) rows.push(commandRow(`fire-${fire.id}`, 'Prioriser : éteindre le feu', true, undefined, currentWorld => {
       const currentFire = currentWorld.fires?.items.find(candidate => candidate.id === fire.id), position = currentFire && firePosition(currentWorld, currentFire);
       if (!position || position.x !== at.x || position.z !== at.z) throw new Error('Ce feu n’est plus présent sur cette case.');
-      return {type: 'order-extinguish', pawnId: pawn.id, fireId: fire.id};
+      return personalOrderCommands378(currentWorld,{type: 'order-extinguish', pawnId: pawn.id, fireId: fire.id},shift());
     }, 'Extinction prioritaire demandée.'));
     // Core: an empty option list opens no float menu, and the menu carries
     // only its options (disabled ones with their reason), no explanatory line.

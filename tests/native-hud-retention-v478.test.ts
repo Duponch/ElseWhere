@@ -2,7 +2,11 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three/webgpu';
 import type {ItemId} from '../src/sim/items';
 import type {StatusAlert} from '../src/ui/status-alerts';
-import {NativeHudCards} from '../src/ui3d/native-hud';
+import {NativeHudCards,type NativeHudActions} from '../src/ui3d/native-hud';
+import {createWorld,applyCommand} from '../src/sim/index';
+import {addMaterial} from '../src/sim/materials';
+import {refreshNativePage} from '../src/ui3d/native-page-refresh';
+import type {NativePage,NativeUiState,NativeUiActions} from '../src/ui3d/native-contract';
 import {PALETTE, PrototypeCardboardArt, type CardboardPiece} from '../src/ui3d/prototype-art';
 
 type Command=unknown[];
@@ -44,12 +48,12 @@ interface HudAccess {
   refreshResources():void;
   refreshAlerts():void;
 }
-function fixture(){
+function fixture(options:Partial<NativeHudActions>={}){
   installPaint();
-  const art=new PrototypeCardboardArt(),root=new THREE.Group(),showPage=vi.fn();
+  const art=new PrototypeCardboardArt(),root=new THREE.Group(),showPage=vi.fn((page:NativePage)=>options.showPage?.(page));
   const anchors={topCenter:new THREE.Group(),topLeft:new THREE.Group(),topRight:new THREE.Group(),bottomRight:new THREE.Group()};
   root.add(...Object.values(anchors));
-  const hud=new NativeHudCards(art,anchors,{selectPawn:vi.fn(),speed:vi.fn(),showPage});
+  const hud=new NativeHudCards(art,anchors,{selectPawn:vi.fn(),speed:vi.fn(),...options,showPage});
   const access=hud as unknown as HudAccess;
   const piece=(id:string):CardboardPiece=>{
     let found:CardboardPiece|undefined;
@@ -69,6 +73,43 @@ const disposed=(resource:THREE.BufferGeometry|THREE.Material|THREE.Texture)=>{co
 const alert=(key:string,text:string):TestAlert=>({key,text,targets:[]});
 
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
+
+describe('HUD dossiers keep the accepted live facts',()=>{
+  it('refreshes an open roster and stock dossier on a same-tick accepted world without creating more HUD pieces',()=>{
+    const world=createWorld(8_530_099,16,16);world.piles=[];
+    for(const tile of world.tiles){tile.terrain='soil';delete tile.fogged;}
+    addMaterial(world,'wood',12,{type:'ground',x:4,z:4},'wood');
+    const state={world,epoch:99} as NativeUiState;let page:NativePage|undefined;
+    const f=fixture({readState:()=>state,showPage:p=>{page=p;}});
+    const access=f.hud as unknown as {showRoster:()=>void;showResources:()=>void;refreshPortraits:()=>void};
+    access.refreshPortraits=vi.fn();
+    try{
+      f.hud.update(world,0,60);access.showRoster();const previous=page!,tick=world.tick;
+      state.world=structuredClone(world);expect(applyCommand(state.world!,{type:'pawn-rename',pawnId:world.pawns[0]!.id,nick:'Lise',title:''})).toMatchObject({ok:true});
+      expect(state.world!.tick).toBe(tick);f.hud.update(state.world,0,60);page=refreshNativePage(page!,state,{} as NativeUiActions)!;
+      expect(page).not.toBe(previous);expect(page.rows.some(r=>r.label.includes('Lise'))).toBe(true);
+      access.showResources();expect(page!.rows.find(r=>r.id==='item-wood')?.detail).toContain('Sol 12');
+      const next=structuredClone(state.world!);addMaterial(next,'wood',7,{type:'ground',x:5,z:4},'wood');state.world=next;f.hud.update(next,0,60);
+      const pieces=f.art.pieceRevision;page=refreshNativePage(page!,state,{} as NativeUiActions)!;
+      expect(page.rows.find(r=>r.id==='item-wood')?.detail).toContain('Sol 19');expect(f.art.pieceRevision).toBe(pieces);
+    }finally{f.close();}
+  });
+  it('refreshes only the currently owned alert dossier when the delayed alert reading finishes while paused',()=>{
+    const state={world:createWorld(8_530_100,16,16),epoch:100} as NativeUiState;let page:NativePage|undefined,now=0;
+    const refresh=vi.fn(()=>{if(page)page=refreshNativePage(page,state,{} as NativeUiActions)??undefined;});
+    const f=fixture({readState:()=>state,showPage:p=>{page=p;},isCurrentPage:p=>page===p,refresh});
+    const access=f.hud as unknown as {clock:()=>number;showAlerts:()=>void;refreshPortraits:()=>void;animateAlerts:(delta:number)=>void};
+    Object.assign(access,{clock:()=>now,refreshPortraits:vi.fn()});
+    try{
+      f.hud.update(state.world,0,60);access.showAlerts();
+      now=100;state.world=structuredClone(state.world!);f.hud.update(state.world,0,60);
+      now=1001;access.animateAlerts(.1);expect(refresh).toHaveBeenCalledOnce();
+      page={id:'local-confirmation',title:'Confirmation',rows:[]};
+      now=1100;state.world=structuredClone(state.world!);f.hud.update(state.world,0,60);
+      now=2002;access.animateAlerts(.1);expect(refresh).toHaveBeenCalledOnce();expect(page.id).toBe('local-confirmation');
+    }finally{f.close();}
+  });
+});
 
 describe('retained native HUD resources',()=>{
   it('changes only affected ink and preserves canvases, GPU resources, hit meshes and hover state',()=>{
@@ -94,7 +135,7 @@ describe('retained native HUD resources',()=>{
       f.resources([['wood',11],['steel',20]]);
       expect(f.art.revision).toBe(revision);
       wood.userData.onClick?.();
-      expect(f.showPage.mock.lastCall?.[0].rows.find((row:{id:string})=>row.id==='item-wood').value).toBe('11 comptabilisé(s)');
+      expect(f.showPage.mock.lastCall![0].rows.find((row:{id:string})=>row.id==='item-wood')!.value).toBe('11 comptabilisé(s)');
     }finally{f.close();}
   });
 
@@ -218,6 +259,21 @@ describe('retained native HUD alerts',()=>{
 });
 
 describe('responsive retained HUD reservations · V485',()=>{
+  it('preserves existing portrait sheets, images and hit planes across guidance reservations and height changes',()=>{
+    const f=fixture(),world=createWorld(8_530_107,16,16);
+    const access=f.hud as unknown as {clock:()=>number;barPiece:CardboardPiece;portraits:Array<{image:unknown;piece:CardboardPiece}>};
+    access.clock=()=>1000;
+    try{
+      f.hud.update(world,0,60);expect(access.portraits.length).toBeGreaterThan(0);
+      const sheet=access.barPiece,original=access.portraits.map(entry=>({image:entry.image,piece:entry.piece}));
+      const version=sheet.userData.texture.version;
+      f.hud.setViewport(1440,900,.01,110,330);f.hud.setViewport(1440,850,.01,120,250);
+      expect(access.barPiece).toBe(sheet);expect(access.barPiece.userData.texture.version).toBe(version);
+      for(let i=0;i<original.length;i++){expect(access.portraits[i]!.piece).toBe(original[i]!.piece);expect(access.portraits[i]!.image).toBe(original[i]!.image);}
+      f.hud.setViewport(1400,850,.01,120,250);expect(access.barPiece).not.toBe(sheet);
+    }finally{f.close();}
+  });
+
   it('uses one compact Stocks control in a short left lane and opens every unchanged resource record',()=>{
     const f=fixture();
     try{
@@ -228,7 +284,7 @@ describe('responsive retained HUD reservations · V485',()=>{
       expect(shown).toEqual(['hud:resource:compact']);expect(compact.userData.paper).toBe(false);
       expect(compact.userData.tooltip).toContain('tous les stocks');
       compact.userData.onClick?.();
-      const page=f.showPage.mock.lastCall?.[0];expect(page.id).toBe('hud-resources');
+      const page=f.showPage.mock.lastCall![0];expect(page.id).toBe('hud-resources');
       expect(page.rows.filter((row:{id:string})=>row.id.startsWith('item-'))).toEqual([
         expect.objectContaining({id:'item-wood',value:'12 comptabilisé(s)',detail:expect.stringContaining('Sol 12')}),
         expect.objectContaining({id:'item-steel',value:'20 comptabilisé(s)',detail:expect.stringContaining('Sol 20')}),

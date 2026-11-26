@@ -1,4 +1,8 @@
 import {validPlantLife} from '../sim/plant-life-save.ts';
+import {createPersonalOrdersTransportValidators378} from './personal-orders-transport-378.ts';
+import {createResidentConstructionValidators379} from '../sim/construction-forbid-save-379.ts';
+import {isOrdinaryResidentOwnerRecord379,residentOwnerRecord379,createResidentOwnerLeafRun379,residentOwnerArray379,residentOwnerArraySlice379} from './resident-owner-records-379';
+import {validateCarryQuantities379} from '../sim/carry-quantity-379.ts';
 import {validFrameProjection301} from '../sim/finish-frame-save-301.ts';
 import {validHumanIngestionProjection299} from '../sim/human-ingestion-save-299.ts';
 import {validIdleWanderProjection300} from '../sim/idle-wander-save-300.ts';
@@ -53,14 +57,34 @@ import {groupWorld} from '../sim/world-map-authority';
 import {SnapshotChangeJournal,StructureChangeJournal,ResourceStructureJournal,
  type ResourceStructureCandidate,type SnapshotMessage,type SnapshotAdoption,pileWithRot} from './snapshots';
 import {ResidentResourceBaseJournal} from './resident-resource-base-journal';
+import {ResidentCollectionJournal379} from './resident-collection-journal-379';
 import {canReuseResidentAuxiliaryStockpiles} from './resident-auxiliary-sections';
+import {hasOwnedRetainedJobsShape379} from './resident-full-retained-379';
+import {hasOwnedResidentActorShapeInternal,createResidentActorTransportMemoInternal} from './resident-actors-section';
+import {hasOwnedResidentResourceShape379,hasOwnedResidentResourceTransport379,readPreparedResidentResources379} from './resident-resource-section-379';
+import {hasOwnedResidentStructureShape379,createResidentStructureTransport379,readPreparedResidentStructures379} from './resident-structures-section-379';
 import {validGiftHistoricalTransport274} from '../sim/diplomatic-gift-transport-274';
 
 const own=(value:object,key:PropertyKey):boolean=>Object.hasOwn(value,key);
+function ownerTransportMemo379(dependencies:ReadonlySet<PropertyKey>,negativeKeys:ReadonlySet<PropertyKey>){
+ const actors=createResidentActorTransportMemoInternal(dependencies);
+ const structures=createResidentStructureTransport379(negativeKeys);
+ return {...actors,array:structures.array,read:(value:object,version:number,role:number)=>hasOwnedResidentResourceTransport379(value,negativeKeys)||structures.read(value)?0:actors.read(value,version,role)};
+}
+const personalOrdersValidators378=createPersonalOrdersTransportValidators378(isOrdinaryResidentOwnerRecord379,ownerTransportMemo379);
+const constructionValidators379=createResidentConstructionValidators379(isOrdinaryResidentOwnerRecord379,createResidentOwnerLeafRun379,ownerTransportMemo379);
 function record(value:unknown):value is Record<string,unknown> {
- return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.getPrototypeOf(value)===Object.prototype
-  &&Reflect.ownKeys(value).every(key=>typeof key==='string'&&Object.getOwnPropertyDescriptor(value,key)?.enumerable===true
-   &&own(Object.getOwnPropertyDescriptor(value,key)!,'value'));
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.getPrototypeOf(value)!==Object.prototype)return false;
+ // Genuine native clones and our own spread records cannot acquire Proxy
+ // traps. No user code can run between these built-in reads, so one current
+ // descriptor proves both enumerable and own-data. Mutable keys/prototypes
+ // are still checked anew; public/Proxy inputs keep their original reads.
+ if(isOrdinaryResidentOwnerRecord379(value))return Reflect.ownKeys(value).every(key=>{
+  const field=typeof key==='string'?Object.getOwnPropertyDescriptor(value,key):undefined;
+  return field?.enumerable===true&&own(field,'value');
+ });
+ return Reflect.ownKeys(value).every(key=>typeof key==='string'&&Object.getOwnPropertyDescriptor(value,key)?.enumerable===true
+  &&own(Object.getOwnPropertyDescriptor(value,key)!,'value'));
 }
 function dense(value:unknown):value is unknown[] {
  if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype||Reflect.ownKeys(value).length!==value.length+1)return false;
@@ -89,12 +113,12 @@ type Patch<T>={removed:number[];upserted:T[];order?:number[];growth?:Float64Arra
 /** Complete check of a record rebuilt from a plant age tuple (see ResourceChanges.life). */
 type LifeCheck<T>=(value:T)=>boolean;
 const lifeTuples=(life:unknown,limit:number):life is Float64Array=>life instanceof Float64Array&&Object.getPrototypeOf(life)===Float64Array.prototype&&life.length%4===0&&life.length<=limit*4;
-type Prepared<T>={values:T[];slots:Map<number,number>;indices:number[]|undefined;edge:ResourceStructureCandidate|undefined;baseEdge:ResourceStructureCandidate|undefined};
+type Prepared<T>={values:T[];slots:ReadonlyMap<number,number>;indices:number[]|undefined;edge:ResourceStructureCandidate|undefined;baseEdge:ResourceStructureCandidate|undefined};
 
 /** Sparse existing-ID upserts and growth have no membership/order edits.
  * Keep all tuple guards and BASE upserts, without a writes Map or ID rescans.
  * A new ID/inconsistent index falls back without changing any owner. */
-function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,upserted:T[],growthRaw:unknown,nextId:number,growthTick:number,lifeRaw?:unknown,validLife?:LifeCheck<T>):Prepared<T>|undefined|null {
+function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:ReadonlyMap<number,number>,upserted:T[],growthRaw:unknown,nextId:number,growthTick:number,lifeRaw?:unknown,validLife?:LifeCheck<T>):Prepared<T>|undefined|null {
  // Either list may be absent; a present one keeps every tuple guard.
  const growth=growthRaw===undefined?new Float64Array():growthRaw,life=lifeRaw===undefined?new Float64Array():lifeRaw;
  if(!(growth instanceof Float64Array)||Object.getPrototypeOf(growth)!==Float64Array.prototype
@@ -106,7 +130,7 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
  // New IDs require the unchanged generic membership reconstruction.
  for(const value of upserted){
   const slot=oldSlots.get(value.id);if(slot===undefined||previous[slot]?.id!==value.id)return null;
-  if(values===previous)values=previous.slice();values[slot]=value;
+  if(values===previous)values=residentOwnerArraySlice379(previous);values[slot]=value;
   touched.add(value.id);indices.push(slot);updated.push({id:value.id,afterOrdinal:slot});baseUpdated.push({id:value.id,afterOrdinal:slot});
  }
  for(let index=0;index<growth.length;index+=4){
@@ -115,18 +139,18 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
    ||!Number.isFinite(value)||value<0||value>1||!integer(tick,0,growthTick)
    ||!Number.isNaN(factor)&&(!Number.isFinite(factor)||factor<0||factor>1))return;
   if(slot===undefined||old.id!==id)return null;
-  const changed={...old,growth:value,growthTick:tick};
+  const changed=residentOwnerRecord379(old,{growth:value,growthTick:tick});
   if(Number.isNaN(factor))delete changed.growthThermalFactor;else changed.growthThermalFactor=factor;
-  if(values===previous)values=previous.slice();values[slot]=changed;
+  if(values===previous)values=residentOwnerArraySlice379(previous);values[slot]=changed;
   touched.add(id);indices.push(slot);updated.push({id,afterOrdinal:slot});
  }
  for(let index=0;index<life.length;index+=4){
   const id=life[index]!,slot=oldSlots.get(id),old=previous[slot??-1] as (T&Partial<Resource>)|undefined;
   if(!integer(id,1,nextId-1)||!old||!record(old.plantLife)||touched.has(id))return;
   if(slot===undefined||old.id!==id)return null;
-  const changed={...old,plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}} as T;
+  const changed=residentOwnerRecord379(old,{plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}}) as T;
   if(!validLife!(changed))return;
-  if(values===previous)values=previous.slice();values[slot]=changed;
+  if(values===previous)values=residentOwnerArraySlice379(previous);values[slot]=changed;
   touched.add(id);indices.push(slot);updated.push({id,afterOrdinal:slot});
  }
  const edge:ResourceStructureCandidate={beforeCount:previous.length,afterCount:values.length,removed:[],added:[],updated};
@@ -135,7 +159,7 @@ function patchSparseGrowth<T extends {id:number}>(previous:T[],oldSlots:Map<numb
 
 /** No private index points at a mutable producer object. Membership/order
  * changes rebuild only that collection; sparse edits keep its stable slots. */
-function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number,number>,raw:unknown,nextId:number,
+function patchCollection<T extends {id:number}>(previous:T[],oldSlots:ReadonlyMap<number,number>,raw:unknown,nextId:number,
  growthTick?:number,validLife?:LifeCheck<T>,rotTick?:number):Prepared<T>|undefined {
  if(!record(raw)||Object.keys(raw).some(key=>!['removed','upserted','order',...(growthTick===undefined?[]:['growth']),...(validLife?['life']:[]),...(rotTick===undefined?[]:['rotClock'])].includes(key))
   ||!own(raw,'removed')||!own(raw,'upserted')||!dense(raw.removed)||!identified(raw.upserted,nextId)
@@ -165,7 +189,7 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
    if(!integer(id,1,nextId-1)||!old||typeof old.growth!=='number'||touched.has(id)
     ||!Number.isFinite(value)||value<0||value>1||!integer(tick,0,growthTick)
     ||!Number.isNaN(factor)&&(!Number.isFinite(factor)||factor<0||factor>1))return;
-   const updated={...old,growth:value,growthTick:tick};
+   const updated=residentOwnerRecord379(old,{growth:value,growthTick:tick});
    if(Number.isNaN(factor))delete updated.growthThermalFactor;else updated.growthThermalFactor=factor;
    touched.add(id);write(updated);
   }
@@ -176,7 +200,7 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
   for(let index=0;index<life.length;index+=4){
    const id=life[index]!,old=read(id) as (T&Partial<Resource>)|undefined;
    if(!integer(id,1,nextId-1)||!old||!record(old.plantLife)||touched.has(id))return;
-   const updated={...old,plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}} as T;
+   const updated=residentOwnerRecord379(old,{plantLife:{...old.plantLife,age:life[index+1]!,darkTicks:life[index+2]!,nextCheck:life[index+3]!}}) as T;
    if(!validLife(updated))return;
    touched.add(id);write(updated);
   }
@@ -190,7 +214,7 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
    const id=rot[index]!,progress=rot[index+1]!,atTick=rot[index+2]!,rate=rot[index+3]!,old=read(id) as (T&Partial<MaterialPile>)|undefined;
    if(!integer(id,1,nextId-1)||!old||touched.has(id)||!Number.isFinite(progress)||progress<0||!integer(atTick,0,rotTick)
     ||!Number.isNaN(rate)&&(!Number.isFinite(rate)||rate<0||rate>1))return;
-   touched.add(id);write(pileWithRot(old as unknown as MaterialPile,progress,atTick,rate) as unknown as T);
+   touched.add(id);write(residentOwnerRecord379(pileWithRot(old as unknown as MaterialPile,progress,atTick,rate),{}) as unknown as T);
   }
  }
  let values:T[];
@@ -200,11 +224,11 @@ function patchCollection<T extends {id:number}>(previous:T[],oldSlots:Map<number
   values=order.map(id=>byId!.get(id)!);
  }else if(!sparse){
   if(touched.size){
-   const gone=new Set(patch.removed);values=[];
+   const gone=new Set(patch.removed);values=residentOwnerArray379<T>();
    for(const value of previous)if(!gone.has(value.id))values.push(writes.get(value.id)??value);
    for(const value of patch.upserted)if(!oldSlots.has(value.id))values.push(writes.get(value.id)!);
   }else values=previous;
- }else if(writes.size){values=previous.slice();for(const [id,value]of writes)values[oldSlots.get(id)!]=value;}
+ }else if(writes.size){values=residentOwnerArraySlice379(previous);for(const [id,value]of writes)values[oldSlots.get(id)!]=value;}
  else values=previous;
  const nextSlots=sparse?oldSlots:slots(values),indices=sparse?[...touched].map(id=>nextSlots.get(id)!):undefined;
  // Without explicit order, Map deletion/insertion preserves survivors and
@@ -255,17 +279,17 @@ function localShape(raw:unknown,checkpoint:boolean,sparseStructures:boolean,reus
  if(!integer(raw.nextId,1))return 'nextId';
  if(!integer(raw.width,1,MAX_EXTENDED_MAP_SIZE)||!integer(raw.height,1,MAX_EXTENDED_MAP_SIZE))return 'dimensions';
  if(!integer(raw.seed,0,0xffffffff)||!integer(raw.rng,0,0xffffffff))return 'seed/rng uint32';
- for(const key of ['pawns','jobs','stockpiles','growingZones'])if(!(key==='stockpiles'&&reuseStockpiles)&&!identified(raw[key],raw.nextId))return key+' IDs';
+ for(const key of ['pawns','jobs','stockpiles','growingZones'])if(!(key==='stockpiles'&&reuseStockpiles)&&!(key==='pawns'&&hasOwnedResidentActorShapeInternal(raw[key],raw.nextId))&&!(key==='jobs'&&hasOwnedRetainedJobsShape379(raw[key],raw.nextId))&&!identified(raw[key],raw.nextId))return key+' IDs';
  for(const key of ['packed','events'])if(!rows(raw[key]))return key+' data rows';
  if(own(raw,'campaignMap')){
   const metadata=raw.campaignMap;if(!record(metadata))return 'campaignMap record';
   if(metadata.revision===2){if(!projectionReferences(metadata,true))return 'campaignMap references';}
   else if(own(metadata,'revision')||!['home','secondary'].includes(String(metadata.active)))return 'legacy campaignMap';
  }
- if(sparseStructures?own(raw,'structures'):!identified(raw.structures,raw.nextId))return 'structures form';
+ if(sparseStructures?own(raw,'structures'):!hasOwnedResidentStructureShape379(raw.structures,raw.nextId)&&!identified(raw.structures,raw.nextId))return 'structures form';
  if(checkpoint){
   if(!rows(raw.tiles)||raw.tiles.length!==raw.width*raw.height)return 'tiles extent/data rows';
-  if(!identified(raw.resources,raw.nextId))return 'resources IDs';
+  if(!hasOwnedResidentResourceShape379(raw.resources,raw.nextId)&&!identified(raw.resources,raw.nextId))return 'resources IDs';
   if(!identified(raw.piles,raw.nextId))return 'piles IDs';
  }else if(own(raw,'tiles')||own(raw,'resources')||own(raw,'piles'))return 'ambiguous dynamic collections';
 }
@@ -293,9 +317,9 @@ export class ResidentPresentationAssembler {
  private current:World|undefined;
  private lastDeepValidationAt=-Infinity;
  private deepValidationDue():boolean {return residentDeltaValidationIntervalMs<=0||residentClock()-this.lastDeepValidationAt>=residentDeltaValidationIntervalMs;}
- private resourceSlots=new Map<number,number>();
- private pileSlots=new Map<number,number>();
- private structureSlots=new Map<number,number>();
+ private resourceSlots:ReadonlyMap<number,number>=new Map<number,number>();
+ private pileSlots:ReadonlyMap<number,number>=new Map<number,number>();
+ private structureSlots:ReadonlyMap<number,number>=new Map<number,number>();
  private calendar?:number;
  private birth:ReturnType<typeof captureNativeWorldPawnBirth256>;
  private factions:ReturnType<typeof captureFactionInitializations256>;
@@ -304,6 +328,9 @@ export class ResidentPresentationAssembler {
  private readonly structures=new StructureChangeJournal();
  private readonly resourceStructure=new ResourceStructureJournal();
  private readonly resourceBase=new ResidentResourceBaseJournal();
+ private readonly resourceDirectory379=new ResidentCollectionJournal379('resources');
+ private readonly pileDirectory379=new ResidentCollectionJournal379('piles');
+ private readonly structureDirectory379=new ResidentCollectionJournal379('structures');
  prepareDraftPreview(packet:unknown){return this.geography.prepareDraftPreview(packet);}
  authorizeDraftPreview(preview:import('../sim/world-geography-owner-256').DraftGeographyPreview256):void {this.geography.authorizeDraftPreview(preview);}
  discardDraftPreview():void {this.geography.discardDraftPreview();}
@@ -325,6 +352,8 @@ export class ResidentPresentationAssembler {
   const fail=(reason='Projection de campagne illisible.'):CampaignAdoption=>({status:'resync',reason});
   const header=this.header(packet);if(header==='stale')return {status:'stale'};if(header==='invalid'||packet.type!=='campaign-only'||Object.keys(packet).some(key=>!['type','epoch','revision','stepMs','speed','summary','urgentThreats','geography'].includes(key))||!record(packet.summary))return fail();
   const raw=packet.summary;
+  if('banishedDepartures378'in raw||!personalOrdersValidators378.transport(raw,Number(raw.schemaVersion)))return fail();
+  if(!constructionValidators379.transport(raw,Number(raw.schemaVersion)))return fail();
   if(!validWallDoorHistoricalTransport296(raw,raw.schemaVersion))return fail();
   // The two campaign-owned fields travel together. Reuse their native scalar
   // registry contract, without scanning alcohol dossiers in this read model.
@@ -339,6 +368,7 @@ export class ResidentPresentationAssembler {
   if(!validPhaseCore297(raw,Number(raw.schemaVersion))||!validCorePathBudget297(raw,Number(raw.schemaVersion),Number(raw.tick),isCorePhysicalSchema297(raw.schemaVersion)?Number(raw.phaseCore297):0,false))return fail('Physical mapless clock or unexpected local path budget');
   const geographic=this.geography.prepare(raw,packet.geography,own(packet,'geography'),packet.epoch!==this.epoch);if(!geographic.ok)return fail();
   const summary={...geographic.state},view=groupWorld(summary,null),calendar=summary.planet?.revision===3?summary.calendarOrigin:undefined;
+  if(!view||!personalOrdersValidators378.projection(view))return fail();
   if(!view||!validHumanIngestionProjection299(view,view.schemaVersion)||!validIdleWanderProjection300(view,view.schemaVersion)||!validFrameProjection301(view,view.schemaVersion)||!validPeaceTalksBindings293(summary)||!validFirefoamWorld290(summary)||!validBillPauseWorld289(summary)||!validAnimalThermalRefugeWorld288(summary)||!validAnimalAreaWorld287(summary)||!validResidentTradeRequests284(view,summary)||!validLinkedStorageProjection286(summary)||!validBillWorkerWorld283(view)||!validCoupleProjection285(view)||!this.chronology(view,packet.epoch,calendar)||acceptExtra&&!acceptExtra(view)||!this.geography.canCommit(geographic))return fail();
   // Freezing is a representation adapter for exact native slots/free lists,
   // never inferred from final membership. Only the candidate is written.
@@ -361,6 +391,8 @@ export class ResidentPresentationAssembler {
   if(own(packet,'corePhase297')&&!isCorePhysicalSchema297(Number(packet.world?.schemaVersion)))return fail('Future physical header on historical resident World');
   const checkpoint=packet.kind==='checkpoint',sparseStructures=!checkpoint&&own(packet,'structures');
   const malformed=localShape(packet.world,checkpoint,sparseStructures,!checkpoint&&canReuseResidentAuxiliaryStockpiles(packet,this.current));if(malformed)return fail('Invalid resident shape: '+malformed);
+  if(!personalOrdersValidators378.transport(packet,Number(packet.world.schemaVersion)))return fail('Invalid or future personal orders transport');
+  if(!constructionValidators379.transport(packet,Number(packet.world.schemaVersion)))return fail('Invalid or future construction permission/material provenance');
   // Deep save-grade validation: every checkpoint, the first delta after it,
   // and then at most once per residentDeltaValidationIntervalMs (0 = always).
   const deep=packet.kind==='checkpoint'||!this.current||this.deepValidationDue();
@@ -377,6 +409,8 @@ export class ResidentPresentationAssembler {
   }
   if(checkpoint&&['tiles','resources','piles','structures','baseRevision'].some(key=>own(packet,key)))return fail('Ambiguous resident checkpoint');
   const previous=this.current;
+  const resourceDraft379=readPreparedResidentResources379(packet,previous);
+  const structureDraft379=readPreparedResidentStructures379(packet,previous);
   if(!checkpoint&&(!previous||packet.epoch!==this.epoch||packet.baseRevision!==this.revision||packet.revision!==packet.baseRevision+1
    ||packet.world.schemaVersion!==previous.schemaVersion||packet.world.width!==previous.width||packet.world.height!==previous.height||packet.world.seed!==previous.seed
    ||mapIdentity(packet.world)!==mapIdentity(previous)||packet.world.tick<previous.tick))return fail('Missing resident predecessor or changed map.');
@@ -387,34 +421,41 @@ export class ResidentPresentationAssembler {
   const river=prepareRiverWaterSnapshot256(dynamic,dynamic.schemaVersion,previous,{kind:packet.kind,epoch:packet.epoch,revision:packet.revision,
    ...packet.kind==='delta'?{baseRevision:packet.baseRevision}:{},previousEpoch:this.epoch,previousRevision:this.revision});
   if(!river.ok)return fail('Invalid resident river reference');if(river.inherited)dynamic={...dynamic,riverWater:river.owner!};
-  let next:World,resourceSlots:Map<number,number>,pileSlots:Map<number,number>,structureSlots:Map<number,number>;
+  let next:World,resourceSlots:ReadonlyMap<number,number>,pileSlots:ReadonlyMap<number,number>,structureSlots:ReadonlyMap<number,number>;
   let resourceIndices:number[]|undefined=[],structureIndices:number[]|undefined=[],tileIndices:number[]=[];
-  let edge:ResourceStructureCandidate|undefined,baseEdge:ResourceStructureCandidate|undefined;
+  let edge:ResourceStructureCandidate|undefined,baseEdge:ResourceStructureCandidate|undefined,pileEdge:ResourceStructureCandidate|undefined,structureEdge:ResourceStructureCandidate|undefined;
   if(checkpoint){
-   next={...dynamic} as World;resourceSlots=slots(next.resources);pileSlots=slots(next.piles);structureSlots=slots(next.structures);
+   next={...dynamic} as World;resourceSlots=resourceDraft379?.state.slots??slots(next.resources);pileSlots=slots(next.piles);structureSlots=structureDraft379?.state?.slots??slots(next.structures);
   }else{
    let tiles=previous!.tiles,resources=previous!.resources,piles=previous!.piles,structures=dynamic.structures;
    resourceSlots=this.resourceSlots;pileSlots=this.pileSlots;structureSlots=this.structureSlots;
    edge={beforeCount:resources.length,afterCount:resources.length,removed:[],added:[],updated:[]};
    baseEdge=edge;
+   pileEdge={beforeCount:piles.length,afterCount:piles.length,removed:[],added:[],updated:[]};
    if(own(packet,'tiles')){const prepared=tileChanges(tiles,packet.tiles);if(!prepared)return fail('Invalid resident tile indices');tiles=prepared.tiles;tileIndices=prepared.indices;}
-   if(own(packet,'resources')){
+   if(resourceDraft379){
+    resources=resourceDraft379.state.values;resourceSlots=resourceDraft379.state.slots;resourceIndices=resourceDraft379.indices;edge=resourceDraft379.edge;baseEdge=resourceDraft379.baseEdge;
+   }else if(own(packet,'resources')){
     const prepared=patchCollection(resources,this.resourceSlots,packet.resources,dynamic.nextId,dynamic.tick,value=>validPlantLife(value,dynamic.schemaVersion,dynamic));if(!prepared)return fail('Invalid resident resource references');
     resources=prepared.values;resourceSlots=prepared.slots;resourceIndices=prepared.indices;edge=prepared.edge;baseEdge=prepared.baseEdge;
    }
    if(own(packet,'piles')){
     const prepared=patchCollection(piles,this.pileSlots,packet.piles,dynamic.nextId,undefined,undefined,dynamic.tick);if(!prepared)return fail('Invalid resident pile references');
-    piles=prepared.values;pileSlots=prepared.slots;
+    piles=prepared.values;pileSlots=prepared.slots;pileEdge=prepared.edge;
    }
-   if(sparseStructures){
+   if(structureDraft379?.state){
+    structures=structureDraft379.state.values;structureSlots=structureDraft379.state.slots;structureIndices=structureDraft379.indices;structureEdge=structureDraft379.edge;
+   }else if(sparseStructures){
     const prepared=patchCollection(previous!.structures,this.structureSlots,packet.structures,dynamic.nextId);if(!prepared)return fail('Invalid resident structure references');
-    structures=prepared.values;structureSlots=prepared.slots;structureIndices=prepared.indices;
+    structures=prepared.values;structureSlots=prepared.slots;structureIndices=prepared.indices;structureEdge=prepared.edge;
    }else {structureSlots=slots(structures!);structureIndices=undefined;}
    // Preserve historical root key order and complete dynamic replacement:
    // missing optional fields are removed, never resurrected from an old World.
    next={...previous,...dynamic,structures,tiles,resources,piles} as World;
    for(const key of Object.keys(previous!)as (keyof World)[])if(key!=='tiles'&&key!=='resources'&&key!=='piles'&&key!=='structures'&&!own(dynamic,key))delete (next as Partial<World>)[key];
   }
+  if(!personalOrdersValidators378.projection(next))return fail('Invalid personal identity, ordered queue, animal work or banishment owner');
+  if(constructionValidators379.world(next,Number(next.schemaVersion)).length||validateCarryQuantities379(next,Number(next.schemaVersion)).length)return fail('Invalid construction permission/material provenance or carried quantity');
   if(deep){
   if(!validPeaceTalksBindings293(next)||!validPartyWorld292(next)||!validForestryPolicies291(next))return fail('Invalid or locked forest growing policy');
   // Both transport fences already accepted this exact packet and schema above.
@@ -448,6 +489,11 @@ export class ResidentPresentationAssembler {
   else {this.changes.append(previous,next,packet.epoch,packet.revision,resourceIndices,tileIndices);this.structures.append(previous,next,packet.epoch,packet.revision,structureIndices,tileIndices);this.resourceStructure.append(previous,next,packet.epoch,packet.revision,edge,tileIndices,next.resources.length);}
   if(checkpoint||!previous)this.resourceBase.reset(next,packet.epoch,packet.revision,next.resources.length);
   else this.resourceBase.append(previous,next,packet.epoch,packet.revision,baseEdge,next.resources.length);
+  if(checkpoint||!previous){
+   this.resourceDirectory379.reset(next,packet.epoch,packet.revision,resourceSlots);this.pileDirectory379.reset(next,packet.epoch,packet.revision,pileSlots);this.structureDirectory379.reset(next,packet.epoch,packet.revision,structureSlots);
+  }else{
+   this.resourceDirectory379.append(previous,next,packet.epoch,packet.revision,resourceSlots,edge);this.pileDirectory379.append(previous,next,packet.epoch,packet.revision,pileSlots,pileEdge);this.structureDirectory379.append(previous,next,packet.epoch,packet.revision,structureSlots,structureEdge);
+  }
   return {status:'applied',world:next,replaced};
  }
 }

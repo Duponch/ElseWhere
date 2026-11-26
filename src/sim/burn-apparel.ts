@@ -1,3 +1,4 @@
+import {pileById,filterPileEntries} from './pile-identity-directory.ts';
 import { allowedAreaWorkAllowed } from './allowed-area-state.ts';
 import { isColonist } from './affiliation.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
@@ -24,7 +25,7 @@ export function finishBurnApparel(world:World,pawn:Pawn,bill:CookingBill,context
     ||!world.pawns.includes(pawn)||!isColonist(pawn)||pawn.prisoner||pawn.visitor||pawn.raid||pawn.podRescue
     ||(pawn.motion?.end??0)>world.tick||pawn.moveCooldown>0||pawn.stun||pawn.draft||pawn.burning||pawn.mental?.crisis||pawn.collapsePending
     ||medicalWorkRefusal(pawn)||backgroundWorkRefusal(pawn,'haul')||workPriority(pawn,'haul')===0||!allowedAreaWorkAllowed(world,pawn))return false;
-  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,garment=world.piles.find(p=>p.id===ingredient.pileId);
+  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,garment=pileById(world,ingredient.pileId);
   if(!station||station.kind!=='electric-crematorium'&&station.kind!=='campfire'||!productionStationUsable(station)||!foodStationUsable(station)||!station.bills?.includes(bill)
     ||bill.id!==task.billId||!isBurnApparelRecipe(bill.recipe)||!validBillSettings(bill,bill.recipe,world.schemaVersion)||bill.suspended||!['times','forever'].includes(bill.mode)||bill.destination!=='drop'
     ||!Number.isSafeInteger(bill.target)||bill.target<0||bill.target>9999||bill.mode==='times'&&bill.target<=0
@@ -35,7 +36,7 @@ export function finishBurnApparel(world:World,pawn:Pawn,bill:CookingBill,context
     ||reservedSource(world,garment.id,pawn.id)>0||pawn.interruptedCargo
     ||world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id)||world.packed.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id))return false;
   const loss=neutralLossPlan(world,{items:{[garment.item]:1}});if(!loss)return false;
-  world.piles=world.piles.filter(p=>p!==garment);world.destroyed=loss;
+  world.piles=filterPileEntries(world.piles,p=>p!==garment);world.destroyed=loss;
   if(bill.mode==='times')bill.target--;
   pawn.cooking=null;if(pawn.orders.active==='cook')pawn.orders.active=null;
   pawn.path=[];pawn.state='idle';pawn.planCooldown=0;

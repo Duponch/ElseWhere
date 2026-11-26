@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {registeredCampaign,registeredMapId} from './world-map-context.ts';
 import {draftForeignRoster261} from './caravan-foreign-roster-261.ts';
@@ -18,5 +19,5 @@ export function createBattlefieldPressureHumanRaid261(map:World,points:number,ra
  // budget freshly as role evidence without rerolling or selecting new people.
  const composition=roster.composition;if(!composition)return false;
  for(let i=0;i<roster.people.length;i++){const p=roster.people[i]!;Object.assign(p,entries[i]!);p.raid={group:serial,exiting:false,goal:null};}
- map.pawns.push(...roster.people);map.piles.push(...roster.items);root.nextId=roster.nextId;s.serial=serial;s.nextCheck=null;s.active={id:serial,startedAt:map.tick,deadline,lossPermille,members:roster.people.map(p=>p.id),lost:[],phase:'assault',composition,caravan261:{revision:1,kind:'pressure',sourceMapId:id!,bornAtCore:map.tick*10,factionId}};random.rng=draft.rng;return true;
+ map.pawns.push(...roster.people);appendPileEntries(map.piles,...roster.items);root.nextId=roster.nextId;s.serial=serial;s.nextCheck=null;s.active={id:serial,startedAt:map.tick,deadline,lossPermille,members:roster.people.map(p=>p.id),lost:[],phase:'assault',composition,caravan261:{revision:1,kind:'pressure',sourceMapId:id!,bornAtCore:map.tick*10,factionId}};random.rng=draft.rng;return true;
 }

@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {markTerrainCellChanged} from './terrain-mutation-journal.ts';
 import {refreshDuckWaterCell256} from './duck-water-256.ts';
 import {registeredMapId,registeredMap,registeredMapForValidation,captureLocalMap,registeredCampaign} from './world-map-context.ts';
@@ -50,7 +51,7 @@ export function finishBridge(w:World,job:Job):boolean {
   if(held.some(p=>p.item!=='wood')||held.reduce((n,p)=>n+p.quantity,0)!==BRIDGE_WOOD)return false;
   if(w.resources.some(r=>same(r,job)&&constructionPlantBlocks(job,r)))return false;
   const retirement=planConstructionPlantRetirement(w,job,job.id);if(!retirement||!commitConstructionPlantRetirement(w,retirement))return false;
-  w.piles=w.piles.filter(p=>p.owner.type!=='job'||p.owner.jobId!==job.id);
+  w.piles=filterPileEntries(w.piles,p=>p.owner.type!=='job'||p.owner.jobId!==job.id);
   w.tiles[job.z*w.width+job.x]!.bridge=true;markTerrainCellChanged(w.tiles,job.z*w.width+job.x);job.escrow.wood=job.escrow.food=0;refreshDuckWaterCell256(w,job);refreshStock(w);
   announce(w,'Pont termine ; '+below(w.tiles[job.z*w.width+job.x]!.terrain)+' conserve sous la fondation.');return true;
 }

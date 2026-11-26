@@ -1,6 +1,9 @@
 import {APPAREL} from './apparel-definitions.ts';
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import type {ApparelItem} from './apparel-definitions.ts';
 import type {MaterialPile,World} from './types.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {markPileIdentityUnknownWrite} from './pile-identity-directory.ts';
 
 /* Pile index (chantier 4, 10–11 November 2026).
  *
@@ -25,9 +28,9 @@ import type {MaterialPile,World} from './types.ts';
 
 let epoch=0,scopeDepth=0,generation=0;
 /** Marks an in-place write to a pile's owner, kind or item, or to the array. */
-export function markPileWrite():void {epoch++;}
+export function markPileWrite():void {epoch++;markPileIdentityUnknownWrite();}
 /** `target.owner = owner`, then markPileWrite; returns `owner` like the assignment. */
-export function assignPileOwner<T extends {owner:unknown}>(target:T,owner:T['owner']):T['owner'] {target.owner=owner;epoch++;return owner;}
+export function assignPileOwner<T extends {owner:unknown}>(target:T,owner:T['owner']):T['owner'] {markPileContentWrite379(target).owner=owner;epoch++;return owner;}
 /** Runs `step` with pile indexes available; nested scopes share the outermost one. */
 export function withPileIndexScope<R>(step:()=>R):R {
   if(scopeDepth===0)generation++;
@@ -65,6 +68,7 @@ export interface PileIndex {
   readonly equipment:ReadonlyMap<number,MaterialPile>;
 }
 interface Entry extends PileIndex {
+  owner?:object;
   generation:number;epoch:number;length:number;first:MaterialPile|undefined;last:MaterialPile|undefined;groundOutside:number;
   readonly groundAt:Map<number,MaterialPile[]>;readonly groundChunks:MaterialPile[];readonly groundMaterialFloors:MaterialPile[];readonly groundSlag:MaterialPile[];
   readonly wornOffsets:Map<number,number>;readonly undefinedWorn:Set<number>;readonly worn:Map<number,MaterialPile[]>;readonly equipment:Map<number,MaterialPile>;
@@ -72,6 +76,26 @@ interface Entry extends PileIndex {
   readonly seen:unknown[];
 }
 const entries=new WeakMap<readonly MaterialPile[],Entry>();
+interface GroundFactsCapture379 {readonly owner:object;readonly facts:Uint8Array;readonly mask:number}
+const groundMasks379=new WeakMap<PileIndex,number>(),groundCaptures379=new WeakMap<PileIndex,GroundFactsCapture379>();
+const groundChunkOrder379=new WeakMap<object,readonly number[]>();
+/** An immutable navigation capture of the index's real facts. Quantity-only
+ * pile changes and appends that do not change a cell retain the same snapshot;
+ * actual fact changes retire it at their source. Public reads copy afresh. */
+export function capturePileGroundFacts379(index:PileIndex):{readonly facts:Uint8Array;readonly mask:number} {
+  const owner=terrainJournalReadOwner(),known=groundMasks379.get(index);
+  if(owner&&known!==undefined){const capture=groundCaptures379.get(index);if(capture?.owner===owner)return capture;const next={owner,facts:index.groundFacts.slice(),mask:known};groundCaptures379.set(index,next);return next;}
+  groundCaptures379.delete(index);const facts=index.groundFacts.slice();let mask=0;for(const flags of facts)mask|=flags;return {facts,mask};
+}
+/** Original first chunk cell order for a navigation capture's set iteration.
+ * Additional piles on an already flagged cell do not change this order; a
+ * changed indexed fact/owner receives a new capture. The stored ordinals are
+ * detached from the pile records, so iteration on an old search is exact. */
+export function captureGroundChunkOrder379(index:PileIndex,capture:object):readonly number[] {
+ let cells=groundChunkOrder379.get(capture);if(cells)return cells;
+ const ordered=new Set<number>();for(const pile of index.groundChunks)if(pile.owner.type==='ground')ordered.add(pile.owner.z*index.width+pile.owner.x);
+ cells=[...ordered];groundChunkOrder379.set(capture,cells);return cells;
+}
 let lastPiles:readonly MaterialPile[]|undefined,lastEntry:Entry|undefined;
 const inMap=(x:number,z:number,width:number,height:number)=>Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<width&&z<height;
 /** True when the first `count` piles are the ones indexed, with the same owner, kind and item. */
@@ -91,7 +115,8 @@ function add(e:Entry,piles:readonly MaterialPile[],from:number):void {
       if(p.item==='slag-steel-chunk')groundSlag.push(p);
       if(inMap(owner.x,owner.z,width,height)){
         const i=owner.z*width+owner.x,list=groundAt.get(i);if(list)list.push(p);else groundAt.set(i,[p]);
-        groundFacts[i]=groundFacts[i]!|(chunk?PILE_CHUNK:0)|(floor?PILE_MATERIAL_FLOOR:0);
+        const flags=groundFacts[i]!|(chunk?PILE_CHUNK:0)|(floor?PILE_MATERIAL_FLOOR:0);
+        if(flags!==groundFacts[i]){groundFacts[i]=flags;groundMasks379.set(e,(groundMasks379.get(e)??0)|flags);groundCaptures379.delete(e);}
       }else e.groundOutside++;
     }else if(owner.type==='apparel'){
       if(Number.isInteger(owner.pawnId)){
@@ -108,21 +133,32 @@ function build(world:World):Entry {
   const piles=world.piles,width=world.width,height=world.height;
   const e:Entry={width,height,version:world.schemaVersion,groundAt:new Map(),groundFacts:new Uint8Array(width*height),groundChunks:[],groundMaterialFloors:[],groundSlag:[],
     wornOffsets:new Map(),undefinedWorn:new Set(),worn:new Map(),equipment:new Map(),seen:[],
-    generation,epoch,length:piles.length,first:piles[0],last:piles[piles.length-1],groundOutside:0};
-  add(e,piles,0);
+    generation,owner:terrainJournalReadOwner(),epoch,length:piles.length,first:piles[0],last:piles[piles.length-1],groundOutside:0};
+  groundMasks379.set(e,0);add(e,piles,0);
   return e;
 }
 function current(e:Entry,piles:readonly MaterialPile[],n:number):Entry {
-  e.generation=generation;e.epoch=epoch;e.length=n;e.first=piles[0];e.last=piles[n-1];
+  e.generation=generation;e.owner=terrainJournalReadOwner();e.epoch=epoch;e.length=n;e.first=piles[0];e.last=piles[n-1];
   lastPiles=piles;lastEntry=e;return e;
 }
 /** The index of `world`'s piles, or undefined outside a simulation step. */
 export function pileIndex(world:World):PileIndex|undefined {
-  if(!scopeDepth)return undefined;
+  if(!scopeDepth){
+    // A public reader can be interleaved with direct fixture edits; it ends
+    // the exclusive owner's witness, just like an ordinary scoped read.
+    const e=world.piles===lastPiles?lastEntry:entries.get(world.piles);if(e)e.owner=undefined;
+    return undefined;
+  }
   const piles=world.piles,n=piles.length;
   let e=piles===lastPiles?lastEntry:entries.get(piles);
   if(e&&e.width===world.width&&e.height===world.height&&e.version===world.schemaVersion){
-    if(e.generation===generation&&e.epoch===epoch&&e.length===n&&e.first===piles[0]&&e.last===piles[n-1]){
+    // The exclusive Worker has no mutable caller between clock tasks. Its
+    // owner admits exactly the same marked-write contract across generations;
+    // public calls (no owner) still validate every new outermost scope.
+    const owner=terrainJournalReadOwner(),sameObservation=e.generation===generation||owner!==undefined&&e.owner===owner;
+    if(sameObservation&&e.epoch===epoch&&e.length===n&&e.first===piles[0]&&e.last===piles[n-1]){
+      if(verifyPileIndex&&e.generation!==generation&&!unchanged(piles,e.seen,n))pileIndexMismatch('owned pile membership');
+      e.generation=generation;
       if(e!==lastEntry){lastPiles=piles;lastEntry=e;}
       return e;
     }

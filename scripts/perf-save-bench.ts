@@ -9,14 +9,20 @@ import { deserializeWorld, serializeCampaign } from '../src/sim/serialization.ts
 import { createHash } from 'node:crypto';
 import { setTerrainWriteCacheVerification } from '../src/sim/terrain-mutation-journal.ts';
 import { setPileIndexVerification } from '../src/sim/pile-index.ts';
+import {setHumanCarrierCacheVerification} from '../src/sim/rescue-state.ts';
+import {withJournalTerrainReadScope} from '../src/sim/terrain-read-scope.ts';
 // VERIFY_TERRAIN_CACHES=1: caches keyed by the terrain write count recompute and throw on a difference.
 if (process.env.VERIFY_TERRAIN_CACHES) setTerrainWriteCacheVerification(true);
 // VERIFY_PILE_INDEX=1: every pile index answer is compared with a scan; throws on an unmarked pile write.
 if (process.env.VERIFY_PILE_INDEX) setPileIndexVerification(true);
+if(process.env.VERIFY_HUMAN_CARRIERS)setHumanCarrierCacheVerification(true);
 
 const path = process.argv[2] ?? 'public/test-saves/v432/les-forges-crash-test.json';
 const macros = Number(process.argv[3] ?? 200);
 const warmup = Number(process.argv[4] ?? 20);
+// Isolate the exact private clock-owner path without charging the publication
+// encoder or the renderer. Default remains the historical mutable reader.
+const closedOwner=process.env.PERF_CLOSED==='1'?{}:undefined;
 
 function payload(file: string): string {
   const text = readFileSync(file, 'utf8');
@@ -33,7 +39,7 @@ if (process.env.LOAD_ONLY) { console.log(JSON.stringify({ save: path, loadMs: Ma
 const step = (count: number, boundary: number[], inner: number[]) => {
   for (let i = 0; i < count * 10; i++) {
     const s = performance.now();
-    const r = advanceWorldCore297(world);
+    const r = closedOwner?withJournalTerrainReadScope(closedOwner,()=>advanceWorldCore297(world)):advanceWorldCore297(world);
     const d = performance.now() - s;
     (r.localTickCompleted ? boundary : inner).push(d);
   }
@@ -63,7 +69,7 @@ const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const msPerMacro = wall / macros;
 console.log(JSON.stringify({
-  save: path, pawns: world.pawns.length, size: `${world.width}x${world.height}`, schema: world.schemaVersion, tick: world.tick,
+  save: path, pawns: world.pawns.length, size: `${world.width}x${world.height}`, schema: world.schemaVersion, tick: world.tick, closedOwner:!!closedOwner,
   loadMs: r3(loadMs), macros,
   msPerMacroTick: r3(msPerMacro),
   macroShareOfWallPct: r3(100 * sum(boundary) / wall),

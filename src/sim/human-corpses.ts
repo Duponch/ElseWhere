@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {toxicCorpseRot256} from './toxic-victim-256.ts';
 import {prepareLinkedShelfRetirement286} from './linked-storage-lifecycle-286.ts';
 import { constructionRecipe,type ConstructionMaterial } from './construction-materials.ts';
@@ -55,7 +57,7 @@ function materialize(w:World,p:Pawn,owner:MaterialOwner,view:TemperatureView):Ma
   if(!cell)return null;
   const pile:MaterialPile={id:w.nextId++,kind:'corpse',item:'human-corpse',quantity:1,owner,
     humanCorpse:{pawnId:p.id},...(body.damage?{damage:body.damage}:{}),rot:anchor(body.rot!,w.tick,rotRateAtTemperature(view.at(w,cell)))};
-  w.piles.push(pile);body.pileId=pile.id;delete body.rot;delete body.damage;
+  appendPileEntries(w.piles,pile);body.pileId=pile.id;delete body.rot;delete markPileContentWrite379(body).damage;
   for(const actor of w.pawns)if(actor.burial?.bodyPawnId===p.id)actor.burial.corpseId=pile.id;
   // A weapon whose forced death drop was blocked stays attached to this body.
   // It cannot later teleport from the frozen location stored on the dead Pawn.
@@ -127,9 +129,9 @@ function destroyHumanBodyContents(w:World,person:Pawn,pile:MaterialPile|undefine
   const ledger=cause==='fire'?ensureFireState(w).ledger:undefined;
   if(ledger)for(const [item,quantity] of changes)ledger.items[item]=(ledger.items[item]??0)+quantity;
   if(neutral)w.destroyed=neutral;
-  const ids=new Set(contents.map(p=>p.id));w.piles=w.piles.filter(p=>!ids.has(p.id));
+  const ids=new Set(contents.map(p=>p.id));w.piles=filterPileEntries(w.piles,p=>!ids.has(p.id));
   if(packed.length){const packedIds=new Set(packed.map(p=>p.building.id));w.packed=w.packed.filter(p=>!packedIds.has(p.building.id));w.destroyed={...w.destroyed,count:(w.destroyed?.count??0)+packed.length,lost};if(ledger)ledger.structures+=packed.length;}
-  person.body??={observedAt:w.tick};person.body.lostAt=w.tick;delete person.body.damage;if(!pile)delete person.body.rot;delete person.equipmentDropPending;
+  person.body??={observedAt:w.tick};person.body.lostAt=w.tick;delete markPileContentWrite379(person.body).damage;if(!pile)delete person.body.rot;delete person.equipmentDropPending;
   if(person.visitor)person.visitor.personalFoodIds=[];
   for(const grave of w.structures){if(pile&&grave.grave?.corpseId===pile.id)delete grave.grave.corpseId;
     if(grave.grave?.assignedPawnId===person.id)delete grave.grave.assignedPawnId;}
@@ -145,5 +147,5 @@ export function humanCorpseAge(w:World,p:Pawn):number {
 export function damageRetainedHumanBody256(w:World,p:Pawn,amount:number):boolean {
  if(w.schemaVersion<256||!w.pawns.includes(p)||p.state!=='dead'||!p.health?.death||p.body?.pileId!==undefined||p.body?.lostAt!==undefined||!Number.isSafeInteger(amount)||amount<=0)return false;
  const body=observe(w,p,new TemperatureView(w)),damage=(body.damage??0)+amount;
- if(damage>=HUMAN_CORPSE_MAX_HP)return destroyRetainedHumanBody256(w,p);body.damage=damage;return true;
+ if(damage>=HUMAN_CORPSE_MAX_HP)return destroyRetainedHumanBody256(w,p);markPileContentWrite379(body).damage=damage;return true;
 }

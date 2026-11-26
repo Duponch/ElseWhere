@@ -28,20 +28,34 @@ function seatSurface(s:Structure,y:number,forward:number):PileSurface {
   const angle=(s.orientation??0)*Math.PI/2;
   return {x:Math.sin(angle)*forward,y,z:Math.cos(angle)*forward,scale:.55,scaleHeight:true};
 }
+const workSurface=(kind:Structure['kind']):boolean=>isFoodWorkstation(kind)||kind==='machining-table'||kind==='hi-tech-research-bench'||kind==='fabrication-bench'||kind==='multi-analyzer'||kind==='stonecutter'||kind==='drug-lab'||kind==='art-bench'||kind==='research-bench'||kind==='tailor-bench';
+function pileSurfaceClass(kind:Structure['kind']):'work'|'smelter'|'smithy'|'crematorium'|'table'|'stool'|'dining-chair'|'armchair'|'couch'|'end-table'|'hopper'|'horseshoes'|undefined {
+  switch(kind){
+    case 'electric-crematorium':return 'crematorium';
+    case 'fueled-smithy':case 'electric-smithy':return 'smithy';
+    case 'electric-smelter':return 'smelter';
+    case 'table':case 'stool':case 'dining-chair':case 'armchair':case 'couch':case 'end-table':case 'hopper':case 'horseshoes':return kind;
+    default:return workSurface(kind)?'work':undefined;
+  }
+}
+/** Shared classification of structures that contribute physical pile support.
+ * The confirmed owner need not rebuild support maps for unrelated geometry. */
+export const isPileSupportMember379=(s:Pick<Structure,'kind'>):boolean=>isShelfKind(s.kind)||pileSurfaceClass(s.kind)!==undefined;
 /** Presentation only. Built per snapshot, never per frame/pile; no extra mesh. */
 export function pileSurfaces(world:World):ReadonlyMap<number,PileSurface> {
   const cached=entry(world);if(cached?.cells)return cached.cells;
   const surfaces=new Map<number,PileSurface>();
   for(const s of world.structures) {
-    if(s.kind==='electric-crematorium'){
+    const type=pileSurfaceClass(s.kind);if(!type)continue;
+    if(type==='crematorium'){
       for(const cell of footprintCells(s))surfaces.set(cell.z*world.width+cell.x,{x:0,y:1.405,z:0,scale:.65});
       continue;
     }
-    if(s.kind==='fueled-smithy'||s.kind==='electric-smithy'){
+    if(type==='smithy'){
       for(const cell of footprintCells(s))surfaces.set(cell.z*world.width+cell.x,{x:0,y:.87,z:0,scale:.65});
       continue;
     }
-    if(s.kind==='electric-smelter'){
+    if(type==='smelter'){
       const angle=s.orientation*Math.PI/2,c=Math.cos(angle),n=Math.sin(angle);
       for(const cell of footprintCells(s)){
         const along=(cell.x-s.x)*c-(cell.z-s.z)*n;
@@ -51,16 +65,16 @@ export function pileSurfaces(world:World):ReadonlyMap<number,PileSurface> {
       }
       continue;
     }
-    const surface=(isFoodWorkstation(s.kind)||s.kind==='machining-table'||s.kind==='hi-tech-research-bench'||s.kind==='fabrication-bench'||s.kind==='multi-analyzer'||s.kind==='stonecutter'||s.kind==='drug-lab'||s.kind==='art-bench'||s.kind==='research-bench'||s.kind==='tailor-bench')?{x:0,y:WORLD_SCALE.stonecutterHeight,z:0,scale:.65}:s.kind==='table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.8}
-      :s.kind==='stool'?{x:0,y:WORLD_SCALE.stoolHeight,z:0,scale:.5}
+    const surface=type==='work'?{x:0,y:WORLD_SCALE.stonecutterHeight,z:0,scale:.65}:type==='table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.8}
+      :type==='stool'?{x:0,y:WORLD_SCALE.stoolHeight,z:0,scale:.5}
       // Core lets an item lie on a Standable seat (DiningChair, Armchair, Couch:
       // no blocking passability, ordinary drop spot) and draws it above the
       // seat (Item altitude over Building). The pile sits on the seat in front
       // of the backrest instead of crossing the chair from the floor.
-      :s.kind==='dining-chair'?seatSurface(s,WORLD_SCALE.stoolHeight+.08,.03)
-      :s.kind==='armchair'?seatSurface(s,.44,.08):s.kind==='couch'?seatSurface(s,.51,.08)
-      :s.kind==='end-table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.6,scaleHeight:true}
-      :s.kind==='hopper'?{x:0,y:.14,z:0,scale:.72}:s.kind==='horseshoes'?{x:-.18,y:0,z:.15,scale:.6}:undefined;
+      :type==='dining-chair'?seatSurface(s,WORLD_SCALE.stoolHeight+.08,.03)
+      :type==='armchair'?seatSurface(s,.44,.08):type==='couch'?seatSurface(s,.51,.08)
+      :type==='end-table'?{x:0,y:WORLD_SCALE.tableHeight,z:0,scale:.6,scaleHeight:true}
+      :type==='hopper'?{x:0,y:.14,z:0,scale:.72}:type==='horseshoes'?{x:-.18,y:0,z:.15,scale:.6}:undefined;
     if(surface)for(const c of footprintCells(s))surfaces.set(c.z*world.width+c.x,surface);
   }
   if(cached)cached.cells=surfaces;return surfaces;

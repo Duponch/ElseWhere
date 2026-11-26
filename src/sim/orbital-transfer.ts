@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {isNovelBook295} from './book-state-295.ts';
@@ -18,10 +20,10 @@ export function orbitalTake(w:World,id:number,quantity:number,owner:MaterialOwne
   let part=pile;
   if(quantity!==pile.quantity){
     if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return false;
-    pile.quantity-=quantity;part={...pile,id:w.nextId++,quantity,owner:{...pile.owner},...copyPileCondition(pile)};w.piles.push(part);
+    markPileContentWrite379(pile).quantity-=quantity;part={...pile,id:w.nextId++,quantity,owner:{...pile.owner},...copyPileCondition(pile)};appendPileEntries(w.piles,part);
   }
   if(owner.type==='ground')return transferPile(w,part,owner);
-  assignPileOwner(part,{...owner});delete part.haulRequested;
+  assignPileOwner(part,{...owner});delete markPileContentWrite379(part).haulRequested;
   if(part.rot)part.rot={progress:rotAge(part,w.tick),atTick:w.tick,rate:0};
   return true;
 }

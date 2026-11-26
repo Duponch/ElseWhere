@@ -2,10 +2,17 @@ import {expect,test} from 'vitest';
 import {copyCoreData297} from '../src/bridge/core-phase-data-297.ts';
 import {frozenDataCopy297} from '../src/bridge/core-phase-owner-297.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
+import {CORE_ANIMAL_OPTIONAL297,CORE_ANIMAL_REQUIRED297,CORE_HUMAN_OPTIONAL297,CORE_HUMAN_REQUIRED297,CORE_MECH_OPTIONAL297,CORE_MECH_REQUIRED297} from '../src/bridge/core-phase-projection-297.ts';
 
 // The faster actor copy must be indistinguishable from the pinned copyCoreData297.
 const deepFrozen=(v:unknown):boolean=>v===null||typeof v!=='object'||Object.isFrozen(v)&&Object.values(v as object).every(deepFrozen);
 const outcome=(f:()=>unknown):string=>{try{const r=f();return 'ok:'+JSON.stringify(r)+':'+deepFrozen(r);}catch(e){return 'throw:'+(e as Error).message;}};
+
+test('each actor projection declares a single ordered occurrence of every required or optional key',()=>{
+ for(const [required,optional] of [[CORE_HUMAN_REQUIRED297,CORE_HUMAN_OPTIONAL297],[CORE_ANIMAL_REQUIRED297,CORE_ANIMAL_OPTIONAL297],[CORE_MECH_REQUIRED297,CORE_MECH_OPTIONAL297]]){
+  const all=[...required,...optional];expect(new Set(all).size).toBe(all.length);
+ }
+});
 
 test('identical copies of real actors',()=>{
  const w=deconstructionCamp(3,32);
@@ -66,4 +73,28 @@ test('fast actor capture matches captureCoreActor297 on real actors and refuses 
  const fast=captureCoreActorFast297('human',0,w.pawns[0]!),pinned=captureCoreActor297('human',0,w.pawns[0]!);
  expect(Reflect.ownKeys(fast.fields)).toEqual(Reflect.ownKeys(pinned.fields));
  for(const key of Reflect.ownKeys(pinned.fields))expect(Object.getOwnPropertyDescriptor(fast.fields,key)).toEqual(Object.getOwnPropertyDescriptor(pinned.fields,key));
+});
+
+test('actor descriptor snapshots preserve nested depth bounds, numeric refusals and accessor ordering',async()=>{
+ const {captureCoreActor297}=await import('../src/bridge/core-phase-data-297.ts');
+ const {captureCoreActorFast297}=await import('../src/bridge/core-frozen-copy-297.ts');
+ const pawn={id:7,x:1,z:1,state:'idle',moveCooldown:0,planCooldown:0,path:[]};
+ const compare=(actor:unknown,index=0)=>{
+  const expected=outcome(()=>captureCoreActor297('human',index,actor as never));
+  expect(outcome(()=>captureCoreActorFast297('human',index,actor as never))).toBe(expected);
+  return expected;
+ };
+ for(let depth=18;depth<=26;depth++){
+  let motion:unknown=1;for(let i=0;i<depth;i++)motion={next:motion};
+  compare({...pawn,motion});
+ }
+ for(const value of [NaN,Infinity,-Infinity]){
+  expect(compare({...pawn,id:value})).toContain('Nonfinite Core phase number');
+  expect(compare(pawn,value)).toContain('Nonfinite Core phase number');
+ }
+ let reads=0;const bad={...pawn};
+ Object.defineProperty(bad,'moveCooldown',{enumerable:true,get(){reads++;throw Error('getter ran');}});
+ expect(compare(bad)).toContain('Physical actor field is not own data');expect(reads).toBe(0);
+ const nested={};Object.defineProperty(nested,'hidden',{value:1});
+ expect(compare({...pawn,motion:nested})).toContain('Core phase requires plain own data');
 });

@@ -1,3 +1,4 @@
+import {structureFamily379} from './structure-family-379.ts';
 import { footprintCells,footprintContains,STRUCTURE_DEFINITIONS } from './definitions.ts';
 import { isPowerActive } from './power-rules.ts';
 import type { ThermalLayout } from './thermal-topology.ts';
@@ -47,7 +48,7 @@ export function advanceCoolers(w:World,layout:ThermalLayout,outside:number):void
     }
     return solids.has(index);
   };
-  for(const s of w.structures){
+  for(const s of structureFamily379(w,'coolers',kind=>kind==='cooler')){
     if(s.kind!=='cooler'||!s.cooler)continue;
     s.cooler.high=false;if(!isPowerActive(s))continue;
     const {cold,hot}=coolerFaces(s);

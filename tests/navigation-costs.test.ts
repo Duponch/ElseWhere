@@ -107,6 +107,22 @@ test('compact captures retain exact sparse/dense costs, floor maxima, doors, his
   expect(navigationCosts(clean).costs).toBeUndefined();expect(scaleNavigationCosts(undefined,3)).toBeUndefined();
 });
 
+test('frame overlay retains structure precedence, zero-delay doors and independent captures',()=>{
+  const world=fixture(false);(world as {schemaVersion:number}).schemaVersion=83;
+  const frame=world.jobs[0]!;
+  // A table overwrites its underlying frame cost; a door with zero object
+  // delay leaves the frame in place before its opening wait is added.
+  for(const [x,z] of [[5,5],[11,6],[14,14]])world.jobs.push({...frame,id:world.nextId++,x:x!,z:z!});
+  const expected=materialized(world),captured=navigationCosts(world);
+  expect(captured.costs!.get(5*16+5)).toBe(1400);
+  expect(captured.costs!.get(6*16+11)).toBe(467);
+  expect(captured.costs!.get(14*16+14)).toBe(467);
+  for(let i=0;i<world.tiles.length;i++)expect(captured.costs?.get(i)).toBe(expected.costs.get(i));
+  world.jobs=[];
+  expect(navigationCosts(world).costs!.get(14*16+14)).toBeUndefined();
+  expect(captured.costs!.get(14*16+14)).toBe(467);
+});
+
 test('full and resumed routes preserve directed costs, tie parents, corners and animal integer scaling against independent search',()=>{
   for(const site of [false,true]) {
     const world=fixture(site),start=2*16+2,n=navigationCosts(world),old=materialized(world),blocked=blockedCells(world),corners=doorCorners(world);

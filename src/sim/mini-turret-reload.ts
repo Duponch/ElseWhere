@@ -4,7 +4,8 @@ import { allowedAreaAllows,allowedAreaReason,captureAllowedArea } from './allowe
 import { deconstructionReserved } from './deconstruction-rules.ts';
 import { haulReservations } from './haul-reservations.ts';
 import { pawnBody,medicalWorkRefusal } from './health-rules.ts';
-import { footprintContains,CARRY_CAPACITY } from './definitions.ts';
+import { footprintContains } from './definitions.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import { reservedSource } from './materials.ts';
 import { candidateAccess } from './candidate-access.ts';
 import { blockedCells,routeToJob } from './pathfinding.ts';
@@ -53,7 +54,7 @@ export function planTurretReload(w:World,p:Pawn,id:number,access?:Reachability,b
   for(const pile of w.piles){
     if(pile.item!=='steel'||pile.owner.type!=='ground'||policy&&!allowedAreaAllows(w,p,pile.owner,policy))continue;
     if(budget.pairs--<=0){budget.pairs=0;return no('Décision reportée : budget de recherche atteint.');}
-    const quantity=Math.min(CARRY_CAPACITY,capacity,pile.quantity-reservedSource(w,pile.id));if(quantity<=0||!canReach(w,pile.owner,reach,true))continue;
+    const quantity=Math.min(carryStackLimit379(w,p,pile.item),capacity,pile.quantity-reservedSource(w,pile.id));if(quantity<=0||!canReach(w,pile.owner,reach,true))continue;
     const distance=Math.abs(p.x-pile.owner.x)+Math.abs(p.z-pile.owner.z)+Math.abs(s.x-pile.owner.x)+Math.abs(s.z-pile.owner.z);
     if(best&&(distance>best.distance||distance===best.distance&&pile.id>=best.pileId))continue;
     const path=routeToJob(w,pile.owner,reach,true);if(path)best={pileId:pile.id,quantity,distance,path};

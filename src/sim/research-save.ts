@@ -165,10 +165,10 @@ export function validHospitalSupportTransport(world:World,version:number,powerTo
       const quantity=(silver.get(j.id)??0)+p.quantity;if(quantity>12)return false;silver.set(j.id,quantity);
     }
     for(const p of world.pawns){
-      const h=p.haul;if(!h||h.destination.type!=='job'||h.whole)continue;
+      const h=p.haul;if(!h||h.destination.type!=='job'||h.whole||h.constructionBatch379)continue;
       const pile=world.piles.find(i=>i.id===(h.phase==='pickup'?h.sourcePileId:h.carryPileId));if(pile?.item!=='silver')continue;
       const j=world.jobs.find(j=>h.destination.type==='job'&&j.id===h.destination.jobId);
-      if(version<211||!j||j.kind!=='lay-floor'||j.floor!=='sterile-tile'||!int(h.quantity,1,10)||constructionCapacity(world,j,pile.item,p.id)<h.quantity
+      if(version<211||!j||j.kind!=='lay-floor'||j.floor!=='sterile-tile'||!int(h.quantity,1,version>=379?500:10)||constructionCapacity(world,j,pile.item,p.id)<h.quantity
         ||(h.phase==='pickup'?h.carryPileId!==null||pile.owner.type!=='ground'||reservedSource(world,pile.id)>pile.quantity:
           pile.owner.type!=='pawn'||pile.owner.pawnId!==p.id||pile.quantity!==h.quantity))return false;
     }

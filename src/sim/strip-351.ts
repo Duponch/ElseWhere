@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isColonist} from './affiliation.ts';
 import {isAggressiveCrisis} from './aggressive-crisis.ts';
 import {foggedCell256} from './exploration-state-256.ts';
@@ -10,6 +11,7 @@ import {assignPileOwner} from './pile-index.ts';
 import {prisonBreakActive} from './prison-break-state.ts';
 import {carrierOf} from './rescue-state.ts';
 import {allowedAreaReason} from './allowed-area-state.ts';
+import {orderedTargetClaimant378} from './order-types.ts';
 import {initialWorldGoodwill256} from './world-faction-catalog.ts';
 import {validWorldRelationKind274,worldGoodwillChange274,worldNaturalGoodwill274} from './world-diplomacy-274.ts';
 import {horizontalDistanceSquared} from './work-givers-rimworld.ts';
@@ -49,7 +51,7 @@ export const stripDesignated351=(w:World,targetId:number):boolean=>!!w.strip351?
 /** Other jobs reserving the same pawn or corpse (Core reservation of TargetA). */
 export function stripTargetClaimed351(w:World,targetId:number,except?:number):Pawn|undefined {
  return w.pawns.find(p=>p.id!==except&&(p.strip351?.targetId===targetId||p.burial?.bodyPawnId===targetId||p.rescue?.patientId===targetId
-  ||p.tend?.patientId===targetId&&p.id!==targetId||p.feed?.patientId===targetId||p.surgery?.patientId===targetId||p.ward?.patientId===targetId));
+  ||p.tend?.patientId===targetId&&p.id!==targetId||p.feed?.patientId===targetId||p.surgery?.patientId===targetId||p.ward?.patientId===targetId))??orderedTargetClaimant378(w,'pawn',targetId,except);
 }
 const known=(w:World,c:Cell)=>!foggedCell256(w,c.z*w.width+c.x);
 function event(w:World,message:string):void {w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.shift();}
@@ -210,15 +212,15 @@ export function commitStrip351(w:World,t:StripTarget351):{ok:true;dropped:number
  for(const pile of piles){const owner=pile.owner;if(!dropRetainingIdentity(w,pile,origin)){rollback();return {ok:false};}moved.push({target:pile,owner});}
  for(const pack of packs){const owner=pack.owner,cell=furnitureDropCell(w,origin,id);if(!cell){rollback();return {ok:false};}assignPileOwner(pack,{type:'ground',...cell});moved.push({target:pack,owner});}
  for(const pile of piles){if(pile.owner.type!=='ground')continue;const was=moved.find(m=>m.target===pile)!.owner.type;
-  if(was==='equipment'&&pile.weapon)delete pile.weapon.forbidden;
-  if(was==='apparel'&&pile.apparel){delete pile.apparel.forbidden;delete pile.apparel.forced;}}
+  if(was==='equipment'&&pile.weapon)delete markPileContentWrite379(pile.weapon).forbidden;
+  if(was==='apparel'&&pile.apparel){delete markPileContentWrite379(pile.apparel).forbidden;delete pile.apparel.forced;}}
  return {ok:true,dropped:piles.length+packs.length};
 }
 /** The goodwill consequence, after a committed strip of a living member. */
 function notifyMemberStripped351(w:World,t:StripTarget351):void {
  const plan=memberStrippedPlan351(w,t);if(!plan)return;
  const kindChanged=plan.relation.kind!==plan.kindAfter;
- plan.relation.goodwill=plan.after;plan.relation.kind=plan.kindAfter;
+ plan.relation.goodwill=plan.after;markPileContentWrite379(plan.relation).kind=plan.kindAfter;
  // Local actors of the faction follow the relation, as peace talks do.
  if(kindChanged&&plan.kindAfter!=='ally')for(const p of w.pawns)if(p.worldAffiliation259?.factionId===t.pawn.worldAffiliation259?.factionId&&!p.prisoner&&!p.raid)p.faction=plan.kindAfter==='hostile'?'outlaws':'outlanders';
  event(w,`Relations avec ${plan.factionName} : ${plan.before} → ${plan.after} (membre dépouillé).`);

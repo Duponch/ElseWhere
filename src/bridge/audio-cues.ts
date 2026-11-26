@@ -3,6 +3,8 @@ import {effectiveCore297} from '../sim/core-phase-297';
 import type { World } from '../sim/types.ts';
 import { isConstruction } from '../sim/construction-rules.ts';
 import { structureById } from '../sim/structure-navigation.ts';
+import { structureFamily379 } from '../sim/structure-family-379.ts';
+import { pileById } from '../sim/pile-identity-directory.ts';
 import { isTailoring, stationAccepts, taskRecipe } from '../sim/production-recipes.ts';
 import { WORK_FRACTIONS } from '../sim/work-progress.ts';
 import { isColonist } from '../sim/affiliation.ts';
@@ -23,6 +25,8 @@ import {
 type AnimalVoiceSpecies = Exclude<AnimalSpeciesId, 'snow-hare'>;
 type AnimalDeathVoiceSpecies = Exclude<AnimalVoiceSpecies, 'red-fox'>;
 type WildAnimal = NonNullable<World['wildlife']>['animals'][number];
+const audibleDoorKind = (kind: World['structures'][number]['kind']): boolean =>
+  kind === 'door' || kind === 'fence-gate' || kind === 'autodoor';
 const itemKind = (item: string): string | undefined =>
   (ITEM_DEFINITIONS as Readonly<Record<string, { kind: string }>>)[item]?.kind;
 /** 0 baby, 1 juvenile, 2 adult: the persisted growth when present, else the Core stage ages. */
@@ -138,6 +142,11 @@ export class AudioCueRecorder {
   private hauls = new Map<number, HaulObservation>();
   private pawnStates = new Map<number, ActorDamageObservation>();
   private animalStates = new Map<number, AnimalObservation>();
+  // Two private generations: observations remain immutable until the next
+  // capture commits. Reuse the inactive containers and unchanged rows, so a
+  // quiet boundary doesn't allocate hundreds of fresh observer records.
+  private pawnStateScratch = new Map<number, ActorDamageObservation>();
+  private animalStateScratch = new Map<number, AnimalObservation>();
   private harvestJobs = new Map<number, HarvestObservation>();
   /** The food a pawn is ingesting, resolved once per meal. */
   private ingestion = new Map<number, { key: string; kind: AudioCueKind }>();
@@ -176,6 +185,8 @@ export class AudioCueRecorder {
     this.hauls.clear();
     this.pawnStates.clear();
     this.animalStates.clear();
+    this.pawnStateScratch.clear();
+    this.animalStateScratch.clear();
     this.firefighting.clear();
     this.fireIds.clear();
     this.switches.clear();
@@ -257,8 +268,9 @@ export class AudioCueRecorder {
     const melee = new Map<number, number>();
     const doors = new Map<number, boolean>();
     const hauls = new Map<number, HaulObservation>();
-    const pawnStates = new Map<number, ActorDamageObservation>();
-    const animalStates = new Map<number, AnimalObservation>();
+    const pawnStates = this.pawnStateScratch; pawnStates.clear();
+    const animalStates = this.animalStateScratch; animalStates.clear();
+    let newAnimalIdentity = false;
     const firefighting = new Map<number, { fireId: number; cooldownCore: number }>();
     const fireIds = new Set((world.fires?.items ?? []).map(fire => fire.id));
     const switches = new Map<number, boolean>();
@@ -270,7 +282,7 @@ export class AudioCueRecorder {
     const harvestJobs = new Map<number, HarvestObservation>();
     const ingestion = new Map<number, { key: string; kind: AudioCueKind }>();
     // Read only when a pawn starts carrying or eating a pile (no index built).
-    const pileItem = (id: number): string | undefined => world.piles.find(pile => pile.id === id)?.item;
+    const pileItem = (id: number): string | undefined => pileById(world, id)?.item;
     for (const job of world.jobs) {
       jobs.set(job.id, job);
       // A job is followed once it has been worked: completion needs contact
@@ -324,8 +336,9 @@ export class AudioCueRecorder {
 
     for (const pawn of world.pawns) {
       const nextInjuryId = pawn.health?.nextInjuryId ?? 1;
-      pawnStates.set(pawn.id, { state: pawn.state, nextInjuryId });
       const previousPawnState = this.pawnStates.get(pawn.id);
+      pawnStates.set(pawn.id, previousPawnState && previousPawnState.state === pawn.state && previousPawnState.nextInjuryId === nextInjuryId
+        ? previousPawnState : { state: pawn.state, nextInjuryId });
       if (this.initialized && previousPawnState && previousPawnState.state !== 'dead'
         && pawn.state !== 'dead' && !pawn.health?.death
         && nextInjuryId > previousPawnState.nextInjuryId
@@ -497,7 +510,16 @@ export class AudioCueRecorder {
       if(this.initialized&&previousMelee.get(actor.id)!==strike.atCore)
         this.add({id:`melee:${actor.id}:${strike.atCore}`,tick:world.tick,kind:this.meleeKind(world,actor.id,'mechanical',strike.atCore),x:actor.x+.5,z:actor.z+.5});
     }
-    for (const structure of world.structures) {
+    // The common physical capture has only door observations. Membership of
+    // the immutable installed-kind family belongs to the closed SIM owner;
+    // a door's live component is still read on every capture. Keep the full
+    // source traversal whenever a completion/switch/deconstruction could
+    // produce another cue: exact global source order also fixes which cues
+    // survive the bounded queue. Public mutable worlds take the same strict
+    // traversal as before, even with no watched target.
+    const audibleStructures = finishedSites?.size || watchedTargets.size || watchedSwitches.size
+      ? world.structures : structureFamily379(world, 'audio-passage-doors-379', audibleDoorKind);
+    for (const structure of audibleStructures) {
       if (finishedSites && structure.id >= this.nextId) {
         const site = `${structure.x},${structure.z}`, jobId = finishedSites.get(site);
         if (jobId !== undefined) {
@@ -517,7 +539,7 @@ export class AudioCueRecorder {
             tick: world.tick, kind: on ? 'power.switch-on' : 'power.switch-off',
             x: structure.x, z: structure.z });
       }
-      if ((structure.kind !== 'door' && structure.kind !== 'fence-gate' && structure.kind !== 'autodoor') || !structure.door) continue;
+      if (!audibleDoorKind(structure.kind) || !structure.door) continue;
       const open = structure.door.open;
       doors.set(structure.id, open);
       const previous = previousDoors.get(structure.id);
@@ -550,6 +572,7 @@ export class AudioCueRecorder {
         ...(voice.volume !== 1 ? { intensity: voice.volume } : {}) });
     for (const animal of world.wildlife?.animals ?? []) {
       const previous = this.animalStates.get(animal.id);
+      if (!previous) newAnimalIdentity = true;
       if(animal.strike){
         melee.set(animal.id,animal.strike.atCore);
         if(this.initialized&&previousMelee.get(animal.id)!==animal.strike.atCore)
@@ -595,12 +618,17 @@ export class AudioCueRecorder {
       if (animal.state === 'eating' && animal.meal)
         recordWork(animal.id, `animal-eat:${animal.meal.kind}:${animal.meal.id}`, animal.meal.progress,
           animalEatCue(animal.species) as AudioCueKind, animal.x, animal.z, true, ANIMAL_EATING_CUE_INTERVAL_TICKS);
-      animalStates.set(animal.id, { state: animal.state, nextInjuryId, nextCall, calls, strikeCore });
+      animalStates.set(animal.id, previous && previous.state === animal.state && previous.nextInjuryId === nextInjuryId
+        && previous.nextCall === nextCall && previous.calls === calls && previous.strikeCore === strikeCore
+        ? previous : { state: animal.state, nextInjuryId, nextCall, calls, strikeCore });
     }
     // Ordinary deaths become a physical corpse pile before the worker publishes
     // its snapshot. Observe that exact identity once, without scanning all piles
     // during snapshots where no previously live animal disappeared.
-    if (this.initialized) {
+    // Every new row was looked up in the preceding map. If there are no
+    // additions and the number of distinct IDs is unchanged, the two key
+    // sets are exactly equal (also for public fixtures with repeated IDs).
+    if (this.initialized && (newAnimalIdentity || animalStates.size !== this.animalStates.size)) {
       const missing = new Set<number>();
       for (const [id, previous] of this.animalStates)
         if (previous.state !== 'dead' && !animalStates.has(id)) missing.add(id);
@@ -660,6 +688,8 @@ export class AudioCueRecorder {
     this.melee = melee;
     this.doors = doors;
     this.hauls = hauls;
+    this.pawnStateScratch = this.pawnStates;
+    this.animalStateScratch = this.animalStates;
     this.pawnStates = pawnStates;
     this.animalStates = animalStates;
     this.firefighting = firefighting;

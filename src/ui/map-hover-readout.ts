@@ -9,6 +9,7 @@ import type { Cell, Tile, World } from '../sim/types';
 import { terrainSurfaceLabel,terrainSurfaceWalkable,TERRAIN_LABELS } from './terrain-inspection';
 import { terrainTravelDelay } from '../sim/furniture-travel';
 import { buildingLabels } from './building-labels';
+import {constructionThingLabel} from './construction-material-presentation';
 import { floraDefinition } from '../sim/biome-flora';
 import { rockInspection, rockThingLabel } from './geology-inspection';
 import { PLANT_DEFINITIONS, plantGrowth } from '../sim/plants';
@@ -95,7 +96,7 @@ export function mapHoverLines(world:World,cell:Cell,lightLevel?:number):string[]
   const snow=snowLine(snowDepthAt(world,index));if(snow)lines.push(snow);
   if(tile.terrain==='rock')lines.push(rockThingLabel(tile));
   const geyser=geyserAt256(world,cell);if(geyser){const info=geyserInspection256(world,geyser.id);if(info)lines.push(info.title);}
-  for(const structure of world.structures)if(footprintContains(structure,cell))lines.push(buildingLabels[structure.kind]);
+  for(const structure of world.structures)if(footprintContains(structure,cell))lines.push(constructionThingLabel(buildingLabels[structure.kind],structure));
   for(const resource of world.resources)if(same(resource)){
     if(resource.kind==='rock'){lines.push(rockInspection(tile,resource)?.title??'Rochers');continue;}
     const label=floraDefinition(resource)?.label??((resource.kind in PLANT_DEFINITIONS)?PLANT_DEFINITIONS[resource.kind as CropKind].label:resource.kind==='tree'?'Arbre':resource.kind);
@@ -108,12 +109,12 @@ export function mapHoverLines(world:World,cell:Cell,lightLevel?:number):string[]
     // Core GenLabel.ThingLabel: the count only above one.
     lines.push(pile.quantity>1?`${ITEM_DEFINITIONS[pile.item].label} ×${pile.quantity}`:ITEM_DEFINITIONS[pile.item].label);
   }
-  for(const packed of world.packed)if(packed.owner.type==='ground'&&same(packed.owner))lines.push(`${buildingLabels[packed.building.kind]} (emballé)`);
+  for(const packed of world.packed)if(packed.owner.type==='ground'&&same(packed.owner))lines.push(`${constructionThingLabel(buildingLabels[packed.building.kind],packed.building)} (emballé)`);
   // Core Filth.Label: « label xThickness ».
   for(const filth of world.filth?.items??[])if(same(filth))lines.push(`${FILTH_DEFINITIONS[filth.kind].label} ×${filth.thickness}`);
   // Blueprint and Frame labels; designations are not Things.
   for(const job of world.jobs)if(isConstruction(job)&&job.kind in buildingLabels&&footprintContains(job,cell))
-    lines.push(`${buildingLabels[job.kind as keyof typeof buildingLabels]} (${job.construction==='frame'?'en construction':'plan'})`);
+    lines.push(`${constructionThingLabel(buildingLabels[job.kind as keyof typeof buildingLabels],job)} (${job.construction==='frame'?'en construction':'plan'})`);
   for(const pawn of world.pawns)if(same(pawn)&&!corpses.has(pawn.id)&&!carrierOf(world,pawn.id))
     lines.push(pawn.state==='dead'?`Cadavre de ${pawn.name}`:isColonist(pawn)&&!pawn.prisoner?pawnShortName(pawn.name):pawn.name);
   for(const animal of world.wildlife?.animals??[])if(same(animal)){const label=animalSpecies(animal.species).label;lines.push(animal.state==='dead'?`Cadavre de ${label}`:cap(label));}

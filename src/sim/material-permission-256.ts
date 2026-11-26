@@ -1,4 +1,5 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isColonist} from './affiliation.ts';
 import {eggSpeciesForItem256} from './animal-egg-content-v256.ts';
 import type {MaterialPile,World} from './types.ts';
@@ -9,10 +10,11 @@ export function materialAllowedForPlayer256(pile:PermissionPile256):boolean {
  return pile.forbidden!==true&&pile.eggForbidden!==true&&pile.apparel?.forbidden!==true&&pile.weapon?.forbidden!==true;
 }
 export function setMaterialForbidden256(pile:MaterialPile,forbidden:boolean):void {
- if(pile.apparel){if(forbidden)pile.apparel.forbidden=true;else delete pile.apparel.forbidden;return;}
- if(pile.weapon){if(forbidden)pile.weapon.forbidden=true;else delete pile.weapon.forbidden;return;}
- if(eggSpeciesForItem256(pile.item)){if(forbidden)pile.eggForbidden=true;else delete pile.eggForbidden;return;}
- if(forbidden)pile.forbidden=true;else delete pile.forbidden;
+ markPileContentWrite379(pile);
+ if(pile.apparel){if(forbidden)markPileContentWrite379(pile.apparel).forbidden=true;else delete markPileContentWrite379(pile.apparel).forbidden;return;}
+ if(pile.weapon){if(forbidden)markPileContentWrite379(pile.weapon).forbidden=true;else delete markPileContentWrite379(pile.weapon).forbidden;return;}
+ if(eggSpeciesForItem256(pile.item)){if(forbidden)markPileContentWrite379(pile).eggForbidden=true;else delete markPileContentWrite379(pile).eggForbidden;return;}
+ if(forbidden)markPileContentWrite379(pile).forbidden=true;else delete markPileContentWrite379(pile).forbidden;
 }
 export function validMaterialPermission256(pile:unknown,version:number):boolean {
  if(!pile||typeof pile!=='object')return false;

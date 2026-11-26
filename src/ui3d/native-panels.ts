@@ -1,4 +1,5 @@
 import { storedPriority } from '../sim/work-types.ts';
+import {liveNativePage} from './native-page-refresh';
 import {CARPET_FLOORS_355,carpetColor355,isCarpetFloor355} from '../sim/carpet-355';
 import {LETTER_CLASSES_352,isSchema352OrLater} from '../sim/letters-352';
 import {DEFAULT_PLAN_COLOR_369,PLAN_COLORS_369,PLAN_COLOR_DEFS_369,planColorHex369} from '../sim/plans-369';
@@ -59,6 +60,7 @@ import {tradeRequestContent284} from '../sim/trade-request-content-284';
 import {worldSettlementAccess256} from '../sim/world-faction-access';
 import {peaceTalksFacts293} from '../ui/peace-talks-293';
 import {constructionMaterials} from '../sim/construction-materials';
+import {constructionToolObject,constructionMaterialLines,constructionMaterialLabel,constructionThingLabel,constructionCostText} from '../ui/construction-material-presentation';
 import {createNativeStorageEditor} from './native-storage-editor';
 import {registeredMapId} from '../sim/world-map-context';
 import {previewBackgroundSkills} from '../sim/background-generation';
@@ -98,6 +100,13 @@ async function send(command:Command):Promise<unknown>{
  finally {dispatching=false;host.refresh();}
 }
 function open(page:NativePage):void {host?.showPage({...page,textEntities:page.textEntities??nativeTextEntitiesFor(latest?.world,latest?.campaign)});}
+/** Read-only dossiers are live projections. The separate editor factories
+ * continue to own their drafts and are deliberately opened with open(). */
+function livePanelPage(make:()=>NativePage|null):NativePage|null {
+ const page=make(),state=latest;if(!page||!state)return null;
+ return liveNativePage(page,state,(next,actions)=>{syncNativePanelState(next,actions);return livePanelPage(make);});
+}
+function openLive(make:()=>NativePage|null):void {const page=livePanelPage(make);if(page)open(page);}
 function redraw():void {host?.refresh();}
 function back():void {const state=latest,actions=host;if(!state||!actions)return;const page=buildNativePanel(state,actions);if(page)open(page);}
 function detailPage(id:string,title:string,rows:NativeRow[],actions:NativeControl[]=[],onBack:()=>void=back):NativePage{return {id,title,rows,actions:[...actions,button(`${id}-back`,'Retour',onBack)],modal:true,width:7.8,onClose:onBack};}
@@ -137,8 +146,9 @@ function planColorPage369(state:NativeUiState,actions:NativeUiActions):void {
  page.width=600;open(page);
 }
 function nativeToolControl(tool:(typeof toolDefinitions)[number],state:NativeUiState,actions:NativeUiActions):NativeControl {
+ const selected=state.tool===tool.id,entity=selected?constructionToolObject(tool.id,state.constructionMaterial):undefined;
  return button(`tool-${tool.id}-select`,tool.title,()=>tool.id==='plan'&&actions.planColor369?planColorPage369(state,actions):actions.tool(tool.id),{
-  icon:tool.id,caption:tool.key||undefined,hint:`${tool.title}${tool.key?` · ${tool.key}`:''}\n${tool.hint}`,active:state.tool===tool.id,
+  icon:tool.id,caption:tool.key||undefined,hint:`${entity?constructionThingLabel(tool.title,entity):tool.title}${tool.key?` · ${tool.key}`:''}\n${[entity?constructionCostText(entity,true):'',tool.hint].filter(Boolean).join('\n')}`,active:selected,
  });
 }
 function architect(state:NativeUiState,actions:NativeUiActions,world:World):NativePage {
@@ -153,8 +163,10 @@ function architect(state:NativeUiState,actions:NativeUiActions,world:World):Nati
   {id:'architect-tools',label:'',region:'catalogue',controlStyle:'tile',controls:tools.map(tool=>nativeToolControl(tool,state,actions))},
  ];
  if(selected){
-  rows.push({...row('architect-selected',selected.title,undefined,selected.hint),region:'details',emphasis:'heading'});
-  if(materials.length>1)rows.push({...row('architect-material','Matériau',undefined,undefined,[button(`tool-${selected.id}-material`,ITEM_DEFINITIONS[state.constructionMaterial].label,()=>{}, {hint:'Matériau de la construction sélectionnée',select:{value:state.constructionMaterial,options:materials.map(material=>({value:material,label:ITEM_DEFINITIONS[material].label})),onChange:value=>{const material=materials.find(item=>item===value);if(material)actions.material(material);}}})]),region:'details',compact:true});
+  const entity=constructionToolObject(selected.id,state.constructionMaterial),material=entity.material;
+  rows.push({...row('architect-selected',constructionThingLabel(selected.title,entity),undefined,selected.hint),region:'details',emphasis:'heading'});
+  for(const line of constructionMaterialLines(entity,world,undefined,true).sort((a,b)=>b.required-a.required))rows.push({...row(`architect-cost-${line.item}`,line.label,String(line.required)),region:'details',compact:true});
+  if(materials.length>1&&material)rows.push({...row('architect-material','Matériau',undefined,undefined,[button(`tool-${selected.id}-material`,constructionMaterialLabel(material),()=>{}, {hint:'Matériau de la construction sélectionnée',select:{value:material,options:materials.map(material=>({value:material,label:constructionMaterialLabel(material)})),onChange:value=>{const material=materials.find(item=>item===value);if(material)actions.material(material);}}})]),region:'details',compact:true});
   if(isCarpetFloor355(selected.id))rows.push({...row('architect-carpet-color','Couleur',undefined,undefined,[button(`tool-${selected.id}-color`,carpetColor355(selected.id).label,()=>{},{hint:'Couleur du tapis : les 63 teintes du jeu de base',select:{value:selected.id,options:CARPET_FLOORS_355.map(id=>({value:id,label:carpetColor355(id).label})),onChange:value=>{if(isCarpetFloor355(value))actions.tool(value);}}})]),region:'details',compact:true});
   if(selected.id==='ship-computer'||selected.id==='ship-sensors')rows.push({...row('architect-rotation','Orientation','Fixe','Édifice 2 × 2 fixe, sans rotation.'),region:'details',compact:true});
   else rows.push({...row('architect-rotation','Orientation',`${state.orientation*90}°`,'Q / E tourne les constructions orientables.',[button('rotate-left','↶',()=>actions.rotate(-1),{hint:'Tourner à gauche · Q'}),button('rotate-right','↷',()=>actions.rotate(1),{hint:'Tourner à droite · E'})]),region:'details',compact:true});
@@ -291,8 +303,10 @@ function animalArea(id:number):void {
  const choices:{id:string;label:string;choice:AnimalAreaChoice287|null}[]=[{id:'unrestricted',label:'Sans restriction',choice:null},{id:'home',label:'Zone de foyer',choice:{kind:'home'}},...(world.allowedAreas??[]).map(area=>({id:`area-${area.id}`,label:area.label,choice:{kind:'allowed' as const,areaId:area.id}}))];
  choose(`animal-area-${id}`,'Zone autorisée',choices.map(choice=>({id:choice.id,label:choice.label,active:JSON.stringify(current)===JSON.stringify(choice.choice),choose:()=>send({type:'animal-area-assign',animalId:id,choice:choice.choice})})));
 }
-function animalDetails(id:number):void {
- const world=currentWorld(),animal=currentAnimal(id),species=animalSpecies(animal.species),name=actualAnimalName256(animal)??`${species.label} ${animal.id}`;
+function animalDetails(id:number):void {openLive(()=>animalDetailsPage(id));}
+function animalDetailsPage(id:number):NativePage|null {
+ const world=currentWorld(),animal=world.wildlife?.animals.find(animal=>animal.id===id);if(!animal)return null;
+ const species=animalSpecies(animal.species),name=actualAnimalName256(animal)??`${species.label} ${animal.id}`;
  const rows:NativeRow[]=[row('animal-state','État',animalActivity(world,animal)),row('animal-age','Âge',`${(animal.ageTicks/(TICKS_PER_DAY*60)).toLocaleString('fr-FR',{maximumFractionDigits:2})} an · ${stageLabels[animalLifeStage(animal)]}`),row('animal-food','Nourriture',`${Math.round(100*animal.food/animalNutritionMax(animal))} %`),row('animal-mobility','Mobilité',`${Math.round(100*animalBody(animal).capacities.moving)} %`),row('animal-position','Position',`${animal.x}, ${animal.z}`)];
  if(animal.pregnancy)rows.push(row('animal-pregnancy','Gestation',`${Math.round(100*animal.pregnancy.progress/gestationTicks(animal.species))} %`));
  if(animal.domestic){
@@ -300,7 +314,7 @@ function animalDetails(id:number):void {
   if(world.schemaVersion>=287&&supportsAnimalAreas287(animal.species))rows.push(row('animal-area','Zone autorisée',animalAreaLabel(world,animal),undefined,[button('animal-area-edit','Choisir',()=>animalArea(id))]));
   if(world.schemaVersion>=282)for(const skill of ['obedience','haul'] as const){const training=readAnimalTraining282(animal,skill),refusal=trainingRefusal282(world,animal,skill);rows.push(row(`training-${skill}`,skill==='haul'?'Transport':'Obéissance',`${training.steps}/${training.maxSteps}${training.learned?' · acquis':''}`,refusal??'Les leçons exigent un dresseur, la nourriture et les prérequis physiques.',[button(`training-${skill}-toggle`,training.wanted?'Demandé':'Demander',()=>send({type:'animal-training',animalId:id,skill,wanted:!readAnimalTraining282(currentAnimal(id),skill).wanted}),{active:training.wanted,disabled:!!refusal})]));}
  }
- open(detailPage(`animal-${id}`,name,rows,[button('animal-locate','Repérer',()=>host?.selectPawn(id))]));
+ return detailPage(`animal-${id}`,name,rows,[button('animal-locate','Repérer',()=>host?.selectPawn(id))]);
 }
 function animalAreaLabel(world:World,animal:NonNullable<World['wildlife']>['animals'][number]):string {
  if(world.schemaVersion<287||!supportsAnimalAreas287(animal.species))return animalPenStatus(world,animal)??'Libre';
@@ -369,12 +383,13 @@ function filteredTableAnimals(kind:AnimalTableKind,world:World,animals:TableAnim
  const text=(animal:TableAnimal)=>{let value=textKeys.get(animal);if(value===undefined){value=view.sort==='species'?animalSpecies(animal.species).label:view.sort==='sex'?animal.sex:view.sort==='activity'?activity(animal):view.sort==='area'?animalAreaLabel(world,animal):name(animal);textKeys.set(animal,value);}return value;};
  return filtered.sort((a,b)=>{const compared=view.sort==='age'?a.ageTicks-b.ageTicks:view.sort==='product'?productFullness(a)-productFullness(b):view.sort==='position'?a.z-b.z||a.x-b.x:view.sort==='harm-rage'?manhunterOnDamageChance348(world,a)-manhunterOnDamageChance348(world,b):view.sort==='tame-rage'?manhunterOnTameFailChance348(a)-manhunterOnTameFailChance348(b):animalTableCollator.compare(text(a),text(b));return (view.descending?-compared:compared)||a.id-b.id;});
 }
-function animalQuotaOverview():void {
+function animalQuotaOverview():void {openLive(animalQuotaOverviewPage);}
+function animalQuotaOverviewPage():NativePage {
  const world=currentWorld(),rows:NativeRow[]=[{id:'quotas-headings',label:'Espèce',value:'Total',compact:true,columns:['Adultes ♂','Adultes ♀','Jeunes ♂','Jeunes ♀','Gestantes','Limite','Modifier'].map(label=>({label}))}];
  for(const species of AUTO_SLAUGHTER_SPECIES){const counts=autoSlaughterCounts(world,species),config=world.autoSlaughter?.find(row=>row.species===species)??defaultAutoSlaughterConfig(species);
   rows.push({id:`quota-${species}`,label:animalSpecies(species).label,value:String(counts.total),compact:true,presentation:'plain',controls:[...[[counts.males,'males'],[counts.females,'females'],[counts.malesYoung,'males-young'],[counts.femalesYoung,'females-young'],[counts.pregnant,'pregnant'],[config.maxTotal<0?'∞':config.maxTotal,'limit']].map(([value,suffix])=>animalFact(`quota-${species}-${suffix}`,String(value))),animalTableButton(`quota-${species}-edit`,'Quotas',()=>quotaEditor(species))]});
  }
- const page=detailPage('animals-quotas','Abattage automatique',rows);page.layout='table';page.width=1140;open(page);
+ const page=detailPage('animals-quotas','Abattage automatique',rows);page.layout='table';page.width=1140;return page;
 }
 function animalsPanel(world:World):NativePage {
  const all=world.wildlife?.animals.filter(animal=>!!animal.domestic&&animal.state!=='dead')??[],targets=autoSlaughterTargets(world),animals=filteredTableAnimals('animals',world,all,targets);
@@ -629,7 +644,8 @@ function apparelEditor(id:number):void {
  ],[button('apparel-apply','Appliquer',async()=>{if(WEAPON_QUALITIES.indexOf(minQuality)>WEAPON_QUALITIES.indexOf(maxQuality)||minHitPointsPercent>maxHitPointsPercent)throw Error('Le minimum dépasse le maximum.');await send({type:'apparel-policy-update',policyId:id,allowedItems:[...items],allowedMaterials:[...materials],minQuality,maxQuality,minHitPointsPercent,maxHitPointsPercent,...(taintedFilter?{allowTainted374:taintedAllowed}:{})});back();}),button('apparel-copy','Copier les filtres confirmés',()=>inputPage(`apparel-copy-${id}`,'Copier la tenue',`${policy.label} copie`,label=>send({type:'apparel-policy-copy',policyId:id,label}))),button('apparel-rename','Renommer',()=>inputPage(`apparel-rename-${id}`,'Renommer la tenue',policy.label,label=>send({type:'apparel-policy-rename',policyId:id,label})))]);
  open(make());
 }
-function areaEditor(onBack:()=>void=back):void {
+function areaEditor(onBack:()=>void=back):void {host?.previewAllowedArea?.(undefined);openLive(()=>areaEditorPage(onBack));}
+function areaEditorPage(onBack:()=>void):NativePage {
  const world=currentWorld(),returnToList=()=>areaEditor(onBack);
  const epoch=latest?.epoch,mapId=registeredMapId(world),seed=world.seed,width=world.width,height=world.height;
  const preview=(areaId:number|undefined):void=>{
@@ -639,7 +655,6 @@ function areaEditor(onBack:()=>void=back):void {
   host?.previewAllowedArea?.(areaId!==undefined&&fresh.allowedAreas?.some(area=>area.id===areaId)?areaId:undefined);
  };
  const clearPreview=()=>preview(undefined),leaveList=()=>{clearPreview();onBack();};
- clearPreview();
  const page=detailPage('allowed-areas','Zones autorisées',[
   row('areas-help','Règles',`${world.allowedAreas?.length??0} / 10`,'Une zone vide équivaut à Sans restriction. Les trajets peuvent traverser le reste de la carte.'),
   ...(world.allowedAreas??[]).map(area=>row(`area-${area.id}`,area.label,`${area.cells.length} cases · #${area.color.toString(16).padStart(6,'0')}`,undefined,[
@@ -663,7 +678,7 @@ function areaEditor(onBack:()=>void=back):void {
  page.layout='table';page.width=1280;
  for(const entry of page.rows){entry.compact=true;entry.presentation='plain';}
  page.rows.splice(1,0,{id:'areas-headings',label:'Zone',value:'Cases · couleur',compact:true,presentation:'plain',columns:['Renommer','Couleur',...(host?.paintAllowedArea?['Agrandir','Réduire']:[]),'Coordonnées','Supprimer'].map(label=>({label}))});
- open(page);
+ return page;
 }
 function renameAllowedArea(areaId:number,onBack:()=>void):void {
  const area=currentWorld().allowedAreas?.find(area=>area.id===areaId);if(!area)return;
@@ -723,13 +738,13 @@ function assignPanel(world:World):NativePage {
   if(reading)controls.push(colonistTableControl(`assign-reading-${pawn.id}`,values.reading!,()=>{},{disabled:dead,hint:`${pawn.name} · Lecture : ${values.reading}`,select:{value:String(effectiveReadingPolicy295(pawn)),options:READING_POLICIES_295.map(policy=>({value:String(policy.id),label:policy.label})),onChange:value=>{const policy=READING_POLICIES_295.find(p=>String(p.id)===value);if(!policy)return;return send({type:'reading-policy-295',pawnId:owner().id,policyId:policy.id});}}}));
   rows.push({...row(`assign-${pawn.id}`,pawn.name,queryPawnStatus(world,pawn).reason,undefined,assignOrder(controls)),compact:true,hint:[pawn.name,`Régime : ${values.food}`,`Hostilité : ${response}`,`Zone : ${area}`,`Tenue : ${values.apparel}`,`Auto : ${values.auto}`,`Drogues : ${values.drug}`].join('\n')});
  }
- const actions:NativeControl[]=[colonistTableControl('assign-manage-food','Régimes',()=>open(detailPage('assign-food-policies','Régimes alimentaires',[
+ const actions:NativeControl[]=[colonistTableControl('assign-manage-food','Régimes',()=>openLive(()=>detailPage('assign-food-policies','Régimes alimentaires',[
   row('manage-food','Régimes alimentaires',undefined,undefined,[colonistTableControl('food-new','Nouveau régime',()=>inputPage('new-food','Nouveau régime','Nouveau régime',colonistTableGuard((name:string)=>send({type:'food-policy-create',name})))),...currentWorld().foodPolicies.map(policy=>colonistTableControl(`food-edit-${policy.id}`,policy.name,()=>foodEditor(policy.id)))]),
  ])))];
- if(world.apparelPolicies)actions.push(colonistTableControl('assign-manage-apparel','Tenues',()=>open(detailPage('assign-apparel-policies','Politiques de tenue',[
+ if(world.apparelPolicies)actions.push(colonistTableControl('assign-manage-apparel','Tenues',()=>openLive(()=>detailPage('assign-apparel-policies','Politiques de tenue',[
   row('manage-apparel','Politiques de tenue',undefined,'Filtre des vêtements et matières, qualité, PV, copie et renommage.',(currentWorld().apparelPolicies??[]).map(policy=>colonistTableControl(`apparel-edit-${policy.id}`,policy.label,()=>apparelEditor(policy.id)))),
  ]))));
- if(world.schemaVersion>=265)actions.push(colonistTableControl('assign-manage-drugs','Drogues',()=>open(detailPage('assign-drug-policies','Politiques de drogues',[
+ if(world.schemaVersion>=265)actions.push(colonistTableControl('assign-manage-drugs','Drogues',()=>openLive(()=>detailPage('assign-drug-policies','Politiques de drogues',[
   row('manage-drugs','Politiques de drogues',undefined,undefined,[colonistTableControl('drug-new','Nouvelle politique',()=>inputPage('new-drug','Nouvelle politique','Nouvelle politique',colonistTableGuard((name:string)=>send({type:'drug-policy-create',name})))),...effectiveDrugPolicies265(currentWorld()).map(policy=>colonistTableControl(`drug-edit-${policy.id}`,policy.name,()=>drugEditor(policy.id)))]),
  ]))));
  actions.push(colonistTableControl('areas-manage','Zones',()=>areaEditor()));
@@ -925,5 +940,6 @@ function buildNativePanelContent(state:NativeUiState,actions:NativeUiActions):Na
 }
 export function buildNativePanel(state:NativeUiState,actions:NativeUiActions):NativePage|null {
  const page=buildNativePanelContent(state,actions);
- return page?{...page,textEntities:page.textEntities??nativeTextEntitiesFor(state.world,state.campaign)}:null;
+ return page?liveNativePage({...page,textEntities:page.textEntities??nativeTextEntitiesFor(state.world,state.campaign)},state,
+  (next,callbacks)=>next.panel===state.panel?buildNativePanel(next,callbacks):null):null;
 }

@@ -1,4 +1,5 @@
-import {isDoubleBedKind} from './bed-kinds.ts';
+import {isBedKind,isDoubleBedKind} from './bed-kinds.ts';
+import {structureFamily379} from './structure-family-379.ts';
 import {captureShipCasketAnimals277} from './ship-casket-state-277.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
@@ -8,7 +9,7 @@ import {captureDuckFlyerOwners256} from './duck-owner-capture-256.ts';
  * World, retained campaign cache or new remote assignment command. */
 import {campaignPhysicalCaptures} from './campaign-people.ts';
 import {registeredCampaign,registeredMapId} from './world-map-context.ts';
-import {actualBedReferences256,prepareActorBedClaim256,actorBedClaimCurrent256,
+import {prepareActorBedClaim256,actorBedClaimCurrent256,
  commitActorBedClaim256,unclaimDetachedActorBed256,
  rememberActorBedDeparture256,actorBedEntryAlias256,
  type BedActor256,type ActualBedReference256} from './actor-map-bed-256.ts';
@@ -25,6 +26,7 @@ export interface ActualActorBeds256 {
 const isAnimal=(a:BedActor256):a is WildAnimal&BedActor256=>'species' in a;
 const localId=(a:BedActor256):number|null=>isAnimal(a)?a.domestic?.bedId??null:a.bedId;
 const localSlot=(a:BedActor256):0|1|undefined=>isAnimal(a)?undefined:a.bedSlot;
+const actualBedKind=(kind:Structure['kind'])=>kind==='animal-sleeping-spot'||isBedKind(kind);
 function alias(a:BedActor256,id:number|null,slot?:0|1):void {
  if(isAnimal(a)){
   if(!a.domestic){if(id!==null)throw Error('Animal bed claim lacks real player settings');return;}
@@ -51,10 +53,11 @@ export function captureActorBeds256(input:CampaignState):ActualActorBeds256 {
   places.set(a,mapId);actors.push(a);
  };
  const bed=(b:Structure,mapId:number|null,source:object=b)=>{
-  const base=actualBedReferences256(mapId??0,[b],[])[0];
-  // This is reference metadata for that very original, not a fabricated pack.
-  const ref=base?{...base,mapId}:undefined;
-  if(!ref)return;identity(b.id,b);
+  // Only an actual bed produces reference metadata. Avoid making two
+  // temporary arrays per ordinary (non-bed) structure and copying the ref.
+  if(!actualBedKind(b.kind))return;
+  const ref:ActualBedReference256={id:b.id,mapId,animal:b.kind==='animal-sleeping-spot',slots:isDoubleBedKind(b.kind)?2:1};
+  identity(b.id,b);
   if(beds.has(b)){if(beds.get(b)!==mapId||bedSources.get(b)!==source)throw Error('Bed original has two physical owners');return;}
   beds.set(b,mapId);bedSources.set(b,source);refs.push(ref);
  };
@@ -72,7 +75,7 @@ export function captureActorBeds256(input:CampaignState):ActualActorBeds256 {
   }
   if(captured.world){
    if(captured.world.structures.length&&mapId===undefined)throw Error('Spawned beds lack a real map authority');
-   for(const b of captured.world.structures)bed(b,mapId??null);
+   for(const b of structureFamily379(captured.world,'actor-beds-379',actualBedKind))bed(b,mapId??null);
    for(const held of captureShipCasketAnimals277(captured.world)){actor(held.animal,mapId??null);for(const pack of held.packed)packed(pack);}
    for(const p of captured.world.packed)packed(p);
    for(const a of captureCoreStartingAnimals256(captured.world))actor(a,null);
@@ -179,14 +182,14 @@ export function globalCivilBedShare256(w:World,b:Structure,p:Pawn,
    (link.aId===p.id&&link.bId===other.id||link.bId===p.id&&link.aId===other.id)));
 }
 export function localBedClaimAvailable256(w:World,b:Structure,p:BedActor256,
- slot?:0|1,capture?:ActualActorBeds256):boolean {
+ slot?:0|1,capture?:ActualActorBeds256|(()=>ActualActorBeds256)):boolean {
  if(!targetBuildingPlayerUse263(w,b))return false;
  if(w.schemaVersion<256||b.medical)return true;
  // A validated continuing local alias already owns this actual place. A true
  // later attribution clears it atomically, including historical aliases.
  if(localId(p)===b.id&&(!isDoubleBedKind(b.kind)||localSlot(p)===slot)&&w.structures.includes(b)&&
     (isAnimal(p)?w.wildlife?.animals.includes(p):w.pawns.includes(p)))return true;
- const c=capture??captureActorBeds256(registeredCampaign(w));
+ const c=typeof capture==='function'?capture():capture??captureActorBeds256(registeredCampaign(w));
  return !otherActorOwnsBed256(w,b,p,slot,c)&&
   (isAnimal(p)||globalCivilBedShare256(w,b,p,c));
 }

@@ -11,15 +11,16 @@ import { readFileSync } from 'node:fs';
 const sum = (a, k) => a.reduce((s, x) => s + (x[k] ?? 0), 0);
 const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))] ?? 0; };
 function measure(window) {
-  const { frames: f, tasks, wallS, ticks } = window;
+  const { frames: f, tasks, wallS, ticks, publishedCoreTicks } = window;
   const full = f.filter(x => x.fulls > 0), phaseOnly = f.filter(x => !x.fulls && x.phaseN > 0);
   const phaseDrain = sum(phaseOnly, 'drain') / Math.max(1, sum(phaseOnly, 'phaseN'));
   const nRecv = Math.max(1, sum(f, 'fulls')), nMsg = Math.max(1, sum(f, 'nFull')), nApply = Math.max(1, sum(f, 'applyN'));
   const msg = (sum(f, 'listenFull') + sum(f, 'onmsgFull')) / nMsg, adm = (sum(full, 'drain') - phaseDrain * sum(full, 'phaseN')) / nRecv, apply = sum(f, 'apply') / nApply;
   const dts = f.map(x => x.dt);
   return { total: msg + adm + apply, msg, deser: sum(f, 'deserFull') / nMsg, adm, adopt: sum(f, 'adopt') / nRecv, apply, fullsPerS: sum(f, 'fulls') / wallS,
-    fps: f.length / wallS, p95: q(dts, .95), p99: q(dts, .99), max: q(dts, 1), over33: dts.filter(x => x > 33.4).length, over50: dts.filter(x => x > 50).length, over100: dts.filter(x => x > 100).length,
-    longTaskMs: tasks.reduce((a, b) => a + b, 0), hudMsPerS: sum(f, 'hud') / wallS, ticksPerS: ticks / wallS };
+    fps: f.length / wallS, ...(f.some(frame=>frame.draws!==undefined)?{renderedFps:sum(f,'draws')/wallS}:{}), p95: q(dts, .95), p99: q(dts, .99), max: q(dts, 1), over33: dts.filter(x => x > 33.4).length, over50: dts.filter(x => x > 50).length, over100: dts.filter(x => x > 100).length,
+    longTaskMs: tasks.reduce((a, b) => a + b, 0), hudMsPerS: sum(f, 'hud') / wallS, ticksPerS: ticks / wallS,
+    ...(Number.isSafeInteger(publishedCoreTicks)?{publishedTicksPerS:publishedCoreTicks/10/wallS}:{}) };
 }
 const speeds = data => Object.keys(data).filter(k => /^x\d+$/.test(k));
 const args = process.argv.slice(2);
@@ -31,6 +32,7 @@ if (!args.some(a => a.includes('='))) {
   for (const k of speeds(groups[0].runs[0])) {
     console.log(`== ${k}`);
     const rows = groups.map(g => g.runs.filter(r => r[k]).map(r => measure(r[k])));
-    for (const m of Object.keys(rows[0][0])) console.log(m.padEnd(11) + groups.map((g, i) => { const v = rows[i].map(r => r[m]); return `${g.name} ${med(v).toFixed(1).padStart(7)} [${Math.min(...v).toFixed(1)}-${Math.max(...v).toFixed(1)}]`; }).join('   '));
+    const metrics=new Set(rows.flatMap(r=>r.flatMap(Object.keys)));
+    for (const m of metrics) console.log(m.padEnd(18) + groups.map((g, i) => { const v = rows[i].map(r => r[m]).filter(Number.isFinite); return v.length?`${g.name} ${med(v).toFixed(1).padStart(7)} [${Math.min(...v).toFixed(1)}-${Math.max(...v).toFixed(1)}]`:`${g.name} n/a`; }).join('   '));
   }
 }

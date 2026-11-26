@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import { footprintCells } from './definitions.ts';
 import { startTravel } from './movement.ts';
 import { canStep, cellIndex, interactionGoals, routeToCell, routeToJob } from './pathfinding.ts';
@@ -26,5 +27,5 @@ export function moveToward(world: World, pawn: Pawn, target: Cell, allowTarget: 
     if (path === null) { releaseWork(world,pawn); return; }
     pawn.path = path; next = path[0];
   }
-  if (next&&startTravel(world,pawn,next,getLight,budget.structureGeometry?.())) pawn.path.shift();
+  if (next&&startTravel(world,pawn,next,getLight,budget.structureGeometry?.())) shiftActorPath297(pawn.path);
 }

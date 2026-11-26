@@ -1,6 +1,8 @@
 import {expect,test} from 'vitest';
 import {createWorld} from '../src/sim/index';
 import {captureActorPhaseDependencies297,equalActorPhaseDependencies297,patchableDependencyChanges297} from '../src/bridge/actor-phase-dependencies-297';
+import {ensureFireState} from '../src/sim/fire-rules';
+import {enableWildlife} from '../src/sim/wildlife';
 
 // A capture given an earlier capture keeps the owned copy of every row that is
 // exactly equal: same values as a capture from scratch, unchanged rows by identity.
@@ -37,4 +39,42 @@ test('a capture that is not one of this module is ignored, never trusted',()=>{
  const world=createWorld(11,48,48),real=captureActorPhaseDependencies297(world),forged={format:real.format,data:structuredClone(real.data)} as typeof real;
  const result=captureActorPhaseDependencies297(world,forged);
  expect(result.data).toEqual(real.data);expect((result.data as Data).human).not.toBe((forged.data as Data).human);
+});
+
+test('warmed owned key lists still observe same-tick live value and key changes',()=>{
+ const world=createWorld(11,48,48),pawn=world.pawns[0]!,appearance=pawn.appearance!;
+ const held=captureActorPhaseDependencies297(world),original=JSON.stringify(held.data),color=appearance.hairColor,tick=world.tick;
+ for(let i=0;i<3;i++)expect(equalActorPhaseDependencies297(held,captureActorPhaseDependencies297(world,held))).toBe(true);
+ appearance.hairColor=color^0x000101;
+ const changed=captureActorPhaseDependencies297(world,held),scratch=captureActorPhaseDependencies297(world);
+ expect(changed.data).toEqual(scratch.data);expect(equalActorPhaseDependencies297(held,changed)).toBe(false);
+ expect(JSON.stringify(held.data)).toBe(original);expect(world.tick).toBe(tick);
+ appearance.hairColor=color;
+ expect((captureActorPhaseDependencies297(world,held).data as Data).human).toBe((held.data as Data).human);
+ // Extra own keys must still reach the complete copy's refusal, even after
+ // an otherwise equal live record warmed the comparison's owned key cache.
+ for(const key of ['hidden',Symbol('extra')]){
+  Object.defineProperty(appearance,key,{value:1,enumerable:typeof key==='symbol',configurable:true});
+  expect(()=>captureActorPhaseDependencies297(world,held)).toThrow('Core phase requires plain own data');
+  expect(()=>captureActorPhaseDependencies297(world)).toThrow('Core phase requires plain own data');
+  Reflect.deleteProperty(appearance,key);
+ }
+ expect(JSON.stringify(held.data)).toBe(original);
+});
+
+test('attachment indexing keeps fire array order, live size edits and removals for humans and animals',()=>{
+ const world=createWorld(11,48,48);enableWildlife(world,2);
+ const pawn=world.pawns[0]!,animal=world.wildlife!.animals[0]!,state=ensureFireState(world);
+ const fire=(attachment:{attachedPawnId:number}|{attachedAnimalId:number}|{},size:number)=>({id:world.nextId++,x:0,z:0,size,bornCore:0,nextPulseCore:15,complexCore:0,spreadCore:0,...attachment});
+ state.items=[fire({attachedPawnId:pawn.id},.4),fire({},.5),fire({attachedAnimalId:animal.id},.6),fire({attachedPawnId:pawn.id},.7),fire({attachedAnimalId:animal.id},.8)];
+ const rows=(value:ReturnType<typeof captureActorPhaseDependencies297>)=>{
+  const data=value.data as {human:unknown[][];animalGroups:[string,unknown[][]][]};
+  return {human:data.human.find(row=>row[0]===pawn.id)!.at(-1),animal:data.animalGroups.flatMap(group=>group[1]).find(row=>row[0]===animal.id)!.at(-1)};
+ };
+ const first=captureActorPhaseDependencies297(world),before=JSON.stringify(first.data);
+ expect(rows(first)).toEqual({human:[[state.items[0]!.id,.4],[state.items[3]!.id,.7]],animal:[[state.items[2]!.id,.6],[state.items[4]!.id,.8]]});
+ state.items[0]!.size=.9;state.items.splice(2,1);
+ const after=captureActorPhaseDependencies297(world,first);
+ expect(rows(after)).toEqual({human:[[state.items[0]!.id,.9],[state.items[2]!.id,.7]],animal:[[state.items[3]!.id,.8]]});
+ expect(after.data).toEqual(captureActorPhaseDependencies297(world).data);expect(JSON.stringify(first.data)).toBe(before);
 });

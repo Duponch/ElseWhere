@@ -7,6 +7,9 @@ import { attribute, texture, uv } from 'three/tsl';
 import { material } from './primitives';
 import type { Placement } from './primitives';
 import { BoxMesh, configureBoxMaterial } from './BoxMesh';
+import {SpatialInstanceRanges379,type SpatialInstanceRange379} from './SpatialInstanceRanges379';
+import {markResidentAttributeRange} from './resident-attribute-range';
+import {retainFixedLocalMatrix} from './scene-matrix-pass';
 import { createStylizedSurfaceTexture } from './stylized-surfaces';
 import { instancedBoxPatternUv } from './texture-variation';
 import { chunkContour, configureChunkMaterial, createChunkGeometry, isSmallChunk } from './chunk-shape';
@@ -27,6 +30,9 @@ import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBo
 
 const object = new THREE.Object3D(), color = new THREE.Color();
 type Style = 'solid' | 'overlay' | 'wire' | 'storage' | 'storage-home' | 'border';
+interface PileBatchState {readonly geometry:THREE.BufferGeometry;readonly matrix:THREE.InstancedInterleavedBuffer;matrixVersion:number;readonly items:Placement[]}
+const sameTransform=(a:Placement,b:Placement):boolean=>Object.is(a.x,b.x)&&Object.is(a.y,b.y)&&Object.is(a.z,b.z)&&Object.is(a.ry??0,b.ry??0)&&Object.is(a.sx??1,b.sx??1)&&Object.is(a.sy??1,b.sy??1)&&Object.is(a.sz??1,b.sz??1);
+const sameScale=(a:Placement,b:Placement):boolean=>Object.is(a.sx??1,b.sx??1)&&Object.is(a.sy??1,b.sy??1)&&Object.is(a.sz??1,b.sz??1);
 
 /** Shared pipelines and authored shape; changing quantity never creates a material.
  * Each logical batch retains its GPU allocation, including when emptied.
@@ -50,6 +56,8 @@ export class BoxBatches {
   private readonly preparedSourceMaterials:THREE.NodeMaterial[]=[];
   private readonly preparedModels=new Map<THREE.BufferGeometry,PreparedSurfaceModel>();
   private readonly preparedBatchCounts=new Map<BoxMesh,Map<number,number>>();
+  /** Renderer-owned primitive values only: caller Placement objects stay mutable. */
+  private pileBatchStates=new WeakMap<BoxMesh,PileBatchState>();
   preparedSurfaceStatus(){return this.preparedSurfaces?.status();}
   requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurfaces?.requestQualityRoute(route);}
   private readonly plainRock = createSurfaceMaterial('diffuse',0xffffff);
@@ -64,6 +72,7 @@ export class BoxBatches {
     wire: new THREE.MeshBasicNodeMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.65, depthWrite: false }),
   };
   private readonly batches = new Map<string, BoxMesh>();
+  private readonly spatial=new Map<BoxMesh,SpatialInstanceRanges379>();
   private readonly itemAtlas:ItemMeshAtlas;
   private readonly plainItem=createSurfaceMaterial('diffuse',0xffffff);
   private readonly texturedItem=createSurfaceMaterial('diffuse',0xffffff);
@@ -185,6 +194,7 @@ export class BoxBatches {
       // without fragments. They are shared across the spatial map chunks.
       for(const [suffix,geometry] of [['rounded-rock',this.roundedRockGeometry],['small-rock',this.smallRockGeometry]] as const){
         const warm = new BoxMesh(geometry, this.texturesEnabled ? this.texturedRock : this.plainRock, 1,this.ownedProducer435);
+        if(this.ownedProducer435)retainFixedLocalMatrix(warm);
         this.allocateRockContour(warm);
         warm.name = `pile-${suffix}-warm`;
         warm.castShadow = shadows; warm.receiveShadow = true; warm.activeCount = 0;
@@ -238,10 +248,34 @@ export class BoxBatches {
     return true;
   }
 
+  /** Bounds use the same committed Float32 transforms that the GPU reads.
+   * Both authorised batches use the complete authored unit box. */
+  readSpatialBounds(group:THREE.Group,key:string,first:number,count:number):THREE.Box3|undefined {
+    const mesh=this.batches.get(key);
+    if(!this.ownedProducer435||!mesh||mesh.parent!==group||!this.rigidBoxes.has(mesh)||count<1||first<0||!Number.isSafeInteger(first)||!Number.isSafeInteger(count)||first+count>mesh.activeCount)return;
+    const bounds=new THREE.Box3(),part=new THREE.Box3(),unit=new THREE.Box3(new THREE.Vector3(-.5,-.5,-.5),new THREE.Vector3(.5,.5,.5));
+    const matrix=new THREE.Matrix4();
+    for(let i=first;i<first+count;i++){mesh.getMatrixAt(i,matrix);bounds.union(part.copy(unit).applyMatrix4(matrix));}
+    return bounds;
+  }
+  setSpatialRanges(group:THREE.Group,key:string,ranges:readonly SpatialInstanceRange379[]|undefined):boolean {
+    const mesh=this.batches.get(key);
+    if(!mesh||mesh.parent!==group||!this.ownedProducer435)return false;
+    let state=this.spatial.get(mesh);
+    if(!ranges||ranges.length<2){
+      if(state){state.dispose();this.spatial.delete(mesh);mesh.commitOwnedOpaque435();}
+      return false;
+    }
+    if(!state){state=new SpatialInstanceRanges379(mesh,'instances',this.ownedProducer435);this.spatial.set(mesh,state);}
+    const installed=state.setRanges(ranges);
+    if(!installed){state.dispose();this.spatial.delete(mesh);}
+    mesh.commitOwnedOpaque435();return installed;
+  }
+  spatialMetrics379(){return [...this.spatial].map(([mesh,state])=>({key:mesh.name,...state.metrics()}));}
+
   private setGeometry(group: THREE.Group, key: string, items: Placement[], geometry: THREE.BufferGeometry, style: Style, shadows: boolean): void {
     if(key==='furniture')this.furnitureRevision={};
     let mesh = this.batches.get(key);
-    if(mesh)this.targetBatches.get(mesh)?.tint.restore();
     const rock=geometry===this.roundedRockGeometry||geometry===this.smallRockGeometry;
     const atlas=geometry===this.itemAtlas.geometry||geometry===this.itemAtlas.smallGeometry;
     const chosen = style==='solid'&&atlas?(this.texturesEnabled?this.texturedItem:this.plainItem):style === 'solid' && rock
@@ -249,6 +283,7 @@ export class BoxBatches {
       : style === 'solid' && this.texturesEnabled ? (geometry===this.geometry?this.texturedSolid:this.texturedNonBox) : this.materials[style];
     if (!mesh) {
       mesh = new BoxMesh(geometry, chosen, Math.max(256, 2 ** Math.ceil(Math.log2(items.length || 1))),style==='solid'?this.ownedProducer435:undefined);
+      if(style==='solid'&&this.ownedProducer435)retainFixedLocalMatrix(mesh);
       if(rock)this.allocateRockContour(mesh);
       mesh.name = key;
       mesh.castShadow = style === 'solid' && shadows; mesh.receiveShadow = true;
@@ -258,12 +293,18 @@ export class BoxBatches {
       group.add(mesh); this.batches.set(key, mesh);
     } else if (items.length > mesh.instanceMatrix.count||atlas!==!!mesh.itemShapeBuffer) {
       // Release the old per-instance buffers before replacing their capacity.
+      this.targetBatches.get(mesh)?.tint.restore();
       const capacity = Math.max(mesh.instanceMatrix.count,2 ** Math.ceil(Math.log2(items.length||1)));
       mesh.allocate(geometry, capacity);
       if(rock)this.allocateRockContour(mesh);
     }
     if(geometry===this.geometry)this.rigidBoxes.add(mesh);else this.rigidBoxes.delete(mesh);
-    if (mesh.material !== chosen) mesh.material = chosen;
+    const materialChanged=mesh.material!==chosen;
+    if (materialChanged) mesh.material = chosen;
+    const pile=style==='solid'&&key.startsWith('pile:'),resident=key.startsWith('pile:')&&!!this.ownedProducer435;
+    if(pile)try{if(this.patchPileGeometry(group,mesh,items,geometry,atlas,rock,materialChanged))return;}catch(error){this.pileBatchStates.delete(mesh);throw error;}
+    this.pileBatchStates.delete(mesh);
+    this.targetBatches.get(mesh)?.tint.restore();
     mesh.activeCount = items.length;
     if(style==='solid'&&!rock&&this.preparedSurfaces){const a=this.ensurePreparedVariant(mesh)!;a.array.fill(-1);this.preparedBatchCounts.set(mesh,new Map());}
     const ids:(number|undefined)[]=[];
@@ -273,20 +314,84 @@ export class BoxBatches {
       object.position.set(item.x, item.y, item.z); object.rotation.set(0, item.ry ?? 0, 0);
       object.scale.set(item.sx ?? 1, item.sy ?? 1, item.sz ?? 1); object.updateMatrix();
       mesh.setMatrixAt(i, object.matrix); mesh.setColorAt(i, color.setHex(item.color ?? 0xffffff));
-      if(style==='solid'&&!rock)this.writePreparedVariant(mesh,i,item,geometry,atlas);ids.push(item.targetId);
+      if(style==='solid'&&!rock)this.writePreparedVariant(mesh,i,item,geometry,atlas,!resident);ids.push(item.targetId);
       if(atlas){const slot=this.itemAtlas.slot(item.shape as ItemShape|undefined),ordinal=patternIndices!.get(slot)??0;mesh.setItemShapeAt(i,slot,ordinal);patternIndices!.set(slot,ordinal+1);}
       if(rock)(mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute).setXYZW(i,...chunkContour(item.key));
     }
-    mesh.instanceMatrix.needsUpdate = true; mesh.colorBuffer.needsUpdate = true;
-    if(mesh.itemShapeBuffer)mesh.itemShapeBuffer.needsUpdate=true;
-    if(rock)mesh.geometry.getAttribute('chunkContour').needsUpdate=true;
-    mesh.computeBoundingSphere();
+    // Every full writer in the owned pile lane explicitly covers the whole
+    // buffer. Subsequent sparse writers can merge outstanding ranges (even
+    // across culled frames) without narrowing a pending complete upload.
+    const dirty=(attribute:THREE.BufferAttribute|THREE.InterleavedBuffer)=>{if(resident)markResidentAttributeRange(attribute,0,attribute.array.length);else attribute.needsUpdate=true;};
+    dirty(mesh.instanceMatrix);dirty(mesh.colorBuffer);
+    if(mesh.itemShapeBuffer)dirty(mesh.itemShapeBuffer);
+    if(rock)dirty(mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute);
+    if(resident&&style==='solid'&&!rock&&this.preparedSurfaces)dirty(this.ensurePreparedVariant(mesh)!);
+    mesh.computeBoundingSphere(resident?0:undefined,this.ownedProducer435);
     let targets=this.targetBatches.get(mesh);
-    if(!targets){const ownedMesh=mesh;targets={ids,tint:new InstanceTargetTint(()=>ownedMesh.commitOwnedOpaque435())};this.targetBatches.set(mesh,targets);}
+    if(!targets){const ownedMesh=mesh;targets={ids,tint:new InstanceTargetTint(()=>ownedMesh.commitOwnedOpaque435(),resident)};this.targetBatches.set(mesh,targets);}
     else targets.ids=ids;
     targets.tint.setInstances(mesh.colorBuffer,ids);
     const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);
     this.publishPreparedBatch(mesh);mesh.commitOwnedOpaque435();
+    if(pile)this.pileBatchStates.set(mesh,{geometry,matrix:mesh.instanceMatrix,matrixVersion:mesh.instanceMatrix.version,items:items.map(item=>({...item}))});
+  }
+
+  /** Same category order, atlas ordinals and ordered bound fold as a full set.
+   * A changed bundle need not rewrite its unchanged neighbours. Shadow warmup
+   * and buffer growth invalidate the matrix witness and use the full writer. */
+  private patchPileGeometry(group:THREE.Group,mesh:BoxMesh,items:Placement[],geometry:THREE.BufferGeometry,atlas:boolean,rock:boolean,materialChanged:boolean):boolean {
+    const state=this.pileBatchStates.get(mesh),targets=this.targetBatches.get(mesh);
+    if(!state||!targets||mesh.parent!==group||state.geometry!==geometry||state.matrix!==mesh.instanceMatrix||state.matrixVersion!==mesh.instanceMatrix.version||state.items.length!==mesh.activeCount)return false;
+    const previous=state.items,oldLength=previous.length,countChanged=oldLength!==items.length,resident=!!this.ownedProducer435;
+    let matrices=false,colors=false,shapes=false,contours=false,prepared=false,idsChanged=countChanged,restored=false;
+    let matrixFirst=Infinity,matrixLast=-1,colorFirst=Infinity,colorLast=-1,shapeFirst=Infinity,shapeLast=-1,contourFirst=Infinity,contourLast=-1,variantFirst=Infinity,variantLast=-1;
+    const restore=()=>{if(!restored){targets.tint.restore();restored=true;}};
+    if(countChanged)restore();
+    const ids:(number|undefined)[]=[],patternIndices=atlas?new Map<number,number>():undefined;
+    const variants=!rock&&this.preparedSurfaces?this.ensurePreparedVariant(mesh):undefined;
+    if(variants&&items.length<oldLength){variants.array.fill(-1,items.length,oldLength);prepared=true;variantFirst=items.length;variantLast=oldLength-1;}
+    for(let i=0;i<items.length;i++){
+      const item=items[i]!,old=previous[i];let changed=!old;
+      if(!old||!sameTransform(old,item)){
+        object.position.set(item.x,item.y,item.z);object.rotation.set(0,item.ry??0,0);
+        object.scale.set(item.sx??1,item.sy??1,item.sz??1);object.updateMatrix();
+        mesh.setMatrixAt(i,object.matrix);matrices=changed=true;matrixFirst=Math.min(matrixFirst,i);matrixLast=i;
+      }
+      if(!old||!Object.is(old.color??0xffffff,item.color??0xffffff)){
+        restore();mesh.setColorAt(i,color.setHex(item.color??0xffffff));colors=changed=true;colorFirst=Math.min(colorFirst,i);colorLast=i;
+      }
+      ids.push(item.targetId);
+      if(!old||!Object.is(old.targetId,item.targetId)){restore();idsChanged=changed=true;}
+      let modelChanged=false;
+      if(atlas){
+        const slot=this.itemAtlas.slot(item.shape as ItemShape|undefined),ordinal=patternIndices!.get(slot)??0;
+        patternIndices!.set(slot,ordinal+1);
+        // Inserting/removing/reordering a shape changes later ordinals too.
+        const data=mesh.itemShapeBuffer!.array;
+        if(data[i*2]!==slot||data[i*2+1]!==ordinal){modelChanged=data[i*2]!==slot;mesh.setItemShapeAt(i,slot,ordinal);shapes=changed=true;shapeFirst=Math.min(shapeFirst,i);shapeLast=i;}
+      }
+      if(rock&&(!old||!Object.is(old.key,item.key))){
+        (mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute).setXYZW(i,...chunkContour(item.key));contours=changed=true;contourFirst=Math.min(contourFirst,i);contourLast=i;
+      }
+      if(variants&&(!old||modelChanged||!sameScale(old,item))){this.writePreparedVariant(mesh,i,item,geometry,atlas,!resident);prepared=changed=true;variantFirst=Math.min(variantFirst,i);variantLast=Math.max(variantLast,i);}
+      if(changed)previous[i]={...item};
+    }
+    previous.length=items.length;mesh.activeCount=items.length;
+    const dirty=(attribute:THREE.BufferAttribute|THREE.InterleavedBuffer,first:number,last:number,stride:number)=>{if(resident)markResidentAttributeRange(attribute,first*stride,(last-first+1)*stride);else attribute.needsUpdate=true;};
+    if(matrices)dirty(mesh.instanceMatrix,matrixFirst,matrixLast,16);
+    if(colors)dirty(mesh.colorBuffer,colorFirst,colorLast,3);
+    if(shapes)dirty(mesh.itemShapeBuffer!,shapeFirst,shapeLast,2);
+    if(contours)dirty(mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute,contourFirst,contourLast,4);
+    if(matrices||countChanged)mesh.computeBoundingSphere(resident?Math.min(matrixFirst,oldLength,items.length):undefined,this.ownedProducer435);
+    if(colors||idsChanged){targets.ids=ids;targets.tint.setInstances(mesh.colorBuffer,ids);const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);}
+    if(prepared){
+      // Rebuild only the tiny numeric counts, in first-slot order just like
+      // the full writer (including variant contribution order after a reorder).
+      const counts=new Map<number,number>();for(let i=0;i<items.length;i++){const id=variants!.getX(i);if(id>=0)counts.set(id,(counts.get(id)??0)+1);}
+      this.preparedBatchCounts.set(mesh,counts);dirty(variants!,variantFirst,variantLast,1);this.publishPreparedBatch(mesh);
+    }
+    if(matrices||colors||shapes||contours||prepared||idsChanged||materialChanged||countChanged)mesh.commitOwnedOpaque435();
+    state.matrixVersion=mesh.instanceMatrix.version;return true;
   }
 
   private ensurePreparedVariant(mesh:BoxMesh):THREE.InstancedBufferAttribute|undefined{
@@ -304,9 +409,9 @@ export class BoxBatches {
     let id=byZ.get(sz);if(id===undefined){id=owner.registerVariant(preparedDiagonalVariant(model,sx,sy,sz));byZ.set(sz,id);}
     return id;
   }
-  private writePreparedVariant(mesh:BoxMesh,slot:number,item:Placement,geometry:THREE.BufferGeometry,atlas:boolean):void{
+  private writePreparedVariant(mesh:BoxMesh,slot:number,item:Placement,geometry:THREE.BufferGeometry,atlas:boolean,mark=true):void{
     const owner=this.preparedSurfaces;if(!owner||geometry===this.roundedRockGeometry||geometry===this.smallRockGeometry)return;const a=this.ensurePreparedVariant(mesh)!,model=atlas?this.preparedModels.get(this.surfaceModels!.geometries[4+this.itemAtlas.slot(item.shape as ItemShape|undefined)]!):this.preparedModels.get(geometry);if(!model)throw Error('Actual shared prop model absent');
-    const id=this.preparedVariantId(owner,model,item.sx??1,item.sy??1,item.sz??1),old=a.getX(slot),counts=this.preparedBatchCounts.get(mesh)??new Map<number,number>();if(old>=0){const n=(counts.get(old)??0)-1;if(n>0)counts.set(old,n);else counts.delete(old);}counts.set(id,(counts.get(id)??0)+1);this.preparedBatchCounts.set(mesh,counts);a.setX(slot,id);a.needsUpdate=true;
+    const id=this.preparedVariantId(owner,model,item.sx??1,item.sy??1,item.sz??1),old=a.getX(slot),counts=this.preparedBatchCounts.get(mesh)??new Map<number,number>();if(old>=0){const n=(counts.get(old)??0)-1;if(n>0)counts.set(old,n);else counts.delete(old);}counts.set(id,(counts.get(id)??0)+1);this.preparedBatchCounts.set(mesh,counts);a.setX(slot,id);if(mark)a.needsUpdate=true;
   }
   /** Box sizes follow quantities (piles grow and shrink with each haul), so the
    * same prepared variants keep leaving and coming back. A variant once drawn
@@ -333,12 +438,15 @@ export class BoxBatches {
   }
 
   clear(): void {
+    for(const state of this.spatial.values())state.dispose();
+    this.spatial.clear();
     for (const state of this.targetBatches.values()) state.tint.dispose();
     this.targetBatches.clear();this.targetGroups.clear();
     for (const mesh of this.batches.values()) {this.preparedSurfaces?.setContribution(mesh,[]);mesh.removeFromParent();mesh.dispose();}this.preparedBatchCounts.clear();
     this.retainedVariants.clear();this.preparedSurfaces?.setContribution(this.retainedVariants,[]);
     this.batches.clear();
     this.itemBatchKeys.clear();
+    this.pileBatchStates=new WeakMap();
     this.furnitureRevision=undefined;
     this.roundedRockWarm = false;
   }
@@ -350,7 +458,7 @@ export class BoxBatches {
     const saved=empty.map(mesh=>({attribute:mesh.instanceMatrix,first:mesh.instanceMatrix.array.slice(0,16),version:mesh.instanceMatrix.version+1}));
     for(const mesh of empty) {
       mesh.instanceMatrix.array.fill(0,0,16);mesh.instanceMatrix.array[15]=1;
-      mesh.instanceMatrix.needsUpdate=true;mesh.activeCount=1;
+      if(this.ownedProducer435&&mesh.name.startsWith('pile:'))markResidentAttributeRange(mesh.instanceMatrix,0,16);else mesh.instanceMatrix.needsUpdate=true;mesh.activeCount=1;
       mesh.commitOwnedOpaque435();
     }
     return ()=>{empty.forEach((mesh,i)=>{
@@ -358,7 +466,7 @@ export class BoxBatches {
       // Snapshot adoption may run while the GPU queue is draining. Never
       // overwrite a newer logical batch, even when its count is also one.
       if(mesh.instanceMatrix!==state.attribute||mesh.instanceMatrix.version!==state.version)return;
-      mesh.activeCount=0;mesh.instanceMatrix.array.set(state.first,0);mesh.instanceMatrix.needsUpdate=true;
+      mesh.activeCount=0;mesh.instanceMatrix.array.set(state.first,0);if(this.ownedProducer435&&mesh.name.startsWith('pile:'))markResidentAttributeRange(mesh.instanceMatrix,0,16);else mesh.instanceMatrix.needsUpdate=true;
       mesh.commitOwnedOpaque435();
     });};
   }

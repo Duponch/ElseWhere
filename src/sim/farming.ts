@@ -1,4 +1,5 @@
 import { resourceArrayDelta } from './resource-array-delta.ts';
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';
 import {extractTreeDefinition} from './tree-transfer-rules.ts';
 import {clearingDuration,prospectivePlantWorkCore256} from './gathering.ts';
 import {terrainGroundFertility256,terrainHasProspectiveRules256} from './natural-terrain-runtime-256.ts';
@@ -295,5 +296,5 @@ export function finishSowing(world: World, job: Job): void {
   const forest=world.schemaVersion>=291&&isForestrySpecies291(kind);
   const plant:Resource={ id: world.nextId++, kind:forest?'tree':kind as import('./crops.ts').CropKind,...(forest?{species:kind as import('./forestry-content-291.ts').ForestrySpecies291,sown291:true as const}:{}), x: job.x, z: job.z, amount:forest?FLORA_DEFINITIONS[kind as import('./forestry-content-291.ts').ForestrySpecies291].yield:PLANT_DEFINITIONS[kind as import('./crops.ts').CropKind].yield, growth: .0001, growthTick: world.tick };
   if(world.climate||forest)plant.plantLife=createPlantLife(world,plant,true);
-  world.resources = [...world.resources,plant];
+  const beforeResources=world.resources;world.resources = [...world.resources,plant];markResourceArrayChanged(world,beforeResources,[plant],[]);
 }

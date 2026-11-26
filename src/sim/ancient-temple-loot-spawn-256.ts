@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {unpublishedAncientGeneration256} from './ancient-generation-frontier-256.ts';
 import {validGeographicSiteClimate256} from './site-climate-save.ts';
@@ -52,7 +53,7 @@ export function spawnActualAncientTempleLoot256(world:World,plan:AncientTempleLo
   if(findAncientTempleItemCell256(rect,allows,world.width,random)===null){retired.push(original.id);continue;}
   const cell=findAncientTempleItemCell256(rect,allows,world.width,random);if(cell===null){retired.push(original.id);continue;}
   const pile=Object.assign(original,{owner:{type:'ground' as const,x:cell%world.width,z:Math.floor(cell/world.width)}}) satisfies MaterialPile;
-  setMaterialForbidden256(pile,true);world.piles.push(pile);itemCells.add(cell);spawned.push(pile.id);
+  setMaterialForbidden256(pile,true);appendPileEntries(world.piles,pile);itemCells.add(cell);spawned.push(pile.id);
  }
  consumed.add(plan);refreshStock(world);return {spawned,retired};
 }

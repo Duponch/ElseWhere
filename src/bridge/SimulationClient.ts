@@ -19,6 +19,7 @@ import type { AudioCue } from './audio-cues';
 import type {BillWorkerOption283,BillWorkerOptions283} from '../sim/bill-worker-state-283';
 import {createShipFramePump298,type ShipClientCountdownState298,type ShipLaunchResult298} from './ship-frame-pump-298.ts';
 import type {ShipLightRequest298} from './ship-countdown-wire-298.ts';
+import type {NativeSnapshotDispatch379} from './native-snapshot-dispatch-379';
 
 /** Transport readers are selected by a fixed client implementation, never by a packet flag. */
 export type SnapshotReader=Pick<SnapshotDecoder,'adopt'|'adoptCampaignOnly'|'prepareDraftPreview'|'authorizeDraftPreview'|'discardDraftPreview'>&{readMotion?(packet:import('./snapshots').SnapshotMessage<true>):import('./motion-tracks').PawnTrack[]|undefined;readCorePhase297?(packet:import('./snapshots').SnapshotMessage<true>):object|undefined};
@@ -121,12 +122,22 @@ export class SimulationClient {
 
   protected createWorker():Worker {return new Worker(new URL('./simulation.worker.ts',import.meta.url),{type:'module'});}
   protected readWorkerMessage(value:unknown):Response {return value as Response;}
+  /** The fixed private port may redeem an opaque Full without letting any
+   * caller inspect or alter the submitted raw snapshot before validation. */
+  protected readNativeSnapshotDispatch379(_value:unknown):NativeSnapshotDispatch379|undefined {return;}
 
   /** The default client and readWorkerMessage instrumentation remain strict. */
   protected withWorkerMessage(_source:Worker,_event:MessageEvent<unknown>,dispatch:()=>void):void {dispatch();}
   protected workerStopped(_source:Worker):void {}
   /** Default public path preserves the live synchronous event read. */
   protected dispatchWorkerMessage(source:Worker,event:MessageEvent<unknown>,dispatch:(raw:unknown)=>void):void {this.withWorkerMessage(source,event,()=>dispatch(event.data));}
+  /** The public Worker still binds its original native event. The fixed
+   * presentation client may instead own a private, ordered output port. It
+   * passes only the raw dispatch closure, never exposes that port or Event. */
+  protected bindWorkerOutput(source:Worker,dispatch:(raw:unknown)=>void,invalid:()=>void):void {
+    source.onmessage=event=>{if(source===this.worker&&!this.stopped)this.dispatchWorkerMessage(source,event,dispatch);};
+    source.onmessageerror=invalid;
+  }
   protected dispatchWorkerFailure(_source:Worker,dispatch:()=>void):void {dispatch();}
 
   /** Fixed native client overrides this; public shape alone has no authority. */
@@ -142,15 +153,34 @@ export class SimulationClient {
   protected deliverUrgentThreats(receipt: UrgentThreatReceipt): void { this.onUrgentThreats(receipt); }
 
   private deliverTradeArrivals261():void {const adopted=this.adopted;if(!adopted)return;const rows=this.tradeArrivals261;this.tradeArrivals261=[];for(const row of rows){if(row.checkpoint.epoch<adopted.epoch)continue;if(row.checkpoint.epoch===adopted.epoch&&row.checkpoint.revision<=adopted.revision){try{this.onCaravanTradeArrival(row);}catch(error){this.onError(String(error));}}else this.tradeArrivals261.push(row);}}
+  private acceptSnapshot379(data:NativeSnapshotDispatch379):void {
+    let result;
+    try {
+      if(!data.acceptsUrgent((meta,tick,speed,tiles)=>this.urgentThreats.accepts(meta,tick,speed,tiles)))result={status:'resync' as const,reason:'Métadonnées de menace illisibles.'};
+      else result=data.adopt(view=>this.urgentThreats.accepts(data.urgentThreats,view.tick,data.speed,view.planet?planetTileCount(view.planet):undefined));
+    }catch{result={status:'resync' as const,reason:'Snapshot illisible.'};}
+    if(result.status==='applied'){
+      this.activeMap=true;this.confirmedCampaign=undefined;
+      const urgentReceipt=this.urgentThreats.commit(data.urgentThreats!,result.world.tick);
+      this.adopted={epoch:data.epoch,revision:data.revision};
+      for(const pending of this.pending.values())if(pending.type==='init'||pending.type==='load'||pending.type==='world-draft-start')if(result.replaced)pending.replacementEpoch=data.epoch;
+      try{this.deliverSnapshot(result.world,data.stepMs,data.speed,result.replaced,data.motion(),data.coreInput());this.deliverTradeArrivals261();}
+      catch(error){this.onError(`Présentation interrompue : ${error instanceof Error?error.message:String(error)}`);}
+      try{if(result.replaced||data.audioCues?.length)this.deliverAudioCues(data.audioCues??[],result.world,result.replaced);}
+      catch(error){this.onError(`Audio interrompu : ${error instanceof Error?error.message:String(error)}`);}
+      try{if(urgentReceipt)this.deliverUrgentThreats(urgentReceipt);}
+      catch(error){this.onError(`Avertissement interrompu : ${error instanceof Error?error.message:String(error)}`);}
+      for(const [id,pending]of this.pending)this.finishReply(id,pending);
+    }else if(result.status==='resync'&&!this.resyncing){this.resyncing=true;void this.request({type:'resync'}).catch(error=>this.onError(String(error))).finally(()=>{this.resyncing=false;});}
+  }
   private startWorker() {
     this.worker = this.createWorker();
     this.shipFrames298.bindWorker(this.worker);this.notifyShipState298();
     this.stopped = false;
     const source=this.worker;
-    this.worker.onmessage = (event:MessageEvent<unknown>) => {
+    const dispatch=(raw:unknown)=>{
       if(source!==this.worker||this.stopped)return;
-      this.dispatchWorkerMessage(source,event,(raw)=>{
-      if(source!==this.worker||this.stopped)return;
+      const native=this.readNativeSnapshotDispatch379(raw);if(native){this.acceptSnapshot379(native);return;}
       let data:Response;
       try{data=this.readWorkerMessage(raw);}catch{this.stop('La projection reçue ne correspond pas au Worker courant.');return;}
       if(data.type==='ship-frame-ack-298'||data.type==='ship-countdown-state-298'){
@@ -243,13 +273,12 @@ export class SimulationClient {
       if (!pending) return;
       pending.reply = data;
       this.finishReply(data.id, pending);
-      });
     };
     this.worker.onerror = (event) => {
       const reason=`Simulation interrompue : ${event.message}`;
       this.dispatchWorkerFailure(source,()=>{if(source===this.worker&&!this.stopped)this.stop(reason);});
     };
-    this.worker.onmessageerror = () => this.dispatchWorkerFailure(source,()=>{if(source===this.worker&&!this.stopped)this.stop('La communication avec la simulation est interrompue.');});
+    this.bindWorkerOutput(source,dispatch,()=>this.dispatchWorkerFailure(source,()=>{if(source===this.worker&&!this.stopped)this.stop('La communication avec la simulation est interrompue.');}));
   }
 
   /** A request that keeps reporting progress is not stalled: re-arm its

@@ -72,6 +72,10 @@ export class PreparedFaceStrokes {
  private ownedBytes():number{let bytes=0;for(const entry of this.entries.values())bytes+=(entry.owner?.cpuBytes??0);for(const entry of this.pendingRelease)bytes+=(entry.owner?.cpuBytes??0);return bytes;}
  private stageQuota():number{let bytes=0;for(const entry of this.entries.values())if(entry.mode==='prepared')bytes+=entry.stageBytes;return bytes;}
  needsPreparation(snapshot:PreparedStrokeSettingsSnapshot):boolean{return!this.closed&&(this.pending||this.publishedSettings!==settingsKey(settings(snapshot.preferences)));}
+ /** Native command declarations come from the current producer entries, never
+  * from compiled shader bindings. A prepared header and its edge kernel refer
+  * to the same current affine allocation; Source uses its canonical table. */
+ ownedStorage435():readonly THREE.StorageBufferAttribute[]{const buffers=new Set<THREE.StorageBufferAttribute>();for(const {table,owner,mode} of this.entries.values())buffers.add(mode==='prepared'&&owner?owner.buffer:table.buffer);return [...buffers];}
  stage(snapshot:PreparedStrokeSettingsSnapshot,assertCurrent:()=>void):SharedSurfacePreparationStage{
   this.assertCurrent();if(this.staged)throw Error('Settle the existing global stroke stage first');assertCurrent();
   const target=settings(snapshot.preferences),targetKey=settingsKey(target),settingsChanged=targetKey!==this.publishedSettings,serial=this.serial,oldSettings=this.publishedSettings;

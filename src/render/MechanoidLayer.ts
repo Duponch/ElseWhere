@@ -1,5 +1,6 @@
 import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
 import {ActorPlayback435} from './ActorPlayback435';
+import {WorldCoordinateGroup} from './WorldCoordinateGroup';
 import {actorExplorationMaterial256} from './ExplorationMask256';
 import * as THREE from 'three/webgpu';
 import { AnimationDetail } from './AnimationDetail';
@@ -146,7 +147,8 @@ class MechanicalRaceBatch {
     g.instanceCount=this.records.length;let dirty=false;
     this.playback435.prepare(world,this.records,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
     if(changed||reset){this.carrierSlots.clear();if(reset)this.animationCache.reset();}
-    this.records.forEach((actor,i)=>{
+    const scheduled=playback?this.playback435.frameIndices435(timeline,tick,origin):undefined;
+    const updateSlot=(actor:VisualMech,i:number)=>{
       if(!changed&&!reset&&actor.pile?.owner.type==='ground'&&actor.carrierId===undefined)return;
       const prepared=playback?this.playback435.select(i,timeline,tick,origin):undefined;if(playback&&!prepared)return;
       if(actor.pile){
@@ -188,7 +190,8 @@ class MechanicalRaceBatch {
       const attackBone=tool==='head'?9:tool.includes('left')?(this.kind==='pikeman'?3:1):tool.includes('right')?(this.kind==='pikeman'?4:2):0;
       gait.setXY(i,phase??0,strike?attackBone:actor.ranged?.stance?.phase==='warmup'?10:0);
       mask.setXY(i,...visualMask);carrierState.setXYZW(i,0,0,0,0);transfer.setXY(i,0,0);
-    });
+    };
+    if(scheduled)for(const i of scheduled)updateSlot(this.records[i]!,i);else this.records.forEach(updateSlot);
     if(dirty)(from as THREE.InterleavedBufferAttribute).data.needsUpdate=true;
     if(changed||reset||dirty)this.records.forEach((actor,i)=>this.animationCache.reconcile(i,actor.id,[rig.getW(i),mask.getX(i),mask.getY(i),carrierState.getX(i),this.carrierSlots.get(i),actor.carrierId,actor.pile?.owner.type].join(':')));
     if(playback)this.playback435.commit();
@@ -221,13 +224,13 @@ class MechanicalRaceBatch {
 /** At most three conditional race batches, each one body and one selection
  * mesh. Empty/historical scenes allocate none of the new races. */
 export class MechanoidLayer {
-  readonly group=new THREE.Group();
+  readonly group:THREE.Group;
   private readonly style=currentGraphicsStyle();
   private readonly batches=new Map<MechanoidKind,MechanicalRaceBatch>();
   private selected:ReadonlySet<number>=new Set();
   private source?:World;private pileSource?:readonly MaterialPile[];private corpsePiles:MaterialPile[]=[];
   private records=new Map<MechanoidKind,VisualMech[]>();
-  constructor(private readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void,private readonly animationDetail=new AnimationDetail()){this.group.name='Mechanical bodies — conditional race batches';}
+  constructor(private readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void,private readonly animationDetail=new AnimationDetail(),ownedGpuMatrices435=false){this.group=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();this.group.name='Mechanical bodies — conditional race batches';}
   setSelected(ids:ReadonlySet<number>):void {this.selected=ids;for(const batch of this.batches.values())batch.setSelected(ids);}
   update(world:World,timeline:MotionTimeline|undefined,reset=false,pawns?:PawnLayer,actorScene?:CoreActorScene297):void {
     if(this.source!==world||reset){

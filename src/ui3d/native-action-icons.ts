@@ -1,12 +1,13 @@
 import {PALETTE} from './prototype-art';
 import {drawPicto,drawPictoInBox,pictoSemanticId} from '../ui/picto-artwork';
 
-type OriginalIcon='architecte'|'travail'|'planning'|'assignations'|'animaux'|'faune'|'recherches'|'quetes'|'monde'|'historique'|'factions'|'menu'|'ordres'|'zones';
+type OriginalIcon='architecte'|'travail'|'planning'|'assignations'|'animaux'|'faune'|'recherches'|'quetes'|'monde'|'historique'|'factions'|'menu'|'ordres'|'zones'|'rename'|'banish';
 export type NativeActionIconKind=OriginalIcon|'wall'|'floor'|'floor-remove'|'bridge'|'bridge-remove'|'chair'|'bed'|'medical-bed'|'animal-bed'|'table'|'shelf'|'door'|'fence'|'flag'|'grave'|'thermometer'|'flame'|'lamp'|'horseshoe'|'chess'|'television'|'workbench'|'anvil'|'sword'|'gun'|'shield'|'shirt'|'power'|'wire'|'battery'|'solar'|'wind'|'rocket'|'reactor'|'casket'|'computer'|'sensors'|'mine'|'haul'|'axe'|'harvest'|'scissors'|'uninstall'|'deconstruct'|'cancel'|'growing'|'growing-remove'|'plan'|'plan-remove'|'stockpile'|'stockpile-remove'|'roof'|'roof-remove'|'roof-ignore'|'home'|'home-remove'|'snow'|'snow-remove'|'pot'|'food'|'barrel'|'drop'|'drill'|'radar'|'chip'|'cross'|'limb'|'paint'|'foam'|'play'|'pause'|'save'|'load'|'export'|'copy'|'paste'|'back'|'rotate-left'|'rotate-right'|'information'|'plus'|'minus'|'check'|'fallback';
 
 // Semantic IDs belong to the catalogue, never to text translated for display.
 // Every delivered tool/project has an explicit entry or a floor-material rule.
 const families:Readonly<Record<string,NativeActionIconKind>>={
+  'pawn-rename':'rename','pawn-banish':'banish',
   architecte:'architecte',architect:'architecte',travail:'travail',work:'travail',planning:'planning',schedule:'planning',assignations:'assignations',assign:'assignations',animaux:'animaux',animals:'animaux',faune:'faune',wildlife:'faune',recherches:'recherches',research:'recherches',quetes:'quetes',quests:'quetes',monde:'monde',world:'monde',historique:'historique',history:'historique',factions:'factions',menu:'menu',ordres:'ordres',orders:'ordres',zones:'zones',
   structure:'wall',floors:'floor',furniture:'chair',temperature:'thermometer',recreation:'horseshoe',production:'workbench',power:'power',ship:'rocket',
   allow:'check',forbid:'cancel',strip:'shirt',plan:'plan','remove-plan':'plan-remove',
@@ -57,10 +58,17 @@ export function drawNativeActionIcon(ctx:CanvasRenderingContext2D,id:string,cx:n
   if(semantic==='forbid')ink=PALETTE.terracotta;else if(semantic==='allow')ink=PALETTE.pineDark;
   if(drawPicto(ctx,semantic,cx,cy,r,ink))return;
   const kind=nativeActionIconKind(id);
+  if(kind==='rename'||kind==='banish'){
+    ctx.save();ctx.translate(cx,cy);ctx.strokeStyle=ink;ctx.lineWidth=Math.max(1.4,r*.14);ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
+    if(kind==='rename'){ctx.moveTo(-r*.65,r*.65);ctx.lineTo(-r*.4,r*.1);ctx.lineTo(r*.45,-r*.75);ctx.lineTo(r*.8,-r*.4);ctx.lineTo(-r*.1,r*.45);ctx.closePath();ctx.moveTo(r*.25,-r*.55);ctx.lineTo(r*.6,-r*.2);}
+    else {ctx.moveTo(-r*.2,-r*.8);ctx.lineTo(-r*.75,-r*.8);ctx.lineTo(-r*.75,r*.8);ctx.lineTo(-r*.2,r*.8);ctx.moveTo(-r*.2,0);ctx.lineTo(r*.8,0);ctx.moveTo(r*.35,-r*.4);ctx.lineTo(r*.8,0);ctx.lineTo(r*.35,r*.4);}
+    ctx.stroke();ctx.restore();return;
+  }
   if(!drawPicto(ctx,kind,cx,cy,r,ink))drawPicto(ctx,'information',cx,cy,r,ink);
 }
 
 export function drawNativeActionIconInBox(ctx:CanvasRenderingContext2D,id:string,x:number,y:number,width:number,height:number,ink='#261e18'):void {
+ if(['rename','banish'].includes(nativeActionIconKind(id))){drawNativeActionIcon(ctx,id,x+width/2,y+height/2,Math.min(width,height)*.45,ink);return;}
  const semantic=pictoSemanticId(id);
  if(semantic==='forbid')ink=PALETTE.terracotta;else if(semantic==='allow')ink=PALETTE.pineDark;
  if(drawPictoInBox(ctx,semantic,x,y,width,height,ink))return;

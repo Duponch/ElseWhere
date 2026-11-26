@@ -1,3 +1,5 @@
+import {stationRecipe} from './production-recipes.ts';
+import {structureFamily379} from './structure-family-379.ts';
 import {isSchema289OrLater} from './schema-compatibility-257.ts';
 import {countedProducts} from './cooking-bills.ts';
 import {nextBillReservePaused289,supportsBillReservePause289} from './bill-pause-rules-289.ts';
@@ -25,7 +27,7 @@ function commit(bill:CookingBill,read:(bill:CookingBill)=>number):void {
 export function reconcileBillReservePauses289(world:World):void {
   if(!isSchema289OrLater(world.schemaVersion))return;
   let read:ReturnType<typeof createBillReserveCountReader289>|undefined;
-  for(const station of world.structures){
+  for(const station of structureFamily379(world,'bill-stations',kind=>stationRecipe({kind})!==null)){
     if(!station.bills)continue;
     for(const bill of station.bills){
       if(!bill.reservePause||!supportsBillReservePause289(bill.recipe))continue;

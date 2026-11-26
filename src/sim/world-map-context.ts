@@ -99,12 +99,26 @@ export function migrateWorldRegistry(w:World):void {
  groups.groups.sort((a,b)=>a.state.id-b.state.id);groups.selectedGroupId=groups.groups[0]?.state.id??null;
 }
 /** Stable per-map identities retain WeakMap caches. Shared clock/IDs/RNG forward to ONE campaign. */
+function createRegisteredView(body:LocalMapState|World,root:CampaignState,record:WorldMapRecord):World {
+ // Define the complete layout once. Replacing ordinary data fields with
+ // accessors on an already-populated World makes every local read indirect
+ // in V8. The initial spread still reads exactly the same own values, before
+ // any campaign accessor is installed. Replacing a descriptor retains its
+ // original key position, including for optional fields present on old maps.
+ const fields=Object.getOwnPropertyDescriptors({...body}) as PropertyDescriptorMap;
+ for(const key of shared){
+  if((key==='worldFactions'||key==='worldPawns'||key==='worldSites263'||key==='tradeRequests284'||key==='linkedStorage286'||key==='phaseCore297')&&!Object.hasOwn(root,key))continue;
+  fields[key]={enumerable:true,configurable:false,...sharedAccessor(root,key)};
+ }
+ fields.civilianPost=postDescriptor(root,record);
+ return Object.defineProperties({},fields) as World;
+}
 export function registeredMap(w:CampaignState,id:number):World|undefined {
  const root=registeredCampaign(w),maps=root.worldMaps;if(!maps)return id===0&&hasLoadedRoot(root)?root:undefined;
  const record=maps.sites.find(s=>s.id===id);if(!record)return;
  const body=id===maps.rootMapId&&hasLoadedRoot(root)?root:record.map;if(!body)return;
  let table=contexts.get(root);if(!table){table=new Map();contexts.set(root,table);}let cached=table.get(id);
- if(!cached||cached.record!==record||cached.body!==body||Object.hasOwn(cached.world,'phaseCore297')!==Object.hasOwn(root,'phaseCore297')){const view={...body} as World;for(const key of shared)if((key!=='worldFactions'&&key!=='worldPawns'&&key!=='worldSites263'&&key!=='tradeRequests284'&&key!=='linkedStorage286'&&key!=='phaseCore297')||Object.hasOwn(root,key)){const accessor=sharedAccessor(root,key);Object.defineProperty(view,key,{enumerable:true,configurable:false,get:accessor.get,set:accessor.set});}authorities.set(view,root);mapIds.set(view,id);attachPost(view,root,record);cached={record,body,world:view,stamp:new Map(Object.entries(captureLocalMap(view)))};table.set(id,cached);}
+ if(!cached||cached.record!==record||cached.body!==body||Object.hasOwn(cached.world,'phaseCore297')!==Object.hasOwn(root,'phaseCore297')){const view=createRegisteredView(body,root,record);authorities.set(view,root);mapIds.set(view,id);cached={record,body,world:view,stamp:new Map(Object.entries(captureLocalMap(view)))};table.set(id,cached);}
  else if(!sameLocalData(cached.body,cached.stamp)){const data=currentLocalData(cached);for(const k of Object.keys(cached.world))if(!shared.has(k)&&!presentation.has(k)&&!Object.hasOwn(data,k))delete (cached.world as unknown as Record<string,unknown>)[k];Object.assign(cached.world,data);cached.stamp=new Map(Object.entries(captureLocalMap(body as World)));}
  // The optional owner is born at the first real link, possibly after this
  // stable map context was cached. Never add an own-undefined historical field.
@@ -155,7 +169,8 @@ export function registeredMapForValidation(root:CampaignState,id:number):World|u
 /** One persisted stock owner per real post; legacy links remain separate and literal. */
 export function postFor(root:CampaignState,owner:{postId?:number}):World['civilianPost'] {const r=root.worldGroups;if(!r)return;return r.posts.find(p=>p.id===(owner.postId??r.canonicalPostId))?.state;}
 export function canAttachPost(w:World):boolean {const root=registeredCampaign(w),r=root.worldGroups;if(!r)return true;return r.canonicalPostId!==null||Number.isSafeInteger(r.nextPostId+1);}
-export function attachPost(view:World,root:CampaignState,owner:{postId?:number}):void {Object.defineProperty(view,'civilianPost',{enumerable:true,configurable:true,get:()=>postFor(root,owner),set:value=>{const r=root.worldGroups!;const linked=owner.postId??r.canonicalPostId;if(linked!==null&&linked!==undefined){const p=r.posts.find(p=>p.id===linked);if(!p)throw Error('Missing post owner');if(!value)throw Error('Cannot delete actual post stock');p.state=value;owner.postId=linked;}else{if(!value)return;if(!Number.isSafeInteger(r.nextPostId+1))throw Error('Post identity exhausted');const id=r.nextPostId++;r.posts.push({id,state:value});r.canonicalPostId=id;owner.postId=id;}}});}
+function postDescriptor(root:CampaignState,owner:{postId?:number}):PropertyDescriptor {return {enumerable:true,configurable:true,get:()=>postFor(root,owner),set:value=>{const r=root.worldGroups!;const linked=owner.postId??r.canonicalPostId;if(linked!==null&&linked!==undefined){const p=r.posts.find(p=>p.id===linked);if(!p)throw Error('Missing post owner');if(!value)throw Error('Cannot delete actual post stock');p.state=value;owner.postId=linked;}else{if(!value)return;if(!Number.isSafeInteger(r.nextPostId+1))throw Error('Post identity exhausted');const id=r.nextPostId++;r.posts.push({id,state:value});r.canonicalPostId=id;owner.postId=id;}}};}
+export function attachPost(view:World,root:CampaignState,owner:{postId?:number}):void {Object.defineProperty(view,'civilianPost',postDescriptor(root,owner));}
 
 /* Fast paths of the two copies between a map's original local fields (`body`)
  * and its stable view. Both copies are field-by-field: when no field differs

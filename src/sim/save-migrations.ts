@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {markPileWrite} from './pile-index.ts';
 import { dropRetainingIdentity } from './ground-placement.ts';
 import type { World } from './types.ts';
@@ -49,9 +50,9 @@ export function initializeDining(world: World): void {
 }
 export function initializeFood(world: World): void {
   (world as unknown as {schemaVersion:number}).schemaVersion = 5; world.foodRules = 'legacy';
-  for (const pile of world.piles) pile.item = legacyItem(pile.kind);
+  for (const pile of world.piles) markPileContentWrite379(pile).item = legacyItem(pile.kind);
   markPileWrite();
-  for (const pawn of world.pawns) if (pawn.need?.kind === 'eat') pawn.need.quantity = 1;
+  for (const pawn of world.pawns) if (pawn.need?.kind === 'eat') markPileContentWrite379(pawn.need).quantity = 1;
 }
 
 /** V5 permitted several stacks per floor cell. Relocate overflow, retaining every ID/unit.

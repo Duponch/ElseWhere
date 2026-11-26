@@ -1,3 +1,5 @@
+import {structureFamily379} from './structure-family-379.ts';
+import {splicePileEntries} from './pile-identity-directory.ts';
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
 import {FERMENTING_CAPACITY_265,FERMENTING_DURATION_CORE_265,FERMENTING_SERVICE_TICKS_265,fermentationSpeed265,type BarrelExtractionTask265} from './fermentation-state-265.ts';
 import {temperatureAt,TemperatureView} from './temperature.ts';
@@ -14,7 +16,7 @@ import {medicalWorkRefusal,pawnBody} from './health-rules.ts';
 import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
 import {workPriority} from './work-types.ts';
 import {routeToJob,type Reachability} from './pathfinding.ts';
-import {CARRY_CAPACITY} from './definitions.ts';
+import {carryStackLimit379,carryQuantityBound379} from './carry-quantity-379.ts';
 import type {Cell,HaulDestination,MaterialPile,Pawn,Structure,World} from './types.ts';
 const f=Math.fround;
 const near=(a:Cell,b:Cell)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)<=1;
@@ -35,12 +37,12 @@ export function barrelFreeCapacity265(w:World,id:number,exceptPawn?:number):numb
 /** Commit only after generic haul has brought its actual carried pile to the
  * barrel and spent200Core. The old pile ceases to exist at incorporation. */
 export function finishBarrelFill265(w:World,p:Pawn,carry:MaterialPile):boolean {
-  const task=p.haul;if(!task||task.destination.type!=='fermenting-barrel'||task.phase!=='deliver'||task.carryPileId!==carry.id||!Number.isSafeInteger(task.quantity)||task.quantity<1||task.quantity>CARRY_CAPACITY||(task.serviceProgress??0)<FERMENTING_SERVICE_TICKS_265||(p.motion?.end??0)>w.tick||p.moveCooldown>0||!capable(w,p)||!w.piles.includes(carry)||!materialAllowedForPlayer256(carry)||carry.item!=='wort'||carry.owner.type!=='pawn'||carry.owner.pawnId!==p.id||carry.quantity!==task.quantity||ticksUntilRot(carry,w.tick)<=0)return false;
+  const task=p.haul;if(!task||task.destination.type!=='fermenting-barrel'||task.phase!=='deliver'||task.carryPileId!==carry.id||!Number.isSafeInteger(task.quantity)||task.quantity<1||task.quantity>carryQuantityBound379(w,carry.item)||(task.serviceProgress??0)<FERMENTING_SERVICE_TICKS_265||(p.motion?.end??0)>w.tick||p.moveCooldown>0||!capable(w,p)||!w.piles.includes(carry)||!materialAllowedForPlayer256(carry)||carry.item!=='wort'||carry.owner.type!=='pawn'||carry.owner.pawnId!==p.id||carry.quantity!==task.quantity||ticksUntilRot(carry,w.tick)<=0)return false;
   const s=actualBarrel(w,task.destination.structureId);
   if(!s||!near(p,s)||barrelFreeCapacity265(w,s.id,p.id)<carry.quantity)return false;
   const state=s.fermentation!,total=state.wort+carry.quantity;
   state.progress=f(f(state.progress*state.wort)/total);state.wort=total;state.ruin=0;
-  w.piles.splice(w.piles.indexOf(carry),1);refreshStock(w);return true;
+  splicePileEntries(w.piles,w.piles.indexOf(carry),1);refreshStock(w);return true;
 }
 /** Exactly once after the actual thermal step. Rare scheduling uses the
  * product's stable thing-ID phase; Unity's internal ticker slot is not copied.
@@ -48,7 +50,7 @@ export function finishBarrelFill265(w:World,p:Pawn,carry:MaterialPile):boolean {
 export function advanceFermentation265(w:World,layout?:ThermalLayout):void {
   if(!isSchema265OrLater(w.schemaVersion))return;
   let view:TemperatureView|undefined;
-  for(const s of w.structures){
+  for(const s of structureFamily379(w,'fermenting-barrels',kind=>kind==='fermenting-barrel')){
     const state=s.fermentation;if(s.kind!=='fermenting-barrel'||!state)continue;
     const from=(w.tick-1)*10+1,to=w.tick*10;
     if(Math.floor((from+s.id-1)/250)===Math.floor((to+s.id)/250))continue;
@@ -71,12 +73,12 @@ export interface BarrelFillCandidate265 {priority:number;rank:number;distance:nu
 export function fermentationHaulCandidates265(w:World,p:Pawn,reach:Reachability):BarrelFillCandidate265[] {
   if(!isSchema265OrLater(w.schemaVersion)||!capable(w,p))return [];
   const results:BarrelFillCandidate265[]=[];
-  for(const s of w.structures){
+  for(const s of structureFamily379(w,'fermenting-barrels',kind=>kind==='fermenting-barrel')){
     if(s.kind!=='fermenting-barrel')continue;
     const capacity=barrelFreeCapacity265(w,s.id,p.id);if(!capacity||!allowedAreaAllows(w,p,s)||!routeToJob(w,s,reach))continue;
     for(const pile of w.piles){
       if(pile.item!=='wort'||pile.owner.type!=='ground'||!materialAllowedForPlayer256(pile)||ticksUntilRot(pile,w.tick)<=0||!allowedAreaAllows(w,p,pile.owner))continue;
-      const quantity=Math.min(CARRY_CAPACITY,capacity,pile.quantity-reservedSource(w,pile.id,p.id));
+      const quantity=Math.min(carryStackLimit379(w,p,pile.item),capacity,pile.quantity-reservedSource(w,pile.id,p.id));
       if(quantity<=0||!routeToJob(w,pile.owner,reach,true))continue;
       results.push({priority:workPriority(p,'haul'),rank:-1.9,distance:Math.abs(p.x-pile.owner.x)+Math.abs(p.z-pile.owner.z)+Math.abs(s.x-pile.owner.x)+Math.abs(s.z-pile.owner.z),id:pile.id,sourceId:pile.id,quantity,destination:{type:'fermenting-barrel',structureId:s.id},target:pile.owner});
     }
@@ -86,7 +88,7 @@ export function fermentationHaulCandidates265(w:World,p:Pawn,reach:Reachability)
 export function barrelExtractionProposal265(w:World,p:Pawn,reach:Reachability):{task:BarrelExtractionTask265;path:Cell[]}|null {
   if(!isSchema265OrLater(w.schemaVersion)||!capable(w,p))return null;
   const reserved=reservedServiceCells(w,p.id);
-  for(const s of w.structures.filter(s=>s.kind==='fermenting-barrel'&&s.fermentation&&s.fermentation.wort>0&&s.fermentation.progress>=1).sort((a,b)=>Math.abs(a.x-p.x)+Math.abs(a.z-p.z)-Math.abs(b.x-p.x)-Math.abs(b.z-p.z)||a.id-b.id)){
+  for(const s of structureFamily379(w,'fermenting-barrels',kind=>kind==='fermenting-barrel').filter(s=>s.kind==='fermenting-barrel'&&s.fermentation&&s.fermentation.wort>0&&s.fermentation.progress>=1).sort((a,b)=>Math.abs(a.x-p.x)+Math.abs(a.z-p.z)-Math.abs(b.x-p.x)-Math.abs(b.z-p.z)||a.id-b.id)){
     if(!targetBuildingPlayerUse263(w,s)||blockedBarrel(w,s)||!allowedAreaAllows(w,p,s)||w.pawns.some(q=>q.id!==p.id&&q.brewing?.barrelId===s.id)||haulReservations(w,p.id).some(h=>h.destination.type==='fermenting-barrel'&&h.destination.structureId===s.id))continue;
     const path=routeToJob(w,s,reach);if(!path)continue;const spot=path.at(-1)??{x:p.x,z:p.z};
     if(reserved.has(spot.z*w.width+spot.x)||!allowedAreaAllows(w,p,spot))continue;

@@ -35,23 +35,36 @@ export function pawnBedSlot(pawn:Pick<Pawn,'bedId'|'bedSlot'>,bed:Structure):Bed
  * for this unchanged World: a reader asking about many slots of one World
  * captures the campaign's beds once instead of once per question. */
 export function bedSlotClaimed(world:World,bed:Structure,slot:BedSlot,exceptPawnId?:number,actorBeds?:()=>ReturnType<typeof captureActorBeds256>):boolean {
-  const head=bedSlotCell(bed,slot);if(!head)return true;
+  return firstBedSlotClaimant(world,bed,slot,exceptPawnId,actorBeds)!==undefined;
+}
+function firstBedSlotClaimant(world:World,bed:Structure,slot:BedSlot,exceptPawnId?:number,actorBeds?:()=>ReturnType<typeof captureActorBeds256>):number|null|undefined {
+  const head=bedSlotCell(bed,slot);if(!head)return null;
   for(const pawn of world.pawns){
     if(pawn.id!==exceptPawnId&&pawn.state!=='dead'){
-      if(!bed.medical&&pawnBedSlot(pawn,bed)===slot)return true;
-      if(pawn.need?.kind==='sleep'&&pawn.need.bedId===bed.id&&same(pawn.need.target,head))return true;
+      if(!bed.medical&&pawnBedSlot(pawn,bed)===slot)return pawn.id;
+      if(pawn.need?.kind==='sleep'&&pawn.need.bedId===bed.id&&same(pawn.need.target,head))return pawn.id;
     }
     const rescue=pawn.rescue;
-    if(rescue&&rescue.patientId!==exceptPawnId&&rescue.bedId===bed.id&&(isDoubleBedKind(bed.kind)?rescue.bedSlot===slot:slot===0))return true;
+    if(rescue&&rescue.patientId!==exceptPawnId&&rescue.bedId===bed.id&&(isDoubleBedKind(bed.kind)?rescue.bedSlot===slot:slot===0))return rescue.patientId;
   }
-  return world.schemaVersion>=256&&!bed.medical&&actualBedOwners256(actorBeds?actorBeds():captureActorBeds256(registeredCampaign(world)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).some(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death);
+  if(world.schemaVersion>=256&&!bed.medical)return actualBedOwners256(actorBeds?actorBeds():captureActorBeds256(registeredCampaign(world)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).find(p=>p.id!==exceptPawnId&&p.state!=='dead'&&!p.health?.death)?.id;
+}
+/** A synchronous read of one unchanged World (e.g. the guide's matching).
+ * With no claimant every exception is free; otherwise only the first
+ * claimant's own exception can possibly be free. Recheck that exception once
+ * using exactly the ordinary provider, including all campaign owners. */
+export function captureBedSlotClaimReader(world:World,bed:Structure,slot:BedSlot,actorBeds?:()=>ReturnType<typeof captureActorBeds256>):(exceptPawnId?:number)=>boolean {
+  const claimant=firstBedSlotClaimant(world,bed,slot,undefined,actorBeds);
+  if(claimant===null||claimant===undefined)return ()=>claimant===null;
+  let another:boolean|undefined;
+  return exceptPawnId=>exceptPawnId!==claimant||(another??=bedSlotClaimed(world,bed,slot,claimant,actorBeds));
 }
 /** Manual assignments do not require a relationship. This rule is only the
  * admission of a new owner by a sleep/patient provider into a shared bed. */
-export function civilBedShareAllowed(world:World,bed:Structure,pawn:Pawn):boolean {
+export function civilBedShareAllowed(world:World,bed:Structure,pawn:Pawn,actorBeds?:()=>ReturnType<typeof captureActorBeds256>):boolean {
   if(!isDoubleBedKind(bed.kind)||bed.medical||bed.prisoner||!civil(pawn)||!world.pawns.some(p=>p.id===pawn.id))return false;
   if(pawnBedSlot(pawn,bed)!==undefined)return true;
-  if(world.schemaVersion>=256)return globalCivilBedShare256(world,bed,pawn);
+  if(world.schemaVersion>=256)return globalCivilBedShare256(world,bed,pawn,actorBeds?.());
   const owners=world.pawns.filter(p=>p.bedId===bed.id&&p.state!=='dead');
   if(!owners.length)return true;
   return owners.every(owner=>civil(owner)&&world.relationships?.links.some(link=>

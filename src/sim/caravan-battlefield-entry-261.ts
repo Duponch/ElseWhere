@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {prepareManhunterSpawn261} from './animal-scaria-261.ts';
@@ -97,7 +98,7 @@ export function* prepareActualBattlefieldEntry261(input:CampaignState,groupId:nu
   for(const p of pending.people){Object.assign(p,foreignCells.get(p.id)!);p.path=[];p.moveCooldown=0;p.planCooldown=0;delete p.motion;p.faction='outlaws';p.raid={group:1,exiting:false,goal:null};}
   for(const p of factionActors)p.faction='outlaws';
   for(let i=0;i<pending.animals.length;i++){const original=pending.animals[i]!;Object.assign(original,animalSpawns[i]!);map.wildlife!.animals.push(original);}
-  map.pawns.push(...g.members,...pending.people);map.piles.push(...g.items,...pending.items);map.packed.push(...g.packed??[],...pending.packed);
+  map.pawns.push(...g.members,...pending.people);appendPileEntries(map.piles,...g.items,...pending.items);map.packed.push(...g.packed??[],...pending.packed);
   if(provenance){map.raids!.active={id:1,startedAt:tick,deadline:null,lossPermille:null,members:pending.people.map(p=>p.id),lost:[],phase:'assault',caravan261:provenance};map.raids!.serial=1;}
   root.worldFactions=nextFactions;root.rng=random.rng;root.nextId=result.nextId;maps.generationRuntime=generation.runtimeAfter;maps.sites.push(site);maps.nextMapId++;
   if(peaceResult&&peaceAttack?.phase==='pending')peaceResult.attack={phase:'entered',mapId,atCore,points:peaceAttack.points,enemyIds:peaceAttack.enemyIds.slice()};

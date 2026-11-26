@@ -105,3 +105,28 @@ test('64 edges compose exactly; the 65th evicts only the unreachable prefix',()=
   expect(readSnapshotStructureChanges(frames[0]!,next)).toBeUndefined();
   expect(readSnapshotStructureChanges(frames[1]!,next)).toEqual({structureIndices:[0,1],tileIndices:[]});
 });
+
+test('private structure keys preserve nested same-tick values and order after outgoing records are edited',()=>{
+  // Encoder representation contract only: the extra nested data is not a
+  // claim that the gameplay decoder admits a new structure field.
+  const world=fixture(),encoder=new SnapshotEncoder({structureDelta:true});
+  const structure=world.structures[0]! as unknown as Record<string,unknown>;
+  structure.representation={number:0,optional:undefined,rows:[{value:1}]};
+  encoder.encode(world,0,1);
+  expect(sparse(encoder.encode(world,0,1)).structures!.upserted).toEqual([]);
+  const data=structure.representation as {number:number;optional?:unknown;rows:{value:number}[]};
+  data.number=-0;data.rows[0]!.value=2;
+  const changed=sparse(encoder.encode(world,0,1)).structures!.upserted;
+  expect(changed).toHaveLength(1);
+  const sent=(changed[0] as unknown as typeof structure).representation as typeof data;
+  expect(Object.is(sent.number,-0)).toBe(true);
+  // An outbound value has no authority over the encoder's owned key metadata.
+  delete sent.optional;sent.rows[0]!.value=99;sent.number=7;
+  expect(sparse(encoder.encode(world,0,1)).structures!.upserted).toEqual([]);
+  delete data.optional;
+  expect(sparse(encoder.encode(world,0,1)).structures!.upserted).toHaveLength(1);
+  structure.representation={rows:data.rows,number:data.number};
+  const reordered=sparse(encoder.encode(world,0,1)).structures!.upserted;
+  expect(reordered).toHaveLength(1);
+  expect(Object.keys((reordered[0] as unknown as typeof structure).representation as object)).toEqual(['rows','number']);
+});

@@ -1,4 +1,5 @@
 import {shipCasketPatientClaimed277} from './ship-casket-carry-277.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import { canStandAt } from './furniture-travel.ts';
 import { routeToCell,routeCost,workNeighbours,type Reachability } from './pathfinding.ts';
 import { reservedServiceCells } from './service-reservations.ts';
@@ -53,7 +54,7 @@ export function bedInteractionCells336(world:World,patient:Pawn):Cell[]|undefine
 }
 
 export const lyingPatient=(p:Pawn):boolean=>p.state!=='dead'&&p.moveCooldown===0&&p.need?.kind==='sleep'&&p.need.phase==='sleep'&&p.need.bedId!==null;
-export const patientClaimed=(world:World,patientId:number,except:Pawn):boolean=>shipCasketPatientClaimed277(world,{kind:'human',id:patientId},except.id)||world.pawns.some(p=>p!==except&&(p.tend?.patientId===patientId||p.feed?.patientId===patientId||p.ward?.patientId===patientId||p.surgery?.patientId===patientId||p.rescue?.patientId===patientId||p.cryptosleepTask?.action==='carry'&&p.cryptosleepTask.patientId===patientId||p.id===patientId&&p.cryptosleepTask?.action==='enter'));
+export const patientClaimed=(world:World,patientId:number,except:Pawn):boolean=>orderedTargetClaimed378(world,'pawn',patientId,except.id)||shipCasketPatientClaimed277(world,{kind:'human',id:patientId},except.id)||world.pawns.some(p=>p!==except&&(p.tend?.patientId===patientId||p.feed?.patientId===patientId||p.ward?.patientId===patientId||p.surgery?.patientId===patientId||p.rescue?.patientId===patientId||p.cryptosleepTask?.action==='carry'&&p.cryptosleepTask.patientId===patientId||p.id===patientId&&p.cryptosleepTask?.action==='enter'));
 /** Schema 339: Core goes to the bed's interaction cell for surgery
  * (JobDriver_DoBill, PathEndMode.InteractionCell on a pawn in bed) and the
  * same cells serve a warden's chat with a prisoner in bed; feeding goes to a

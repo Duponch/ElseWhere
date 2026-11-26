@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import { startSentryMelee } from './melee.ts';
 import { equippedWeapon } from './equipment-rules.ts';
 import { rangedWeaponProfile } from './ranged-statistics.ts';
@@ -17,6 +18,7 @@ import type { NavigationGrid,SearchBudget } from './work-planner.ts';
 import type { Cell,Pawn,World } from './types.ts';
 import { activeCombatThreat,hostileCandidates,hostileTarget,isAnimalTarget,meleeThreatTarget,type LivingTarget } from './combat-target.ts';
 import type { WildAnimal } from './wildlife-state.ts';
+import {humanThreatCandidates379} from './human-threat-candidates-379.ts';
 
 export interface FleeState { target:Cell; /** Zero while travelling, otherwise end of cowering. */ until:number }
 const EMPTY:ReadonlySet<number>=new Set();
@@ -38,7 +40,7 @@ export function threatQueries(world:World,animalThreats?:readonly WildAnimal[]) 
      * predicates, then the melee threat. */
     anyNearby:(p:Pawn):boolean=>{
       const near=(t:LivingTarget)=>distanceSquared(p,t)<64&&hostileTarget(p,t)&&activeCombatThreat(t)&&clearShotSegment(queries.grid(),p,t);
-      for(const t of world.pawns)if(near(t))return true;
+      for(const t of humanThreatCandidates379(world,p))if(near(t))return true;
       for(const t of animalThreats??world.wildlife?.animals??[])if(near(t))return true;
       for(const t of world.mechanoids??[])if(near(t))return true;
       const threat=meleeThreatTarget(world,p,world.tick*10,undefined,queries.grid);
@@ -102,7 +104,7 @@ export function processFlee(world:World,pawn:Pawn,context:Context,getBlocked:Nav
   const next=pawn.path[0];
   if(next) {
     if(!canStep(world,pawn,next,getBlocked(),EMPTY)){pawn.path=[];pawn.planCooldown=20;return;}
-    pawn.state='moving';if(startTravel(world,pawn,next,getLight))pawn.path.shift();
+    pawn.state='moving';if(startTravel(world,pawn,next,getLight))shiftActorPath297(pawn.path);
     if(!pawn.path.length)flee.until=Math.ceil(pawn.motion?.end??world.tick)+120;
     return;
   }

@@ -1,4 +1,5 @@
-import type { NativeControl, NativePage, NativeRow, NativeUiState } from './native-contract';
+import type { NativeControl, NativeGesture, NativePage, NativeRow, NativeUiState } from './native-contract';
+import {personalOrderCommands378} from '../ui/order-queue-378';
 import type { Cell, Command, MaterialPile, Pawn, World } from '../sim/types';
 import type { TradeLine } from '../sim/trade-state';
 import { isColonist } from '../sim/affiliation';
@@ -110,11 +111,11 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
     finally { if (token === generation) { pending = false; if (active && options.isCurrent()) { paint(); pauseAtContact(); } } }
     return success;
   }
-  function button(id: string, label: string, action: () => unknown, disabled = false, selected = false, hint?: string): NativeControl {
+  function button(id: string, label: string, action: (gesture?:NativeGesture) => unknown, disabled = false, selected = false, hint?: string): NativeControl {
     const token = generation,dialog=confirmation,choice=`${pawnId}:${peerId}:${consoleId}`,locked=disabled||pending||options.readState().busy||!!options.readState().fault;
     return { id: `${prefix}${id}`, label, active: selected, hint, disabled: locked,
-      onActivate: () => {if(locked||confirmation!==dialog||choice!==`${pawnId}:${peerId}:${consoleId}`)return;return run(async () => {
-        if(confirmation!==dialog||choice!==`${pawnId}:${peerId}:${consoleId}`)throw Error('Le contact commercial a changé.');await action();
+      onActivate: gesture => {if(locked||confirmation!==dialog||choice!==`${pawnId}:${peerId}:${consoleId}`)return;return run(async () => {
+        if(confirmation!==dialog||choice!==`${pawnId}:${peerId}:${consoleId}`)throw Error('Le contact commercial a changé.');await action(gesture);
       }, token);} };
   }
   function choices(id: string, label: string, value: number | undefined, entries: { id: number; label: string }[], change: (id: number) => void, locked: boolean): NativeRow {
@@ -213,10 +214,10 @@ export function createNativeLocalTrade(options: NativeLocalTradeOptions) {
     const ship = world.orbital?.ships.find(ship => ship.id === peerId), console = world.structures.find(structure => structure.id === consoleId);
     return !ship ? 'Choisissez un vaisseau détecté.' : pawn.orbitalTrade ? 'Un appel est déjà engagé.' : orbitalTradeReason(world, pawn, ship, console);
   }
-  async function approach(): Promise<void> {
+  async function approach(gesture?:NativeGesture): Promise<void> {
     const world = current(), reason = contactReason(world); if (reason) throw Error(reason);
-    if (mode === 'visitors') { options.focusPawn(peerId!); await send({ type: 'order-trade', pawnId: pawnId!, traderId: peerId! }); }
-    else { const console = world.structures.find(structure => structure.id === consoleId)!; options.focusCell?.(console); await send({ type: 'order-orbital-trade', pawnId: pawnId!, shipId: peerId!, consoleId: consoleId! }); }
+    if (mode === 'visitors') { options.focusPawn(peerId!); for(const order of personalOrderCommands378(world,{ type: 'order-trade', pawnId: pawnId!, traderId: peerId! },!!gesture?.shift))await send(order); }
+    else { const console = world.structures.find(structure => structure.id === consoleId)!; options.focusCell?.(console); for(const order of personalOrderCommands378(world,{ type: 'order-orbital-trade', pawnId: pawnId!, shipId: peerId!, consoleId: consoleId! },!!gesture?.shift))await send(order); }
     await options.resume();
   }
   async function cancelTask(): Promise<void> {

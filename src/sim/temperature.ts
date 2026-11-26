@@ -8,6 +8,9 @@ import { applyThermalSources } from './thermal-sources.ts';
 import { TICKS_PER_DAY, type Cell, type World } from './types.ts';
 import { ThermalTopologyCache, type ThermalLayout } from './thermal-topology.ts';
 import { structureById } from './structure-navigation.ts';
+import {thermalCellOwners379} from './thermal-cell-owners-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 export interface ThermalRegion {cells:number[];temperature:number}
 export interface ThermalState {regions:ThermalRegion[]}
@@ -17,16 +20,23 @@ export function thermalLayout(world:World):ThermalLayout {
   let cache=contexts.get(world);if(!cache){cache=new ThermalTopologyCache();contexts.set(world,cache);}return cache.read(world);
 }
 const sameCells=(a:number[],b:number[])=>a===b||a.length===b.length&&a.every((v,i)=>v===b[i]);
+const sameRegions=(regions:ThermalRegion[],layout:ThermalLayout)=>regions.length===layout.rooms.length&&regions.every((r,i)=>sameCells(r.cells,layout.rooms[i]!.cells));
+const reconciledLayouts=new WeakMap<World,{owner:object;regions:ThermalRegion[]|undefined;layout:ThermalLayout}>();
 
 /** Cells, not a transient room ID, carry the thermal history across save/rebuild.
  * A split inherits its old air; merging mixes by overlapping air-cell volume. */
 export function reconcileTemperature(world:World,layout=thermalLayout(world)):ThermalLayout {
-  const old=world.thermal?.regions??[];
-  if(old.length===layout.rooms.length&&old.every((r,i)=>sameCells(r.cells,layout.rooms[i]!.cells)))return layout;
-  if(!layout.rooms.length){delete world.thermal;return layout;}
+  const source=world.thermal?.regions,old=source??[],owner=terrainJournalReadOwner(),known=owner&&reconciledLayouts.get(world);
+  // Both region membership and the topology snapshot are immutable under the
+  // actual owner. Heat sources only change temperatures; geometry commits
+  // replace one of these identities. Public calls retain literal cell checks.
+  if(known&&known.owner===owner&&known.regions===source&&known.layout===layout){if(verifyTerrainWriteCaches&&!sameRegions(old,layout))throw Error('Unobserved reconciled thermal geometry mutation under a closed owner');return layout;}
+  if(sameRegions(old,layout)){if(owner)reconciledLayouts.set(world,{owner,regions:source,layout});return layout;}
+  if(!layout.rooms.length){delete world.thermal;if(owner)reconciledLayouts.set(world,{owner,regions:undefined,layout});return layout;}
   const previous=new Map<number,number>();for(const r of old)for(const i of r.cells)previous.set(i,r.temperature);
   const outside=outdoorTemperature(world);
   world.thermal={regions:layout.rooms.map(r=>({cells:r.cells,temperature:r.cells.reduce((sum,i)=>sum+(previous.get(i)??outside),0)/r.cells.length}))};
+  if(owner)reconciledLayouts.set(world,{owner,regions:world.thermal.regions,layout});
   return layout;
 }
 
@@ -35,6 +45,14 @@ export function reconcileTemperature(world:World,layout=thermalLayout(world)):Th
  * Reverse order preserves TemperatureView's last-write priority for overlaps. */
 export function temperatureAt(world:World,cell:Cell):number {
   const index=cell.z*world.width+cell.x,regions=world.thermal?.regions;
+  if(!regions?.length)return outdoorTemperature(world);
+  // Actual closed thermal membership already owns a cell-to-last-region
+  // table. Point readers (mood, farming, brewery, sleeping) observe the
+  // live temperature rather than allocating a snapshot or searching every
+  // room's member cells. Unowned/public callers retain their exact reverse
+  // literal scan, including malformed/out-of-map fixtures.
+  const owners=thermalCellOwners379(world);
+  if(owners){const slot=owners.slots[index];return slot?owners.regions[slot-1]!.temperature:outdoorTemperature(world);}
   for(let i=(regions?.length??0)-1;i>=0;i--)if(regions![i]!.cells.includes(index))return regions![i]!.temperature;
   return outdoorTemperature(world);
 }
@@ -52,6 +70,8 @@ export class TemperatureView {
   constructor(world:World,layout?:ThermalLayout) {
     this.outside=outdoorTemperature(world);this.layout=layout;this.regions=world.thermal?.regions??[];
     if(!layout){
+      const owners=thermalCellOwners379(world);
+      if(owners){this.slots=owners.slots;this.temps=this.regions.map(r=>r.temperature);return;}
       const regions=this.regions,size=world.width*world.height;let valid=Number.isSafeInteger(size)&&size>=0;
       if(valid){
         const slots=new Int32Array(size),temps:number[]=[];

@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import {validProstheticWorkShape273} from './prosthetic-work-save-273.ts';
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
@@ -75,13 +76,13 @@ export function cancelProstheticWork273(world:World,itemId:number):CommandResult
     if(!placements||shadow.piles.length+placements.length>32768||!Number.isSafeInteger(world.nextId+plans.reduce((n,p)=>n+p.placements.length,0)+placements.length))return {ok:false,code:'occupied',reason:'Aucune place pour conserver tous les matériaux récupérés.'};
     plans.push({item,placements});
     // Reserve each planned cell for the next type in the same shadow world.
-    shadow.piles.push(...placements.map((p,i):MaterialPile=>({id:-(plans.length*1000+i+1),kind:item,item,quantity:p.quantity,owner:{type:'ground',...p.cell}})));
+    appendPileEntries(shadow.piles,...placements.map((p,i):MaterialPile=>({id:-(plans.length*1000+i+1),kind:item,item,quantity:p.quantity,owner:{type:'ground',...p.cell}})));
   }
   for(const pawn of world.pawns){
     if(pawn.cooking?.ingredients.some(i=>i.pileId===itemId)||pawn.haul?.sourcePileId===itemId)releaseAssignments(world,pawn);
     pawn.orders.queue=pawn.orders.queue.filter(o=>typeof o==='number'||(isCookingOrder(o)?!o.cooking.ingredients.some(i=>i.pileId===itemId):o.sourcePileId!==itemId));
   }
-  world.piles=world.piles.filter(p=>p!==pile);
+  world.piles=filterPileEntries(world.piles,p=>p!==pile);
   for(const {item,placements} of plans)for(const placement of placements)addMaterial(world,item,placement.quantity,{type:'ground',...placement.cell},item);
   world.rng=random.rng;
   return {ok:true};

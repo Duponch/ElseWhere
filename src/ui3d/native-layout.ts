@@ -4,7 +4,7 @@ import {layoutNativeBioCard,NATIVE_BIO_SIZE,type NativeBioLayout} from './native
 import {layoutNativeTab} from './native-tab-layout';
 import {appliedScroll,type NativeTabCard} from './native-tab-card';
 import {gearPortraitRect} from './native-tab-gear';
-import {ARCHITECT_WINDOW,FLOAT_MENU,architectCategoryRect,floatMenuLabelWidth,floatMenuOptionSize,floatMenuOrigin,layoutFloatMenu} from './native-float-menu';
+import {ARCHITECT_WINDOW,FLOAT_MENU,architectCategoryRect,compareFloatMenuOptions,floatMenuLabelWidth,floatMenuOptionSize,floatMenuOrigin,layoutFloatMenu} from './native-float-menu';
 import {PAWN_TABLE,pawnTableSpec,type PawnTableKind,type PawnTableSpec} from './native-pawn-table';
 import {NATIVE_RESEARCH} from './native-research-metrics';
 import {factionTableColumns,historyColumns,NATIVE_FACTIONS,NATIVE_HISTORY,NATIVE_MENU,NATIVE_QUESTS} from './native-main-tab-metrics';
@@ -418,6 +418,7 @@ function floatMenuPage(page:NativePage,viewport:{width:number;height:number},mea
     }else rowOf(row,{id:`${row.id}-option`,label:text,hint:row.detail,disabled:true,onActivate:()=>{}});
   }
   for(const action of page.actions??[])rowOf({id:action.id,label:action.label},action);
+  options.sort((a,b)=>compareFloatMenuOptions(a.control,b.control));
   const tiny=options.length>60,role=tiny?'tiny':'small',size=NATIVE_TEXT[role],line=NATIVE_LINE[role];
   const wrapWidth=Math.max(1,Math.min(floatMenuLabelWidth(tiny),viewport.width-FLOAT_MENU.scrollbar-2*(tiny?3:6)-4)),sizes=options.map(option=>{
     const lines=wrapNativeText(option.control.label,wrapWidth,measure,size);option.lines=lines.length;

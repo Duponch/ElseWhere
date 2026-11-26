@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isEggBoxSchema374} from './egg-box-state-374.ts';
 import {isFurnitureCKind363,isFurnitureCSchema363,FURNITURE_C_JOB_KINDS_363} from './furniture-c-363.ts';
 import {isStrawCouchSchema365} from './straw-couch-365.ts';
@@ -12,6 +14,7 @@ import {isPenoxycyline337} from './penoxycyline-337.ts';
 import {applyTutorialCommand347,isTutorialCommand347} from './tutorial-347.ts';
 import {advanceTutorialDownRaider349,applyTutorialLessonCommand349,isTutorialLessonCommand349} from './tutorial-lessons-349.ts';
 import {withPileIndexScope} from './pile-index.ts';
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {isFinishFrameSchema301} from './wall-frame-kind-301.ts';
 import {createWoodWallCore301} from './wood-wall-core-301.ts';
 import {rateForPawn301} from './actual-view-301.ts';
@@ -33,6 +36,7 @@ import {effectiveCore297} from './core-phase-297.ts';
 import {syncWorldPawnsPhysicalCore297} from './world-pawn-physical-clock-297.ts';
 import {createCorePhysics297,type CoreStepResult297} from './core-physics-297.ts';
 import {createCoreMovement297} from './core-movement-297.ts';
+import {takeMovementMotionCandidates379,recordPhysicalMotionSelection379,forwardPhysicalMotionSelection379} from './core-motion-publication-receipt-379.ts';
 import {applyReadBook295,applyReadingPolicy295} from './reading-runtime-295.ts';
 import {canPlaceFirefoamPopper290} from './firefoam-placement-290.ts';
 import {initializeFirefoamPopper290,applyFirefoamAutoRebuild290,advanceFirefoamWaves290} from './firefoam-290.ts';
@@ -236,6 +240,7 @@ import { FURNITURE_DEFINITIONS,isHabitatFurnitureKind } from './furniture-stats.
 import { cancelGunWork,detachMissingGunBills } from './gun-work.ts';
 import { cancelComponentWork,detachMissingComponentBills } from './component-work.ts';
 import { detachMissingBills,cancelUnfinished } from './unfinished.ts';
+import {detachMissingMacroWorkBills379} from './unfinished-bill-pass-379.ts';
 import { canPlaceHumanSleepingSpot,placeHumanSleepingSpot,removeHumanSleepingSpot } from './human-sleeping-spot.ts';
 import {canPlaceAnimalSpot,placeAnimalSpot,removeAnimalSpot,applyAnimalSpotMedical} from './animal-sleeping-spot.ts';
 import {syncCarriedAnimals} from './animal-rest-state.ts';
@@ -265,6 +270,8 @@ import { applyMeleeCommand,processMelee } from './melee.ts';
 import { isStunned } from './stun.ts';
 import { processTactics } from './tactics.ts';
 import { considerFlee,processFlee,processSentry,threatQueries } from './threats.ts';
+import {beginHumanThreatCandidates379} from './human-threat-candidates-379.ts';
+import {beginSourceReservationCandidates379} from './source-reservation-candidates-379.ts';
 import { retryInterruptedCargo,interruptWork } from './interrupted-cargo.ts';
 import { draftedOrderAdmitted346,isDraftedEquipment346 } from './drafted-orders-346.ts';
 import { applyDraftCommand,processDraft,interruptDraftWork } from './drafting.ts';
@@ -295,7 +302,7 @@ import { MEDICAL_CARE } from './medicine-rules.ts';
 import { planUrgentCare } from './urgent-care.ts';
 import { applyRescue,processRescue,reconcileRescues,isDraftedRescue } from './rescue.ts';
 import { applyMedicalBed } from './medical-beds.ts';
-import { carrierOf } from './rescue-state.ts';
+import { carrierOf,withHumanCarrierReadScope } from './rescue-state.ts';
 import { exitPrisoner } from './prisoner-exit.ts';
 import { feedingWork } from './feeding-rules.ts';
 import { tickSkills, constructionWorkRate } from './skills.ts';
@@ -321,6 +328,14 @@ import { removeZonesForPlan } from './construction-zones.ts';
 import { occupancyOf, occupies } from './occupancy.ts';
 import { constructionHaulId, constructionSiteFree, constructionWorkTarget, isConstruction } from './construction-rules.ts';
 import { advanceOrders, applyOrderCommand, reconcileOrders } from './player-orders.ts';
+import {advanceGeneralQueue378,applyGeneralQueue378,isOrderedCommand378,orderedQueueBusy378,orderedCommandPawnId378} from './ordered-queue-378.ts';
+import {orderRecoveryReason,orderedTargets378,orderedTargetClaimed378} from './order-types.ts';
+import {applyPersonalAnimalOrder378} from './personal-animal-orders-378.ts';
+import {isForcedPersonalAnimalOrder378} from './personal-animal-order-state-378.ts';
+import {applyPawnIdentityCommand378,processBanishedPawn378,finalizeBanishedDepartures378} from './pawn-identity-378.ts';
+import {applyConstructionForbid379,stopForbiddenConstructionExecutions379} from './construction-forbid-379.ts';
+import {reconcileConstructionBatches379} from './construction-batch-379.ts';
+import {reconcileHaulOpportunities379} from './haul-opportunity-379.ts';
 import { gatherResource, clearingDuration, clearingKind,plantWorkGrowthFactor256 } from './gathering.ts';
 import { wallBlueprintForDoor, planBlueprintDoorReplacement, retireWallBlueprint } from './construction-replacement.ts';
 import { wallDoorTarget296, wallDoorRemoval296, canAttachWallDoor296, attachWallDoor296, promoteWallDoorManual296 } from './wall-door-runtime-296.ts';
@@ -368,7 +383,7 @@ import { CIVIL_TRANSIT_BLOCKERS, moveToward } from './travel.ts';
 import { haulingWork } from './haul-aside.ts';
 import { groundPile } from './ground-placement.ts';
 import { generateWorld } from './generation.ts';
-import { adjacent, blockedCells, cellIndex, inBounds } from './pathfinding.ts';
+import { adjacent, blockedCells, cellIndex, inBounds,withTerrainBlockedReadScope } from './pathfinding.ts';
 import { CARRY_CAPACITY, footprintCells, STRUCTURE_DEFINITIONS } from './definitions.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { constructionSkillRequired,constructionSupplied, validConstructionMaterial } from './construction-materials.ts';
@@ -502,7 +517,7 @@ function applyArea(world: World, command: AreaCommand, drops:DropPlan): CommandR
   } else if(command.action==='lay-floor'||command.action==='remove-floor') {
     for(const index of selection.cells)world.jobs.push({id:world.nextId++,kind:command.action,x:index%world.width,z:Math.floor(index/world.width),orientation:0,footprint:'standard',status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0},...command.action==='lay-floor'?{construction:'blueprint',floor:command.floor}:{floor:world.tiles[index]!.floor}});
   } else if(command.action==='haul-chunks') {
-    const selected=new Set(selection.cells);for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground'&&selected.has(cellIndex(world,p.owner.x,p.owner.z)))p.haulRequested=true;
+    const selected=new Set(selection.cells);for(const p of world.piles)if(p.kind==='chunk'&&p.owner.type==='ground'&&selected.has(cellIndex(world,p.owner.x,p.owner.z)))markPileContentWrite379(p).haulRequested=true;
   } else if (command.action === 'mine' || command.action === 'chop' || command.action === 'harvest' || command.action === 'cut') {
     // Schema 367 Designator_Mine: the new Mine designation removes SmoothWall.
     if(command.action==='mine'&&isSmoothWallSchema367(world.schemaVersion)){
@@ -755,18 +770,27 @@ function observeAcceptedConsoleCommand298(world:World,command:Command):void {
 type LocalCommand=Exclude<Command,SecondarySiteCommand>;
 function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(command?.type==='designate'&&isShipComputerSensorsKind298(command.kind))command={...command,orientation:command.orientation??0,material:command.material??'steel'};
+  // Shift orders are admitted by the same map/actor authority as direct orders.
+  // A future intent cannot reveal or act on an undiscovered target.
+  if(Number(world.schemaVersion)>=378&&command&&typeof command==='object'&&(command.type==='queue-order-378'?isOrderedCommand378(command.order)&&hiddenExplorationCommandTarget256(world,command.order):(isOrderedCommand378(command)||'queue'in command&&command.queue===true)&&hiddenExplorationCommandTarget256(world,command)))return refusal('missing-target','Cette cible n’est pas connue sur la carte actuelle.');
+  const queued378=applyGeneralQueue378(world,command,direct=>applyLocalCommand(world,direct as LocalCommand));
+  if(queued378!==undefined)return queued378;
+  if(Number(world.schemaVersion)>=378){
+    const intent=command?.type==='order-bury'&&command.queue===undefined?{...command,queue:false as const}:command;
+    if(isOrderedCommand378(intent)&&orderedTargets378(intent).some(t=>orderedTargetClaimed378(world,t.kind,t.id,orderedCommandPawnId378(intent))))return refusal('occupied','Cette cible est réservée par un ordre en file.');
+  }
   // Schema 369: plans are player marks only; no task, cache or clock is touched.
   if(command?.type==='area'&&(command.action==='plan'||command.action==='remove-plan'))return applyPlanArea369(world,command);
   if(isPlanCommand369(command))return applyPlanCommand369(world,command);
   if(command?.type==='read-book-295')return applyReadBook295(world,command.pawnId,command.bookId);
   if(command?.type==='reading-policy-295')return applyReadingPolicy295(world,command.pawnId,command.policyId);
   if(isSchema287OrLater(Number(world.schemaVersion))&&command?.type==='animal-area-assign')return applyAnimalAreaAssignmentCommand287(world,command);
-  if(isSchema287OrLater(Number(world.schemaVersion))&&(command?.type==='allowed-area-create'||command?.type==='allowed-area-settings'||command?.type==='allowed-area-paint'||command?.type==='allowed-area-delete'||command?.type==='assign-allowed-area'))return applyAnimalAwareAreaCommand287(world,command);
+  if(isSchema287OrLater(Number(world.schemaVersion))&&(command?.type==='allowed-area-create'||command?.type==='allowed-area-settings'||command?.type==='allowed-area-paint'||command?.type==='allowed-area-delete'||command?.type==='assign-allowed-area')){const result=applyAnimalAwareAreaCommand287(world,command);if(result.ok){reconcileConstructionBatches379(world);reconcileHaulOpportunities379(world);}return result;}
   if(command&&typeof command==='object'&&hiddenExplorationCommandTarget256(world,command))return refusal('missing-target','Cette cible n’est pas connue sur la carte actuelle.');
-  if(command.type==='material-forbid')return applyMaterialPermission256(world,command);
-  if(command.type==='area'&&(command.action==='allow'||command.action==='forbid'))return applyAreaMaterialPermission256(world,command);
+  if(command.type==='material-forbid'){const result=applyMaterialPermission256(world,command);if(result.ok&&Number(world.schemaVersion)>=379){reconcileConstructionBatches379(world);reconcileHaulOpportunities379(world);reconcileOrders(world);wakePlanners(world);}return result;}
+  if(command.type==='area'&&(command.action==='allow'||command.action==='forbid')){const result=applyAreaMaterialPermission256(world,command);if(result.ok&&Number(world.schemaVersion)>=379){reconcileConstructionBatches379(world);reconcileHaulOpportunities379(world);reconcileOrders(world);wakePlanners(world);}return result;}
   if(command.type==='area'&&command.action==='strip')return applyStripArea351(world,command);
-  if(command.type==='egg-forbid')return applyEggPermission256(world,command);
+  if(command.type==='egg-forbid'){const result=applyEggPermission256(world,command);if(result.ok&&Number(world.schemaVersion)>=379){reconcileHaulOpportunities379(world);reconcileOrders(world);wakePlanners(world);}return result;}
   if(command.type==='map-view'||command.type==='map-settle'||command.type==='map-abandon'||command.type==='group-select'||command.type==='group-enter')return refusal('invalid-command','Une commande de campagne valide est requise.');
   // Filter editing changes campaign metadata only. Ordinary due checks own
   // future clothing actions; no task/thermal reconciliation is triggered here.
@@ -789,6 +813,9 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   if(result.ok){
     reconcileSmoothFloorJobs281(world);
     reconcileAllowedAreas(world);
+    reconcileConstructionBatches379(world);
+    reconcileHaulOpportunities379(world);
+    stopForbiddenConstructionExecutions379(world);
     reconcilePodRescueResults(world);
     syncCarriedAnimals(world);reconcileAnimalRescues(world);reconcileAnimalRest(world);
     reconcileWildlife(world);reconcileStrip351(world);
@@ -807,8 +834,8 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
   pawn.priorities[work] = value;
   if(value===0&&work==='haul'&&pawn.brewing)releaseWork(world,pawn,drops);
   if(value===0&&pawn.deepWork&&work===(pawn.deepWork.kind==='drill'?'mine':'research'))releaseWork(world,pawn,drops);
-  if(value===0&&(work==='handle'&&pawn.animalHandling||work==='doctor'&&(pawn.animalCare||pawn.animalFeed||pawn.animalRescue)))releaseWork(world,pawn,drops);
-  if(work==='hunt'&&value===0&&pawn.hunting){cancelHunting(pawn);pawn.path=[];pawn.state='idle';}if(work==='research'&&value===0&&pawn.research)releaseAssignments(world,pawn);
+  if(value===0&&(work==='handle'&&pawn.animalHandling&&!pawn.animalHandling.forced378||work==='doctor'&&(pawn.animalCare||pawn.animalFeed||pawn.animalRescue)))releaseWork(world,pawn,drops);
+  if(work==='hunt'&&value===0&&pawn.hunting&&!pawn.hunting.forced378){cancelHunting(pawn);pawn.path=[];pawn.state='idle';}if(work==='research'&&value===0&&pawn.research)releaseAssignments(world,pawn);
   if(value===0&&pawn.feed&&work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')releaseWork(world,pawn,drops);
   if(work==='doctor'&&value===0&&(pawn.surgery||pawn.tend&&pawn.orders.active!=='tend'))releaseWork(world,pawn);
   if(work==='clean'&&value===0&&pawn.cleaning&&!pawn.cleaning.forced)releaseWork(world,pawn,drops);
@@ -825,6 +852,9 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
 function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}|import('./letters-352.ts').LetterCommand352>): CommandResult {
   // Schema 369: handled by applyLocalCommand; kept here for the command type.
   if(command.type==='plan-369')return applyPlanCommand369(world,command);
+  if(command.type==='queue-order-378')return refusal('invalid-command','Ordre en file invalide.');
+  if(command.type==='construction-forbid-379'){const result=applyConstructionForbid379(world,command);if(result.ok)wakePlanners(world);return result;}
+  if(command.type==='pawn-rename'||command.type==='pawn-banish')return applyPawnIdentityCommand378(world,command);
   // Schema 347: the tutorial's forced content and its storyteller handover.
   if(isTutorialCommand347(command))return applyTutorialCommand347(world,command);
   // Schema 349: the chain of the tutorial lessons.
@@ -936,14 +966,14 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
     }
   }
   if(command.type==='hostility-response'){const p=world.pawns.find(p=>p.id===command.pawnId);if(!p||!['flee','ignore','attack'].includes(command.response))return refusal('invalid-command','Réaction invalide.');if(command.response==='flee')delete p.hostilityResponse;else p.hostilityResponse=command.response;cancelAutomaticCombat(p);if(p.flee&&command.response!=='flee'){delete p.flee;p.path=[];p.state='idle';}return {ok:true};}
-  if(typeof command.type==='string'&&command.type.startsWith('order-')&&'pawnId' in command&&world.pawns.find(p=>p.id===command.pawnId)?.melee?.strike)return refusal('invalid-command','Le colon récupère après sa frappe.');
-  if(command.type==='melee'||command.type==='shoot'){const result=command.type==='melee'?applyMeleeCommand(world,command):applyShootingCommand(world,command);if(result.ok){const target=world.pawns.find(p=>p.id===command.targetId);if(target?.visitor)visitorGroupDanger(world,target,'hostile');}return result;}
-  if(typeof command.type==='string'&&'pawnId' in command&&command.type.startsWith('order-')&&world.pawns.find(p=>p.id===command.pawnId)?.shooting?.stance?.phase==='cooldown')return {ok:false,code:'invalid-command',reason:'Le colon récupère après son tir.'};
+  if(typeof command.type==='string'&&command.type.startsWith('order-')&&'pawnId' in command){const reason=orderRecoveryReason(world.pawns.find(p=>p.id===command.pawnId));if(reason)return refusal('invalid-command',reason);}
+  if(command.type==='melee'||command.type==='shoot'){const result=command.type==='melee'?applyMeleeCommand(world,command):applyShootingCommand(world,command);if(result.ok){if(Number(world.schemaVersion)>=378)for(const p of world.pawns)if(command.pawnIds.includes(p.id))delete p.orderedQueue378;const target=world.pawns.find(p=>p.id===command.targetId);if(target?.visitor)visitorGroupDanger(world,target,'hostile');}return result;}
   if(command.type==='draft'||command.type==='draft-move'||command.type==='draft-stop'||command.type==='fire-at-will')return applyDraftCommand(world,command);
   if(typeof command.type==='string'&&command.type.startsWith('order-')&&'pawnId' in command&&world.pawns.find(p=>p.id===command.pawnId)?.draft
     &&!(world.schemaVersion>=237&&command.type==='order-rescue')&&!(world.schemaVersion>=234&&command.type==='order-consume')&&!(world.schemaVersion>=233&&command.type==='order-drafted-tend')&&!(world.schemaVersion>=193&&command.type==='order-haul'&&command.target?.type==='turret')&&!draftedOrderAdmitted346(world,command)&&!draftedStripAdmitted351(world,command))return refusal('invalid-command','Démobilisez ce colon avant un ordre civil.');
   if(command.type==='clear-orders'&&world.pawns.find(p=>p.id===command.pawnId)?.draft)return applyDraftCommand(world,{type:'draft-stop',pawnIds:[command.pawnId]});
   if(command.type==='order-strip')return applyStripOrder351(world,command);
+  if(command.type==='order-animal-378')return applyPersonalAnimalOrder378(world,command);
   if(command.type==='strip-designate')return designateStrip351(world,command);
   if(command.type==='order-equipment'||command.type==='weapon-permission'||command.type==='apparel-permission'||command.type==='forget-weapon')return applyEquipment(world,command);
   if(command.type==='order-feed')return applyFeeding(world,command);
@@ -1200,7 +1230,7 @@ function applyCommandInternal(world: World, command: Exclude<LocalCommand,import
     if(ids.size){const cancelled=cancelIntentJobs(world,ids);if(!cancelled.ok)return cancelled;}
   }
   removeZonesForPlan(world,command,drops);
-  world.jobs.push({ id: world.nextId++, kind: command.kind, ...(world.schemaVersion>=235&&['chop','cut','harvest'].includes(command.kind)?{plantTarget:{resourceId:world.resources.find(r=>sameCell(r,command))!.id}}:{}), ...(isConstruction(command)?{construction:command.kind==='grave'?'frame' as const:'blueprint' as const,...command.kind==='grave'||command.kind==='build-bridge'||command.kind==='lay-floor'?{}:{material:command.material??(command.kind==='electric-crematorium'?'granite-blocks' as const:command.kind==='sandbags'?'cloth' as const:command.kind==='firefoam-popper'||isShipComputerSensorsKind298(command.kind)||isShipPartKind276(command.kind)||command.kind==='ship-cryptosleep-casket'||command.kind==='cryptosleep-casket'||command.kind==='geothermal-generator'||command.kind==='electric-smelter'||command.kind==='biofuel-refinery'||command.kind==='chemfuel-generator'||command.kind==='nutrient-paste-dispenser'||command.kind==='hopper'||command.kind==='orbital-beacon'||command.kind==='comms-console'||command.kind==='deep-drill'||command.kind==='ground-scanner'||command.kind==='vitals-monitor'||command.kind==='tool-cabinet'||command.kind==='hydroponics-basin'||command.kind==='mini-turret'||command.kind==='hospital-bed'||command.kind==='tube-television'?'steel' as const:'wood' as const)}}:{}),...(command.kind==='lay-floor'?{floor:command.floor}:command.kind==='remove-floor'?{floor:world.tiles[command.z*world.width+command.x]!.floor}:{}), x: command.x, z: command.z, orientation: command.orientation ?? (command.kind==='ship-cryptosleep-casket'?2:isShipPartKind276(command.kind)?SHIP_PART_DEFAULT_ORIENTATION_276[command.kind]:0), footprint: 'standard', status: 'pending', reservedBy: null, progress: 0, escrow: { wood: 0, food: 0 } });
+  world.jobs.push({ id: world.nextId++, kind: command.kind, ...(Number(world.schemaVersion)>=379&&command.kind==='electric-tailor-bench'&&command.material==='steel'?{tailorSteel379:true as const}:{}), ...(world.schemaVersion>=235&&['chop','cut','harvest'].includes(command.kind)?{plantTarget:{resourceId:world.resources.find(r=>sameCell(r,command))!.id}}:{}), ...(isConstruction(command)?{construction:command.kind==='grave'?'frame' as const:'blueprint' as const,...command.kind==='grave'||command.kind==='build-bridge'||command.kind==='lay-floor'?{}:{material:command.material??(command.kind==='electric-crematorium'?'granite-blocks' as const:command.kind==='sandbags'?'cloth' as const:command.kind==='firefoam-popper'||isShipComputerSensorsKind298(command.kind)||isShipPartKind276(command.kind)||command.kind==='ship-cryptosleep-casket'||command.kind==='cryptosleep-casket'||command.kind==='geothermal-generator'||command.kind==='electric-smelter'||command.kind==='biofuel-refinery'||command.kind==='chemfuel-generator'||command.kind==='nutrient-paste-dispenser'||command.kind==='hopper'||command.kind==='orbital-beacon'||command.kind==='comms-console'||command.kind==='deep-drill'||command.kind==='ground-scanner'||command.kind==='vitals-monitor'||command.kind==='tool-cabinet'||command.kind==='hydroponics-basin'||command.kind==='mini-turret'||command.kind==='hospital-bed'||command.kind==='tube-television'?'steel' as const:'wood' as const)}}:{}),...(command.kind==='lay-floor'?{floor:command.floor}:command.kind==='remove-floor'?{floor:world.tiles[command.z*world.width+command.x]!.floor}:{}), x: command.x, z: command.z, orientation: command.orientation ?? (command.kind==='ship-cryptosleep-casket'?2:isShipPartKind276(command.kind)?SHIP_PART_DEFAULT_ORIENTATION_276[command.kind]:0), footprint: 'standard', status: 'pending', reservedBy: null, progress: 0, escrow: { wood: 0, food: 0 } });
   refreshStock(world); wakePlanners(world); event(world, 'command', `Nouvel ordre : ${JOB_LABEL[command.kind]} (${command.x}, ${command.z}).`); return { ok: true };
 }
 
@@ -1238,11 +1268,11 @@ function completeJob(world: World, pawn: Pawn, job: Job): void {
     if(!constructionSupplied(world,job)||!constructionSiteFree(world,job,pawn.id)||job.kind==='wall-lamp'&&!wallLampSupported363(world,job,true)||!Number.isSafeInteger(world.nextId+(isShelfKind(job.kind)?1+footprintCells(job).length:job.kind==='hydroponics-basin'?2:1))){setWorkUnits(job,Math.max(0,Math.round((jobDuration(world,job)-1)*WORK_FRACTIONS)));releaseWork(world,pawn);return;}
     const retirement=planConstructionPlantRetirement(world,job,job.id);
     if(!retirement||!commitConstructionPlantRetirement(world,retirement)){setWorkUnits(job,Math.max(0,Math.round((jobDuration(world,job)-1)*WORK_FRACTIONS)));releaseWork(world,pawn);return;}
-    world.piles = world.piles.filter(pile => pile.owner.type !== 'job' || pile.owner.jobId !== job.id);
+    world.piles = filterPileEntries(world.piles,pile => pile.owner.type !== 'job' || pile.owner.jobId !== job.id);
     if(job.kind==='wind-turbine')adoptWind(world);
     const qualityStream={rng:world.rng},quality=(job.kind==='sarcophagus'||isHabitatFurnitureKind(job.kind)&&FURNITURE_DEFINITIONS[job.kind].quality||isJoyTableKind354(job.kind)&&JOY_TABLES_354[job.kind].quality)?craftingQuality(pawn.skills.construction.level,()=>healthRandom(qualityStream),useInspiration360(world,pawn,'creativity')):undefined;if(quality)world.rng=qualityStream.rng;
     const builtId=world.nextId++,shelf=isShelfKind(job.kind)?newShelfStorage(footprintCells(job).map(()=>world.nextId++),world.schemaVersion):undefined;
-    world.structures.push({ ...(job.kind==='ship-cryptosleep-casket'?{shipCryptosleep277:newShipCasketHolder277(world.tick)}:{}), ...(job.kind==='cryptosleep-casket'?{cryptosleep:newCryptosleepHolder271(world.tick)}:{}), ...(job.kind==='vent'?{vent:newVentState()}:{}), ...(shelf?{shelf}:{}), ...(job.kind==='spike-trap'||isIedTrapKind357(job.kind)?{spikeTrap:initialSpikeTrapState(world,job)}:{}),...(job.kind==='mini-turret'?{turret:newMiniTurretState()}:{}),...(job.kind==='hospital-bed'?{medical:true as const}:{}),...(job.kind==='grave'?{grave:initialGrave()}:job.kind==='sarcophagus'?{grave:{colonists:true,strangers:false}}:{}),...(job.kind==='pen-marker'?{pen:{accepted:[...penAnimalsForVersion(world.schemaVersion)]}}:{}),...(job.kind==='heater'?{heater:newHeaterState()}:{}),...(job.kind==='wind-turbine'?{wind:newWindTurbineState()}:{}),...(job.kind==='battery'?{battery:{stored:0}}:{}),...(job.kind==='cooler'?{cooler:newCoolerState()}:{}),...(job.kind==='flower-pot'?{flower:createFlowerPotState()}:{}),...(quality?{quality}:{}),...(isElectrical(job.kind)?{power:newPowerState(job.kind)}:{}),...(isPassageDoor(job.kind)?{door:builtDoorState(world,job)}:{}),...(job.material?{material:job.material}:{}),...(isFueledBuilding(job.kind)?{fuel:newBuildingFuel(job.kind as import('./types.ts').StructureKind)}:{}),...(job.kind==='fueled-smithy'||job.kind==='electric-smithy'||job.kind==='brewery'||job.kind==='electric-crematorium'||job.kind==='electric-smelter'||job.kind==='biofuel-refinery'||job.kind==='drug-lab'||job.kind==='art-bench'||job.kind==='machining-table'||job.kind==='fabrication-bench'||job.kind==='tailor-bench'||job.kind==='electric-tailor-bench'||job.kind==='campfire'||isFoodWorkstation(job.kind)||job.kind==='stonecutter'?{bills:[]}:{}), id: builtId, kind: job.kind as import('./types.ts').StructureKind, x: job.x, z: job.z, orientation: job.orientation, footprint: job.footprint });
+    appendStructureEntries(world,{ ...(job.kind==='ship-cryptosleep-casket'?{shipCryptosleep277:newShipCasketHolder277(world.tick)}:{}), ...(job.kind==='cryptosleep-casket'?{cryptosleep:newCryptosleepHolder271(world.tick)}:{}), ...(job.kind==='vent'?{vent:newVentState()}:{}), ...(shelf?{shelf}:{}), ...(job.kind==='spike-trap'||isIedTrapKind357(job.kind)?{spikeTrap:initialSpikeTrapState(world,job)}:{}),...(job.kind==='mini-turret'?{turret:newMiniTurretState()}:{}),...(job.kind==='hospital-bed'?{medical:true as const}:{}),...(job.kind==='grave'?{grave:initialGrave()}:job.kind==='sarcophagus'?{grave:{colonists:true,strangers:false}}:{}),...(job.kind==='pen-marker'?{pen:{accepted:[...penAnimalsForVersion(world.schemaVersion)]}}:{}),...(job.kind==='heater'?{heater:newHeaterState()}:{}),...(job.kind==='wind-turbine'?{wind:newWindTurbineState()}:{}),...(job.kind==='battery'?{battery:{stored:0}}:{}),...(job.kind==='cooler'?{cooler:newCoolerState()}:{}),...(job.kind==='flower-pot'?{flower:createFlowerPotState()}:{}),...(quality?{quality}:{}),...(isElectrical(job.kind)?{power:newPowerState(job.kind)}:{}),...(isPassageDoor(job.kind)?{door:builtDoorState(world,job)}:{}),...(job.material?{material:job.material}:{}),...(job.tailorSteel379?{tailorSteel379:true as const}:{}),...(isFueledBuilding(job.kind)?{fuel:newBuildingFuel(job.kind as import('./types.ts').StructureKind)}:{}),...(job.kind==='fueled-smithy'||job.kind==='electric-smithy'||job.kind==='brewery'||job.kind==='electric-crematorium'||job.kind==='electric-smelter'||job.kind==='biofuel-refinery'||job.kind==='drug-lab'||job.kind==='art-bench'||job.kind==='machining-table'||job.kind==='fabrication-bench'||job.kind==='tailor-bench'||job.kind==='electric-tailor-bench'||job.kind==='campfire'||isFoodWorkstation(job.kind)||job.kind==='stonecutter'?{bills:[]}:{}), id: builtId, kind: job.kind as import('./types.ts').StructureKind, x: job.x, z: job.z, orientation: job.orientation, footprint: job.footprint });
       if(job.kind==='firefoam-popper')initializeFirefoamPopper290(world,world.structures.at(-1)!);
     if(job.kind==='fermenting-barrel')world.structures.at(-1)!.fermentation=newFermentationState265();
     if(job.kind==='geothermal-generator'){const built=world.structures.at(-1)!;built.geothermal=createGeothermalState264(world,built);}
@@ -1282,7 +1312,7 @@ const samePlantLightSourcesKey=(a:readonly unknown[]|undefined,b:readonly unknow
   return true;
 };
 /** Pile indexes (pile-index.ts) are available inside a simulation step only. */
-export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans)));}
+export function stepWorld(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>withTerrainBlockedReadScope(()=>withHumanCarrierReadScope(()=>stepWorldInScope(world,ticks,diagnostics,caravans)))));}
 function stepWorldInScope(world:CampaignState,ticks=1,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):void {
   if(!Number.isInteger(ticks)||ticks<0||ticks>100000)throw new Error('Tick count must be an integer between 0 and 100000.');
   const root=campaignAuthority(world as World);
@@ -1377,10 +1407,10 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     reconcileAllowedAreas(world);if(isCorePhysicalSchema297(Number(world.schemaVersion)))advanceCoreMap297(world,true);else advanceWorldCombat(world,trapContacts);
     if(trapContacts){advanceWildlife(world);reconcileAnimalRescues(world);reconcileAnimalRest(world);}
     syncCarriedAnimals(world);advanceLocalEggs256(world,thermal);reconcileAnimalRescues(world);reconcileAnimalRest(world);advanceCorpses(world,thermal);advanceMechanoidCorpses(world);reconcileDomesticWork(world);advanceAnimalProducts(world);advanceHumanCorpses(world);advanceDeathThoughts(world);reconcileBurials(world);reconcileCommercialOnMap(world);
-    detachMissingBills(world);detachMissingSmithingBills267(world);detachMissingGunBills(world);detachMissingFlakBills(world);detachMissingArtBills(world);detachMissingComponentBills(world);detachMissingProstheticBills273(world);if(world.tick%20===0)reconcileBreakdownJobs(world);reconcileRepairs(world);reconcilePowerFlicks(world);
+    detachMissingMacroWorkBills379(world);if(world.tick%20===0)reconcileBreakdownJobs(world);reconcileRepairs(world);reconcilePowerFlicks(world);
     expireStaggers(world);advanceFilth(world,weatherRainRate(world));
     scheduleGrowing(world);
-    scheduleRoofs(world);advanceWorldApparelWear(world);reconcilePrisoners(world);reconcileRescues(world);reconcileWarden(world);reconcilePatientRest(world);reconcileTending(world);reconcileSurgery(world);reconcilePasteRequests(world);reconcileFeeding(world);reconcileEquipmentTasks(world);for(const pawn of world.pawns){if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);reconcileWeaponMemory(world,pawn);}
+    scheduleRoofs(world);stopForbiddenConstructionExecutions379(world);advanceWorldApparelWear(world);reconcilePrisoners(world);reconcileRescues(world);reconcileWarden(world);reconcilePatientRest(world);reconcileTending(world);reconcileSurgery(world);reconcilePasteRequests(world);reconcileFeeding(world);reconcileEquipmentTasks(world);for(const pawn of world.pawns){if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);reconcileWeaponMemory(world,pawn);}
     reconcileBillReservePauses289(world);
     // Build only if this tick actually plans or moves. No cross-tick cache can hide
     // a command, edited terrain, restored save, or a wall that changed between calls.
@@ -1433,13 +1463,36 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     // mutable point lookup. Historical exposure branches retain their reader.
     const humanAir460=isSchema282OrLater(world.schemaVersion)?new TemperatureView(world,thermal):undefined;
     reconcileParty292(world,getLight().topology);
+    // Every provider below completes synchronously before the next human is
+    // admitted. The pass owns one set of services, with the current actor as
+    // its only changing input; no provider retains these callbacks in World.
+    // Rebuilding this object and its closures for every colonist only creates
+    // temporary allocations, including when its first provider returns idle.
+    let decidingPawn:Pawn;
+    const readAir460=()=> (humanAir460??new TemperatureView(world,thermal)).at(world,decidingPawn);
+    const candidates=()=>searchCandidates(world,decidingPawn,getBlocked(),occupied,budget);
+    const decisionWorkGlow=()=>workGlow(decidingPawn);
+    const needsContext = {
+      recreationTopology:()=>getLight().topology,
+      searchAllowed:(policy:import('./allowed-area-state.ts').AllowedAreaPolicy)=>searchAllowed(world,decidingPawn,getBlocked(),occupied,budget,policy),
+      search: (goals?: ReadonlySet<number>) => search(world, decidingPawn, getBlocked(), occupied, budget, goals),
+      move: (target: Cell, exact: boolean) => moveToward(world, decidingPawn, target, true, getBlocked, budget, exact, getLight),
+      release: () => releaseWork(world, decidingPawn),
+      event: (message: string) => event(world, 'need', message),
+    };
+    const candidateContext={...needsContext,candidates,blocked:getBlocked};
+    const handlingContext={...candidateContext,searchWith:(grid:Uint8Array,goals?:ReadonlySet<number>)=>search(world,decidingPawn,grid,occupied,budget,goals)};
+    const closeThreatCandidates379=beginHumanThreatCandidates379(world);
+    const sourceReservations379=beginSourceReservationCandidates379(world);
+    try{
     for (let offset = 0; offset < (world.schemaVersion>=271?actingCount271:world.pawns.length); offset++) {
       const pawn = world.schemaVersion>=271?actingHumans271[((world.tick-1)+offset)%actingCount271]!:world.pawns[((world.tick-1)+offset)%world.pawns.length]!;
+      decidingPawn=pawn;
       if(world.schemaVersion>=271&&world.pawns!==actingHumans271&&!world.pawns.includes(pawn))continue;
+      sourceReservations379.human(pawn);
       if(trapContacts?.visit(pawn)){blocked=undefined;invalidateEnvironment();}
       const completedEdge=pawn.moveCooldown>0&&(pawn.motion?.end??0)<=world.tick;
       pawn.moveCooldown = Math.max(0, (pawn.motion?.end ?? world.tick) - world.tick); if (pawn.planCooldown > 0) pawn.planCooldown--;
-      const readAir460=()=> (humanAir460??new TemperatureView(world,thermal)).at(world,pawn);
       advanceHeatExposure(world,pawn,readAir460);
       const body=updatePawnHealth(world,pawn);reconcilePartyPawn292(world,pawn,body);reconcileCouple285(world,pawn,body);reconcileKidnapParticipant261(world,pawn);reconcileAncientCasketOpening256(world,pawn);reconcileFirefoamManual290(world,pawn);reconcileCryptosleepTask271(world,pawn);reconcileShipCasketTask277(world,pawn);
       reconcileAllowedAreaPawn(world,pawn);
@@ -1481,15 +1534,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.need?.kind==='eat' && pawn.need.dining && !validDiningPlace(world,pawn.need.dining)) {pawn.need.phase='choose-spot';pawn.need.dining=null;pawn.need.progress=0;delete pawn.need.workRemainder;pawn.path=[];pawn.state='moving';}
       if(factionCommsTask298(pawn))reconcileFactionComms298(world,pawn);if(pawn.orbitalTrade)reconcileOrbitalTrade(world,pawn);if(pawn.deepWork)reconcileDeepWork(world,pawn);
       reconcileAllowedAreaPawn(world,pawn);
-      if (pawn.moveCooldown > 0) { if(pawn.draft)pawn.draft.lastActiveTick=world.tick; pawn.state = groupOnMapMember(world,pawn.id) || scoutOnMapId(world)===pawn.id || commercialOnMapId(world)===pawn.id || pawn.brewing || factionCommsTask298(pawn) || pawn.orbitalTrade || pawn.deepWork || pawn.animalHandling || pawn.animalCare || pawn.animalFeed || pawn.animalRescue || pawn.burial || pawn.shipCasketTask277 || pawn.cryptosleepTask || pawn.openCasket || pawn.firefoamTask290 || pawn.strip351 || pawn.cleaning || pawn.visitor || pawn.podRescue || pawn.trade || pawn.burning || pawn.firefighting || pawn.hunting || pawn.mental?.crisis || pawn.raid || pawn.tactics || pawn.melee || pawn.flee || pawn.draft || pawn.bombRefuge || pawn.heatRefuge || pawn.research || pawn.allowedAreaReturn || pawn.jobId !== null || pawn.equipmentTask || pawn.ward || pawn.feed || pawn.tend || pawn.surgery || pawn.rescue || pawn.haul || pawn.need || pawn.cooking || pawn.recreation.task || isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move' ? 'moving' : 'idle'; continue; }
-      const needsContext = {
-        recreationTopology:()=>getLight().topology,
-        searchAllowed:(policy:import('./allowed-area-state.ts').AllowedAreaPolicy)=>searchAllowed(world,pawn,getBlocked(),occupied,budget,policy),
-        search: (goals?: ReadonlySet<number>) => search(world, pawn, getBlocked(), occupied, budget, goals),
-        move: (target: Cell, exact: boolean) => moveToward(world, pawn, target, true, getBlocked, budget, exact, getLight),
-        release: () => releaseWork(world, pawn),
-        event: (message: string) => event(world, 'need', message),
-      };
+      if (pawn.moveCooldown > 0) { if(pawn.draft)pawn.draft.lastActiveTick=world.tick; pawn.state = Number(world.schemaVersion)>=378&&pawn.identity378?.banishedAt!==undefined&&!isColonist(pawn)&&!pawn.prisoner || groupOnMapMember(world,pawn.id) || scoutOnMapId(world)===pawn.id || commercialOnMapId(world)===pawn.id || pawn.brewing || factionCommsTask298(pawn) || pawn.orbitalTrade || pawn.deepWork || pawn.animalHandling || pawn.animalCare || pawn.animalFeed || pawn.animalRescue || pawn.burial || pawn.shipCasketTask277 || pawn.cryptosleepTask || pawn.openCasket || pawn.firefoamTask290 || pawn.strip351 || pawn.cleaning || pawn.visitor || pawn.podRescue || pawn.trade || pawn.burning || pawn.firefighting || pawn.hunting || pawn.mental?.crisis || pawn.raid || pawn.tactics || pawn.melee || pawn.flee || pawn.draft || pawn.bombRefuge || pawn.heatRefuge || pawn.research || pawn.allowedAreaReturn || pawn.jobId !== null || pawn.equipmentTask || pawn.ward || pawn.feed || pawn.tend || pawn.surgery || pawn.rescue || pawn.haul || pawn.need || pawn.cooking || pawn.recreation.task || isSchema300OrLater(Number(world.schemaVersion))&&idleWanderTask300(pawn)?.kind==='move' ? 'moving' : 'idle'; continue; }
       if(processBurning(world,pawn,needsContext))continue;
       if(bombDanger(world,pawn,getBlocked,budget,getLight,bombSources))continue;
       if(pawn.coupleTask285&&processHeatRefuge(world,pawn,needsContext,thermal))continue;
@@ -1519,6 +1564,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(processScoutLoading(world,pawn,needsContext))continue;
       if(processPrisonBreak(world,pawn,getBlocked,budget,getLight,needsContext))continue;
       if(pawn.prisoner&&!(world.schemaVersion>=213&&isColonist(pawn)&&pawn.mental?.crisis)&&pawn.mental?.crisis?.kind!=='confused-wander'){processPrisoner(world,pawn,needsContext);continue;}
+      if(processBanishedPawn378(world,pawn,needsContext))continue;
       if(pawn.mental?.crisis){
         if(isAggressiveCrisis(pawn.mental))processAggressiveCrisis(world,pawn,getBlocked,budget,getLight,needsContext);
         else processMentalBreak(world,pawn,needsContext,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));
@@ -1528,6 +1574,12 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(isSiteAmbushHuman263(world,pawn)){if(!processDraftSleep(world,pawn,needsContext))processSiteAmbushHuman263(world,pawn,getBlocked,budget,getLight);continue;}
       if(isWorldTargetDefender263(world,pawn)){if(!processDraftSleep(world,pawn,needsContext))processWorldTargetDefender263(world,pawn,getBlocked,budget,getLight);continue;}
       if(pawn.raid){if(!processDraftSleep(world,pawn,needsContext))processRaider(world,pawn,getBlocked,budget,getLight);continue;}
+      // An opportunistic attack is not a player job ahead of an accepted
+      // Shift order. A paid strike/cooldown, active draft move and ordinary
+      // physically reserved prefix still complete before that order.
+      if(pawn.orderedQueue378?.length&&isColonist(pawn)&&!orderedQueueBusy378(world,pawn)){
+        if((!pawn.draft||!processDraftSleep(world,pawn,needsContext))&&advanceGeneralQueue378(world,pawn,direct=>applyLocalCommand(world,direct as LocalCommand)))continue;
+      }
       if(pawn.tactics&&(!pawn.allowedAreaId||pawn.tactics.targetId!==null||pawn.tactics.post!==null)){if(!processDraftSleep(world,pawn,needsContext))processTactics(world,pawn,getBlocked,budget,getLight);continue;}
       if(pawn.melee&&(!pawn.allowedAreaId||pawn.melee.order||pawn.melee.strike)){if(!processDraftSleep(world,pawn,needsContext)&&pawn.melee)processMelee(world,pawn,getBlocked,budget,getLight);continue;}
       if(processPodRescuePatient(world,pawn,needsContext))continue;
@@ -1567,7 +1619,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         if(processDraftSleep(world,pawn,needsContext)||!pawn.draft)continue;
         pawn.draft.lastActiveTick=world.tick;processEquipment(world,pawn,needsContext);continue;
       }
-      if(pawn.draft){if(!processDraftSleep(world,pawn,needsContext)){processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;}
+      if(pawn.draft){if(!processDraftSleep(world,pawn,needsContext)){if(advanceGeneralQueue378(world,pawn,direct=>applyLocalCommand(world,direct as LocalCommand)))continue;processDraft(world,pawn,getBlocked,budget,getLight);if(pawn.moveCooldown===0)retryInterruptedCargo(world,pawn);}continue;}
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;
       if(pawn.interruptedCargo){processNeeds(world,pawn,needsContext);continue;}
       if (leaveTransitCell(world,pawn,getBlocked,budget,getLight)) continue;
@@ -1593,11 +1645,12 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         continue;
       }
       if (advanceOrders(world,pawn,getBlocked,budget)) continue;
+      if(advanceGeneralQueue378(world,pawn,direct=>applyLocalCommand(world,direct as LocalCommand)))continue;
       if (!pawn.animalHandling&&!pawn.animalCare&&!pawn.animalFeed&&!pawn.animalRescue&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery&&!pawn.rescue&&advancePriorityWork(world,pawn,getBlocked,budget)) continue;
-      if(processIdleWander300(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked}))continue;
+      if(processIdleWander300(world,pawn,candidateContext))continue;
       if(processHeatRefuge(world,pawn,needsContext,thermal))continue;
       if(processFirefighting(world,pawn,needsContext))continue;
-      if (planUrgentCare(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget))) continue;
+      if (planUrgentCare(world,pawn,candidates)) continue;
       const needDecision300=processNeedsDecision300(world,pawn,needsContext);
       if(needDecision300==='handled')continue;
       const pendingCurrent300=needDecision300==='pending-current';
@@ -1605,21 +1658,21 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       // A pending food offer may resume only the existing task below, never
       // another provider, a replacement job or a new idle/recreation offer.
       if(!pendingCurrent300){
-        if(processAutomaticAlcohol265(world,pawn,needsContext))continue;
-        if(processScheduledPenoxycyline337(world,pawn,needsContext))continue;
-      if(processParty292(world,pawn,needsContext))continue;
-      if (!pawn.animalHandling&&!pawn.animalCare&&!pawn.animalFeed&&!pawn.animalRescue&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery&&!pawn.rescue&&pawn.orders.active===null&&processRecreation(world, pawn, needsContext)) continue;
-      if(!pawn.surgery&&pawn.planCooldown===0&&recoverDroppedWeapon(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget)))continue;
-      if(!pawn.surgery&&pawn.planCooldown===0&&considerApparelPolicy(world,pawn,()=>searchCandidates(world,pawn,getBlocked(),occupied,budget)))continue;
+      if(!isForcedPersonalAnimalOrder378(pawn)&&processAutomaticAlcohol265(world,pawn,needsContext))continue;
+        if(!isForcedPersonalAnimalOrder378(pawn)&&processScheduledPenoxycyline337(world,pawn,needsContext))continue;
+      if(!isForcedPersonalAnimalOrder378(pawn)&&processParty292(world,pawn,needsContext))continue;
+      if (!isForcedPersonalAnimalOrder378(pawn)&&!pawn.animalHandling&&!pawn.animalCare&&!pawn.animalFeed&&!pawn.animalRescue&&!pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery&&!pawn.rescue&&pawn.orders.active===null&&processRecreation(world, pawn, needsContext)) continue;
+      if(!isForcedPersonalAnimalOrder378(pawn)&&!pawn.surgery&&pawn.planCooldown===0&&recoverDroppedWeapon(world,pawn,candidates))continue;
+      if(!isForcedPersonalAnimalOrder378(pawn)&&!pawn.surgery&&pawn.planCooldown===0&&considerApparelPolicy(world,pawn,candidates))continue;
       if(processReturnToAllowedArea(world,pawn,needsContext))continue;
       if (pawn.jobId === null && pawn.haul === null && !pawn.rescue && !pawn.animalHandling && !pawn.animalCare && !pawn.animalFeed && !pawn.animalRescue && !pawn.ward&&!pawn.feed&&!pawn.tend&&!pawn.surgery && !pawn.cooking && !pawn.hunting && !pawn.orbitalTrade && !pawn.deepWork && !pawn.brewing && !pawn.research && !pawn.burial && !pawn.cleaning && !pawn.strip351 && pawn.planCooldown === 0) {planWork(world, pawn, getBlocked, occupied, budget);idlePlanningResolved300=isSchema300OrLater(Number(world.schemaVersion))&&budget.remaining>0&&budget.pairs>0&&pawn.planCooldown>0;}
       }
       if(pawn.firefighting&&processFirefighting(world,pawn,needsContext))continue;
       if(pawn.animalRescue){processAnimalRescue(world,pawn,needsContext);continue;}
-      if(pawn.animalHandling){processHandling(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked,searchWith:(grid,goals)=>search(world,pawn,grid,occupied,budget,goals)});continue;}
+      if(pawn.animalHandling){processHandling(world,pawn,handlingContext);continue;}
       if(pawn.animalFeed){processAnimalFeeding(world,pawn,needsContext);continue;}
-      if(pawn.animalCare){processAnimalCare(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked},()=>workGlow(pawn));continue;}
-      if(pawn.hunting){processHunting(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});continue;}
+      if(pawn.animalCare){processAnimalCare(world,pawn,candidateContext,decisionWorkGlow);continue;}
+      if(pawn.hunting){processHunting(world,pawn,candidateContext);continue;}
       if(pawn.burial){processBurial(world,pawn,needsContext);continue;}
       if(processCleaning(world,pawn,needsContext))continue;
       if(pawn.brewing){processBarrelExtraction265(world,pawn,needsContext.move,()=>wakePlanners(world));continue;}
@@ -1628,7 +1681,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
       if(pawn.ward){processWarden(world,pawn,needsContext);continue;}
       if(pawn.feed){processFeeding(world,pawn,needsContext);continue;}
       if(pawn.surgery){processSurgery(world,pawn,needsContext,()=>getLight().lightAt(pawn),cell=>getLight().lightAt(cell));continue;}
-      if(pawn.tend){processTending(world,pawn,needsContext,()=>workGlow(pawn),()=>searchCandidates(world,pawn,getBlocked(),occupied,budget));continue;}
+      if(pawn.tend){processTending(world,pawn,needsContext,decisionWorkGlow,candidates);continue;}
       if(pawn.rescue){processRescue(world,pawn,needsContext);continue;}
       if (pawn.haul) { const refueling=pawn.haul.destination.type==='fuel';processHaul(world, pawn, (target, allow) => moveToward(world, pawn, target, allow, getBlocked, budget,false,getLight), () => {wakePlanners(world);if(refueling)invalidateEnvironment();});continue; }
       if(pawn.cooking) {const priorProduct=pawn.cooking.productId,priorPhase=pawn.cooking.phase;processCooking(world,pawn,{
@@ -1642,7 +1695,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         if(pendingCurrent300)continue;
         if(processReturnToAllowedArea(world,pawn,needsContext))continue;
         if(processRecreation(world,pawn,needsContext,true,isSchema300OrLater(Number(world.schemaVersion))?'idle300':'ordinary'))continue;
-        if(idlePlanningResolved300&&budget.remaining>0&&budget.pairs>0)offerIdleWander300(world,pawn,{...needsContext,candidates:()=>searchCandidates(world,pawn,getBlocked(),occupied,budget),blocked:getBlocked});
+        if(idlePlanningResolved300&&budget.remaining>0&&budget.pairs>0)offerIdleWander300(world,pawn,candidateContext);
         continue;
       }
       // A job admitted by Main in THIS macro has not passed the earlier
@@ -1753,6 +1806,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
         if (cutOutputPending||workProgress(job) >= jobDuration(world, job)) {completeJob(world, pawn, job);blocked=undefined;roofs=undefined;invalidateEnvironment();}
       } else moveToward(world, pawn, job, false, getBlocked, budget,false,getLight);
     }
+    }finally{sourceReservations379.close();closeThreatCandidates379();}
     if(!(world.tick%2))processMechanicalDecisions();
     for(const pawn of [...world.pawns])if(pawn.visitor)exitVisitor(world,pawn);
     reconcilePodRescueResults(world);
@@ -1760,6 +1814,7 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     for(const pawn of world.pawns)if(pawn.trade&&!world.pawns.some(t=>t.id===pawn.trade!.traderId&&t.visitor)){delete pawn.trade;pawn.path=[];pawn.state='idle';}
     for(const pawn of [...world.pawns])if(pawn.prisoner?.escape)exitPrisoner(world,pawn);
     if(world.raids)for(const pawn of [...world.pawns])if(pawn.raid?.exiting&&!pawn.prisoner)exitRaider(world,pawn);
+    finalizeBanishedDepartures378(world);
     const scoutId=scoutOnMapId(world);
     if(scoutId!==null){const pawn=world.pawns.find(p=>p.id===scoutId);if(pawn)departScout(world,pawn);}
     const commercialId=commercialOnMapId(world);
@@ -1795,6 +1850,9 @@ function stepLocalWorld(world: World, ticks = 1, diagnostics?:import('./work-pla
     for(const pawn of world.pawns)if(pawn.firefoamTask290)reconcileFirefoamManual290(world,pawn);
     finishToxicFallout294(world);
     noteBondedAnimalDeaths350(world);
+    reconcileConstructionBatches379(world);
+    reconcileHaulOpportunities379(world);
+    stopForbiddenConstructionExecutions379(world);
   }
 }
 import { updatePawnHealth,reconcilePawnHealth } from './health.ts';
@@ -1860,7 +1918,17 @@ function advanceCoreMap297(world:World,boundary=false):CoreStepResult297 {
  const reactorStep=advanceShipReactorsCore297(world);
  if(reactorStep?.completed)event(world,'command',reactorStep.completed===1?'Un réacteur stellaire a terminé son démarrage.':`${reactorStep.completed} réacteurs stellaires ont terminé leur démarrage.`);
  if(result.requiresFull||frameStep301?.requiresFull){state.movement.invalidate();invalidateHumanMoveSpeed297(world);}
- state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged||!!frameStep301?.requiresFull,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged||!!frameStep301?.requiresFull},requiresFull:result.requiresFull||moved.requiresFull||!!frameStep301?.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,deferredChange297:moved.deferredChange297,doorsMoved297:moved.doorsMoved297,actorsChanged:[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)]};return state.result;
+ const actorsChanged=[...new Set(contactStep?.actorsChanged.length?[...physicalActorChanges298,...contactStep.actorsChanged]:physicalActorChanges298)];
+ state.result={...result,observerEffects297:{threatsChanged:result.observerEffects297.threatsChanged||moved.topologyChanged||!!frameStep301?.requiresFull,audioChanged:result.observerEffects297.audioChanged||moved.topologyChanged||!!frameStep301?.requiresFull},requiresFull:result.requiresFull||moved.requiresFull||!!frameStep301?.requiresFull||!!reactorStep?.completed||!!contactStep?.requiresFull||!!idleStep300?.requiresFull,deferredChange297:moved.deferredChange297,doorsMoved297:moved.doorsMoved297,actorsChanged};
+ const movementCandidates=takeMovementMotionCandidates379(moved,world);
+ if(!boundary&&movementCandidates&&!state.result.requiresFull){
+  // Any later actual producer touching this actor cancels the movement pass's
+  // pure-cooldown receipt. Keep the SAME deduplicated original actor order.
+  const motionCandidates=new Set(movementCandidates);
+  for(const rows of [result.actorsChanged,expired,idleStep300?.actorsChanged,frameStep301?.actorsChanged,contactStep?.actorsChanged])for(const id of rows??[])motionCandidates.add(id);
+  recordPhysicalMotionSelection379(state.result,world,actorsChanged,actorsChanged.filter(id=>motionCandidates.has(id)));
+ }
+ return state.result;
 }
 /** requiresFull preserves the existing conservative boundary signal. Only the
  * fixed bridge may use the separate actual hard receipt to coalesce calm macros. */
@@ -1875,7 +1943,7 @@ export interface AdvancedCoreMap297 extends CoreStepResult297 {mapId:number;worl
 /** A single authoritative physical step. Phase0 is an atomic global/local macro
  * transaction. Results borrow maps only until the synchronous bridge copies them. */
 export function advanceWorldCore297(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
- return withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>advanceWorldCore297InScope(world,diagnostics,caravans)));
+ return withWorkTabMode344(simpleWorkTab344(campaignAuthority(world as World)),()=>withPileIndexScope(()=>withTerrainBlockedReadScope(()=>withHumanCarrierReadScope(()=>advanceWorldCore297InScope(world,diagnostics,caravans)))));
 }
 function advanceWorldCore297InScope(world:CampaignState,diagnostics?:import('./work-planner.ts').SearchStats,caravans?:import('./group-campaign-runtime-256.ts').GroupCampaignRuntime256):{core:number;localTickCompleted:boolean;maps:readonly AdvancedCoreMap297[]} {
  const root=campaignAuthority(world as World);if(!isCorePhysicalSchema297(Number(root.schemaVersion)))throw Error('Physical stepping requires297');
@@ -1900,7 +1968,8 @@ function advanceWorldCore297InScope(world:CampaignState,diagnostics?:import('./w
    // Its first state is already at this frontier; it has played no earlier Core.
    result={core,actorsChanged:[],projectileEvents:{upserted:[],removed:[]},requiresFull:true,observerEffects297:{threatsChanged:true,audioChanged:true},strikeAudio297:[],shotAudio297:[]};
   }
-  results.push({...result,mapId:!root.worldMaps&&root.secondarySite&&map!==root?1:registeredMapId(map)??0,world:map,requiresFull:boundary||result.requiresFull||!!result.deferredChange297||!!result.doorsMoved297?.length,requiresHardFull297:ownersChanged||result.requiresFull,deferredFull297:!!result.deferredChange297,doorsMoved297:result.doorsMoved297??[]});
+  const published={...result,mapId:!root.worldMaps&&root.secondarySite&&map!==root?1:registeredMapId(map)??0,world:map,requiresFull:boundary||result.requiresFull||!!result.deferredChange297||!!result.doorsMoved297?.length,requiresHardFull297:ownersChanged||result.requiresFull,deferredFull297:!!result.deferredChange297,doorsMoved297:result.doorsMoved297??[]};
+  forwardPhysicalMotionSelection379(result,published,map,result.actorsChanged);results.push(published);
  }
  // Macro suffixes may create/retire owners or alter cover. Never retain their borrowed captures.
  if(boundary)invalidateCoreCampaign297(root,'macro');

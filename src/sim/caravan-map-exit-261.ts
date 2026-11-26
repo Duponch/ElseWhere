@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {notifyColonistKidnapped336} from './colony-economy.ts';
 import {preparePartyRelease292} from './party-release-292.ts';
 import {medicalCivilTick271} from './suspended-human-clock-271.ts';
@@ -93,7 +94,7 @@ export function prepareMapRaiderWorldExit261(w:World,carrier:Pawn,patient?:Pawn)
   commitNativeWorldPawnOrder256(state,nativeBefore,staged.nativeOrder);root.rng=random.rng;
   const ids=new Set(originals.map(p=>p.id)),movedItems=new Set(prepared.flatMap(p=>p.items)),movedPacks=new Set(prepared.flatMap(p=>p.packed));
   if(patient)notifyColonistKidnapped336(w,patient);
-  w.pawns=w.pawns.filter(p=>!ids.has(p.id));w.piles=w.piles.filter(p=>!movedItems.has(p));w.packed=w.packed.filter(p=>!movedPacks.has(p));
+  w.pawns=w.pawns.filter(p=>!ids.has(p.id));w.piles=filterPileEntries(w.piles,p=>!movedItems.has(p));w.packed=w.packed.filter(p=>!movedPacks.has(p));
   if(patient)notifyBillWorkerUnavailable283(w,patient.id);
   // Same local combat cancellation as the existing physical exitRaider;
   // no renderer or stale target may continue to own the departed actor.

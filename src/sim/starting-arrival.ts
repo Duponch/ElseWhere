@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {advanceCoreStartingArrival256} from './starting-pod-runtime-256.ts';
 import {CORE_STARTING_ARRIVAL_PROFILE_256} from './starting-pod-state-256.ts';
@@ -40,7 +41,7 @@ export function prepareStartingArrival(world:World,selectedPawnIds:readonly numb
   }
   for(const pod of pods)for(const pile of pod.items)if(pile.owner.type==='ground')assignPileOwner(pile,{type:'starting-pod',podId:pod.id});
   const pawnIds=new Set(selectedPawnIds),pileIds=new Set(transportedPileIds);
-  world.pawns=world.pawns.filter(p=>!pawnIds.has(p.id));world.piles=world.piles.filter(p=>!pileIds.has(p.id));world.nextId+=3;
+  world.pawns=world.pawns.filter(p=>!pawnIds.has(p.id));world.piles=filterPileEntries(world.piles,p=>!pileIds.has(p.id));world.nextId+=3;
   world.startingArrival={profile:STARTING_ARRIVAL_PROFILE,phase:'incoming',start:0,landAt:STARTING_ARRIVAL_FALL_TICKS,openAt:STARTING_ARRIVAL_FALL_TICKS+STARTING_ARRIVAL_OPEN_DELAY,personalTick:0,pods};
   refreshStock(world);
 }
@@ -90,7 +91,7 @@ export function advanceStartingArrival(world:World):void {
     }
   }
   world.pawns.push(...state.pods.map(p=>p.pawn));
-  for(const pod of state.pods)world.piles.push(...pod.items);
+  for(const pod of state.pods)appendPileEntries(world.piles,...pod.items);
   world.startingArrival={profile:state.profile,phase:'opened',start:state.start,landAt:state.landAt,openAt:state.openAt,openedAt:world.tick,cells:state.pods.map(p=>({...p.cell}))};
   for(const pod of state.pods)notifyActualExplorationSpawn256(world,pod.pawn);
 }

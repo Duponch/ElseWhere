@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
 import { mergeSlowIntervals,travelEnd } from './travel-timing.ts';
 import { syncPatient } from './rescue-state.ts';
@@ -17,7 +18,7 @@ export function applyBulletStagger(world:World,pawn:Pawn,atCore:number,stoppingP
   if(m&&m.end>at) {
     const stagger=mergeSlowIntervals([...(m.stagger??[]),{start:Math.max(m.start,at),end:pawn.stagger.untilCore/10}]);
     const updated={...m,stagger};updated.end=travelEnd(updated);
-    pawn.motion=updated;pawn.moveCooldown=Math.max(0,updated.end-(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick));syncPatient(world,pawn);
+    pawn.motion=updated;markActorMotionSource297(updated);pawn.moveCooldown=Math.max(0,updated.end-(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick));syncPatient(world,pawn);
   }
 }
 export function expireStaggers(world:World):void {

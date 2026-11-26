@@ -1,6 +1,6 @@
 import { listenerPose, type AudioCamera } from './spatial.ts';
 import type { Resource, World } from '../sim/types.ts';
-import { plantGrowth } from '../sim/plants.ts';
+import { plantGrowth,createPlantGrowthReader } from '../sim/plants.ts';
 import { plantLeafless } from '../sim/plant-life.ts';
 import { TICKS_PER_DAY } from '../sim/types.ts';
 import { calendarTick } from '../sim/calendar.ts';
@@ -8,6 +8,7 @@ import { outdoorTemperature } from '../sim/temperature.ts';
 import type { WeatherKind } from '../sim/weather-definitions.ts';
 import { biomeHasNightInsects, nightInsectsGain } from './game-sounds.ts';
 import type { ContinuousSource } from './continuous.ts';
+import {readResidentCollectionChanges379,readResidentCollectionDirectory379,type ResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379.ts';
 
 /** Global weather follows the map camera but softens as the listener rises. */
 export function ambientCameraGain(camera: AudioCamera): number {
@@ -18,6 +19,15 @@ export function ambientCameraGain(camera: AudioCamera): number {
 const FOLIAGE_CELL = 8;
 const FOLIAGE_RADIUS = 28;
 type CanopyDeposit={cell:number;right:number;lower:number;lowerRight:number;a:number;b:number;c:number;d:number};
+type ResidentCanopyRow={plant:Resource;cells:readonly number[];deposit:CanopyDeposit|undefined;stable:boolean};
+type ResidentCanopy={world:World;records:Map<number,ResidentCanopyRow>;ordered:number[]};
+const canopyPlant=(plant:Resource)=> (plant.kind==='tree'||plant.kind==='berries')&&plant.species!=='saguaro';
+function canopyCells(plant:Resource,columns:number):readonly number[]{const x=Math.floor(plant.x/FOLIAGE_CELL),z=Math.floor(plant.z/FOLIAGE_CELL),cell=z*columns+x;return [cell,cell+1,cell+columns,cell+columns+1];}
+function canopyDeposit(world:World,plant:Resource,cells:readonly number[],readGrowth:(plant:Resource)=>number):CanopyDeposit|undefined{
+ if(plantLeafless(world,plant))return;
+ const growth=readGrowth(plant),weight=(plant.kind==='tree'?1:.15)*growth*growth,gx=plant.x/FOLIAGE_CELL,gz=plant.z/FOLIAGE_CELL,fx=gx-Math.floor(gx),fz=gz-Math.floor(gz);
+ return {cell:cells[0]!,right:cells[1]!,lower:cells[2]!,lowerRight:cells[3]!,a:weight*(1-fx)*(1-fz),b:weight*fx*(1-fz),c:weight*(1-fx)*fz,d:weight*fx*fz};
+}
 
 /** Snapshot-only canopy census. Bilinear deposition keeps the listening field
  * continuous across cells; camera queries visit a bounded neighbourhood, never
@@ -29,6 +39,47 @@ export class FoliageAmbience {
   private snapshotResources:readonly Resource[]|undefined;
   private snapshotTimeInvariant=false;
   private stableDeposits:WeakMap<Resource,CanopyDeposit>|undefined;
+  private resident:ResidentCanopy|undefined;
+  reset():void {this.resident=undefined;this.snapshotResources=undefined;this.snapshotTimeInvariant=false;this.stableDeposits=undefined;this.density=new Float32Array(0);this.columns=this.rows=0;}
+
+  /** Accepted resources have an ordered private membership journal. Maintain
+   * only the actual canopy members and stable deposits. A dirty-bin variant
+   * was slower on Forges (most trees have a time-dependent growth input),
+   * so fold this much smaller directory in original order instead. A single
+   * environment reader serves all dynamic trees. Unknown/reordered history
+   * takes the exact complete census. */
+  private adoptResident(world:World,directory:ResidentCollectionDirectory379,columns:number,rows:number,resized:boolean):void {
+    let state=this.resident;
+    if(state?.world===world&&!resized)return;
+    let growthReader:((plant:Resource)=>number)|undefined;
+    const readGrowth=(plant:Resource)=>(plant.growth??1)===1?1:(growthReader??=createPlantGrowthReader(world))(plant);
+    const proof=!resized&&state?readResidentCollectionChanges379(state.world,world,'resources'):undefined;
+    if(!state||!proof){
+      this.columns=columns;this.rows=rows;this.density=new Float32Array(columns*rows);
+      state={world,records:new Map(),ordered:[]};this.resident=state;
+      for(const plant of world.resources)if(canopyPlant(plant)){state.ordered.push(plant.id);this.registerCanopy(state,world,plant,readGrowth);}
+    }else{
+      const dirty=new Set<number>();let membershipChanged=false;
+      for(const edge of proof.edges){membershipChanged||=!!(edge.removed.length||edge.added.length);for(const changes of [edge.removed,edge.added,edge.updated])for(const row of changes)dirty.add(row.id);}
+      for(const id of dirty){
+        const old=state.records.get(id),slot=directory.source(id),plant=slot===undefined?undefined:world.resources[slot];
+        if(plant&&canopyPlant(plant)){if(!old)membershipChanged=true;if(old?.plant!==plant)this.registerCanopy(state,world,plant,readGrowth);}
+        else if(old){state.records.delete(id);membershipChanged=true;}
+      }
+      if(membershipChanged)state.ordered=[...state.records.keys()].map(id=>({id,slot:directory.source(id)})).sort((a,b)=>(a.slot??Infinity)-(b.slot??Infinity)).map(row=>row.id);
+      this.density.fill(0);
+    }
+    // Refold Float32 in exactly the original source order, including growth
+    // rounding and skipped leaves, without reading unrelated plants at all.
+    for(const id of state.ordered){const row=state.records.get(id)!,d=row.stable?row.deposit:canopyDeposit(world,row.plant,row.cells,readGrowth);
+      if(d){this.density[d.cell]!+=d.a;this.density[d.right]!+=d.b;this.density[d.lower]!+=d.c;this.density[d.lowerRight]!+=d.d;}}
+    state.world=world;
+  }
+  private registerCanopy(state:ResidentCanopy,world:World,plant:Resource,readGrowth:(plant:Resource)=>number):ResidentCanopyRow {
+    const cells=canopyCells(plant,this.columns),stable=(plant.growth??1)===1&&plant.plantLife?.leaflessAt===undefined,row={plant,cells,stable,deposit:stable?canopyDeposit(world,plant,cells,readGrowth):undefined};
+    state.records.set(plant.id,row);
+    return row;
+  }
 
   /** Opt-in is reserved for immutable decoder snapshots; direct callers retain
    * the original census and same-tick mutation semantics. */
@@ -36,6 +87,9 @@ export class FoliageAmbience {
     const columns = Math.ceil(world.width / FOLIAGE_CELL) + 1;
     const rows = Math.ceil(world.height / FOLIAGE_CELL) + 1;
     const resized=columns!==this.columns||rows!==this.rows;
+    const directory=immutableSnapshot?readResidentCollectionDirectory379(world,'resources'):undefined;
+    if(directory){this.snapshotResources=undefined;this.snapshotTimeInvariant=false;this.stableDeposits=undefined;this.adoptResident(world,directory,columns,rows,resized);return;}
+    this.resident=undefined;
     if(immutableSnapshot&&!resized&&this.snapshotResources===world.resources&&this.snapshotTimeInvariant)return;
     if (columns !== this.columns || rows !== this.rows) {
       this.columns = columns; this.rows = rows;

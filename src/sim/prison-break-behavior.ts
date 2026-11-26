@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import { hostileTo } from './affiliation.ts';
 import { prisonBreakActive,prisonBreakMeleeOwned } from './prison-break-state.ts';
 import { endPrisonBreak } from './prison-break.ts';
@@ -70,6 +71,6 @@ export function processPrisonBreak(world:World,p:Pawn,getBlocked:NavigationGrid,
   const step=p.path[0];
   if(!step){p.state='idle';return true;}
   if(!canStep(world,p,step,getBlocked(),EMPTY)){p.path=[];p.planCooldown=0;p.state='idle';return true;}
-  p.state='moving';if(startTravel(world,p,step,getLight))p.path.shift();
+  p.state='moving';if(startTravel(world,p,step,getLight))shiftActorPath297(p.path);
   return true;
 }

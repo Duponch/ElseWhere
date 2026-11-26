@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {copyPileCondition} from './pile-condition.ts';
 import {mergeThingDamage,pileMaxHp} from './thing-damage-rules.ts';
 import {groundMaxStacks} from './shelf-storage.ts';
@@ -39,10 +41,10 @@ export function takeFrameWood301(world:World,frame:Job,source:MaterialPile,quant
   // copy is the newly allocated physical split, not a second owned source.
   const {owner:_oldOwner,...fields}=source;
   piece={...fields,...copyPileCondition(source),id:world.nextId++,quantity,kind:'wood',item:'wood'};
-  source.quantity-=quantity;
+  markPileContentWrite379(source).quantity-=quantity;
  }else{
   removeIdentity(world.piles,source);
-  delete (source as Partial<MaterialPile>).owner;
+  delete markPileContentWrite379((source as Partial<MaterialPile>)).owner;
   piece=source as unknown as DetachedWood301; // actual removal of the owner slot above
  }
  withdrawn301.set(source,frame.id);
@@ -87,7 +89,7 @@ export function directDropWood301(world:World,holder:WoodLeavingsHolder301,cell:
   const moved=Math.min(piece.quantity,75-target.quantity);
   if(!moved)continue;
   mergeThingDamage(target,moved,piece.damage??0,pileMaxHp(target,world.schemaVersion));
-  target.quantity+=moved;piece.quantity-=moved;lastResult=target;
+  markPileContentWrite379(target).quantity+=moved;markPileContentWrite379(piece).quantity-=moved;lastResult=target;
   // No OR/AND, permission comparison or source-to-target forbidden assignment.
   if(piece.quantity===0){state.pile=undefined;state.status='consumed';break;}
  }
@@ -97,7 +99,7 @@ export function directDropWood301(world:World,holder:WoodLeavingsHolder301,cell:
   // Larger-than-stack inputs cannot be manufactured through this holder.
   if(world.piles.length>=32768)throw RangeError('Frame transaction must preflight the published pile budget');
   const spawned:MaterialPile=Object.assign(piece,{owner:{type:'ground' as const,x:cell.x,z:cell.z}});
-  world.piles.push(spawned);lastResult=spawned;state.pile=undefined;state.status='consumed';
+  appendPileEntries(world.piles,spawned);lastResult=spawned;state.pile=undefined;state.status='consumed';
  }
  refreshStock(world);
  return {success:state.status==='consumed',transferred:before-(state.pile?.quantity??0),remaining:state.pile?.quantity??0,remainder:state.pile,lastResult};

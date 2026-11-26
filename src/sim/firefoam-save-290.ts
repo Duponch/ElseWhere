@@ -81,7 +81,7 @@ const lanes:readonly Branch[]=[
  ['worldPawns','record'],['owners','record',true],['worldFactions','record'],['leaders','record',true],
  ['heldCaskets259','record',true],['heldPlayerCaskets271','record',true],['heldShipCaskets277','record',true],
  ['casket','record'],['cryptosleep','record'],['shipCryptosleep277','record'],['occupant','record'],
- ['visitors','record'],['podRescues','record'],['departed','record',true],['startingArrival','record'],['pods','record',true],
+ ['visitors','record'],['podRescues','record'],['banishedDepartures378','record',true],['departed','record',true],['startingArrival','record'],['pods','record',true],
  ['animalOwners','record'],['wildlife','record'],['raids','record'],['mechActive','record'],['extraMechActive261','record',true],
  ['humans','actor',true],['members','actor',true],['people','actor',true],['animals','actor',true],['mechanoids','actor',true],['flyers','actor',true],
  ['human','actor'],['pawn','actor'],['animal','actor'],['mech','actor'],['actor','actor'],

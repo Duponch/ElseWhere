@@ -1,3 +1,5 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { coolerSalvage } from './cooler-salvage.ts';
 import { releaseStructureMelee } from './melee-state.ts';
 import { addMaterial } from './materials.ts';
@@ -26,7 +28,7 @@ export interface DestructionLedger { natural?:import('./cave-hive-loss-256.ts').
 export function damageBarrier(world:World,s:Structure,amount:number,rng=world.rng):boolean {
   if(!isBarrier(s)||!world.structures.includes(s)||!Number.isSafeInteger(amount)||amount<1)return false;
   const damage=(s.damage??0)+amount;
-  if(damage<barrierMaxHp(s)){s.damage=damage;world.rng=rng;return true;}
+  if(damage<barrierMaxHp(s)){s.damage=damage;structureDamageChanged379(world,s);world.rng=rng;return true;}
   const salvage=(s.kind==='cooler'||s.kind==='vent')||s.kind==='sandbags'?coolerSalvage(world,s,rng):undefined;if(salvage===null)return false;
   const ledger=world.destroyed??{count:0,lost:{}};
   const lost={...ledger.lost};
@@ -43,7 +45,7 @@ export function damageBarrier(world:World,s:Structure,amount:number,rng=world.rn
     p.orders.queue=p.orders.queue.filter(o=>typeof o!=='number'||!removed.has(o));
   }
   world.jobs=world.jobs.filter(j=>!removed.has(j.id));
-  if(delivered.length)world.piles=world.piles.filter(p=>!delivered.includes(p));
+  if(delivered.length)world.piles=filterPileEntries(world.piles,p=>!delivered.includes(p));
   world.structures=world.structures.filter(b=>b!==s);
   releaseStructureMelee(world,s.id);
   // A door job loses ownership immediately; its committed strike keeps the

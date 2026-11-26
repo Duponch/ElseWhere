@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {createScenarioWorld} from './new-game.ts';
 import {newDoorState} from './door-rules.ts';
 import {addMaterial,refreshStock} from './materials.ts';
@@ -21,7 +22,7 @@ export function prepareGroupScenario():World {
   world.stockpiles=[];world.growingZones=[];world.growingCursor=0;world.events=[];
   // Keep only the actual starting shirts. The finite scene supplies below
   // replace this preparation's ground dotation, never a historical save.
-  world.piles=world.piles.filter(pile=>pile.owner.type==='apparel');
+  world.piles=filterPileEntries(world.piles,pile=>pile.owner.type==='apparel');
   delete world.arrivals;delete world.raids;delete world.heatwaves;delete world.wildlife;delete world.filth;delete world.home;
   for(const [i,pawn] of world.pawns.entries()){
     pawn.name=['Ada','Noé','Mina'][i]!;pawn.x=12+i*3;pawn.z=14;

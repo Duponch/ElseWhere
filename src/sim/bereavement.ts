@@ -9,7 +9,7 @@ import { notifyFamilyDeath } from './family-bereavement.ts';
 import { notifyDeathThoughts } from './death-thoughts.ts';
 
 export type DeathMemoryKind='friend-died'|'rival-died';
-export interface DeathMemory {otherId:number;kind:DeathMemoryKind;at:number;opinion:number;suspendedTicks?:number}
+export interface DeathMemory {otherId:number;kind:DeathMemoryKind;at:number;opinion:number;suspendedTicks?:number;banishedToDie378?:true}
 
 export const FRIEND_DEATH_DURATION=20*TICKS_PER_DAY;
 export const RIVAL_DEATH_DURATION=10*TICKS_PER_DAY;

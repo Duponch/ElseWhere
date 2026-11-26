@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {registeredMapId} from './world-map-context.ts';
 import {captureAnimalAreaPolicy287,type AnimalAreaPolicy287} from './animal-area-policy-287.ts';
@@ -37,7 +38,7 @@ export function reconcileAnimalAreaTasks287(w:World,a:WildAnimal,policy=captureA
  if(a.animalAreaReturn287&&(a.motion?.end??0)<=w.tick&&policy.has(a.z*w.width+a.x))releaseAnimalAreaReturn287(w,a);
  const inside=(c:{x:number;z:number})=>policy.has(c.z*w.width+c.x);
  let interrupted=false;
- if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(r=>r.id===a.meal!.id):w.piles.find(p=>p.id===a.meal!.id)?.owner;
+ if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(r=>r.id===a.meal!.id):pileById(w,a.meal!.id)?.owner;
   if(source&&'x'in source&&!inside(source)){delete a.meal;interrupted=true;}
  }
  if(a.animalRest){const bed=structureById(w,a.animalRest!.spotId);if(bed&&!inside(bed)){delete a.animalRest;if(a.state==='sleeping')a.state='idle';interrupted=true;}}

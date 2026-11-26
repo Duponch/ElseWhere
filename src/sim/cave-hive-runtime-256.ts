@@ -1,3 +1,4 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -146,8 +147,15 @@ export function planActualHiveRuntime256(w:World,frontier:HiveRuntimeFrontier256
   for(const p of w.pawns)if(p.jobId!==null&&removedJobs.has(p.jobId)){if(hasTravellingCargo(w,p))interruptWork(w,p,true);else if(!releaseWork(w,p,releases))throw Error('Preflighted Hive retirement work changed');}
   if(removedJobs.size){w.jobs=w.jobs.filter(j=>!removedJobs.has(j.id));for(const p of w.pawns)p.orders.queue=p.orders.queue.filter(o=>typeof o!=='number'||!removedJobs.has(o));}
   w.rng=randomState.rng;if(copiedWildlife)w.wildlife=stage.wildlife;if(frontier.lordIds)frontier.lordIds.nextId=lordIds.nextId;
-  for(const [original,changed] of pairs){if(hive(original)&&hive(changed))original.caveHive=changed.caveHive;if(pod(original)&&pod(changed))original.glowPod=changed.glowPod;if(changed.damage)original.damage=changed.damage;else delete original.damage;}
-  const reverse=new Map([...pairs].map(([a,b])=>[b,a]));w.structures=stage.structures.map(s=>reverse.get(s)??s);
+  for(const [original,changed] of pairs){if(hive(original)&&hive(changed))original.caveHive=changed.caveHive;if(pod(original)&&pod(changed))original.glowPod=changed.glowPod;if(changed.damage)original.damage=changed.damage;else delete original.damage;structureDamageChanged379(w,original);}
+  const reverse=new Map([...pairs].map(([a,b])=>[b,a]));
+  // Component clocks above are committed to the original structures. Retain
+  // their membership owner when this transaction has added/removed nothing:
+  // replacing an identical array invalidates every geometry-derived reader.
+  // Compare the full ordered reverse mapping; count/endpoints alone cannot
+  // prove that a removed prop was not replaced by another one in the middle.
+  if(stage.structures.length!==baseStructures.length||stage.structures.some((s,i)=>(reverse.get(s)??s)!==baseStructures[i]))
+   w.structures=stage.structures.map(s=>reverse.get(s)??s);
   if(copiedPiles)w.piles=stage.piles;if(copiedFilth)w.filth=stage.filth;if(copiedPacked)w.packed=stage.packed;w.nextId=stage.nextId;if(copiedPiles)refreshStock(w);
   if(removed.length){w.destroyed=stage.destroyed;for(const row of removed)notifyRemovedHiveProp256(w,row.original,isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveCore297(w):row.core,false,row.defeat);}
   frontier.adjacentPermutation.splice(0,8,...runtime.adjacentPermutation);frontier.adjacentUses=runtime.adjacentUses;return true;

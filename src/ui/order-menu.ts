@@ -21,6 +21,8 @@ import { FOOD_ITEMS } from '../sim/food-policy';
 import { groundPilesAt } from '../sim/ground-placement';
 import { setTooltip } from './tooltip';
 import {isSchema290OrLater} from '../sim/schema-compatibility-257.ts';
+import {orderedIntentReason378} from '../sim/ordered-queue-378';
+import {personalOrderCommands378} from './order-queue-378';
 
 export interface TacticalAttackOption {
   kind: 'shoot' | 'melee';
@@ -39,13 +41,13 @@ export interface TacticalAttackPolicy {
 
 /** Uses the same eligibility and route/line kernels as the committed commands.
  * The worker still rechecks every order against its current world. */
-export function tacticalPawns(world: World, ids: ReadonlySet<number>): Pawn[] {
+export function tacticalPawns(world: World, ids: ReadonlySet<number>,queue=false): Pawn[] {
   const carried = new Set(world.pawns.filter(pawn => pawn.rescue?.phase === 'carry').map(pawn => pawn.rescue!.patientId));
-  return draftablePawns(world.pawns.filter(pawn => ids.has(pawn.id)&&!pawn.prisoner)).filter(pawn => !!pawn.draft && pawn.state !== 'sleeping' && !pawn.need && !pawn.collapsePending && !carried.has(pawn.id)).sort((a, b) => a.id - b.id);
+  return draftablePawns(world.pawns.filter(pawn => ids.has(pawn.id)&&!pawn.prisoner)).filter(pawn => !!pawn.draft && (queue&&Number(world.schemaVersion)>=378||pawn.state !== 'sleeping' && !pawn.need) && !pawn.collapsePending && !carried.has(pawn.id)).sort((a, b) => a.id - b.id);
 }
 
 export function tacticalAttackPolicy(world: World, ids: ReadonlySet<number>, targetId: number, queue: boolean): TacticalAttackPolicy {
-  const pawns = tacticalPawns(world, ids), target = combatTarget(world, targetId);
+  const pawns = tacticalPawns(world, ids,queue), target = combatTarget(world, targetId);
   const base = { selected: ids.size, drafted: pawns.length, target: target ? isAnimalTarget(target) ? `${animalSpecies(target.species).label} ${target.id}` : isMechanoidTarget(target)?`${mechanoidDefinition(target.mechKind).label} ${target.id}`:target.name : `cible ${targetId}` };
   if(target&&isAnimalTarget(target)&&target.domestic)return {...base,reason:'Cet animal appartient à la colonie.',options:[]};
   if (!pawns.length) return { ...base, reason: 'Mobilisez un colon libre et capable de combattre.', options: [] };
@@ -53,7 +55,7 @@ export function tacticalAttackPolicy(world: World, ids: ReadonlySet<number>, tar
   // The ordinary context action must not turn a selected friend or neutral human
   // into a target. Explicit attack targeting elsewhere has its own controls.
   if (!isAnimalTarget(target) && !pawns.some(pawn => hostileTarget(pawn, target))) return { ...base, reason: 'Aucune attaque contextuelle sur un allié ou une personne neutre.', options: [] };
-  if (queue) return { ...base, options: (['shoot', 'melee'] as const).map(kind => ({
+  if (queue&&Number(world.schemaVersion)<378) return { ...base, options: (['shoot', 'melee'] as const).map(kind => ({
     kind, label: `${kind === 'shoot' ? 'Tirer sur' : 'Attaquer au contact'} ${base.target}`,
     pawnIds: [], enabled: false, reason: 'La file d’attaques n’est pas disponible ; relâchez Maj.',
   })) };
@@ -61,6 +63,10 @@ export function tacticalAttackPolicy(world: World, ids: ReadonlySet<number>, tar
   let shootReason = '', meleeReason = '';
   const blocked = blockedCells(world), claimed = new Set<number>();
   for (const pawn of pawns) {
+    if(queue&&Number(world.schemaVersion)>=378){
+      const shot=orderedIntentReason378(world,{type:'shoot',pawnIds:[pawn.id],targetId}),melee=orderedIntentReason378(world,{type:'melee',pawnIds:[pawn.id],targetId});
+      if(shot)shootReason||=shot;else shootIds.push(pawn.id);if(melee)meleeReason||=melee;else meleeIds.push(pawn.id);continue;
+    }
     const shot = shotPlan(world, pawn, targetId, shotQueries);
     if ('reason' in shot) shootReason ||= shot.reason ?? 'Tir indisponible.';
     else shootIds.push(pawn.id);
@@ -88,9 +94,10 @@ export interface TacticalTendingOption {
 export function tacticalTendingPolicy(world:World,ids:ReadonlySet<number>,targetId:number,queue:boolean):TacticalTendingOption|undefined {
   const patient=world.pawns.find(p=>p.id===targetId);if(!patient)return;
   const doctor=ids.size===1?world.pawns.find(p=>ids.has(p.id)):undefined;
-  const reason=queue?'Les soins mobilisés ne peuvent pas être mis en file ; relâchez Maj.'
+  const reason=queue&&Number(world.schemaVersion)<378?'Les soins mobilisés ne peuvent pas être mis en file ; relâchez Maj.'
     :ids.size!==1?'Sélectionnez un seul colon pour les soins mobilisés.'
     :!doctor?'Ce colon est indisponible.'
+    :queue&&Number(world.schemaVersion)>=378?orderedIntentReason378(world,{type:'order-drafted-tend',pawnId:doctor.id,patientId:patient.id,queue:false})
     :draftedTendingReason(world,doctor,patient)
       ??(!draftedTendingProposal(world,doctor,patient,reachableCells(world,doctor,blockedCells(world),new Set()))?'Aucune place de soin accessible et libre.':undefined);
   return {patientId:patient.id,...doctor?{pawnId:doctor.id}:{},label:`Soigner ${patient.name} (sans médicament)`,enabled:!reason,...reason?{reason}:{}};
@@ -102,9 +109,10 @@ export function tacticalRescuePolicy(world:World,ids:ReadonlySet<number>,targetI
   const patient=world.pawns.find(p=>p.id===targetId);
   if(world.schemaVersion<237||!patient||!wantsRescue(patient,true))return;
   const actor=ids.size===1?world.pawns.find(p=>ids.has(p.id)):undefined;
-  const reason=queue?'Le secours direct ne peut pas être mis en file ; relâchez Maj.'
+  const reason=queue&&Number(world.schemaVersion)<378?'Le secours direct ne peut pas être mis en file ; relâchez Maj.'
     :ids.size!==1?'Sélectionnez un seul colon pour le secours.'
     :!actor?.draft||!isColonist(actor)||actor.prisoner?'Mobilisez un colon libre pour ce secours tactique.'
+    :queue&&Number(world.schemaVersion)>=378?orderedIntentReason378(world,{type:'order-rescue',pawnId:actor.id,patientId:patient.id,queue:false})
     :rescueReason(world,actor,patient,true)
       ??(!rescueProposal(world,actor,patient,reachableCells(world,actor,blockedCells(world),new Set()),true)?'Aucun couchage accessible et disponible.':undefined);
   return {patientId:patient.id,...actor?{pawnId:actor.id}:{},label:`Secourir ${patient.name}`,enabled:!reason,...reason?{reason}:{}};
@@ -166,9 +174,9 @@ export class OrderMenu {
     if(rescue){
       const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.dataset.orderRescue=String(rescue.patientId);
       button.textContent=rescue.enabled?rescue.label:`${rescue.label} — ${rescue.reason}`;button.disabled=!rescue.enabled;
-      button.onclick=()=>{
+      button.onclick=event=>{
         if(!rescue.enabled||rescue.pawnId===undefined)return;
-        this.close();void this.client.command({type:'order-rescue',pawnId:rescue.pawnId,patientId:rescue.patientId,queue:false})
+        this.close();void this.client.command({type:'order-rescue',pawnId:rescue.pawnId,patientId:rescue.patientId,queue:Number(world.schemaVersion)>=378&&(queue||event.shiftKey)})
           .then(()=>this.report(`Secours demandé pour ${policy.target}.`)).catch(error=>this.report(String(error instanceof Error?error.message:error),true));
       };
       content.append(button);
@@ -176,9 +184,9 @@ export class OrderMenu {
     if(tending){
       const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.dataset.orderDraftedTend=String(tending.patientId);
       button.textContent=tending.enabled?tending.label:`${tending.label} — ${tending.reason}`;button.disabled=!tending.enabled;
-      button.onclick=()=>{
+      button.onclick=event=>{
         if(!tending.enabled||tending.pawnId===undefined)return;
-        this.close();void this.client.command({type:'order-drafted-tend',pawnId:tending.pawnId,patientId:tending.patientId,queue:false})
+        this.close();void this.client.command(personalOrderCommands378(world,{type:'order-drafted-tend',pawnId:tending.pawnId,patientId:tending.patientId,queue:false},queue||event.shiftKey)[0]!)
           .then(()=>this.report(`Soins sans médicament demandés pour ${policy.target}.`)).catch(error=>this.report(String(error instanceof Error?error.message:error),true));
       };
       content.append(button);
@@ -189,16 +197,16 @@ export class OrderMenu {
         const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.dataset.tacticalAttack=option.kind;
         button.textContent=option.enabled?option.label:`${option.label} — ${option.reason ?? 'Indisponible'}`;
         button.disabled=!option.enabled;
-        button.onclick=()=>{
+        button.onclick=event=>{
           this.close();
           const command=option.kind==='shoot'
             ? {type:'shoot' as const,pawnIds:option.pawnIds,targetId}
             : {type:'melee' as const,pawnIds:option.pawnIds,targetId};
-          void this.client.command(command).then(()=>this.report(`${option.kind==='shoot'?'Tir':'Mêlée'} demandé sur ${policy.target}.`)).catch(error=>this.report(String(error instanceof Error?error.message:error),true));
+          void (async()=>{for(const order of personalOrderCommands378(world,command,queue||event.shiftKey))await this.client.command(order);this.report(`${option.kind==='shoot'?'Tir':'Mêlée'} demandé sur ${policy.target}.`);})().catch(error=>this.report(String(error instanceof Error?error.message:error),true));
         };
         content.append(button);
       }
-      if(queue){const hint=document.createElement('p');hint.className='muted';hint.textContent='Seuls les déplacements ont une file d’ordres tactiques.';content.append(hint);}
+      if(queue&&Number(world.schemaVersion)<378){const hint=document.createElement('p');hint.className='muted';hint.textContent='Seuls les déplacements ont une file d’ordres tactiques.';content.append(hint);}
     }
     this.menu.append(header,content);this.position(x,y);this.menu.focus();
     content.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
@@ -241,10 +249,17 @@ export class OrderMenu {
         if(option.rescuePatientId!==undefined)button.dataset.orderRescue=String(option.rescuePatientId);
         if(option.capturePatientId!==undefined)button.dataset.orderCapture=String(option.capturePatientId);
         if(option.arrestPatientId!==undefined)button.dataset.orderArrest=String(option.arrestPatientId);
+        if(option.animalId!==undefined&&option.animalAction)button.dataset.orderAnimal=`${option.animalId}:${option.animalAction}`;
+        if(option.animalRescueId!==undefined)button.dataset.orderAnimalRescue=String(option.animalRescueId);
         button.onclick=event=>{
-          if(option.openCasketId!==undefined&&(queue||event.shiftKey)){this.report('Ouvrir est un ordre direct ; relâchez Maj.',true);return;}
-          if(option.consumePileId!==undefined&&(queue||event.shiftKey)){this.report('Consommer est un ordre direct ; relâchez Maj.',true);return;}
-          this.close();void this.client.command(option.openCasketId!==undefined
+          const queued=queue||event.shiftKey;
+          if(Number(world.schemaVersion)<378&&option.openCasketId!==undefined&&queued){this.report('Ouvrir est un ordre direct ; relâchez Maj.',true);return;}
+          if(Number(world.schemaVersion)<378&&option.consumePileId!==undefined&&queued){this.report('Consommer est un ordre direct ; relâchez Maj.',true);return;}
+          this.close();void this.client.command(personalOrderCommands378(world,option.animalId!==undefined&&option.animalAction
+            ? {type:'order-animal-378',pawnId:pawn.id,animalId:option.animalId,action:option.animalAction,queue:false}
+            : option.animalRescueId!==undefined
+            ? {type:'order-animal-rescue',pawnId:pawn.id,animalId:option.animalRescueId}
+            : option.openCasketId!==undefined
             ? {type:'order-open-casket',pawnId:pawn.id,casketId:option.openCasketId}
             : option.stripTargetId!==undefined
             ? {type:'order-strip',pawnId:pawn.id,targetId:option.stripTargetId}
@@ -266,7 +281,7 @@ export class OrderMenu {
             ? {type:'order-cook',pawnId:pawn.id,structureId:option.cookStationId,queue:queue||event.shiftKey}
             : option.haulTarget
             ? {type:'order-haul',pawnId:pawn.id,target:option.haulTarget,queue:queue||event.shiftKey}
-            : {type:'order-job',pawnId:pawn.id,jobId:option.jobId,queue:queue||event.shiftKey})
+            : {type:'order-job',pawnId:pawn.id,jobId:option.jobId,queue:queue||event.shiftKey},queued)[0]!)
             .then(()=>this.report(option.arrestPatientId!==undefined?'Tentative d’arrestation demandée ; l’acceptation sera vérifiée au contact.':'Ordre accepté.')).catch(error=>this.report(String(error instanceof Error?error.message:error),true));
         };
         content.append(button);

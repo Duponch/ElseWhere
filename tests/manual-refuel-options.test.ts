@@ -2,6 +2,7 @@
  * Aucun contrôle exécuté par l’auteur. Fixtures déclarées, transport réel. */
 import {expect,test} from 'vitest';
 import {medicalCamp} from './scenarios/health';
+import {asOldSchema} from './scenarios/old-schema';
 import {fixtureBuilding} from './scenarios/deconstruction';
 import {addGroundMaterial,refreshStock} from '../src/sim/materials';
 import {applyCommand,stepWorld} from '../src/sim/engine';
@@ -9,7 +10,7 @@ import {queryOrderOptions} from '../src/sim/player-orders';
 import {footprintCells} from '../src/sim/definitions';
 import {newBuildingFuel,fuelItem,fuelLimit,WOOD_BURN_TICKS} from '../src/sim/fuel';
 import {newPowerState} from '../src/sim/power-rules';
-import {serializeWorld,deserializeWorld,validateWorld} from '../src/sim/serialization';
+import {serializeWorld,deserializeWorld,validateWorld,validateCampaignSchema378} from '../src/sim/serialization';
 import type {Structure,World} from '../src/sim/types';
 
 const kinds=['campfire','fueled-stove','passive-cooler','wood-generator','chemfuel-generator'] as const;
@@ -30,7 +31,7 @@ function scene(kind:typeof kinds[number],quantity=5){
 function fuelOption(w:World,pawnId:number,s:Structure,cell={x:s.x,z:s.z}){
  return queryOrderOptions(w,pawnId,cell).filter(o=>o.haulTarget?.type==='fuel'&&o.haulTarget.structureId===s.id);
 }
-function until(w:World,condition:()=>boolean,max=180){for(let n=0;n<max&&!condition();n++)stepWorld(w);expect(condition()).toBe(true);expect(validateWorld(w)).toEqual([]);}
+function until(w:World,condition:()=>boolean,max=180){for(let n=0;n<max&&!condition();n++)stepWorld(w);expect(condition()).toBe(true);expect(Number(w.schemaVersion)===378?validateCampaignSchema378(w):validateWorld(w)).toEqual([]);}
 
 test.each(kinds)('%s : option sur toute empreinte, puis vrai prélèvement entier et crédit physique',kind=>{
  const {w,p,s,source}=scene(kind),before=serializeWorld(w);
@@ -45,12 +46,14 @@ test.each(kinds)('%s : option sur toute empreinte, puis vrai prélèvement entie
  expect(w.piles.some(i=>i.id===carry.id)).toBe(false);stepWorld(saved,w.tick-saved.tick);expect(saved).toEqual(w);
 });
 
-test('prélèvement partiel : dix bois dans un nouveau cargo, reste exact de cinq et crédit6000',()=>{
- const {w,p,s,source}=scene('wood-generator',15);
+test.each([[378,10,5],[379,15,0]])('schéma %i : prélèvement de %i bois et reste exact de %i',(version,quantity,remainder)=>{
+ const original=scene('wood-generator',15),w=version===378?JSON.parse(asOldSchema(serializeWorld(original.w),version)) as World:original.w,p=w.pawns[0]!,s=w.structures.find(b=>b.id===original.s.id)!,source=w.piles.find(i=>i.id===original.source.id)!;
  expect(applyCommand(w,{type:'order-haul',pawnId:p.id,target:{type:'fuel',structureId:s.id},queue:false}).ok).toBe(true);
  until(w,()=>p.haul?.phase==='deliver');const carry=w.piles.find(i=>i.id===p.haul!.carryPileId)!;
- expect(p.haul).toMatchObject({sourcePileId:source.id,quantity:10,pickupCell:{x:10,z:13},destination:{type:'fuel',structureId:s.id,forced:true}});expect(carry).toMatchObject({quantity:10,item:'wood',owner:{type:'pawn',pawnId:p.id}});expect(carry.id).not.toBe(source.id);expect(w.piles.find(i=>i.id===source.id)).toMatchObject({quantity:5,owner:{type:'ground',x:10,z:13}});
- until(w,()=>p.haul===null&&s.fuel!.ticks+s.fuel!.burned===6000);expect(w.piles.find(i=>i.id===source.id)?.quantity).toBe(5);expect(w.piles.some(i=>i.id===carry.id)).toBe(false);
+ expect(p.haul).toMatchObject({sourcePileId:source.id,quantity,pickupCell:{x:10,z:13},destination:{type:'fuel',structureId:s.id,forced:true}});expect(carry).toMatchObject({quantity,item:'wood',owner:{type:'pawn',pawnId:p.id}});expect(carry.id).not.toBe(source.id);expect(w.piles.find(i=>i.id===source.id)?.quantity??0).toBe(remainder);
+ const restored=version>=379?deserializeWorld(serializeWorld(w)):null;
+ until(w,()=>p.haul===null&&s.fuel!.ticks+s.fuel!.burned===quantity*WOOD_BURN_TICKS);expect(w.piles.find(i=>i.id===source.id)?.quantity??0).toBe(remainder);expect(w.piles.some(i=>i.id===carry.id)).toBe(false);
+ if(restored){stepWorld(restored,w.tick-restored.tick);expect(restored).toEqual(w);}
 });
 
 test('mauvais combustible : option désactivée et commande refusée sans effets',()=>{

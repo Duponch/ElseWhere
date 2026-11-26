@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {targetBuildingPlayerUse263} from './world-target-building-263.ts';
 import { pawnBody } from './health-rules.ts';
 import { inHome } from './repairs.ts';
@@ -110,8 +112,8 @@ export function advanceBreakdownFix(world:World,pawn:Pawn,job:Job,body?:BodyAsse
   pawn.path=[];pawn.state='working';job.progress++;
   if(job.progress<BREAKDOWN_FIX_TICKS)return null;
   const component=world.piles.find(p=>p.item==='component'&&p.owner.type==='job'&&p.owner.jobId===job.id)!;
-  if(component.quantity===1)world.piles=world.piles.filter(p=>p!==component);
-  else component.quantity--;
+  if(component.quantity===1)world.piles=filterPileEntries(world.piles,p=>p!==component);
+  else markPileContentWrite379(component).quantity--;
   const calendar=world.breakdown!;
   const successful=nextRandom(calendar)<fixBreakdownSuccessChance(pawn,body);
   learnSkill(pawn.skills.construction,1000,pawn);

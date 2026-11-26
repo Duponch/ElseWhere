@@ -5,6 +5,8 @@ import { TICKS_PER_SECOND } from '../sim/types';
 import type { WildAnimal } from '../sim/wildlife-state';
 import type { FireRecord } from '../sim/fire-rules';
 import { structureById } from '../sim/structure-navigation';
+import {readSnapshotChanges} from '../bridge/snapshot-changes';
+import {isActorPlaybackWorld435} from './ActorPlayback435';
 import type { CachedActorPose } from './ActorAnimationCache';
 import {
   ACTION_PARTICLES, FAMILY_FIRST_CELL, PARTICLE_SLOTS, TIME_WRAP,
@@ -27,6 +29,12 @@ const TEXELS = 7;
 const sourceNames = ['aFrom', 'aTo', 'aTravel'] as const;
 type Stream = THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
 const versionOf = (attr: Stream | undefined) => attr ? attr instanceof THREE.InterleavedBufferAttribute ? attr.data.version : attr.version : -1;
+type ParticlePhase297={jobs?:ReadonlyMap<number,Job>;pileSource?:(id:number)=>number|undefined;base?:World;humans?:ReadonlySet<number>;piles?:ReadonlyMap<number,Readonly<MaterialPile>|null>;pawnSource?:(id:number)=>Pawn|undefined};
+type ParticleSubject297={pawn:Pawn;job:Job|undefined;emitter:Emitter|undefined;pileIds:readonly number[];humanTarget:boolean};
+function particlePileIds297(pawn:Pawn):number[]{
+ const need=pawn.need?.kind==='eat'?pawn.need:undefined;
+ return [need?.carryPileId,need?.sourcePileId,pawn.haul?.carryPileId,pawn.feed?.carryPileId,pawn.animalFeed?.carryPileId].filter((id):id is number=>typeof id==='number');
+}
 
 /** Per-slot parameters of every action, read by the vertex shader. Row 0 is
  * "no action". Built once from the catalogue. */
@@ -130,6 +138,8 @@ export class ActionParticleLayer {
   private pawnIndex: { source?: readonly Pawn[]; map: Map<number, Pawn> } = { map: new Map() };
   private animalIndex: { source?: readonly WildAnimal[]; map: Map<number, WildAnimal> } = { map: new Map() };
   private pileIndex: { source?: readonly MaterialPile[]; map: Map<number, MaterialPile> } = { map: new Map() };
+  private phaseSubjects297:{base:World;rows:ParticleSubject297[]}|undefined;
+  readonly phaseMetrics297={rows:0,skipped:0};
 
   constructor(private readonly clock: { readonly travelTime: { value: number } }) {
     const geometry = particleGeometry();
@@ -201,22 +211,33 @@ export class ActionParticleLayer {
   }
 
   /** Confirmed snapshot: chooses every actor's action and detects events. */
-  update(world: World, source: THREE.InstancedBufferGeometry | undefined, animals?: ActionParticleAnimals): void {
+  update(world: World, source: THREE.InstancedBufferGeometry | undefined, animals?: ActionParticleAnimals, phase?:ParticlePhase297): void {
     this.source = source;
-    const lookup = this.lookup(world), tick = world.tick;
+    const lookup = this.lookup(world,phase), tick = world.tick;
     const previous = this.emitters;this.emitters = [];
+    const base=phase?.base,held=this.phaseSubjects297;
+    const sparse=!!(base&&held?.base===base&&readSnapshotChanges(base,base)!==undefined&&isActorPlaybackWorld435(base)&&isActorPlaybackWorld435(world)&&Object.isFrozen(world.pawns)&&world.pawns.length===held.rows.length&&world.pawns.every((p,i)=>p.id===held.rows[i]!.pawn.id)&&world.structures===base.structures&&world.wildlife===base.wildlife&&world.fires===base.fires&&world.tiles===base.tiles&&world.width===base.width&&world.height===base.height&&phase?.piles&&phase.jobs);
+    const rows=sparse?held!.rows:!phase&&isActorPlaybackWorld435(world)&&readSnapshotChanges(world,world)!==undefined?[]:undefined;
+    this.phaseSubjects297=undefined;
     this.seen.clear();this.found.length = 0;
     world.pawns.forEach((pawn, row) => {
-      this.seen.add(pawn.id);
+      if(!sparse)this.seen.add(pawn.id);
+      const job=pawn.jobId===null?undefined:rows?lookup.job(pawn.jobId):undefined,old=sparse?rows![row]:undefined;
+      if(old&&old.pawn===pawn&&!phase!.humans?.has(row)&&old.job===job&&!old.humanTarget&&!old.pileIds.some(id=>phase!.piles!.has(id))){
+        if(old.emitter)this.emitters.push(old.emitter);this.phaseMetrics297.skipped++;return;
+      }
+      if(sparse)this.phaseMetrics297.rows++;
       const memory = this.memories.get(pawn.id);
       const next = actionParticleEvents(memory, pawn, tick, lookup, this.found);
       if (!memory) this.memories.set(pawn.id, next);
       for (const event of this.found) this.addEvent(event, pawn, row);
       this.found.length = 0;
       const choice = actionParticleForPawn(pawn, lookup);
-      if (choice) this.emitters.push({ action: actionParticleIndex(choice.action), choice, row, seed: actorParticleSeed(pawn.id), stroke: actorStrokeOffset(pawn.id), startTick: -1, endTick: 0 });
+      const emitter=choice?{action:actionParticleIndex(choice.action),choice,row,seed:actorParticleSeed(pawn.id),stroke:actorStrokeOffset(pawn.id),startTick:-1,endTick:0}:undefined;
+      if(emitter)this.emitters.push(emitter);
+      if(rows)rows[row]={pawn,job,emitter,pileIds:particlePileIds297(pawn),humanTarget:pawn.state==='working'&&(pawn.tend?.phase==='tend'||pawn.surgery?.phase==='work'||pawn.feed?.phase==='feed')};
     });
-    for (const id of this.memories.keys()) if (!this.seen.has(id)) this.memories.delete(id);
+    if(!sparse)for (const id of this.memories.keys()) if (!this.seen.has(id)) this.memories.delete(id);
     if (animals) for (const animal of world.wildlife?.animals ?? []) {
       if (animal.state !== 'eating' && animal.state !== 'sleeping') continue;
       const choice = actionParticleForAnimal(animal);
@@ -232,6 +253,7 @@ export class ActionParticleLayer {
           || a.pose?.x !== b.pose?.x || a.pose?.z !== b.pose?.z || a.pose?.yaw !== b.pose?.yaw) { this.dirty = true; break; }
       }
     } else this.dirty = true;
+    if(rows)this.phaseSubjects297={base:sparse?base!:world,rows};
   }
 
   /** Every frame: the clock, and records only when an actor pose or the
@@ -330,7 +352,7 @@ export class ActionParticleLayer {
     this.put(at + 12, a.ground); this.put(at + 13, 1); this.put(at + 14, this.arrived ? 1 : 0); this.put(at + 15, 0);
     if (a.x < this.minX) this.minX = a.x; if (a.x > this.maxX) this.maxX = a.x; if (a.z < this.minZ) this.minZ = a.z; if (a.z > this.maxZ) this.maxZ = a.z;
   }
-  private lookup(world: World): ActionParticleLookup {
+  private lookup(world: World,phase?:ParticlePhase297): ActionParticleLookup {
     const index = <T extends { id: number }>(cache: { source?: readonly T[]; map: Map<number, T> }, source: readonly T[] | undefined): Map<number, T> => {
       const list = source ?? [];
       if (cache.source !== list) { cache.source = list; cache.map.clear(); for (const item of list) if (!cache.map.has(item.id)) cache.map.set(item.id, item); }
@@ -338,12 +360,12 @@ export class ActionParticleLayer {
     };
     const fires = world.fires?.items;
     return {
-      job: id => index(this.jobs, world.jobs).get(id),
+      job: id => phase?.jobs?phase.jobs.get(id):index(this.jobs, world.jobs).get(id),
       structure: id => structureById(world, id),
       fire: id => fires?.find(fire => fire.id === id) as FireRecord | undefined,
-      pawn: id => index(this.pawnIndex, world.pawns).get(id),
+      pawn: id => phase?.pawnSource?phase.pawnSource(id):index(this.pawnIndex, world.pawns).get(id),
       animal: id => index(this.animalIndex, world.wildlife?.animals).get(id),
-      pile: id => id < 0 ? undefined : index(this.pileIndex, world.piles).get(id),
+      pile: id => {if(id<0)return;const source=phase?.pileSource?.(id),pile=source===undefined?undefined:world.piles[source];return pile?.id===id?pile:index(this.pileIndex, world.piles).get(id);},
       tile: (x, z) => x >= 0 && z >= 0 && x < world.width && z < world.height ? world.tiles[z * world.width + x] : undefined,
     };
   }

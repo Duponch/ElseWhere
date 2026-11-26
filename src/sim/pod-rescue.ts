@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259,bornFactionForDef259} from './world-affiliation-259.ts';
@@ -88,7 +89,7 @@ function openPod(w:World,pending:PodRescuePending):boolean {
   p.state='downed';
   const shirt:MaterialPile={id:w.nextId+1,kind:'apparel',item:'cloth-shirt',quantity:1,owner:{type:'apparel',pawnId:p.id},apparel:newApparelState('cloth-shirt',undefined,w.schemaVersion)};
   const s=w.podRescues!;
-  w.nextId+=2;w.pawns.push(p);w.piles.push(shirt);
+  w.nextId+=2;w.pawns.push(p);appendPileEntries(w.piles,shirt);
   s.incidents.push({id:pending.id,start:pending.start,openedAt:w.tick,pawnId:p.id,
     ...(pending.origin===undefined?{}:{origin:pending.origin})});delete s.pending;
   emit(w,`${p.name} est à terre après l’ouverture de sa capsule. Un secours direct peut le conduire vers un lit.`);return true;
@@ -140,7 +141,7 @@ export function exitPodRescue(w:World,p:Pawn):boolean {
   delete p.motion;delete p.stagger;delete p.stun;delete p.shooting;delete p.melee;delete p.tactics;delete p.medicalSleep;delete p.transitExit;
   s.departed.push({incidentId:incident.id,tick:w.tick,pawn:structuredClone(p),items:structuredClone(items),...packed.length?{packed:structuredClone(packed)}:{}});
   incident.result='departed';incident.resolvedAt=w.tick;
-  w.pawns=w.pawns.filter(q=>q!==p);w.piles=w.piles.filter(i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));
+  w.pawns=w.pawns.filter(q=>q!==p);w.piles=filterPileEntries(w.piles,i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));
   emit(w,`${p.name} quitte la carte avec ses possessions restantes.`);return true;
 }
 import { civilianAdmissionFits } from './civilian-away.ts';

@@ -1,6 +1,7 @@
 import {schemaAtLeast} from './schema-range.ts';
 import {naturalTerrainCosts256} from './natural-terrain-movement-256.ts';
 import {furnitureDelay} from './furniture-travel.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 import {duckTerrainOverride256,duckMapHasWater256,duckWanderWaterAllowed256} from './duck-water-256.ts';
 import {duckFlying256} from './duck-flight-state-256.ts';
 import {notifyDuckFlightJob256} from './duck-flight-runtime-256.ts';
@@ -76,7 +77,7 @@ function raceFacts(species:string):{herd:boolean;roamer:boolean} {
  const legacy=LEGACY_HERD_ROAM[species];return {herd:!!legacy?.herd,roamer:legacy?.roam!==null&&legacy?.roam!==undefined};
 }
 
-type Nav=Pick<ReturnType<typeof animalNavigation>,'free'|'occupy'|'step'|'blockedGrid'|'regionKey'>;
+type Nav=Pick<ReturnType<typeof animalNavigation>,'free'|'occupy'|'step'|'blockedGrid'|'regionKey'>&Partial<Pick<ReturnType<typeof animalNavigation>,'regionTopology'>>;
 /** A live region: the cells of one 12 x 12 block joined by cardinal steps
  * (cell indices, in index order), and their bounds. */
 type Region={readonly tag:number;readonly cells:number[];x0:number;x1:number;z0:number;z1:number};
@@ -111,7 +112,10 @@ function dangerReader(w:World,a:ActualAnimalMind256,nav:Nav):(c:Cell)=>number {
 interface RegionCache {
  readonly key:string;readonly width:number;readonly height:number;
  /** The grid the regions were built on, door cells cleared. */
- readonly grid:Uint8Array;readonly portals:Set<number>;
+ readonly grid:Uint8Array;readonly portals:ReadonlySet<number>;
+ /** Same non-door topology, witnessed by its immutable source mask and the
+  * actual geometry's passage-door membership. Neither is a tick heuristic. */
+ topology?:ReturnType<NonNullable<Nav['regionTopology']>>;
  /** 0 unknown, -1 no region (blocked or door), else the region's tag. */
  readonly regionOf:Int32Array;readonly regions:Region[];
  /** Per tag, the region's boundary steps in order: pairs (cell, door), door
@@ -122,7 +126,7 @@ const regionCaches=new WeakMap<World,RegionCache[]>();
 /** One pass's view: the cache and the reader's current grid. */
 interface RegionGraph {readonly cache:RegionCache;readonly grid:Uint8Array;readonly regionOf:Int32Array;readonly regions:Region[];readonly exits:(number[]|undefined)[]}
 const graphs=new WeakMap<Nav,RegionGraph>();
-function sameRegionGrid(cache:RegionCache,w:World,grid:Uint8Array,portals:Set<number>):boolean {
+function sameRegionGrid(cache:RegionCache,w:World,grid:Uint8Array,portals:ReadonlySet<number>):boolean {
  if(cache.width!==w.width||cache.height!==w.height||cache.grid.length!==grid.length||cache.portals.size!==portals.size)return false;
  for(const i of portals)if(!cache.portals.has(i))return false;
  const kept=cache.grid;let i=0;
@@ -138,14 +142,17 @@ function sameRegionGrid(cache:RegionCache,w:World,grid:Uint8Array,portals:Set<nu
 }
 function regionGraph(w:World,nav:Nav):RegionGraph {
  let graph=graphs.get(nav);if(graph)return graph;
- const grid=nav.blockedGrid(),portals=passageDoorCells(w),key=nav.regionKey;
+ const grid=nav.blockedGrid(),topology=nav.regionTopology?.(),portals=topology?.portals??passageDoorCells(w),key=nav.regionKey;
  let list=regionCaches.get(w);if(!list){list=[];regionCaches.set(w,list);}
  let cache=list.find(c=>c.key===key);
- if(!cache||!sameRegionGrid(cache,w,grid,portals)){
+ const sameTopology=!!cache&&!!topology&&cache.width===w.width&&cache.height===w.height&&cache.topology?.base===topology.base&&cache.topology?.portals===topology.portals;
+ if(sameTopology&&verifyTerrainWriteCaches&&!sameRegionGrid(cache!,w,grid,portals))throw Error('Animal region topology witness disagrees with its full obstacle grid');
+ if(!cache||!sameTopology&&!sameRegionGrid(cache,w,grid,portals)){
   const kept=Uint8Array.from(grid);for(const i of portals)kept[i]=0;
-  const fresh:RegionCache={key,width:w.width,height:w.height,grid:kept,portals,regionOf:new Int32Array(grid.length),regions:[],steps:[]};
+  const fresh:RegionCache={key,width:w.width,height:w.height,grid:kept,portals,topology,regionOf:new Int32Array(grid.length),regions:[],steps:[]};
   if(cache)list[list.indexOf(cache)]=fresh;else list.push(fresh);cache=fresh;
  }
+ cache.topology=topology;
  graph={cache,grid,regionOf:cache.regionOf,regions:cache.regions,exits:[]};graphs.set(nav,graph);return graph;
 }
 function regionAt(w:World,graph:RegionGraph,c:Cell):Region|undefined {

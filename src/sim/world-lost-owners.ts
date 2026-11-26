@@ -100,6 +100,7 @@ export function captureLostOwners(root:CampaignState):HumanOwnershipCapture {
 /** Final own-record MapDeiniter cleanup after REAL work notifiers. No clinical
  * tick, faction choice, new dossier or chronology is performed here. */
 export function cleanMapRemovedHumanRecord259(p:Pawn,tick:number):void {
+ delete p.orderedQueue378;
  if(p.prisoner){delete p.prisoner.escape;if(p.prisoner.breakout)delete p.prisoner.breakout.active;}
  clearActualGuest259(p);for(const k of ['visitor','podRescue','raid'] as const)delete p[k];
  for(const key of localFields)delete p[key];p.bedId=null;delete p.interruptedCargo;

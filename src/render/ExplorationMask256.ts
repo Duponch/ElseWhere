@@ -1,6 +1,6 @@
 /** One resident DATA mask; pigments and BoxMesh layouts remain unchanged. */
 import * as THREE from 'three/webgpu';
-import {attribute,convert,float,normalWorldGeometry,positionWorld,texture,uniform,varying,vec2} from 'three/tsl';
+import {attribute,convert,float,normalWorldGeometry,positionWorld,renderGroup,texture,uniform,varying,vec2} from 'three/tsl';
 import {ExplorationField256} from './ExplorationField256';
 import type {World} from '../sim/types';
 export function actorExplorationMaterial256<T extends THREE.NodeMaterial>(material:T):T {material.userData.explorationActor=true;return material;}
@@ -18,8 +18,8 @@ export class ExplorationMask256 {
  /** Exact producer nodes for the private compiled-program contract; no graph mutation. */
  ownedObjectUniforms435():readonly THREE.Node[]{return [this.size,this.enabled];}
  readonly map=new THREE.DataTexture(this.field.data,1,1,THREE.RGBAFormat,THREE.UnsignedByteType);
- private readonly size=uniform(new THREE.Vector2(1,1));
- private readonly enabled=uniform(false);
+ private readonly size=uniform(new THREE.Vector2(1,1)).setGroup(renderGroup);
+ private readonly enabled=uniform(false).setGroup(renderGroup);
  private readonly sample=texture(this.map);
  private readonly cell=positionWorld.xz.add(.5).floor();
  private readonly inside=this.cell.x.greaterThanEqual(0).and(this.cell.y.greaterThanEqual(0)).and(this.cell.x.lessThan(this.size.x)).and(this.cell.y.lessThan(this.size.y));

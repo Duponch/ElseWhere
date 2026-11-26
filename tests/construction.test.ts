@@ -13,6 +13,7 @@ import { createWorld, applyCommand, addGroundMaterial, refreshStock, stepWorld, 
 import { blockedCells, reachableCells, routeToCell } from '../src/sim/pathfinding';
 import { startTravel } from '../src/sim/movement';
 import { constructionObstruction, constructionObstructions, constructionSiteFree } from '../src/sim/construction-rules';
+import { constructionCandidates } from '../src/sim/construction-planner';
 import { rotAge } from '../src/sim/food-preservation';
 import type { World } from '../src/sim/types';
 
@@ -29,9 +30,15 @@ test('a builder clears a typed pile physically, preserves freshness and cargo on
   const w=camp();addGroundMaterial(w,'wood',5,{x:7,z:10},'wood');addGroundMaterial(w,'food',23,{x:12,z:10},'rice');
   expect(applyCommand(w,{type:'designate',kind:'wall',x:12,z:10}).ok).toBe(true);
   expect(w.jobs[0]!.construction).toBe('blueprint');expect(blockedCells(w)[332]).toBe(0);
+  // Historical producers keep their ten-unit trip; new construction clearing
+  // carries this whole rice stack under the current actor/item capacity.
+  const historical={...w,schemaVersion:378 as typeof w.schemaVersion},blocked=blockedCells(historical);
+  const reach=reachableCells(historical,w.pawns[0]!,blocked,new Set());
+  expect(constructionCandidates(historical,w.pawns[0]!,blocked,reach,{remaining:32768,pairs:32768},constructionObstructions(historical))
+    .find(c=>c.destination?.type==='aside')?.quantity).toBe(10);
   until(w,()=>w.pawns[0]!.haul?.destination.type==='aside'&&w.pawns[0]!.haul.phase==='deliver');
   const checkpoint=serializeWorld(w),copy=deserializeWorld(checkpoint),cancelled=deserializeWorld(checkpoint);
-  expect(cancelled.pawns[0]!.haul?.quantity).toBe(10);
+  expect(cancelled.pawns[0]!.haul?.quantity).toBe(23);
   expect(applyCommand(cancelled,{type:'cancel',x:12,z:10}).ok).toBe(true);expect(validateWorld(cancelled)).toEqual([]);
   expect(cancelled.pawns[0]!.haul).toBeNull();expect(cancelled.piles.filter(p=>p.item==='rice').reduce((n,p)=>n+p.quantity,0)).toBe(23);
   until(w,()=>w.jobs[0]?.construction==='frame');expect(w.jobs[0]!.escrow.wood).toBe(5);expect(blockedCells(w)[332]).toBe(0);

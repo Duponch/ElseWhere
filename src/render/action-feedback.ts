@@ -29,6 +29,9 @@ export interface ActionProgress {
 }
 
 export interface ActionLookup {
+  /** Closed phase presentation may share the authentic Full's unchanged
+   * growing-zone derivation for sowing. Other job clocks keep the phase World. */
+  sowingWorld?:World;
   /** Ephemeral snapshot indices. The large resource index is built only if a
    * colon is actually clearing a plant before construction. */
   jobs?:ReadonlyMap<number,Job>;
@@ -119,7 +122,7 @@ export function actionProgress(world:World,pawn:Pawn,lookup?:ActionLookup):Actio
       // Core JobDriver_ConstructFinishFrame has no bar: the frame draws its own
       // progress tiles. JobDriver_Repair and JobDriver_Flick have none either.
       if(isConstruction(job)||job.kind==='repair'||job.kind==='flick')return undefined;
-      return measured('job',workProgress(job),jobDuration(world,job,lookup?.resourceCells ? lookup.resourceCells.get(job.z*world.width+job.x)??null : undefined));
+      return measured('job',workProgress(job),jobDuration(job.kind==='sow'?lookup?.sowingWorld??world:world,job,lookup?.resourceCells ? lookup.resourceCells.get(job.z*world.width+job.x)??null : undefined));
     }
   }
   return undefined;

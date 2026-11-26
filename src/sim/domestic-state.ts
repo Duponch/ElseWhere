@@ -23,6 +23,8 @@ export interface DomesticAnimal {
 export interface TamingDesignation { designated:boolean; lastAttempt?:number }
 export interface AnimalHandlingTask {
   animalId:number;
+  /** Schema 378: a direct Prioritise order, on this actual service only. */
+  forced378?:true;
   kind:'tame'|'maintain'|'train'|'lead'|'milk'|'shear'|'slaughter'|'release';
   sourcePileId:number;
   carryPileId:number|null;

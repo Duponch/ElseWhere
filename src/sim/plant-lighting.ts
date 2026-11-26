@@ -3,12 +3,16 @@ import { isRoofed,roofCoverage,roofIdentity,sameRoofIdentity,type RoofIdentity }
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import type { Resource,World } from './types.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import {markResourceChanged,captureResourceJournal,readResourceJournal,resourceMembershipUnchanged,type ResourceJournalCursor} from './resource-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 /** Settle the captured light/thermal interval before changing either regime.
  * Roof producers still call this before mutating physical coverage. */
 export function checkpointPlantGrowth(world:World,plant:Resource):void {
   if(!isPlant(plant))return;
   plant.growth=plantGrowth(world,plant);plant.growthTick=world.tick;
+  markResourceChanged(world,plant);
 }
 
 interface Binding {
@@ -48,11 +52,84 @@ let writingPasses=0;
 const sameCoverage=(previous:readonly number[],current:readonly number[]|undefined):boolean=>
   previous.length===(current?.length??0)&&previous.every((cell,i)=>cell===current![i]);
 
+interface OwnedBinding {
+  owner:object;source:Resource[];cursor:ResourceJournalCursor;plants:Set<Resource>;
+  artificial:Float32Array|undefined;roofs:RoofArrays;coverage:readonly number[];width:number;height:number;key:object;pass:number;
+}
+const ownedBindings=new WeakMap<World,OwnedBinding>();
+/** Under the closed SIM owner, the membership journal gives the ordered
+ * survivors and appended records directly. Lighting is the sole writer of an
+ * on-map plant's growthLight; tree replantation clears it before its append.
+ * An unchanged regime therefore only needs to reconcile appended plants.
+ * Unknown transactions, owner changes and another world's lighting pass lose
+ * that proof and visit the complete ordered membership. */
+function reconcileOwnedPlantLighting(world:World,provided:LightEnvironment|LightReader,owner:object):boolean {
+  const previous=ownedBindings.get(world);let binding=previous,membershipChanged=false,full=false;
+  let appended:Set<Resource>|undefined;
+  if(binding?.owner!==owner)binding=undefined;
+  if(binding&&(binding.source!==world.resources||!resourceMembershipUnchanged(world.resources,binding.cursor))){
+    const delta=readResourceJournal(world.resources,binding.cursor);
+    if(delta?.membershipEdits){
+      membershipChanged=delta.membershipChanged;
+      apply:for(const edit of delta.membershipEdits){
+        for(const plant of edit.removed)if(isPlant(plant)){
+          if(!binding.plants.delete(plant)){binding=undefined;break apply;}appended?.delete(plant);
+        }
+        for(const plant of edit.appended)if(isPlant(plant)){
+          if(binding.plants.has(plant)){binding=undefined;break apply;}binding.plants.add(plant);(appended??=new Set()).add(plant);
+        }
+      }
+    }else binding=undefined;
+  }
+  if(!binding){
+    const plants=new Set<Resource>();let count=0;for(const plant of world.resources)if(isPlant(plant)){plants.add(plant);count++;}
+    // A malformed repeated object has no ordered-Set representation. Keep the
+    // ordinary array path, including its duplicate visits, for that caller.
+    if(plants.size!==count){ownedBindings.delete(world);bindings.delete(world);return false;}
+    binding={owner,source:world.resources,cursor:captureResourceJournal(world.resources),plants,artificial:undefined,roofs:roofArrays(world),coverage:[],width:0,height:0,key:{},pass:0};
+    full=true;
+  }
+  if(verifyTerrainWriteCaches){
+    const expected=world.resources.filter(isPlant),actual=binding.plants.values();
+    for(const plant of expected)if(actual.next().value!==plant)throw Error('Incremental plant lighting membership differs from a complete capture');
+    if(!actual.next().done)throw Error('Incremental plant lighting membership differs from a complete capture');
+  }
+  const hasLamp=structuresOfKind(world,'sun-lamp').length>0;
+  const artificial=hasLamp?(typeof provided==='function'?provided():provided).artificial:undefined,roofs=roofArrays(world);
+  const sameDims=binding.width===world.width&&binding.height===world.height;
+  let coverage:readonly number[]=binding.coverage;
+  if(!sameRoofArrays(binding.roofs,roofs)||full)coverage=roofCoverage(world);
+  const sameRegime=previous?.owner===owner&&previous.artificial===artificial&&sameDims&&sameCoverage(previous.coverage,coverage);
+  if(!sameRegime){binding.key={};full=true;}
+  // A different World can legally share resource objects in reader fixtures.
+  // Its pass may have reconciled them under another regime in the meantime.
+  if(membershipChanged&&binding.pass!==writingPasses)full=true;
+  binding.source=world.resources;binding.cursor=captureResourceJournal(world.resources);
+  binding.artificial=artificial;binding.roofs=roofs;binding.coverage=coverage;binding.width=world.width;binding.height=world.height;
+  ownedBindings.set(world,binding);
+  if(!full&&!appended?.size)return true;
+  const key=binding.key,pass=++writingPasses;
+  if(verifyTerrainWriteCaches&&!full)for(const plant of binding.plants)if(!appended!.has(plant)){
+    const seen=reconciled.get(plant);if(!seen||seen.key!==key||seen.mode!==plant.growthLight)throw Error('Unobserved plant light mutation under a closed membership proof');
+  }
+  for(const plant of full?binding.plants:appended!){
+    const seen=reconciled.get(plant);if(seen?.key===key&&seen.mode===plant.growthLight)continue;
+    const cell=plant.z*world.width+plant.x,mode=(artificial?.[cell]??0)>=1?'artificial-full':isRoofed(world,cell)?'dark':undefined;
+    reconciled.set(plant,{key,mode});
+    if(plant.growthLight===mode)continue;
+    checkpointPlantGrowth(world,plant);
+    if(mode===undefined)delete plant.growthLight;else plant.growthLight=mode;
+  }
+  binding.pass=pass;return true;
+}
+
 /** The light cache supplies a stable, immutable field. Sky and the temporary
  * roofs Set are deliberately excluded from the invalidation key. Stable calls
  * compare roof primitives but never walk the forest or copy the coverage.
  * Producers replace Resource[] when adding/removing/replacing plant objects. */
 export function reconcilePlantLighting(world:World,provided:LightEnvironment|LightReader):void {
+  const owner=terrainJournalReadOwner();
+  if(owner&&world.schemaVersion>=256&&reconcileOwnedPlantLighting(world,provided,owner))return;
   let binding=bindings.get(world);
   const previous=binding;
   if(!binding||binding.source!==world.resources) {

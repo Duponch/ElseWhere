@@ -1,4 +1,5 @@
 import {isSchema265OrLater} from './schema-compatibility-257.ts';
+import {carryQuantityBound379} from './carry-quantity-379.ts';
 import {validFermentationState265,FERMENTING_SERVICE_TICKS_265} from './fermentation-state-265.ts';
 import {isHaulOrder} from './order-types.ts';
 import {everyHumanPawnOwner} from './human-owners.ts';
@@ -42,7 +43,7 @@ export function validFermentationWorld265(w:World,version:number=w.schemaVersion
     const tasks=[...(p.haul?[p.haul]:[]),...p.orders.queue.filter(isHaulOrder)];
     for(const h of tasks)if(h.destination.type==='fermenting-barrel'){
       const d=h.destination;
-      if(!isSchema265OrLater(version)||!local||!exact(d,['type','structureId'])||!integer(d.structureId,1,w.nextId-1)||!integer(h.quantity,1,10)||barrelClaims.has(d.structureId)||h.serviceProgress!==undefined&&!integer(h.serviceProgress,0,FERMENTING_SERVICE_TICKS_265))return false;
+      if(!isSchema265OrLater(version)||!local||!exact(d,['type','structureId'])||!integer(d.structureId,1,w.nextId-1)||!integer(h.quantity,1,carryQuantityBound379({schemaVersion:version},'wort'))||barrelClaims.has(d.structureId)||h.serviceProgress!==undefined&&!integer(h.serviceProgress,0,FERMENTING_SERVICE_TICKS_265))return false;
       const s=w.structures.find(s=>s.id===d.structureId&&s.kind==='fermenting-barrel'),pile=w.piles.find(i=>i.id===(h.phase==='pickup'?h.sourcePileId:h.carryPileId));
       if(!s?.fermentation||s.fermentation.progress>=1||s.fermentation.wort+h.quantity>25||!pile||pile.item!=='wort')return false;
       barrelClaims.add(d.structureId);

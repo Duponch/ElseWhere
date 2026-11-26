@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isProstheticRecipe273} from './prosthetic-content-273.ts';
 import {billWorkerRefusal283} from './bill-worker-rules-283.ts';
 import {validProstheticIngredients273} from './machining.ts';
@@ -84,7 +85,7 @@ export function queuedCookingReason(world:World,order:CookingOrder,pawn?:Pawn):s
   const areaReason=pawn?queuedCookingAreaReason(world,pawn,order):undefined;if(areaReason)return areaReason;
   const view=withoutQueuedOrder(world,order),c=order.cooking,station=view.structures.find(s=>s.id===c.stationId&&stationRecipe(s)!==null),bill=station?.bills?.find(b=>b.id===c.billId);
   if(!station||!bill||bill.recipe!==taskRecipe(c)||!billWanted(view,bill,true))return 'Facture supprimée, suspendue ou quantité atteinte.';
-  if(isKibbleRecipe(bill.recipe)&&(world.schemaVersion<227||!stationAccepts(station,bill.recipe)||!validKibbleIngredients(c.ingredients)||c.ingredients.some(i=>i.stage==='source'&&i.quantity>10)))return 'Les croquettes exigent vingt protéines et vingt végétaux frais au poste de boucherie.';
+  if(isKibbleRecipe(bill.recipe)&&(world.schemaVersion<227||!stationAccepts(station,bill.recipe)||!validKibbleIngredients(c.ingredients)||world.schemaVersion<379&&c.ingredients.some(i=>i.stage==='source'&&i.quantity>10)))return 'Les croquettes exigent vingt protéines et vingt végétaux frais au poste de boucherie.';
   if(isBurnApparelRecipe(bill.recipe)&&(world.schemaVersion<251||!stationAccepts(station,bill.recipe)||!validBurnApparelIngredients(c.ingredients)||c.phase==='output'||c.phase==='interrupted'||bill.mode==='until'||bill.destination!=='drop'))return 'La combustion exige un vêtement entier autorisé et aucune sortie.';
   if(isCremationRecipe(bill.recipe)&&(!validCremationIngredients(c.ingredients)||c.phase==='output'||bill.mode==='until'||bill.destination!=='drop'))return 'La crémation exige une seule dépouille entière et aucune sortie.';
   if(!productionStationUsable(station)||!productionResearchUnlocked(world,bill.recipe))return 'Atelier sans courant ou recherche manquante.';
@@ -113,7 +114,7 @@ export function queuedCookingReason(world:World,order:CookingOrder,pawn?:Pawn):s
   if(bill.recipe==='cook-carnivore-lavish-meal'&&!validCarnivoreLavishMealIngredients(c.ingredients))return 'Le plat carnivore gastronomique exige vingt-cinq viandes crues, sans lait ni végétaux.';
   if(isSmithingRecipe267(bill.recipe)&&!(c.ingredients.length===1&&c.ingredients[0]!.item===smithingWorkpiece267(bill.recipe))&&!smithingMaterialFromIngredients267(bill.recipe,c.ingredients))return 'L’ouvrage exige une seule matière autorisée en quantité complète.';
   for(const i of c.ingredients) {
-    const pile=view.piles.find(p=>p.id===i.pileId);
+    const pile=pileById(view,i.pileId);
     if(isCremationRecipe(bill.recipe)&&!canStandAt(view,i.cell))return 'Dépôt des ingrédients inaccessible.';
     if(isCremationRecipe(bill.recipe)&&(!pile||!cremationIngredientAllowed(view,bill,pile)||pile.humanCorpse&&burialClaim(view,pile.humanCorpse.pawnId,author?.id)))return 'Dépouille interdite par les filtres, indisponible ou réservée pour une inhumation.';
     if(isBurnApparelRecipe(bill.recipe)&&(!pile||!burnApparelIngredientAllowed(bill,pile)))return 'Vêtement interdit, non brûlable ou hors des filtres de type, état et qualité.';
@@ -159,13 +160,13 @@ export function queuedCookingAreaReason(world:World,pawn:Pawn,order:CookingOrder
   const c=order.cooking,station=structureById(world,c.stationId);
   let reason=station?allowedAreaReason(world,pawn,station):undefined;if(reason)return reason;
   for(const i of c.ingredients){reason=allowedAreaReason(world,pawn,i.cell);if(reason)return reason;
-    const pile=world.piles.find(p=>p.id===i.pileId);if(i.stage!=='held'&&pile?.owner.type==='ground'){reason=allowedAreaReason(world,pawn,pile.owner);if(reason)return reason;}}
+    const pile=pileById(world,i.pileId);if(i.stage!=='held'&&pile?.owner.type==='ground'){reason=allowedAreaReason(world,pawn,pile.owner);if(reason)return reason;}}
 }
 export function advanceCookingOrder(world:World,pawn:Pawn,order:CookingOrder,getBlocked:NavigationGrid,budget:SearchBudget):boolean {
   const station=structureById(world,order.cooking.stationId);
   let reason=queuedCookingAreaReason(world,pawn,order)??(station?backgroundWorkRefusal(pawn,taskWork(order.cooking)):undefined)??queuedCookingReason(world,order),path:Cell[]|null=null;
   if(!reason) {
-    const c=order.cooking,sources=c.ingredients.filter(i=>i.stage==='source').map(i=>world.piles.find(p=>p.id===i.pileId)!.owner as Cell);
+    const c=order.cooking,sources=c.ingredients.filter(i=>i.stage==='source').map(i=>pileById(world,i.pileId)!.owner as Cell);
     const groups=[new Set([cellIndex(world,c.spot.x,c.spot.z)]),...sources.map(s=>interactionGoals(world,[s]))];
     const reach=search(world,pawn,getBlocked(),new Set(),budget,undefined,groups);if(!reach)return true;
     const workPath=routeToCell(world,c.spot,reach);

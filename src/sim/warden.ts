@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {executionTaskValid364,executionWanted364,processExecution364} from './execute-release-364.ts';
 import {notePopulationGain320} from './population-intent-320.ts';
 import {actors352} from './letter-producers-352.ts';
@@ -6,6 +8,7 @@ import {inspirationKind360,useInspiration360} from './inspirations-360.ts';
 import {assignPileOwner} from './pile-index.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {commitJoinedPlayer259} from './world-affiliation-259.ts';
+import {discardBanishMemoriesOnRejoin378} from './banish-memories-378.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
 import { workPriority } from './work-types.ts';
@@ -124,6 +127,7 @@ function finishConversation(world:World,actor:Pawn,p:Pawn,context:NeedContext):b
   }else if(prisoner.mode==='recruit'){
     const raidGroup=p.raid?.group;p.recruitment={capturedAt:prisoner.capturedAt,recruitedAt:world.tick,fromFaction:'outlaws',...(raidGroup===undefined?{}:{raidGroup})};
     commitJoinedPlayer259(world,p);notePopulationGain320(world);delete p.prisoner;delete p.raid;p.faction='colony';p.bedId=null;delete p.bedSlot;
+    discardBanishMemoriesOnRejoin378(world,p);
     // Core SetGuestStatus releases the prison bed: the global claim goes too,
     // or the save holds a bed owner with no matching local bed.
     if(world.schemaVersion>=256)delete p.mapBed;p.needCooldown=0;p.planCooldown=0;
@@ -151,7 +155,7 @@ export function processWarden(world:World,actor:Pawn,context:NeedContext):void {
       if(pile.quantity===t.quantity){assignPileOwner(pile,{type:'pawn',pawnId:actor.id});t.carryPileId=pile.id;}
       else{
         if(world.piles.length>=32768||!Number.isSafeInteger(world.nextId+1)){interruptWork(world,actor);return;}
-        pile.quantity-=t.quantity;t.carryPileId=world.nextId++;world.piles.push({id:t.carryPileId,kind:'food',item:pile.item,quantity:t.quantity,owner:{type:'pawn',pawnId:actor.id},...copyPileCondition(pile)});
+        markPileContentWrite379(pile).quantity-=t.quantity;t.carryPileId=world.nextId++;appendPileEntries(world.piles,{id:t.carryPileId,kind:'food',item:pile.item,quantity:t.quantity,owner:{type:'pawn',pawnId:actor.id},...copyPileCondition(pile)});
       }
       t.phase='deliver';actor.path=[];actor.state='moving';return;
     }

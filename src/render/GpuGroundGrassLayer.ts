@@ -11,9 +11,11 @@ import { ARID_GRASS_COLOR, TERRAIN_COLORS } from './TerrainLayer';
 import { GRASS_BLOOD_COLOR } from './ground-blood';
 import { GrassBloodMask, GRASS_BLOOD_SLOTS, GRASS_BLOOD_WORDS } from './grass-blood-mask';
 import { readSceneResourceFrame, type SceneResourceFrame } from './scene-resource-index';
+import {readResidentCollectionChanges379,type ResidentCollectionChanges379} from '../bridge/resident-collection-changes-379';
 import type {GroundSurfaceTint} from './GroundSurfaceTint';
 import type { AnimationDetail } from './AnimationDetail';
 import { NaturalAnimationCache, NaturalPhasePalette } from './natural-animation-cache';
+import {GrassCoverDraw379} from './GrassCoverDraw379';
 
 /** AntSystem-inspired GPU blades, indexed by stable world cell and slot.
  * This is scenery: no Resource, job, save or simulation RNG. Four vertices/two
@@ -111,6 +113,28 @@ function diffCover<T>(before: T[] | undefined, after: T[], id: (item: T) => numb
   }
   for (const [key, b] of newById) if (!oldById.has(key) && !same(undefined, b)) apply(b, 1);
   return true;
+}
+
+/** Both endpoint directories are the accepted collection owners. A skipped
+ * Full is a union of actual producer edits, not a comparison of dense rows.
+ * Validate every source before applying the first contribution so a broken
+ * suffix can take the original exhaustive reader without partial writes. */
+function diffResidentCover379<T extends {id:number}>(proof:ResidentCollectionChanges379,before:readonly T[],after:readonly T[],same:(a:T|undefined,b:T|undefined)=>boolean,apply:(item:T,delta:-1|1)=>void):{visited:number;edits:number}|undefined {
+  if(proof.before.count!==before.length||proof.after.count!==after.length)return;
+  const touched=new Set<number>();for(const edge of proof.edges){for(const row of edge.removed)touched.add(row.id);for(const row of edge.added)touched.add(row.id);for(const row of edge.updated)touched.add(row.id);}
+  const edits:{before:T|undefined;after:T|undefined;beforeOrdinal:number;afterOrdinal:number}[]=[];
+  for(const id of touched){
+    const a=proof.before.source(id),b=proof.after.source(id);
+    if(a===undefined&&proof.before.capturedSource(id)!==undefined||b===undefined&&proof.after.capturedSource(id)!==undefined)return;
+    const old=a===undefined?undefined:before[a],next=b===undefined?undefined:after[b];
+    if(a!==undefined&&old?.id!==id||b!==undefined&&next?.id!==id)return;
+    if(!same(old,next))edits.push({before:old,after:next,beforeOrdinal:a??Infinity,afterOrdinal:b??Infinity});
+  }
+  // Match the literal unaligned traversal: old source order, then new-only
+  // additions. Overlapping footprints retain the exact contribution count.
+  edits.sort((a,b)=>a.beforeOrdinal-b.beforeOrdinal||a.afterOrdinal-b.afterOrdinal);
+  for(const edit of edits){if(edit.before)apply(edit.before,-1);if(edit.after)apply(edit.after,1);}
+  return{visited:touched.size,edits:edits.length};
 }
 
 function writeGroundCell(data: Uint8Array, world: GroundWorld, i: number, blocked: Uint8Array, blood?: ReadonlySet<number>): boolean {
@@ -231,12 +255,15 @@ export class GpuGroundGrassLayer {
   private readonly dirtyCells: number[] = [];
   private readonly blood = new GrassBloodMask();
   private revision = 0;
+  private readonly coverSourceCounts379={journalReads:0,journalRows:0,journalEdits:0,fallbackReads:0,fallbackRows:0};
+  coverSourceMetrics379(){return{...this.coverSourceCounts379};}
   private readonly corner = new THREE.Vector3();
   private readonly ray = new THREE.Vector3();
   private readonly forward = new THREE.Vector3();
   private readonly footprint = new Float64Array(8);
   private readonly nearFootprint = new Float64Array(8);
   private readonly foregroundFootprint = new Float64Array(8);
+  private readonly coverDraw:GrassCoverDraw379;
 
   constructor(configure?: (material: THREE.MeshStandardNodeMaterial) => void,
     private readonly maxTextureDimension = Infinity, private readonly onUnsupported: (message: string) => void = () => {},surfaceTint?:GroundSurfaceTint,
@@ -342,6 +369,7 @@ export class GpuGroundGrassLayer {
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = true;
     this.mesh.visible = false;
+    this.coverDraw=new GrassCoverDraw379(this.mesh);
   }
 
   setWind(strength:number,directionX:number,directionZ:number):void {
@@ -433,7 +461,15 @@ export class GpuGroundGrassLayer {
             ((oldTiles[i]?.snowDepth??0)>=.5)!==((world.tiles[i]!.snowDepth??0)>=.5)) touch(i);
         }
       }
-      const structuresOkay = diffCover(this.previousStructures, world.structures, s => s.id,
+      const previous=this.previousWorld,confirmed=resourceEdits!==undefined&&previous!==undefined;
+      const closedDiff=<T extends {id:number}>(collection:'structures'|'piles',before:T[]|undefined,after:T[],same:(a:T|undefined,b:T|undefined)=>boolean,apply:(item:T,delta:-1|1)=>void):boolean=>{
+        if(before===after)return true;
+        const proof=confirmed&&previous&&Object.is(before,previous[collection])&&Object.is(after,world[collection])?readResidentCollectionChanges379(previous,world,collection):undefined;
+        if(proof&&before){const result=diffResidentCover379(proof,before,after,same,apply);if(result){this.coverSourceCounts379.journalReads++;this.coverSourceCounts379.journalRows+=result.visited;this.coverSourceCounts379.journalEdits+=result.edits;return true;}}
+        this.coverSourceCounts379.fallbackReads++;this.coverSourceCounts379.fallbackRows+=(before?.length??0)+after.length;
+        return diffCover(before,after,row=>row.id,same,apply);
+      };
+      const structuresOkay = closedDiff('structures',this.previousStructures, world.structures,
         sameStructureCover, (s, delta) => {
           for (const { x, z } of footprintCells(s)) adjust(x, z, delta);
         });
@@ -447,7 +483,7 @@ export class GpuGroundGrassLayer {
         } else resourcesOkay = diffCover(this.previousResources, world.resources, r => r.id,
           sameRockCover, (r, delta) => { if (r.kind === 'rock') adjust(r.x, r.z, delta); });
       }
-      const pilesOkay = resourcesOkay && diffCover(this.previousPiles, world.piles, p => p.id,
+      const pilesOkay = resourcesOkay && closedDiff('piles',this.previousPiles, world.piles,
         sameGroundCover, (p, delta) => {
           if (p.owner.type === 'ground') adjust(p.owner.x, p.owner.z, delta);
         });
@@ -681,6 +717,10 @@ export class GpuGroundGrassLayer {
     this.zoomVisibility.value = zoomVisibility;
     this.mesh.geometry.instanceCount = cells * slots + this.nearInstances.value +
       foregroundColumns * foregroundRows * foregroundSlots;
+    this.coverDraw.setMask(this.previousPixels,this.map.image.width,this.map.version);
+    this.coverDraw.setBand(0,firstX,firstZ,columns,rows,slots);
+    this.coverDraw.setBand(5,nearFirstX,nearFirstZ,nearColumns,nearRows,nearSlots);
+    this.coverDraw.setBand(10,foregroundFirstX,foregroundFirstZ,foregroundColumns,foregroundRows,foregroundSlots);
     this.mesh.visible = true;
   }
 
@@ -693,5 +733,6 @@ export class GpuGroundGrassLayer {
     } };
   }
 
-  dispose(): void { this.middlePalette?.dispose();this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.map.dispose(); this.bloodMap.dispose(); }
+  coverDrawMetrics(){return this.coverDraw.metrics();}
+  dispose(): void { this.coverDraw.dispose();this.middlePalette?.dispose();this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.map.dispose(); this.bloodMap.dispose(); }
 }

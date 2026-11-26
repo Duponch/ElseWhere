@@ -1,4 +1,5 @@
 import {advanceRopes377,isLeadSchema377} from './animal-leading-377.ts';
+import {markActorRecordSource297} from './actor-record-source-297.ts';
 import {processNuzzle350} from './nuzzle-350.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import { volcanicAnimalDensityFactor310 } from './volcanic-winter-state-310.ts';
@@ -46,7 +47,7 @@ import { captureWorldShotGrid } from './combat-world.ts';
 import { blockedCells } from './pathfinding.ts';
 import { advanceAnimalHealth,animalBody } from './wildlife-health.ts';
 import { animalEscape } from './wildlife-flight.ts';
-import { animalFoods,animalMealTarget,finishAnimalMeal,grazingPen,reservedPlantWorkCells,type AnimalFood } from './wildlife-food.ts';
+import { animalFoods,animalMealTarget,finishAnimalMeal,grazingPen,reservedPlantWorkCells } from './wildlife-food.ts';
 import { animalDoorPassingNavigation,animalNavigation,createAnimalNavigationReader,moveAnimal } from './wildlife-navigation.ts';
 import { structureNavigationReader } from './structure-navigation.ts';
 import { HARE,MAX_WILDLIFE,wildlifeRandom,type WildAnimal,type WildlifeState } from './wildlife-state.ts';
@@ -56,28 +57,20 @@ import type { Cell,Resource,World } from './types.ts';
 import { animalSpecies,faunaBiome,selectBiomeSpecies,type AnimalSpeciesId,type FaunaBiomeId } from './animal-species.ts';
 import { animalHandlingHolding } from './animal-handling.ts';
 import { animalCareInProgress,animalCareTargets } from './animal-care.ts';
-import { animalCarrier,animalServiceIds } from './animal-rest-state.ts';
+import { animalCarrier,animalServiceIds,createAnimalServiceReadPass379 } from './animal-rest-state.ts';
 import { processAnimalRest } from './animal-rest.ts';
 import { animalFeedingInProgress } from './animal-feeding.ts';
 import { veterinaryCareSpeciesAllowed,veterinaryNeedsRest } from './veterinary-rules.ts';
 import { adultAgeTicks, advanceAnimalLife, animalFoodPerDay, animalLifeStage, animalNutritionMax } from './animal-life.ts';
 import { atMapEdge,cancelAnimalExit,exitSuppressed,finishAnimalExits,stopExitTargeting,WILDLIFE_EXIT_FOOD_CHECK } from './wildlife-exit.ts';
 import { animalPreyCandidates,animalPredationTarget,reconcileAnimalPredation,cancelAnimalPredation } from './wildlife-predation.ts';
+import {foodRouting379 as foodRouting} from './animal-food-routing-379.ts';
+import {closedResourceIdentityLookup} from './resource-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {withWildlifeServiceReservationCandidates379} from './service-reservations.ts';
+import {beginSourceReservationCandidates379} from './source-reservation-candidates-379.ts';
 const contact=(a:Cell,b:Cell)=>Math.abs(a.x-b.x)+Math.abs(a.z-b.z)<=1;
 const neighbours=(c:Cell):Cell[]=>[{x:c.x,z:c.z},{x:c.x-1,z:c.z},{x:c.x+1,z:c.z},{x:c.x,z:c.z-1},{x:c.x,z:c.z+1}];
-/** With new fodder present, Core score is bonus minus source Manhattan distance.
- * Existing food-only searches retain their historical path-cost ranking.
- * Reachability and route ties reuse one frontier, never one flood per food. */
-function foodRouting(w:World,a:WildAnimal,food:AnimalFood[]){
-  const goals=food.flatMap(neighbours),preferred=food.some(f=>f.preference),ranks=new Map<number,number>();
-  const score=(f:AnimalFood)=>Math.abs(a.x-f.x)+Math.abs(a.z-f.z)-(f.preference??0);
-  if(preferred)for(const f of food)for(const c of neighbours(f)){
-    if(c.x<0||c.z<0||c.x>=w.width||c.z>=w.height)continue;
-    const index=c.z*w.width+c.x,priority=score(f);if(!ranks.has(index)||priority<ranks.get(index)!)ranks.set(index,priority);
-  }
-  return {goals,rank:preferred?(c:Cell)=>ranks.get(c.z*w.width+c.x)!:undefined,
-    target:(end:Cell)=>preferred?food.filter(f=>contact(end,f)).sort((a,b)=>score(a)-score(b))[0]!:food.find(f=>contact(end,f))!};
-}
 export const ANIMAL_POPULATION_CHECK_TICKS=122; // 1,220 Core ticks; Core checks every 1,213.
 
 function occupiedWildlifeCells(world:World,s:WildlifeState):Set<number>{
@@ -195,19 +188,26 @@ export function reconcileWildlife(world:World,resourcesById?:ReadonlyMap<number,
   }
 }
 export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices256={hitRoof:hitSkyfallerRoof256}):void {
+  withWildlifeServiceReservationCandidates379(world,()=>advanceWildlifePass379(world,duckFlyerServices));
+}
+function advanceWildlifePass379(world:World,duckFlyerServices:DuckFlyerServices256):void {
   // Schema 377: roped animals follow their handler whatever its own turn.
   if(isLeadSchema377(world.schemaVersion))advanceRopes377(world);
   const s=world.wildlife;if(!s)return;advanceGeographicRenewal262(world,(species,cell,nextDecision,flyIn)=>addAnimal(world,s,species,cell,nextDecision,flyIn));advancePopulation(world,s);advanceAnimalLife(world);advanceEggLayers256(world);if(!s.animals.length){advanceDuckFlyers256(world,duckFlyerServices);return;}
-  const animalAir=createAnimalAirReader466(world),readThermal466=createAnimalThermalPass466(world,animalAir);
+  const services=createAnimalServiceReadPass379(world),readCarrier=services.carrier;
+  const animalAir=createAnimalAirReader466(world,readCarrier),readThermal466=createAnimalThermalPass466(world,animalAir);
   // A meal can remain active for many ticks. Capture its plant identity once
   // for this synchronous decision, then discard the index before other world
   // systems can mutate resources. A handful of meals are cheaper to scan
-  // directly; the first measured large-map win was at 16 active meals.
-  // The public reconciliation API remains live.
+  // directly; the first measured large-map win was at 16 active meals. The
+  // closed producer already maintains exact identity membership: reuse it
+  // instead of copying the entire map each macro. Public reconciliation and
+  // unenrolled/malformed collections retain their historical reader.
   let mealResources:Map<number,Resource>|undefined;
   let activePlantMeals=0;
   for(const animal of s.animals)if(animal.meal?.kind==='plant')activePlantMeals++;
-  if(activePlantMeals>=16){
+  const resourceOwner=terrainJournalReadOwner();
+  if(activePlantMeals>=16&&!(resourceOwner&&closedResourceIdentityLookup(world.resources,resourceOwner))){
     mealResources=new Map();for(const resource of world.resources)mealResources.set(resource.id,resource);
   }
   let plantWorkCells:ReadonlySet<number>|undefined;
@@ -228,11 +228,15 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
   const matingFemales=new Set(s.animals.flatMap(a=>a.mating?[a.mating.femaleId]:[]));
   const departures=new Set<number>(),retiredDucks=new Set<number>();
   // Rotate priority; at most one potentially map-wide search per tick.
+  const sourceReservations379=beginSourceReservationCandidates379(world);
+  try{
   for(let i=0;i<s.animals.length;i++) {
     const a=s.animals[(world.tick+i)%s.animals.length]!;
+    sourceReservations379.animal(a);
+    markActorRecordSource297('animal',a);
     const species=animalSpecies(a.species);
     const aliveBefore=a.state!=='dead';
-    advanceAnimalHealth(world,a,readThermal466(a));reconcileAnimalEggLay256(world,a);reconcileHiveMaintenance256(world,a);
+    advanceAnimalHealth(world,a,readThermal466(a),readCarrier);reconcileAnimalEggLay256(world,a);reconcileHiveMaintenance256(world,a);
     if(aliveBefore&&a.state==='dead')hauling.invalidate();
     // Revoke future cargo travel before any danger, medical or other owner
     // can take control. The committed edge and actual inventory stay physical.
@@ -249,7 +253,10 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(a.exiting&&exitSuppressed(a))cancelAnimalExit(world,a);
     if(a.state==='dead')continue;
     if(a.health)bleedFilth(world,a,medicalBleed(a.health),a.state==='downed'||a.state==='sleeping',.4);
-    const body=animalBody(a);
+    // Clinical capacities retain their pre-decision snapshot. A healthy
+    // animal's model cannot change in the transport/recovery checks below;
+    // read it only after an in-progress physical edge has been left alone.
+    const clinicalBody=a.health?animalBody(a):undefined;
     // Local ground-rest adaptation: keep the existing food/danger priorities.
     // V277 also retains convalescence after tending, as Core medical rest does.
     const medicalRest=!a.confusion&&!!a.domestic&&a.domestic.care!=='none'&&!a.burning&&!a.flee&&!a.threat&&!a.retaliation&&!a.strike
@@ -262,7 +269,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     a.rest=Math.max(0,Math.min(1,a.rest+(a.state==='sleeping'?.0003809524*.8:-.00015833333*(a.rest<.01?.6:a.rest<.14?.3:a.rest<.28?.7:1))));
     if(isSchema287OrLater(Number(world.schemaVersion))&&a.animalAreaReturn287)reconcileAnimalAreaTasks287(world,a,readArea(a));
     // Transport owns position only: life, health, bleeding and needs still advance.
-    if(world.schemaVersion>=221&&animalCarrier(world,a.id))continue;
+    if(world.schemaVersion>=221&&readCarrier(a.id))continue;
     hauling.recover(a);
     if(!isCorePhysicalSchema297(world.schemaVersion)&&a.filthFeet&&a.motion&&a.motion.end>world.tick-1&&a.motion.end<=world.tick)recordShipCasketFilthMovement277(world,a);
     if(a.exitFlight)continue;
@@ -272,6 +279,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(processAnimalVomiting(world,a))continue;
     if(world.schemaVersion>=256&&processGroupAnimalOnMap256(world,a,{free:c=>getNav(a).free(c),route:(animal,goals)=>{if(searches>=1)return null;searches++;return getNav(animal).route(animal,goals);},move:animal=>moveAnimal(world,animal,getNav(animal).step,animalBody(animal).capacities.moving,getNav(animal).geometry)}))continue;
     if(a.state==='downed'||a.motion&&a.motion.end>world.tick)continue;
+    const body=clinicalBody??animalBody(a);
     // New panic travel waits only for the already committed physical recovery.
     // Fire damage keeps advancing in the shared fire clock during this wait.
     if(a.strike){a.path=[];if(a.state!=='sleeping')a.state='idle';continue;}
@@ -326,7 +334,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     // The handler advances both bodies on confirmed ticks. Ordinary wildlife
     // decisions must not replace its route while the rope is held.
     if(!danger&&!a.confusion&&(ledAnimals?.has(a.id)||matingFemales.has(a.id)))continue;
-    const held=!danger&&((!!a.taming?.designated||!!a.domestic)&&animalHandlingHolding(world,a.id)
+    const held=!danger&&services.humanService(a.id)&&((!!a.taming?.designated||!!a.domestic)&&animalHandlingHolding(world,a.id)
       ||!!a.domestic&&(animalCareInProgress(world,a)||animalFeedingInProgress(world,a)));
     if(held&&!(a.state==='eating'&&a.meal)){cancelAnimalExit(world,a);continue;}
     if(a.eggLay&&processAnimalEggLay256(world,a,()=>moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry)))continue;
@@ -334,8 +342,11 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(isSchema287OrLater(Number(world.schemaVersion))&&!medicalRest&&returnToArea())continue;
     const rest=()=>{
       if(world.schemaVersion<221||!a.domestic||a.confusion&&a.rest>=.15&&a.state!=='sleeping')return false;
-      const pen=grazingPen(world,a),inside=(c:Cell)=>!pen||pen.has(c.z*world.width+c.x);
-      return processAnimalRest(world,a,{medicalRest,night,nutrition,readArea,
+      // Most animals need no rest action. Its early checks do not change pen
+      // geometry or the animal's position, so capture only on a spatial query.
+      let pen:ReturnType<typeof grazingPen>,penRead=false;
+      const inside=(c:Cell)=>{if(!penRead){pen=grazingPen(world,a);penRead=true;}return !pen||pen.has(c.z*world.width+c.x);};
+      return processAnimalRest(world,a,{medicalRest,night,nutrition,readArea,carriedOrClaimed:services.carriedOrClaimed,
         free:c=>inside(c)&&getNav(a).free(c),step:(from,to)=>inside(to)&&getNav(a).step(from,to),
         route:(goals,rank)=>{if(searches>=1)return null;searches++;return getNav(a).route(a,goals.filter(inside),rank);},
         move:()=>{moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}});
@@ -453,6 +464,7 @@ export function advanceWildlife(world:World,duckFlyerServices:DuckFlyerServices2
     if(choices.length){const candidate=choices[Math.floor(wildlifeRandom(s)*choices.length)]!;if(!isDuckRuntime256(world,a)||duckWanderWaterAllowed256(world,a,candidate,duckMapHasWater256(world),()=>wildlifeRandom(s))){notifyDuckFlightJob256(world,a,'GotoWander',()=>wildlifeRandom(s));a.path=[candidate];if(a.wander){a.wander.nextMoveOrderIsWait=!a.wander.nextMoveOrderIsWait;a.wander.job={kind:'goto',destination:{...candidate}};}moveAnimal(world,a,getNav(a).step,body.capacities.moving,getNav(a).geometry);}}
     a.nextDecision=Math.max(a.nextDecision,world.tick+12+Math.floor(wildlifeRandom(s)*13));
   }
+  }finally{sourceReservations379.close();}
   if(retiredDucks.size)s.animals=s.animals.filter(a=>!retiredDucks.has(a.id));
   finishAnimalExits(world,departures);
   commitDuckFlyExits256(world);advanceDuckFlyers256(world,duckFlyerServices);

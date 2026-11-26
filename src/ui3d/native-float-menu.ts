@@ -11,6 +11,16 @@ export function floatMenuDistance(box:Box,x:number,y:number):number {
   return Math.hypot(dx, dy);
 }
 export const floatMenuVanishes = (box:Box,x:number,y:number):boolean => floatMenuDistance(box, x, y) > FLOAT_MENU_VANISH_PX;
+/** Core UpdateBaseColor: linear fade from the expanded rectangle to 95 px. */
+export const floatMenuOpacity = (box:Box,x:number,y:number):number => Math.max(0,1-floatMenuDistance(box,x,y)/FLOAT_MENU_VANISH_PX);
+/** Core MenuOptionPriority's numeric values, not label or provider ordering. */
+export const FLOAT_MENU_PRIORITY={DisabledOption:0,GoHere:1,VeryLow:2,Low:3,Default:4,High:5,AttackEnemy:6,InitiateSocial:7,RescueOrCapture:8,SummonThreat:9} as const;
+export interface FloatMenuPriority {disabled?:boolean;floatMenuPriority?:number;orderInPriority?:number}
+/** Array.sort is stable: exact ties retain the providers' original order. */
+export function compareFloatMenuOptions(a:FloatMenuPriority,b:FloatMenuPriority):number {
+  return (b.disabled?0:b.floatMenuPriority??FLOAT_MENU_PRIORITY.Default)-(a.disabled?0:a.floatMenuPriority??FLOAT_MENU_PRIORITY.Default)
+    || (b.orderInPriority??0)-(a.orderInPriority??0);
+}
 /** Core WindowStack.HandleEventsHighPriority: a press outside every window
  * closes the windows that close on outside clicks, and the press is used. */
 export const pressOutsideFloatMenu = (box:Box,x:number,y:number):boolean => !(x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height);

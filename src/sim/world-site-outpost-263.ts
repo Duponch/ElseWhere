@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {invalidateTerrainJournal} from './terrain-mutation-journal.ts';
 import {draftForeignRoster261} from './caravan-foreign-roster-261.ts';
@@ -42,7 +43,7 @@ export function constructSiteOutpost400263(w:World,site:ItemStash263,storage:Anc
   if(x>=rect.minX&&x<=rect.maxX&&z>=rect.minZ&&z<=rect.maxZ)continue;const c=z*w.width+x;if(!occupied.has(c)&&reach.physical.standable(c)&&reach.canReachMapEdgeNoPassClosedDoorsOrWater(c))stands.push(c);
  }
  if(stands.length<roster.people.length||!Number.isSafeInteger(nextId))throw Error('Actual Outpost cannot place all selected defenders');
- for(const [c,t]of tiles)w.tiles[c]=t;invalidateTerrainJournal(w.tiles);w.structures.push(...buildings);w.nextId=nextId;w.roofing??={constructed:[],build:[],remove:[],cursor:0};const natural=new Set([...(w.roofing.natural?.thin??[]),...(w.roofing.natural?.thick??[])]);w.roofing.constructed=[...new Set([...w.roofing.constructed,...roofs.filter(c=>!natural.has(c))])].sort((a,b)=>a-b);usedRects.push(rect);
+ for(const [c,t]of tiles)w.tiles[c]=t;invalidateTerrainJournal(w.tiles);appendStructureEntries(w,...buildings);w.nextId=nextId;w.roofing??={constructed:[],build:[],remove:[],cursor:0};const natural=new Set([...(w.roofing.natural?.thin??[]),...(w.roofing.natural?.thick??[])]);w.roofing.constructed=[...new Set([...w.roofing.constructed,...roofs.filter(c=>!natural.has(c))])].sort((a,b)=>a-b);usedRects.push(rect);
  const defendSpot={x:rect.minX+14,z:rect.minZ+8};populateWorldTargetDefenders263(w,{kind:'outpost',siteId:site.id},site.threat.factionId,roster,stands,defendSpot);
  return {rect,defendSpot,turretsCount:random.integer(0,2)as 0|1};
 }

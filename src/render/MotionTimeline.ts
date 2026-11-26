@@ -1,4 +1,5 @@
 import {ConfirmedTrackCursor435} from './ActorPlayback435';
+import {hasOwnedCorePlaybackHistory297,readOwnedCoreTrackEdits297} from '../bridge/core-phase-owner-297';
 import type { PawnTrack } from '../bridge/motion-tracks';
 import { LOCAL_TICKS_PER_SECOND,CORE_TICKS_PER_SECOND } from '../bridge/clock-rate';
 import type { PresentationSegment as TravelSegment } from '../sim/travel-timing';
@@ -26,13 +27,60 @@ const FINE_TRANSITION_MAX_MS297=250;
  * until the confirmed history reaches the new reserve (`up`) or drains to it,
  * or until `until` (wall ms). No freeze, no seek, no jump. */
 type Transition297={rate:number;up:boolean;until:number};
+const immutablePlaybackHistories435=new WeakSet<readonly TravelSegment[]>();
+const noPlaybackChanges435:readonly number[]=Object.freeze([]);
+/** Closed MAIN history is own data, detached and frozen by its decoder. A
+ * literal mutable history never receives a boundary lifetime. Accessors also
+ * stay on the ordinary read path even when their containing objects froze. */
+function immutablePlaybackHistory435(segments:readonly TravelSegment[]):boolean{
+ if(hasOwnedCorePlaybackHistory297(segments))return true;
+ if(immutablePlaybackHistories435.has(segments))return true;
+ if(!Array.isArray(segments)||!Object.isFrozen(segments))return false;
+ const data=(value:object,key:string)=>Object.getOwnPropertyDescriptor(value,key);
+ for(let i=0;i<segments.length;i++){
+  const descriptor=data(segments,String(i)),edge=descriptor&&'value'in descriptor?descriptor.value as TravelSegment:undefined;
+  if(!edge||!Object.isFrozen(edge))return false;
+  for(const key of ['start','end','from','to']){const field=data(edge,key);if(!field||!('value'in field))return false;}
+  for(const key of ['edgeStart','fromFraction','toFraction']){const field=data(edge,key);if(field&&!('value'in field))return false;}
+  for(const point of [edge.from,edge.to]){if(!point||!Object.isFrozen(point))return false;for(const key of ['x','z']){const field=data(point,key);if(!field||!('value'in field))return false;}}
+ }
+ immutablePlaybackHistories435.add(segments);return true;
+}
 export class MotionTimeline {
   private readonly playbackCursor435=new ConfirmedTrackCursor435();
   get playbackEnabled435():boolean{return this.playbackCursor435.enabled;}
   get playbackGeneration435():number{return this.playbackCursor435.generation;}
-  playbackSegment435(id:number):TravelSegment|undefined{return this.playbackCursor435.segment(this.tracks,id,this.tick);}
-  playbackDiagnostics435(){return{enabled:this.playbackCursor435.enabled,generation:this.playbackCursor435.generation,...this.playbackCursor435.stats};}
-  readonly tracks=new Map<number,TravelSegment[]>();
+  playbackSegment435(id:number):TravelSegment|undefined{return this.playbackCursor435.segment(this.trackStore435,id,this.tick);}
+  private readonly trackStore435=new Map<number,TravelSegment[]>();
+  private trackStoreEscaped435=false;
+  private lastOwnedTracks435:readonly PawnTrack[]|undefined;
+  private trackRowVisits435=0;
+  private sparseTrackAdoptions435=0;
+  private readonly mutableHistories435=new Set<number>();
+  private trackRevision435=0;
+  private readonly trackChanges435:{revision:number;ids:readonly number[]}[]=[];
+  get playbackOwned435():boolean{return this.playbackEnabled435&&!this.trackStoreEscaped435&&this.mutableHistories435.size===0;}
+  get playbackRevision435():number{return this.trackRevision435;}
+  playbackBoundary435(id:number):{edge:TravelSegment|undefined;next:number}{return this.playbackCursor435.boundary(this.trackStore435,id,this.tick);}
+  playbackChanged435(after:number):readonly number[]|undefined{
+   if(after===this.trackRevision435)return noPlaybackChanges435;
+   if(after<0||!this.trackChanges435.length||after<this.trackChanges435[0]!.revision-1||after>this.trackRevision435)return;
+   const changed=new Set<number>();for(const frame of this.trackChanges435)if(frame.revision>after)for(const id of frame.ids)changed.add(id);return[...changed];
+  }
+  playbackDiagnostics435(){return{enabled:this.playbackCursor435.enabled,generation:this.playbackCursor435.generation,...this.playbackCursor435.stats,trackRowVisits:this.trackRowVisits435,sparseTrackAdoptions:this.sparseTrackAdoptions435};}
+  /** Preserve the mutable public Map. Once exposed it can be retained and
+   * edited through any Map method, so this timeline permanently gives up the
+   * private schedule and its immutable cursor. No mutation observer is used. */
+  get tracks():Map<number,TravelSegment[]>{this.trackStoreEscaped435=true;this.playbackCursor435.configure(false,false);return this.trackStore435;}
+  private adoptTracks435(tracks:readonly PawnTrack[]):void{
+   const changed:number[]=[];
+   const closed=this.playbackCursor435.enabled&&!this.trackStoreEscaped435;
+   const edits=closed?readOwnedCoreTrackEdits297(this.lastOwnedTracks435,tracks):undefined;
+   this.trackRowVisits435+=(edits??tracks).length;if(edits)this.sparseTrackAdoptions435++;
+   for(const track of edits??tracks){if(this.trackStore435.get(track.id)===track.segments)continue;this.trackStore435.set(track.id,track.segments);changed.push(track.id);if(immutablePlaybackHistory435(track.segments))this.mutableHistories435.delete(track.id);else this.mutableHistories435.add(track.id);}
+   this.lastOwnedTracks435=closed?tracks:undefined;
+   if(changed.length){this.trackRevision435++;this.trackChanges435.push({revision:this.trackRevision435,ids:changed});if(this.trackChanges435.length>128)this.trackChanges435.shift();}
+  }
   tick=0;
   private latest=0;
   private rate=0;
@@ -106,8 +154,8 @@ export class MotionTimeline {
     if(resetFine297){this.resetFineRate297(tick,now,speed*LOCAL_TICKS_PER_SECOND);this.fineStartupProgressPending297=true;}
     if(fineCore297&&!wasFine297)this.fineFrameRate297=this.frameRate;
     this.reserve=fineCore297 ? speed*LOCAL_TICKS_PER_SECOND*FINE_BUFFER_MS297/1000 : MOTION_BUFFER_TICKS;
-    this.playbackCursor435.configure(closed435,reset);
-    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.tracks.clear();this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;this.transition297=undefined;}
+    this.playbackCursor435.configure(closed435&&!this.trackStoreEscaped435,reset);
+    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.trackStore435.clear();this.lastOwnedTracks435=undefined;this.mutableHistories435.clear();this.trackRevision435++;this.trackChanges435.length=0;this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;this.transition297=undefined;}
     // An adopted pause is authoritative presentation state, not a request or
     // predicted Core tick. Show its latest confirmed frontier immediately.
     // Running deliveries keep the ordinary smooth, buffered RAF policy below.
@@ -115,7 +163,7 @@ export class MotionTimeline {
       this.latest=Math.max(this.latest,tick);this.tick=this.latest;
       this.speed=0;this.rate=this.frameRate=this.fineFrameRate297=0;this.rateChanges.length=0;this.transition297=undefined;
       this.previous=Math.max(this.previous,now);this.ready=Infinity;this.buffering=true;
-      for(const track of tracks)this.tracks.set(track.id,track.segments);
+      this.adoptTracks435(tracks);
       return;
     }
     // Rate changes never consume wall time at delivery. Historical playout is
@@ -175,7 +223,7 @@ export class MotionTimeline {
       this.tick=this.latest-this.reserve;
       this.chooseFineRate297();
     }
-    for(const track of tracks)this.tracks.set(track.id,track.segments);
+    this.adoptTracks435(tracks);
   }
   advance(now:number):number {
     // A lone confirmed Core must not wait forever for a fuller startup reserve.
@@ -218,7 +266,7 @@ export class MotionTimeline {
     return this.tick;
   }
   segment(id:number):TravelSegment|undefined {
-    const segments=this.tracks.get(id);if(!segments?.length)return undefined;
+    const segments=this.trackStore435.get(id);if(!segments?.length)return undefined;
     let current:TravelSegment|undefined;
     for(const segment of segments){if(segment.start>this.tick)break;current=segment;}
     return current;

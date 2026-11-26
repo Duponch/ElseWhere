@@ -1,9 +1,14 @@
 import {geyserCells256} from './local-geyser-state-256.ts';
 import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
-import {STRUCTURE_SHOT_FILL,FRAME_SHOT_FILL,resourceShotFill,itemShotFill} from './combat-content.ts';
+import {STRUCTURE_SHOT_FILL,RESOURCE_SHOT_FILL,FRAME_SHOT_FILL,resourceShotFill,itemShotFill} from './combat-content.ts';
+import {FLORA_DEFINITIONS} from './biome-flora.ts';
+import {actualPlantRegions379} from './actual-plant-regions-379.ts';
 import {isPassageDoor} from './door-rules.ts';
-import {peekStructureMembershipToken} from './structure-navigation.ts';
+import {peekStructureMembershipToken,captureStructureNavigation,type StructureNavigationGeometry} from './structure-navigation.ts';
 import {resourceArrayDelta} from './resource-array-delta.ts';
+import {captureResourceJournal,readResourceJournal,resourceMembershipUnchanged,type ResourceJournalCursor} from './resource-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 import {constructionFinalWipesPlants,constructionFrameWipesPlants} from './construction-plants.ts';
 import {actualAdditionalPlantOwners256} from './actual-plant-physical-masks-256.ts';
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
@@ -17,8 +22,13 @@ import type {ExistingGenerationPlant256} from './wild-plant-generation-256.ts';
 import {createPreparedSpatialWildPlantSpawner256,type PreparedPlantPopulation256,type PlantSpatialSpawnerInput256,type PlantSpawnerCell256,type PlantSpawnerRegionCounts256} from './wild-plant-spawner-256.ts';
 
 const f=Math.fround;
-const BLOCKED=1,FULL=2,COVER=4,BLOCKS_PLANT=8,DOOR=16,FENCE=32;
+const BLOCKED=1,FULL=2,COVER=4,BLOCKS_PLANT=8,DOOR=16,FENCE=32,REGION_BITS=BLOCKED|FULL|DOOR|FENCE;
 const ZERO_FILL_EDIFICES:ReadonlySet<StructureKind>=new Set(['power-switch','spike-trap','ied-high-explosive','ied-incendiary','grave','bedroll','double-bedroll','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot','horseshoes','hoopstone-ring']);
+// Frames and all current items/resources are below full fill. Their live
+// occupancy still enters pick/counts; they cannot change a region's type.
+// A future full-fill resource automatically keeps the ephemeral full reader.
+const independentRegionOwners=FRAME_SHOT_FILL<=.99&&Object.values(RESOURCE_SHOT_FILL).every(fill=>fill<=.99)
+ &&Object.keys(FLORA_DEFINITIONS).every(species=>resourceShotFill({kind:'wild-plant',species:species as keyof typeof FLORA_DEFINITIONS})<=.99);
 interface SpatialCell256 extends PlantSpawnerCell256 {readonly regionType:number;readonly walkableNoDoor:boolean}
 type Header256=Omit<PlantSpatialSpawnerInput256,'existing'|'spatial'>;
 
@@ -56,6 +66,7 @@ interface ResourceCapture256 {readonly n:number;readonly owners:Uint8Array;reado
  * dropped; captures are never retained past one renewal decision. */
 interface LiveResourceCapture256 extends ResourceCapture256 {
  source:readonly Resource256[];readonly width:number;total:number;
+ owner?:object;cursor?:ResourceJournalCursor;
  readonly at:Map<number,ExistingGenerationPlant256>;readonly species:Map<string,number>;
  readonly full:Uint32Array;readonly cover:Uint32Array;readonly blocks:Uint32Array;
 }
@@ -65,21 +76,39 @@ const liveResourceCaptures256=new WeakMap<World,LiveResourceCapture256>();
 /** Above this many removed or added resources a rebuild is as cheap. */
 const RESOURCE_DELTA_LIMIT256=256;
 function resourceCapture256(world:World):ResourceCapture256 {
- const n=world.width*world.height,cached=resourceCaptures256.get(world.resources);
- if(cached&&cached.n===n){liveResourceCaptures256.set(world,cached);return cached;}
+ const n=world.width*world.height,cached=resourceCaptures256.get(world.resources),owner=terrainJournalReadOwner();
+ if(cached&&cached.n===n&&cached.width===world.width&&cached.owner===owner&&(!owner||cached.cursor&&resourceMembershipUnchanged(world.resources,cached.cursor))){
+  if(owner)cached.cursor=captureResourceJournal(world.resources);
+  verifyResourcePopulation256(world,cached);liveResourceCaptures256.set(world,cached);return cached;
+ }
  const live=liveResourceCaptures256.get(world);
- if(live&&live.n===n&&live.width===world.width&&resourceCaptures256.get(live.source)===live){
-  try{if(deriveResourceCapture256(world,live))return live;}
+ if(live&&live.n===n&&live.width===world.width&&live.owner===owner&&resourceCaptures256.get(live.source)===live){
+  let derived=false;
+  try{derived=deriveResourceCapture256(world,live);}
   // A rejected resource: the full rebuild below throws the original error.
   catch{resourceCaptures256.delete(live.source);resourceCaptures256.delete(world.resources);liveResourceCaptures256.delete(world);}
+  if(derived){verifyResourcePopulation256(world,live);return live;}
  }
- return buildResourceCapture256(world);
+ return buildResourceCapture256(world,owner);
 }
-function buildResourceCapture256(world:World):LiveResourceCapture256 {
+function populationCapture256(world:World):LiveResourceCapture256 {
  const n=world.width*world.height,owners=new Uint8Array(n),at=new Map<number,ExistingGenerationPlant256>(),species=new Map<string,number>();
  const capture:LiveResourceCapture256={n,owners,at,species,total:0,source:world.resources,width:world.width,full:new Uint32Array(n),cover:new Uint32Array(n),blocks:new Uint32Array(n)};
  for(const resource of world.resources)addResource256(world,capture,resource);
+ return capture;
+}
+function buildResourceCapture256(world:World,owner:object|undefined):LiveResourceCapture256 {
+ const capture=populationCapture256(world);
+ if(owner){capture.owner=owner;capture.cursor=captureResourceJournal(world.resources);}
  resourceCaptures256.set(world.resources,capture);liveResourceCaptures256.set(world,capture);return capture;
+}
+function verifyResourcePopulation256(world:World,capture:LiveResourceCapture256):void {
+ if(!capture.owner||!verifyTerrainWriteCaches)return;
+ const cold=populationCapture256(world);
+ if(cold.total!==capture.total||cold.at.size!==capture.at.size||cold.species.size!==capture.species.size
+   ||cold.owners.some((bits,i)=>bits!==capture.owners[i]||cold.full[i]!==capture.full[i]||cold.cover[i]!==capture.cover[i]||cold.blocks[i]!==capture.blocks[i])
+   ||[...cold.at].some(([cell,plant])=>plant.defId!==capture.at.get(cell)?.defId)
+   ||[...cold.species].some(([def,count])=>capture.species.get(def)!==count))throw Error('Resident plant population differs from the full resource capture');
 }
 /** Exactly the per-resource step of the former full capture, plus the counts. */
 function addResource256(world:World,capture:LiveResourceCapture256,resource:Resource256):void {
@@ -111,32 +140,76 @@ function removeResource256(capture:LiveResourceCapture256,resource:Resource256):
 /** Follows the new array when resources were only removed or appended
  * (resourceArrayDelta); anything else returns false: rebuild. */
 function deriveResourceCapture256(world:World,capture:LiveResourceCapture256):boolean {
- const old=capture.source,next=world.resources,delta=resourceArrayDelta(old,next,RESOURCE_DELTA_LIMIT256);if(!delta)return false;
- for(const resource of delta.removed)removeResource256(capture,resource);
- for(let t=delta.appendedFrom;t<next.length;t++)addResource256(world,capture,next[t]!);
+ const old=capture.source,next=world.resources;
+ if(capture.owner){
+  // The real membership journal supplies precisely the remove and append
+  // commits, including several intervening renewal decisions. Never walk
+  // the surviving 20k resource references just to discover those edits.
+  const delta=capture.cursor&&readResourceJournal(next,capture.cursor);
+  if(!delta?.membershipEdits)return false;
+  for(const edit of delta.membershipEdits){
+   for(const resource of edit.removed)removeResource256(capture,resource);
+   for(const resource of edit.appended)addResource256(world,capture,resource);
+  }
+  capture.cursor=delta.cursor;
+ }else{
+  const delta=resourceArrayDelta(old,next,RESOURCE_DELTA_LIMIT256);if(!delta)return false;
+  for(const resource of delta.removed)removeResource256(capture,resource);
+  for(let t=delta.appendedFrom;t<next.length;t++)addResource256(world,capture,next[t]!);
+ }
  resourceCaptures256.delete(old);capture.source=next;resourceCaptures256.set(next,capture);
  return true;
 }
-/* The (cell, bits) writes of the structures, in source order, per shared
- * structure membership token: kinds and footprints never change while the
- * token holds (see structure-navigation), so the writes, and the refusals
- * of the loop, are the same. Without an existing token, computed afresh. */
-const structureOwnerWrites=new WeakMap<object,{readonly width:number;readonly height:number;readonly writes:Int32Array}>();
-function structureOwnerWrites256(world:World,index:(c:Cell)=>number):Int32Array {
- const token=peekStructureMembershipToken(world),cached=token?structureOwnerWrites.get(token):undefined;
- if(cached&&cached.width===world.width&&cached.height===world.height)return cached.writes;
- const writes:number[]=[];
- for(const structure of world.structures){
+/* Structure geometry owns an immutable byte mask, not a list replayed into
+ * each renewal session. The closed append producer carries all existing
+ * geometry entries by identity; update a new mask with only those appends.
+ * Unknown membership, dimensions or owner fall back to the full capture.
+ * The complete physical session composes this layer at cellAt(), so neither
+ * an extra 7k write pass nor a merged mask is needed for every choice. */
+interface StructureMasks {readonly bits:Uint8Array;readonly regionBits:Uint8Array}
+interface StructureMask256 extends StructureMasks {readonly owner:object;readonly token:object;readonly geometry:StructureNavigationGeometry;readonly width:number;readonly height:number}
+const structureMasks256=new WeakMap<World,StructureMask256>();
+function writeStructureMask256(structures:readonly World['structures'][number][],from:number,bits:Uint8Array,index:(c:Cell)=>number):{changed:boolean;regionChanged:boolean} {
+ let changed=false,regionChanged=false;
+ for(let k=from;k<structures.length;k++){
+  const structure=structures[k]!;
   if(!Object.hasOwn(STRUCTURE_SHOT_FILL,structure.kind)||!Object.hasOwn(STRUCTURE_DEFINITIONS,structure.kind))throw Error('Missing physical plant structure metadata');
   const fill=STRUCTURE_SHOT_FILL[structure.kind],edifice=ZERO_FILL_EDIFICES.has(structure.kind);
   if(fill<.01&&structure.kind!=='power-conduit'&&!edifice)throw Error('Unresolved zero-fill edifice metadata');
-  const bits=(fill>.99?FULL:0)|(fill>=.01||edifice?COVER:0)|(constructionFinalWipesPlants(structure.kind)?BLOCKS_PLANT:0)|
+  const flags=(fill>.99?FULL:0)|(fill>=.01||edifice?COVER:0)|(constructionFinalWipesPlants(structure.kind)?BLOCKS_PLANT:0)|
    (STRUCTURE_DEFINITIONS[structure.kind].blocksMovement?BLOCKED:0)|(isPassageDoor(structure.kind)?DOOR:structure.kind==='fence'?FENCE:0);
-  for(const cell of footprintCells(structure)){const i=index(cell);if(bits)writes.push(i,bits);}
+  for(const cell of footprintCells(structure)){
+   const i=index(cell);if(!flags)continue;
+   const before=bits[i]!,after=before|flags;
+   if(before===after)continue;
+   changed=true;if(((before^after)&REGION_BITS)!==0)regionChanged=true;
+   bits[i]=after;
+  }
  }
- const result=Int32Array.from(writes);
- if(token)structureOwnerWrites.set(token,{width:world.width,height:world.height,writes:result});
- return result;
+ return {changed,regionChanged};
+}
+function structureOwnerMask256(world:World,index:(c:Cell)=>number):StructureMasks {
+ const owner=terrainJournalReadOwner(),token=owner&&peekStructureMembershipToken(world);
+ const geometry=token&&captureStructureNavigation(world),cached=structureMasks256.get(world),n=world.width*world.height;
+ const sameOwner=!!(cached&&owner&&cached.owner===owner&&cached.width===world.width&&cached.height===world.height);
+ const old= sameOwner?cached!.geometry.entries:undefined,next=geometry&&geometry.entries,prefix=old?.length??0;
+ let bits:Uint8Array,regionBits:Uint8Array;
+ if(sameOwner&&cached!.token===token){bits=cached!.bits;regionBits=cached!.regionBits;}
+ else {
+  const append=!!(old&&next&&next.length>prefix&&(prefix===0||next[0]===old[0]&&next[prefix-1]===old[prefix-1]));
+  bits=append?cached!.bits.slice():new Uint8Array(n);
+  const changes=writeStructureMask256(world.structures,append?prefix:0,bits,index);
+  if(append&&!changes.changed)bits=cached!.bits;
+  // Occupancy-only changes (including nonblocking furniture, items and
+  // conduit additions) do not change the regional input layer at all.
+  regionBits=append&&!changes.regionChanged?cached!.regionBits:bits;
+ }
+ if(owner&&token&&geometry){
+  if(verifyTerrainWriteCaches){const cold=new Uint8Array(n);writeStructureMask256(world.structures,0,cold,index);if(cold.some((v,i)=>v!==bits[i]||((v^regionBits[i]!)&REGION_BITS)!==0))throw Error('Resident plant structure mask differs from the full footprint capture');}
+  structureMasks256.set(world,{owner,token,geometry,width:world.width,height:world.height,bits,regionBits});
+ }
+ else structureMasks256.delete(world);
+ return {bits,regionBits};
 }
 /** Copy-on-write population: plants recorded during one decision stay local. */
 class OverlayPlantMap256 extends Map<number,ExistingGenerationPlant256> {
@@ -164,8 +237,7 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
    if(row.nonStump){population.totalPlants++;population.globalSpecies.set(row.defId,(population.globalSpecies.get(row.defId)??0)+1);}
   }else{(plantCells as Set<number>).add(row.cell);existing.push(row);}
  };
- const structureWrites=structureOwnerWrites256(world,index);
- for(let k=0;k<structureWrites.length;k+=2)add(structureWrites[k]!,structureWrites[k+1]!);
+ const {bits:structureBits,regionBits}=structureOwnerMask256(world,index);
  for(const job of world.jobs)if(job.construction==='frame'){
   const kind=job.furniture?.kind??job.kind;if(job.kind==='lay-floor'||job.kind==='build-bridge')continue;
   if(!constructionFrameWipesPlants(kind))throw Error('Missing actual Thing Frame metadata');
@@ -181,23 +253,31 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
  for(const pile of world.piles)if(pile.owner.type==='ground')filled(pile.owner,itemShotFill(pile.item));
  for(const pack of world.packed)if(pack.owner.type==='ground')index(pack.owner);
  for(const geyser of world.geysers?.items??[])for(const cell of geyserCells256(world.width,geyser))add(cell,BLOCKS_PLANT);
- const cells=new Map<number,SpatialCell256>();
+ // Lazy, cell-addressed pages. Renewal requests repeatedly read the same
+ // neighbours and region cells; allocating an entire second map or hashing
+ // every already captured integer cell is unnecessary. The session still
+ // reads each actual cell only on its first query, in the same order.
+ const cells:((SpatialCell256|undefined)[]|undefined)[]=new Array(Math.ceil(n/256));
  const cellAt=(c:number):SpatialCell256=>{
-  let cell=cells.get(c);if(cell)return cell;
   if(!Number.isSafeInteger(c)||c<0||c>=n)throw Error('Invalid actual spatial plant cell');
+  const page=c>>>8,slot=c&255;
+  let values=cells[page],cell=values?.[slot];if(cell)return cell;
   const tile=world.tiles[c];if(!tile)throw Error('Actual plant terrain is absent');
-  const substrate=readNaturalPlantSubstrate256(tile),roof=roofKindAt(world,c),bits=owners[c]!,solid=tile.terrain==='rock'||!!tile.collapsedRock;
+  const substrate=readNaturalPlantSubstrate256(tile),roof=roofKindAt(world,c),bits=owners[c]!|structureBits[c]!,solid=tile.terrain==='rock'||!!tile.collapsedRock;
   const normal=!!(tile.bridge||tile.floor||naturalTerrainWalkable256(tile.terrain))&&!solid&&!(bits&BLOCKED),door=!!(bits&DOOR);
   const fertility=f(substrate.fertility),snowDepth=f(tile.snowDepth??0),baseWater=terrainIsWater256(tile.terrain);
   if(!Number.isFinite(fertility)||fertility<0||!Number.isFinite(snowDepth)||snowDepth<0)throw Error('Invalid actual spatial plant cell');
   cell={fertility,naturalRoof:roof==='natural-thin'||roof==='natural-thick',water:!tile.bridge&&!tile.floor&&baseWater,baseWater,
    terrainDefId:substrate.terrainDefId,terrainTags:substrate.tags,occupied:solid||!!(bits&COVER),blocksPlanting:solid||!!(bits&BLOCKS_PLANT),snowDepth,sandDepth:0,
    regionType:door?2:bits&FENCE?3:normal?1:solid||bits&FULL?0:4,walkableNoDoor:normal&&!door};
-  cells.set(c,cell);return cell;
+  if(!values){values=new Array(256);cells[page]=values;}
+  values[slot]=cell;return cell;
  };
  const anyIgnores=header.rules.wildPlants.some(row=>FACTS[row.defId as Def].completelyIgnoreFertility)||Object.values(FACTS).some(row=>row.cavePlant&&row.completelyIgnoreFertility);
  const baseAt=(c:number)=>{const cell=cellAt(c);let value=cell.fertility;if(cell.naturalRoof)value=f(value*.5);if(anyIgnores&&cell.water&&value<=0)value=f(.1);return value;};
- const regions=new PlantSpatialRegions256(world.width,world.height,c=>cellAt(c).regionType,baseAt),counts=new Map<number,PlantSpawnerRegionCounts256>();
+ const retained=independentRegionOwners?actualPlantRegions379(world,regionBits,anyIgnores):undefined;
+ const regions=retained?.regions??new PlantSpatialRegions256(world.width,world.height,c=>cellAt(c).regionType,baseAt),counts=new Map<number,PlantSpawnerRegionCounts256>();
+ const walkableNoDoorAt=retained?.walkableNoDoorAt??((c:number)=>cellAt(c).walkableNoDoor);
  return {...header,existing,spatial:{cell:cellAt,near:(cell,radius)=>regions.near(cell,radius),record:()=>counts.clear(),counts(region,plants){
   let result=counts.get(region.id);if(result)return result;
   let count=0;const species=new Map<string,number>();
@@ -205,7 +285,7 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
   // Integer counts do not depend on source owner order; duplicate contacts to
   // the same region are counted once, as in the cold lister's Set.
   for(let z=Math.max(0,region.minZ-1);z<=Math.min(world.height-1,region.maxZ+1);z++)for(let x=Math.max(0,region.minX-1);x<=Math.min(world.width-1,region.maxX+1);x++){
-   const c=z*world.width+x,row=plants.get(c);if(!row?.nonStump||!regions.touches(c,region,c=>cellAt(c).walkableNoDoor))continue;
+   const c=z*world.width+x,row=plants.get(c);if(!row?.nonStump||!regions.touches(c,region,walkableNoDoorAt))continue;
    count++;species.set(row.defId,(species.get(row.defId)??0)+1);
   }
   result={count,species};counts.set(region.id,result);return result;

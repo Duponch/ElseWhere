@@ -3,3 +3,9 @@
 declare module '*?test-before-phase-capture492' {
   export function captureNativeMessageForDeferred(value: unknown): unknown;
 }
+declare module '*?test-qualified-phase-capture492' {
+  export function captureNativeMessageForDeferred297(value: unknown): unknown;
+}
+declare module '*?test-qualified-native-lane492' {
+  export function createNativeCloneResidentLane(): import('../src/bridge/native-clone-resident').NativeCloneResidentLane;
+}

@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {SCHEMA_VERSION} from './types.ts';
 import {groupPackedMassGrams258} from './group-freight-mass-258.ts';
@@ -61,7 +62,7 @@ export function draftSplitInventory(members:readonly CaravanPhysicalPawn256[],it
  const newIdentity=()=>{if(!Number.isSafeInteger(freshId+1))throw Error('Thing identities exhausted');return freshId++;};
  const move=(p:MaterialPile,count:number,target:CaravanPhysicalPawn256,preferred?:number)=>{
   const from=owner(p)!,movedShares=splitShares(p,count,preferred);let fragment=p;
-  if(count<p.quantity){fragment=structuredClone(p);fragment.id=newIdentity();fragment.quantity=count;p.quantity-=count;draft.push(fragment);}
+  if(count<p.quantity){fragment=structuredClone(p);markPileContentWrite379(fragment).id=newIdentity();markPileContentWrite379(fragment).quantity=count;markPileContentWrite379(p).quantity-=count;draft.push(fragment);}
   shares.set(fragment.id,movedShares);assignPileOwner(fragment,{type:'inventory',pawnId:target.id});
   // ThingOwner walks existing inventory order, partially filling each real
   // stack before appending the remaining original fragment. Partial absorption
@@ -72,7 +73,7 @@ export function draftSplitInventory(members:readonly CaravanPhysicalPawn256[],it
     const n=Math.min(fragment.quantity,ITEM_DEFINITIONS[into.item].stackLimit-into.quantity);if(n<=0)continue;
     const absorbedId=n===fragment.quantity?fragment.id:newIdentity(),absorbedShares=splitShares(fragment,n),targetShares=shares.get(into.id)!;
     for(const [id,units] of absorbedShares)targetShares.set(id,(targetShares.get(id)??0)+units);
-    mergePileEgg256(into,n,fragment.egg);mergePileContamination(into,n,fragment.foodPoison);mergeThingDamage(into,n,fragment.damage);mergeRot(into,n,rotAge(fragment,tick),tick);into.quantity+=n;fragment.quantity-=n;
+    mergePileEgg256(into,n,fragment.egg);mergePileContamination(into,n,fragment.foodPoison);mergeThingDamage(into,n,fragment.damage);mergeRot(into,n,rotAge(fragment,tick),tick);markPileContentWrite379(into).quantity+=n;markPileContentWrite379(fragment).quantity-=n;
     receipts.push({sourceId:p.id,quantity:n,fromPawnId:from,toPawnId:target.id,fragmentId:absorbedId,absorbedById:into.id});
     if(!fragment.quantity){draft.splice(draft.indexOf(fragment),1);shares.delete(fragment.id);return;}
    }

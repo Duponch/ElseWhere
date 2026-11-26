@@ -53,6 +53,7 @@ import { penParts } from './pen-parts';
 import { WORLD_SCALE } from '../world/scale';
 import type { Placement } from './primitives';
 import { furniturePlacementZone, hiddenFurnitureSlot, furnitureZoneSlack, furnitureStructureValues, sameFurnitureValues, structureCells, zonesNear, zoneSubjects, samePlacement } from './furniture-zones';
+import {FurnitureSpatialRanges379,type FurnitureSpatialBatches379} from './FurnitureSpatialRanges379';
 
 /** Procedural furniture batches rebuilt only when structure content changes. */
 export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world): void {
@@ -112,7 +113,7 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
  * unchanged (tests/furniture-independent-kinds.test.ts). */
 export const FURNITURE_INDEPENDENT_KINDS:ReadonlySet<unknown>=new Set(['sandbags']);
 
-type FurnitureBatches=Pick<BoxBatches,'set'|'furnitureStamp'|'patchFurniture'|'patchFurnitureBatch'>;
+type FurnitureBatches=Pick<BoxBatches,'set'|'furnitureStamp'|'patchFurniture'|'patchFurnitureBatch'>&FurnitureSpatialBatches379;
 type SunLampCapture={id:number;active:boolean};
 /** One zone of the resident furniture batch: its live placements (historical
  * producer order, restricted to the zone) from `start`, then reserved slots
@@ -144,8 +145,9 @@ const zoneOrder=(a:string,b:string):number=>{const [ax,az]=a.split(':').map(Numb
  * reach of it (tests/furniture-zones.test.ts); anything else lays all out. */
 export class FurniturePresentation {
   private state:FurnitureState|undefined;
+  private readonly spatialRanges=new FurnitureSpatialRanges379();
 
-  clear():void {this.state=undefined;}
+  clear():void {this.state=undefined;this.spatialRanges.clear();}
 
   /** Diagnostics/tests: the current zone layout of the resident batch. */
   layout():{total:number;segments:{key:string;start:number;capacity:number;count:number}[]}|undefined {
@@ -203,15 +205,17 @@ export class FurniturePresentation {
     const state=this.state;
     // Keep only a local predecessor until every read/patch/capture succeeds.
     // A thrown producer or resident patch cannot leave that cache authorized.
-    this.clear();
-    if((flowerChanges!==undefined||changedKinds!==undefined)&&this.owns(state,world,group,cutaway,batches)&&this.sunLampsUnchanged(state,world)){
-      const next=this.patchZones(state,world,group,cutaway,batches);
-      if(next){this.state=next;return;}
-    }
+    this.state=undefined;
+    try{
+      if((flowerChanges!==undefined||changedKinds!==undefined)&&this.owns(state,world,group,cutaway,batches)&&this.sunLampsUnchanged(state,world)){
+        const next=this.patchZones(state,world,group,cutaway,batches);
+        if(next){this.state=next;return;}
+      }
     // Clear first: exceptions and a refused resident patch cannot keep a cache
     // authorized against a partially modified or replaced batch.
-    this.clear();
-    this.layOut(world,group,cutaway,batches);
+      this.state=undefined;
+      this.layOut(world,group,cutaway,batches);
+    }catch(error){this.clear();throw error;}
   }
 
   private capture(world:World,previous?:Map<number,StructureCapture>):Map<number,StructureCapture>|undefined {
@@ -240,7 +244,9 @@ export class FurniturePresentation {
     }
     batches.set(group,'furniture',laid);
     batches.set(group,'sandbags',sandbags);
-    const stamp=batches.furnitureStamp();if(stamp===undefined||!structures)return;
+    if(batches.furnitureStamp()===undefined||!structures){this.spatialRanges.clear();return;}
+    this.spatialRanges.update(group,batches,segments.values(),laid.length);
+    const stamp=batches.furnitureStamp();if(stamp===undefined){this.spatialRanges.clear();return;}
     const sunLamps=world.structures.filter(s=>s.kind==='sun-lamp').map(s=>({id:s.id,active:sunLampActive(world,s)}));
     this.state={group,batches,cutaway,width:world.width,height:world.height,
       colorManagementEnabled:ColorManagement.enabled,workingColorSpace:ColorManagement.workingColorSpace,
@@ -271,7 +277,7 @@ export class FurniturePresentation {
     const byId=new Map(world.structures.map(s=>[s.id,s] as const)),fresh=new Map<string,Placement[]>();
     for(const key of dirty)fresh.set(key,[]);
     for(const p of furniture)fresh.get(furniturePlacementZone(p,byId))?.push(p);
-    const segments=new Map(state.segments),patches:{start:number;items:Placement[]}[]=[];
+    const segments=new Map(state.segments),patches:{start:number;items:Placement[]}[]=[],spatialDirty=new Set<string>();
     for(const [key,items] of fresh){
       const segment=state.segments.get(key);
       if(!segment){if(items.length)return;continue;}
@@ -281,15 +287,16 @@ export class FurniturePresentation {
       for(let i=0;i<segment.capacity;i++){
         const next=i<items.length?items[i]:undefined,old=i<segment.items.length?segment.items[i]:undefined;
         if(next&&old?samePlacement(next,old):!next&&!old){run=undefined;continue;}
-        const value=next??hiddenFurnitureSlot(key);
+        const value=next??hiddenFurnitureSlot(key);spatialDirty.add(key);
         if(run)run.items.push(value);else{run={start:segment.start+i,items:[value]};patches.push(run);}
       }
       segments.set(key,{...segment,items});
     }
     patches.sort((a,b)=>a.start-b.start);
     if(patches.length&&!batches.patchFurnitureBatch(group,'furniture',patches,state.total,state.stamp))return;
+    if(patches.length)this.spatialRanges.update(group,batches,segments.values(),state.total,spatialDirty);
     // The sandbag batch is its own; a change of one of them rebuilds it too.
     if([...changed].some(id=>FURNITURE_INDEPENDENT_KINDS.has((structures.get(id)??state.structures.get(id))?.values[1])))batches.set(group,'sandbags',sandbagParts(world));
-    return {...state,segments,structures,packed};
+    return {...state,stamp:batches.furnitureStamp()??state.stamp,segments,structures,packed};
   }
 }

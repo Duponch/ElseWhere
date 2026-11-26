@@ -1,4 +1,9 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {markFrameGeometryChanged379} from './frame-geometry-379.ts';
+import {pileById,splicePileEntries,appendPileEntries} from './pile-identity-directory.ts';
 import {processEggBoxExtraction374} from './egg-box-374.ts';
+import {processConstructionBatch379} from './construction-batch-379.ts';
+import {planNextHaulOpportunity379,processHaulOpportunity379} from './haul-opportunity-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {finishBarrelFill265} from './fermentation-runtime-265.ts';
@@ -14,7 +19,8 @@ import { releaseWork } from './work-release.ts';
 import { footprintCells } from './definitions.ts';
 import { adjacent, workNeighbours } from './pathfinding.ts';
 import { woodWallTouch301 } from './wall-frame-kind-301.ts';
-import { transferPile } from './materials.ts';
+import { transferPile,reservedSource } from './materials.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import {planConstructionPlantRetirement,commitConstructionPlantRetirement} from './plant-retirement.ts';
 import { haulingWork } from './work-types.ts';
 import { backgroundWorkRefusal } from './colonist-backgrounds.ts';
@@ -25,15 +31,18 @@ const nearby = (a: Cell, b: Cell) => sameCell(a, b) || adjacent(a, b);
 export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allowTarget: boolean) => void, wake: () => void): void {
   const task = pawn.haul!;
   if(backgroundWorkRefusal(pawn,haulingWork(task.destination))){releaseWork(world,pawn);return;}
+  if(task.constructionBatch379){processConstructionBatch379(world,pawn,move,wake);return;}
+  if(task.haulOpportunity379){processHaulOpportunity379(world,pawn,move);return;}
   if(task.destination.type==='turret'&&turretReloadPawnReason(pawn)){releaseWork(world,pawn);return;}
   if(task.whole){processFurnitureHaul(world,pawn,move,wake);return;}
   if (!destinationValid(world, pawn)) { releaseWork(world, pawn); return; }
   if (task.phase === 'pickup') {
     // Schema 374: EmptyEggBox extracts the held eggs before the ordinary pickup.
     if(task.eggBox374!==undefined){processEggBoxExtraction374(world,pawn,task,move);return;}
-    const source = world.piles.find(item => item.id === task.sourcePileId);
-    if (!source || !eggAllowedForPlayer256(source)||source.owner.type !== 'ground' || source.quantity < task.quantity) { releaseWork(world, pawn); return; }
+    const source = pileById(world,task.sourcePileId);
+    if (!source || !eggAllowedForPlayer256(source)||source.owner.type !== 'ground' || Number(world.schemaVersion)<379&&source.quantity < task.quantity) { releaseWork(world, pawn); return; }
     if (!nearby(pawn, source.owner)) { move(source.owner, true); return; }
+    if(Number(world.schemaVersion)>=379){markPileContentWrite379(task).quantity=Math.min(task.quantity,carryStackLimit379(world,pawn,source.item),Math.max(0,source.quantity-reservedSource(world,source.id,pawn.id)));if(task.quantity<1){releaseWork(world,pawn);return;}}
     const aiCore298=source.kind==='ai-core'||source.item==='ai-core';
     if(aiCore298&&(!validAiCorePile298(source,world.schemaVersion)||task.quantity!==1)){releaseWork(world,pawn);return;}
     if (!aiCore298&&source.kind!=='book'&&source.kind!=='plant'&&source.kind!=='corpse'&&source.kind!=='mech-corpse'&&source.kind!=='unfinished'&&source.kind!=='weapon'&&source.kind!=='apparel'&&(!Number.isSafeInteger(world.nextId + 1) || (source.quantity > task.quantity && world.piles.length >= 32768))) { releaseWork(world, pawn); return; }
@@ -41,14 +50,14 @@ export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allow
     if(aiCore298||source.kind==='book'||source.kind==='plant'||source.kind==='corpse'||source.kind==='mech-corpse'||source.kind==='unfinished'||source.kind==='weapon'||source.kind==='apparel'){
       assignPileOwner(source,{type:'pawn',pawnId:pawn.id});task.carryPileId=source.id;task.phase='deliver';pawn.path=[];pawn.planCooldown=0;pawn.state='working';return;
     }
-    source.quantity -= task.quantity;
-    if (!source.quantity) world.piles.splice(world.piles.indexOf(source), 1);
+    markPileContentWrite379(source).quantity -= task.quantity;
+    if (!source.quantity) splicePileEntries(world.piles,world.piles.indexOf(source), 1);
     const carryId = world.nextId++;
-    world.piles.push({ id: carryId, kind: source.kind, item: source.item, quantity: task.quantity, owner: { type: 'pawn', pawnId: pawn.id }, ...copyPileCondition(source) });
-    task.carryPileId = carryId; task.phase = 'deliver'; pawn.path = []; pawn.planCooldown = 0; pawn.state = 'working'; return;
+    appendPileEntries(world.piles,{ id: carryId, kind: source.kind, item: source.item, quantity: task.quantity, owner: { type: 'pawn', pawnId: pawn.id }, ...copyPileCondition(source) });
+    task.carryPileId = carryId; task.phase = 'deliver'; pawn.path = []; pawn.planCooldown = 0; pawn.state = 'working'; planNextHaulOpportunity379(world,pawn); return;
   }
   const target = destinationCell(world, task.destination);
-  const carry = world.piles.find(item => item.id === task.carryPileId);
+  const carry = pileById(world,task.carryPileId);
   if (!target || !carry) { releaseWork(world, pawn); return; }
   if((carry.kind==='ai-core'||carry.item==='ai-core')&&(!validAiCorePile298(carry,world.schemaVersion)||task.quantity!==1)){releaseWork(world,pawn);return;}
   // A wood wall Frame (schema 301+) is touched from its eight neighbours, the
@@ -74,15 +83,15 @@ export function processHaul(world: World, pawn: Pawn, move: (target: Cell, allow
     if(task.serviceProgress<TURRET_RELOAD_WORK_TICKS)return;
     const turret=reloadableTurret(world,task.destination.structureId)!;
     turret.turret!.ammoQ=Math.min(240,turret.turret!.ammoQ+carry.quantity*3);
-    world.piles.splice(world.piles.indexOf(carry),1);
+    splicePileEntries(world.piles,world.piles.indexOf(carry),1);
   } else if (task.destination.type==='fuel') {
     pawn.state='working';pawn.path=[];task.serviceProgress=(task.serviceProgress??0)+1;
     if(task.serviceProgress<REFUEL_WORK_TICKS)return;
     const fire=refuelable(world,task.destination.structureId)!;
     fire.fuel!.ticks+=carry.quantity*FUEL_UNIT_TICKS;
-    world.piles.splice(world.piles.indexOf(carry),1);
+    splicePileEntries(world.piles,world.piles.indexOf(carry),1);
   } else if(!transferPile(world,carry,task.destination.type === 'job' ? { type:'job',jobId:task.destination.jobId } : {type:'ground',x:target.x,z:target.z})) {releaseWork(world,pawn);return;}
-  if(task.destination.type==='job'&&(target as Job).kind!=='fix-breakdown')(target as Job).construction='frame';
+  if(task.destination.type==='job'&&(target as Job).kind!=='fix-breakdown'){(target as Job).construction='frame';markFrameGeometryChanged379(world);}
   pawn.haul = null; if(pawn.orders.active==='haul')pawn.orders.active=null;
   pawn.path = []; pawn.state = 'idle'; pawn.planCooldown = 0; wake();
 }

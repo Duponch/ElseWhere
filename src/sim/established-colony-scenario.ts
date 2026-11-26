@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { invalidateTerrainJournal } from './terrain-mutation-journal.ts';
 import { createScenarioWorld } from './new-game.ts';
 import { startingPawn } from './starting-pawns.ts';
@@ -71,7 +72,7 @@ export function prepareEstablishedColonyScenario(): World {
   world.growingZones = []; world.growingCursor = 0; world.events = [];
   // Replace only this new preparation's ground dotation. Keep the original
   // three shirts and their owners; four additional residents receive new ones.
-  world.piles = world.piles.filter(pile => pile.owner.type === 'apparel');
+  world.piles = filterPileEntries(world.piles,pile => pile.owner.type === 'apparel');
   delete world.relationships;
 
   const roofs = new Set<number>(), home = new Set<number>();

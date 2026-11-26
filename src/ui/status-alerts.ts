@@ -19,7 +19,7 @@ import { medicalBleed } from '../sim/injury-state';
 import {captureFoodReadability,type FoodReadability} from '../sim/food-readability';
 import { mentalCrisisView } from '../sim/mental-presentation';
 import { prisonBreakActive } from '../sim/prison-break-state';
-import type { Pawn,World } from '../sim/types';
+import type { Pawn,Resource,World } from '../sim/types';
 import { buildingLabels } from './building-labels';
 import type { ArchitectCategory,Panel } from './layout';
 import { miniTurretView,turretSeconds } from '../sim/mini-turret-presentation';
@@ -77,7 +77,7 @@ export function readAvailabilityStatusAlerts(world:World):StatusAlert[] {
 
 /** All predicates and targets share the same confirmed snapshot. Labels are
  * never parsed to find an entity, a medical condition or a management panel. */
-export function readStatusAlerts(world:World,food:FoodReadability=captureFoodReadability(world,{pileVisible:p=>knownPile256(world,p),structureVisible:s=>knownBuilding256(world,s)})):StatusAlert[] {
+export function readStatusAlerts(world:World,food:FoodReadability=captureFoodReadability(world,{pileVisible:p=>knownPile256(world,p),structureVisible:s=>knownBuilding256(world,s)}),knownBlighted?:()=>readonly Resource[]):StatusAlert[] {
   const rows:StatusAlert[]=[...readAvailabilityStatusAlerts(world),...(world.campaignMap?.revision===2?readCampaignMapAlerts({maps:world.campaignMap.maps,incidents:[]}):[])],colonists=world.pawns.filter(isColonist),living=colonists.filter(p=>p.state!=='dead');
   const campaignIncidents:readonly (MapIncident|{site:'home'|'secondary';kind:MapIncident['kind'];count:number;actorId:number})[]=world.campaignMap?.incidents??[];
   for(const incident of campaignIncidents){
@@ -163,7 +163,7 @@ export function readStatusAlerts(world:World,food:FoodReadability=captureFoodRea
   core(readNeedBatteries(world));
   rows.push(...readAnimalPenAlerts(world,free));
   core(readStarvationAnimals(world));
-  core(readCropBlight(world));
+  core(readCropBlight(world,knownBlighted));
   // Alerts lot C: occasional Core alerts (caravan, doctor, miner, dispenser,
   // operation, research bench).
   core(readImmobileCaravan(world));

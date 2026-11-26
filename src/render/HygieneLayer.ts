@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { World } from '../sim/types';
+import {readSnapshotTileChanges} from '../bridge/snapshot-changes';
 import type { FloorKind } from '../sim/flooring';
 import { FilthLayer } from './FilthLayer';
 import type { BoxBatches } from './BoxBatches';
@@ -42,23 +43,57 @@ export class HygieneLayer {
   readonly group=new THREE.Group();
   private floors=new Map<number,FloorKind|'bridge'>();
   private tiles:World['tiles']|undefined;
+  private world:World|undefined;
   readonly filth:FilthLayer;
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void){this.filth=new FilthLayer(configure);this.group.add(this.filth.mesh);}
   update(world:World,batches:BoxBatches,reset=false):void {
+    if(this.world)batches.setSpatialRanges?.(this.group,'hygiene-floors',undefined);
+    this.world=undefined;this.apply(world,batches,reset);
+  }
+  /** Closed renderer application. Keep the endpoint of this producer's own
+   * last successful application; an arbitrary changed-array argument cannot
+   * certify floor reuse or survive a public read. */
+  updateWorld(world:World,batches:BoxBatches,reset=false):void {
+    const before=this.world;this.world=undefined;
+    const changes=!reset&&before&&before!==world&&before.seed===world.seed&&before.width===world.width&&before.height===world.height
+      ?readSnapshotTileChanges(before,world):undefined;
+    this.apply(world,batches,reset,changes,true);this.world=world;
+  }
+  private apply(world:World,batches:BoxBatches,reset:boolean,changedTiles?:readonly number[],confirmed=false):void {
     let changed=reset;
     if(reset)this.floors.clear();
     // Bridge snapshots retain unchanged tile arrays. A new array triggers a
     // value comparison; no simulation revision or mutable cache is assumed.
-    if(reset||this.tiles!==world.tiles)for(let i=0;i<world.tiles.length;i++){
+    const updateFloor=(i:number):void=>{
       const tile=world.tiles[i]!,floor=tile.bridge?'bridge':tile.floor,old=this.floors.get(i);
       if(floor!==old){changed=true;if(floor)this.floors.set(i,floor);else this.floors.delete(i);}
-    }
+    };
+    if(!reset&&changedTiles)for(const i of changedTiles)updateFloor(i);
+    else if(reset||confirmed||this.tiles!==world.tiles)for(let i=0;i<world.tiles.length;i++)updateFloor(i);
     this.tiles=world.tiles;
-    if(changed){const parts:Placement[]=[];
-      for(const [i,floor] of this.floors)parts.push(...(floor==='bridge'?bridgePartsForCell(i%world.width,Math.floor(i/world.width)):floorPartsForKind(floor,i%world.width,Math.floor(i/world.width))));
+    if(changed){const parts:Placement[]=[],runs:{first:number;count:number;page:number}[]=[];
+      const columns=Math.ceil(world.width/32);
+      for(const [i,floor] of this.floors){
+        const x=i%world.width,z=Math.floor(i/world.width),pieces=floor==='bridge'?bridgePartsForCell(x,z):floorPartsForKind(floor,x,z);
+        if(confirmed){
+          const page=(x>>>5)+(z>>>5)*columns,last=runs.at(-1);
+          if(last?.page===page)last.count+=pieces.length;else runs.push({first:parts.length,count:pieces.length,page});
+        }
+        parts.push(...pieces);
+      }
       batches.set(this.group,'hygiene-floors',parts,'solid',false);
+      if(confirmed&&batches.setSpatialRanges){
+        const ranges=[];
+        if(parts.length>=256)for(const r of runs){
+          const bounds=batches.readSpatialBounds(this.group,'hygiene-floors',r.first,r.count);
+          if(!bounds){ranges.length=0;break;}
+          ranges.push({first:r.first,count:r.count,bounds});
+        }
+        batches.setSpatialRanges(this.group,'hygiene-floors',ranges);
+      }
     }
-    this.filth.update(world.filth?.items??[],reset,world);
+    if(confirmed)this.filth.updateWorld(world,reset);
+    else this.filth.update(world.filth?.items??[],reset,world);
   }
   dispose():void {this.filth.dispose();}
 }

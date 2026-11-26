@@ -1,4 +1,5 @@
 import {roadPropCanRepair256} from './local-road-prop-ownership-256.ts';
+import {damagedStructures379,structureDamageChanged379} from './structure-family-379.ts';
 import { isBarrier } from './barriers.ts';
 import { isRepairableStructure } from './thing-damage-rules.ts';
 import { constructionSpeed,learnSkill } from './skills.ts';
@@ -27,7 +28,7 @@ export function reconcileRepairs(world:World):void {
   // Same conjunction of pure tests, the rare one first: almost every structure
   // is undamaged, and only a damaged one needs the job-cell set.
   const repairable=world.schemaVersion>=87?isRepairableStructure:isBarrier;let busy:Set<number>|undefined;
-  for(const s of world.structures)if(s.damage&&roadPropCanRepair256(world,s)&&!s.breakdown&&repairable(s)&&inHome(world,s.z*world.width+s.x)&&!(busy??=new Set(world.jobs.map(j=>j.z*world.width+j.x))).has(s.z*world.width+s.x)&&Number.isSafeInteger(world.nextId+1)) {
+  for(const s of damagedStructures379(world))if(s.damage&&roadPropCanRepair256(world,s)&&!s.breakdown&&repairable(s)&&inHome(world,s.z*world.width+s.x)&&!(busy??=new Set(world.jobs.map(j=>j.z*world.width+j.x))).has(s.z*world.width+s.x)&&Number.isSafeInteger(world.nextId+1)) {
     world.jobs.push({id:world.nextId++,kind:'repair',repair:{structureId:s.id},x:s.x,z:s.z,orientation:s.orientation,footprint:s.footprint,status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0}});
   }
 }
@@ -41,7 +42,7 @@ export function advanceRepair(world:World,pawn:Pawn,job:Job,light:number,body:Bo
     const threshold=job.repair!.warmed?20:80;
     if(job.progress>=threshold){
       setWorkUnits(job,(job.progress-threshold)*WORK_FRACTIONS+(job.workRemainder??0));job.repair!.warmed=true;
-      if(--s.damage===0){learnSkill(pawn.skills.construction,50*(core+1),pawn);delete s.damage;return true;}
+      if(--s.damage===0){learnSkill(pawn.skills.construction,50*(core+1),pawn);delete s.damage;structureDamageChanged379(world,s);return true;}
     }
   }
   learnSkill(pawn.skills.construction,500,pawn);

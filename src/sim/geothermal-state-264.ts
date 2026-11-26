@@ -1,3 +1,4 @@
+import {structureFamily379} from './structure-family-379.ts';
 /** Prospective generator sprayer. Persisting its phase is the same declared
  * continuation adaptation as the natural geyser; Core resets unsaved sprayers. */
 import type {NaturalGeyser256} from './local-geyser-state-256.ts';
@@ -33,7 +34,7 @@ export function createGeothermalState264(world:World,building:Structure):Geother
  * every actor or substep. The natural owner and its paused timers are retained. */
 export function harvestedGeothermalGeyserIds264(world:World):ReadonlySet<number> {
  const ids=new Set<number>();
- for(const s of world.structures)if(s.kind==='geothermal-generator'){
+ for(const s of structureFamily379(world,'geothermal-generators',kind=>kind==='geothermal-generator'))if(s.kind==='geothermal-generator'){
   const state=s.geothermal,g=geothermalGeyser264(world,s);
   if(Number(world.schemaVersion)<264||world.site?.revision!==3||!state||!validGeothermalState264(state,state.atTick,world.nextId)||!g||g.id!==state.geyserId||s.orientation!==0||s.footprint!=='standard'||ids.has(g.id))throw Error('Invalid actual geothermal geyser association');
   ids.add(g.id);

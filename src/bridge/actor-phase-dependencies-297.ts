@@ -27,6 +27,7 @@ import {groupHumanCarryPairs257} from '../sim/group-human-admission-257';
 import {autoSlaughterTargets} from '../sim/auto-slaughter';
 import {isColonist} from '../sim/affiliation';
 import {frozenDataCopy297} from './core-frozen-copy-297';
+import type {ActorPileJoin379} from './actor-pile-join-379';
 
 export const POSE_SLEEP=18,POSE_DEAD=19,POSE_FIGHT_READY=22,READING_ACTIVITY295=14;
 export function seatedOnFurniture(pawn:Pawn):boolean {
@@ -65,20 +66,29 @@ export function animationPose(pawn:Pawn,workPose:number,smallMelee:boolean,seate
   return workPose;
 }
 
-export function humanCorpseVisualStage(world:World,pawn:Pawn,body?:MaterialPile):0|1|2 {
+export function humanCorpseVisualStage(world:World,pawn:Pawn,body?:MaterialPile,pileById?:ActorPileJoin379['byId']):0|1|2 {
   if(pawn.state!=='dead')return 0;
-  const pile=body??(pawn.body?.pileId!==undefined?world.piles.find(p=>p.id===pawn.body?.pileId):undefined);
+  const pile=body??(pawn.body?.pileId!==undefined?(pileById?pileById(pawn.body.pileId):world.piles.find(p=>p.id===pawn.body?.pileId)):undefined);
   if(pile){const stage=corpseStage(pile,world.tick);return stage==='desiccated'?2:stage==='rotting'?1:0;}
   const age=humanCorpseAge(world,pawn);
   return age>=CORPSE_DESSICATION_TICKS?2:age>=CORPSE_ROT_TICKS?1:0;
 }
 
+/** The exact opponent reader used by the full work contact. A renderer which
+ * already holds the authoritative contact patch need not reconstruct the
+ * rest of the work pose merely to look up this actor. */
+export function humanContactOpponent297(pawn:Pawn,pawnsById:ReadonlyMap<number,Pawn>):Pawn|undefined {
+ const pair=pawn.social?.fight?pawnsById.get(pawn.social.fight.opponentId):undefined;
+ const socialOpponent=pair?.social?.fight?.opponentId===pawn.id&&!medicallyStopped(pair)?pair:undefined;
+ return pawn.melee?.order&&!pawn.melee.order.structure?pawnsById.get(pawn.melee.order.targetId):socialOpponent;
+}
+
 /** Exact pure statements moved from PawnLayer; no new contact formula. */
-export function humanWorkContact297(world:World,pawn:Pawn,pawnsById:ReadonlyMap<number,Pawn>,initialJobs:Map<number,Job>|undefined,initialYaw:number) {
+export function humanWorkContact297(world:World,pawn:Pawn,pawnsById:ReadonlyMap<number,Pawn>,initialJobs:Map<number,Job>|undefined,initialYaw:number,pileById?:ActorPileJoin379['byId']) {
  let jobsById=initialJobs,yaw=initialYaw;
       const arriving=pawn.state==='moving'&&pawn.moveCooldown>0&&pawn.path.length===0&&!!pawn.motion&&pawn.motion.to.x===pawn.x&&pawn.motion.to.z===pawn.z;
       const job=pawn.jobId===null?undefined:(jobsById??=new Map(world.jobs.map(j=>[j.id,j]))).get(pawn.jobId);
-      const garment=pawn.equipmentTask?.action==='wear'?world.piles.find(p=>p.id===pawn.equipmentTask!.itemId):undefined;
+      const garment=pawn.equipmentTask?.action==='wear'?(pileById?pileById(pawn.equipmentTask.itemId):world.piles.find(p=>p.id===pawn.equipmentTask!.itemId)):undefined;
       const dressing=garment?.owner.type==='ground'?garment.owner:undefined;
       const fighting=pawn.firefighting?world.fires?.items.find(f=>f.id===pawn.firefighting!.fireId):undefined;
       const fireTarget=fighting?firePosition(world,fighting):undefined;
@@ -99,9 +109,7 @@ export function humanWorkContact297(world:World,pawn:Pawn,pawnsById:ReadonlyMap<
       const contactPose=arriving?pawnWorkPose({...pawn,state:'working'},job,station?.kind):workPose;
       const atBench=station?.kind==='fueled-smithy'||station?.kind==='electric-smithy'||station?.kind==='electric-crematorium'||station?.kind==='electric-smelter'||station?.kind==='biofuel-refinery'||station?.kind==='deep-drill'||station?.kind==='ground-scanner'||station?.kind==='drug-lab'||station?.kind==='research-bench'||station?.kind==='hi-tech-research-bench'||station?.kind==='fabrication-bench'||station?.kind==='butcher-table'||station?.kind==='machining-table'||station?.kind==='stonecutter'||station?.kind==='art-bench'||station?.kind==='tailor-bench'||station?.kind==='electric-tailor-bench'||station?.kind==='electric-stove'||station?.kind==='fueled-stove';
       const clearance=job?.kind==='mine' ? .9 : atBench ? .88 : .82;
-      const pair=pawn.social?.fight?pawnsById.get(pawn.social.fight.opponentId):undefined;
-      const socialOpponent=pair?.social?.fight?.opponentId===pawn.id&&!medicallyStopped(pair)?pair:undefined;
-      const humanOpponent=pawn.melee?.order&&!pawn.melee.order.structure?pawnsById.get(pawn.melee.order.targetId):socialOpponent;
+      const humanOpponent=humanContactOpponent297(pawn,pawnsById);
       const fightContact=humanOpponent&&humanOpponent.state!=='dead'&&!medicallyStopped(pawn)&&(pawn.state!=='moving'||arriving)
         ? meleeApproach(pawn,humanOpponent):undefined;
       const reach=fightContact&&(fightContact.x!==0||fightContact.z!==0)?fightContact
@@ -113,6 +121,28 @@ export function humanWorkContact297(world:World,pawn:Pawn,pawnsById:ReadonlyMap<
 /** Owned comparable data only; no value or predicate confers Native authority. */
 export interface ActorPhaseDependencies297 {readonly format:'actor-phase-dependencies-297-1';readonly data:unknown}
 const ownedDependencies297=new WeakSet<object>();
+// Only keys of this module's deeply frozen copies are memoized. Live World
+// records are always enumerated again, including unannounced in-place edits.
+const ownedDependencyKeys297=new WeakMap<object,readonly string[]>();
+function ownedKeys297(value:object):readonly string[] {
+ let keys=ownedDependencyKeys297.get(value);if(keys===undefined){keys=Object.keys(value);ownedDependencyKeys297.set(value,keys);}return keys;
+}
+/** The left tree is an owned dependency capture; the right tree is either a
+ * live candidate or another owned capture. Owned arrays are dense, and owned
+ * records have only enumerable string data keys. These are copy guarantees,
+ * never assumptions about a live record's identity, shape or writability. */
+function equalOwnedDependencyValue297(x:unknown,y:unknown,rightOwned=false):boolean {
+ if(Object.is(x,y))return true;if(x===null||y===null||typeof x!=='object'||typeof y!=='object')return false;
+ if(Array.isArray(x)){
+  if(!Array.isArray(y)||x.length!==y.length)return false;
+  for(let i=0;i<x.length;i++)if(!equalOwnedDependencyValue297(x[i],y[i],rightOwned))return false;
+  return true;
+ }
+ if(Array.isArray(y))return false;
+ const keys=ownedKeys297(x),other=rightOwned?ownedKeys297(y):Reflect.ownKeys(y);if(keys.length!==other.length)return false;
+ for(let i=0;i<keys.length;i++){const k=keys[i]!;if(!Object.hasOwn(y,k)||!equalOwnedDependencyValue297((x as Record<string,unknown>)[k],(y as Record<string,unknown>)[k],rightOwned))return false;}
+ return true;
+}
 function cell(value:{x:number;z:number}|null|undefined){return value?[value.x,value.z]:null;}
 function structure(value:Structure|undefined){return value?[value.id,value.kind,value.x,value.z,value.orientation,value.footprint,value.medical,value.prisoner]:null;}
 function owner(value:MaterialPile['owner']){return {...value};}
@@ -128,19 +158,32 @@ function cargo(p:MaterialPile|undefined){
  * to its held owned copy keeps that copy instead of a new one, so the result
  * has the same values and unchanged rows compare by identity. */
 export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDependencies297):ActorPhaseDependencies297 {
+ return captureDependencies297(world,held);
+}
+/** Internal fixed publisher join. The ordinary exported capture above never
+ * accepts a resolver or an authority flag and always discovers every value. */
+export function captureActorPhaseDependenciesWithResourceJoin297(world:World,held:ActorPhaseDependencies297|undefined,resourceById:((id:number)=>Resource|undefined)|undefined,pileJoin?:ActorPileJoin379):ActorPhaseDependencies297 {
+ return captureDependencies297(world,held,resourceById,pileJoin);
+}
+function captureDependencies297(world:World,held?:ActorPhaseDependencies297,resourceById?:((id:number)=>Resource|undefined),pileJoin?:ActorPileJoin379):ActorPhaseDependencies297 {
  if(!isCorePhysicalSchema297(Number(world.schemaVersion)))throw Error('Dependency capture requires actual schema297');
  const pawnsById=new Map(world.pawns.map(p=>[p.id,p])),jobs=new Map(world.jobs.map(j=>[j.id,j]));
- const bodies=new Map<number,MaterialPile>(),carried=new Map<number,MaterialPile>(),gear=new Map<number,string>(),apparel=new Map<number,unknown[]>();
- for(const pile of world.piles){
+ const bodies=new Map<number,MaterialPile>(),carried=new Map<number,MaterialPile>(),gear=new Map<number,string>(),apparel=new Map<number,unknown[]>(),pileRows=pileJoin?.rows??world.piles;
+ for(const pile of pileRows){
   if(pile.humanCorpse)bodies.set(pile.humanCorpse.pawnId,pile);
   if(pile.owner.type==='pawn')carried.set(pile.owner.pawnId,pile);
   if(pile.owner.type==='equipment')gear.set(pile.owner.pawnId,pile.item);
   if(pile.owner.type==='apparel'){const list=apparel.get(pile.owner.pawnId)??[];list.push([pile.item,pile.apparel?.birthColor]);apparel.set(pile.owner.pawnId,list);}
  }
  const packed=new Set((world.packed??[]).flatMap(p=>p.owner.type==='pawn'?[p.owner.pawnId]:[]));
+ const pawnFires=new Map<number,unknown[]>(),animalFires=new Map<number,unknown[]>();
+ for(const fire of world.fires?.items??[]){
+  if(fire.attachedPawnId!==undefined){let rows=pawnFires.get(fire.attachedPawnId);if(!rows){rows=[];pawnFires.set(fire.attachedPawnId,rows);}rows.push([fire.id,fire.size]);}
+  if(fire.attachedAnimalId!==undefined){let rows=animalFires.get(fire.attachedAnimalId);if(!rows){rows=[];animalFires.set(fire.attachedAnimalId,rows);}rows.push([fire.id,fire.size]);}
+ }
  const scale=new WildlifeBodyScale(),quotas=autoSlaughterTargets(world);
  const human=world.pawns.map(p=>{
-  const contact=humanWorkContact297(world,p,pawnsById,jobs,0),couple=coupleBed285(world,p),sleepId=p.need?.kind==='sleep'?p.need.bedId:null;
+  const contact=humanWorkContact297(world,p,pawnsById,jobs,0,pileJoin?.byId),couple=coupleBed285(world,p),sleepId=p.need?.kind==='sleep'?p.need.bedId:null;
   const bed=couple??((p.state==='sleeping'||p.state==='resting'||p.state==='downed')&&sleepId!==null?structureById(world,sleepId):undefined);
   const slot=bed?pawnBedSlot(p,bed):undefined,seated=seatedOnFurniture(p),small=!!p.melee?.strike&&!!world.wildlife?.animals.some(a=>a.id===p.melee!.strike!.targetId&&a.species==='hare');
   const recreation=p.recreation.task,paste=pasteCollectionSource(p),identity=appearanceOf(p,world.seed),body=bodies.get(p.id),visitor=world.visitors?.groups.find(g=>g.id===p.visitor?.group);
@@ -148,7 +191,7 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
   const leisure=recreation&&recreation.buildingId!==null?structureById(world,recreation.buildingId):undefined;
   const patient=recreation?.activity==='visit-sick'?pawnsById.get(recreation.patientId!):undefined;
   return [p.id,identity,appearanceShape(identity),apparel.get(p.id)??[],gear.get(p.id),isColonist(p),p.visitor?!!visitor?.hostile:undefined,
-   humanLimbVisualMask(p),bodyBloodWord(p.health),humanCorpseVisualStage(world,p,body),
+   humanLimbVisualMask(p),bodyBloodWord(p.health),humanCorpseVisualStage(world,p,body,pileJoin?.byId),
    [p.body?.pileId,p.body?.lostAt,body?owner(body.owner):undefined],
    [contact.workPose,contact.contactPose,contact.reach.x,contact.reach.z,contact.yaw],
    [animationPose(p,contact.workPose,small,seated,!!couple),workActivity(p),seated],
@@ -160,15 +203,18 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
    p.rescue?[p.rescue.phase,p.rescue.patientId]:null,p.animalRescue?[p.animalRescue.phase,p.animalRescue.animalId]:null,
    p.cryptosleepTask?[p.cryptosleepTask.action,p.cryptosleepTask.phase,p.cryptosleepTask.patientId]:null,
    p.raid?.kidnap261?[p.raid.kidnap261.phase,p.raid.kidnap261.patientId]:null,
-   (world.fires?.items??[]).filter(f=>f.attachedPawnId===p.id).map(f=>[f.id,f.size])];
+   pawnFires.get(p.id)??[]];
  });
  // Meal targets of the presented animals, found in one pass over resources
  // and piles: the first record with that id in array order, as find() gives
  // (a find per eating animal scanned all 21 000 resources of a large colony).
- const presented=[...wildlifePresentationGroups(world)],plantMeals=new Map<number,Resource|undefined>(),pileMeals=new Map<number,MaterialPile|undefined>();
+ const presented=[...wildlifePresentationGroups(world,undefined,pileRows)],plantMeals=new Map<number,Resource|undefined>(),pileMeals=new Map<number,MaterialPile|undefined>();
  for(const [,rows] of presented)for(const a of rows){const meal=a.meal;if(meal)(meal.kind==='plant'?plantMeals:pileMeals).set(meal.id,undefined);}
- if(plantMeals.size)for(const r of world.resources)if(plantMeals.has(r.id)&&plantMeals.get(r.id)===undefined)plantMeals.set(r.id,r);
- if(pileMeals.size)for(const p of world.piles)if(pileMeals.has(p.id)&&pileMeals.get(p.id)===undefined)pileMeals.set(p.id,p);
+ if(plantMeals.size){
+  if(resourceById)for(const id of plantMeals.keys())plantMeals.set(id,resourceById(id));
+  else for(const r of world.resources)if(plantMeals.has(r.id)&&plantMeals.get(r.id)===undefined)plantMeals.set(r.id,r);
+ }
+ if(pileMeals.size){if(pileJoin)for(const id of pileMeals.keys())pileMeals.set(id,pileJoin.byId(id));else for(const p of world.piles)if(pileMeals.has(p.id)&&pileMeals.get(p.id)===undefined)pileMeals.set(p.id,p);}
  const animalGroups=presented.map(([species,rows])=>[species,rows.map(a=>{
   const corpse=a.corpsePile?.corpse,medical=corpse?.health??a.health;
   const blood=corpse?bodyBloodWord(corpse.health,part=>corpsePartAbsent(corpse,part)):bodyBloodWord(medical);
@@ -178,18 +224,19 @@ export function captureActorPhaseDependencies297(world:World,held?:ActorPhaseDep
   return [a.id,a.species,scale.read(corpse??a),blood,mask,a.domestic?.slaughter===true,quotas.has(a.id),
    meal?[meal.kind,meal.id,target&&'x' in target?cell(target):null]:null,structure(door),a.carrierId,
    a.corpsePile?[a.corpsePile.id,owner(a.corpsePile.owner),corpse?.facing]:null,
-   (world.fires?.items??[]).filter(f=>f.attachedAnimalId===a.id).map(f=>[f.id,f.size])];
+   animalFires.get(a.id)??[]];
  })]);
  const animalCargo=(world.wildlife?.animals??[]).flatMap(a=>{
   const t=a.haul;if(!a.domestic||a.state==='dead'||!t||t.phase==='pickup'||t.carryPileId===null)return [];
-  const pile=world.piles.find(p=>p.id===t.carryPileId&&p.owner.type==='inventory'&&p.owner.pawnId===a.id&&p.quantity>0);
+  const accept=(p:MaterialPile)=>p.id===t.carryPileId&&p.owner.type==='inventory'&&p.owner.pawnId===a.id&&p.quantity>0;
+  const resolved=pileJoin?.byId(t.carryPileId),pile=pileJoin?resolved&&accept(resolved)?resolved:undefined:world.piles.find(accept);
   return pile?[[a.id,a.species,a.state,scale.read(a),cargo(pile)]]:[];
  });
  const mechanical=(world.mechanoids??[]).map(a=>[a.id,a.mechKind,mechanoidVisualMask(a)]);
- const mechanicalBodies=world.piles.filter(p=>p.mechCorpse&&(p.owner.type==='ground'||p.owner.type==='pawn')).map(p=>[p.id,owner(p.owner),p.mechCorpse!.mechKind,p.mechCorpse!.heading,mechanoidVisualMask(p.mechCorpse!)]);
+ const mechanicalBodies=pileRows.filter(p=>p.mechCorpse&&(p.owner.type==='ground'||p.owner.type==='pawn')).map(p=>[p.id,owner(p.owner),p.mechCorpse!.mechKind,p.mechCorpse!.heading,mechanoidVisualMask(p.mechCorpse!)]);
  const departed=(world.raids?.departed??[]).map(a=>[a.pawnId,cell(a.cell)]);
  const prior=held&&ownedDependencies297.has(held)?held.data as Record<string,unknown>:undefined;
- const keep=(old:unknown,fresh:unknown):unknown=>old!==undefined&&equalDependencyValue297(old,fresh)?old:frozenDataCopy297(fresh);
+ const keep=(old:unknown,fresh:unknown):unknown=>old!==undefined&&equalOwnedDependencyValue297(old,fresh)?old:frozenDataCopy297(fresh);
  const keepRows=(old:unknown,fresh:readonly unknown[]):unknown=>{
   const rows=Array.isArray(old)?old as readonly unknown[]:undefined,out:unknown[]=new Array(fresh.length);let same=!!rows&&rows.length===fresh.length;
   for(let i=0;i<fresh.length;i++){const row=keep(rows?.[i],fresh[i]);if(row!==rows?.[i])same=false;out[i]=row;}
@@ -224,7 +271,7 @@ export const equalDependencyValue297=(x:unknown,y:unknown):boolean=>{
 /** Exact type/presence/value comparison; unknown or copied wrappers refuse. */
 export function equalActorPhaseDependencies297(a:ActorPhaseDependencies297,b:ActorPhaseDependencies297):boolean {
  if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return false;
- return equalDependencyValue297(a.data,b.data);
+ return equalOwnedDependencyValue297(a.data,b.data,true);
 }
 /** Row slots of a human dependency row that frontier patches can carry: the
  * work contact (work pose, contact pose, reach, yaw), the animation pose, and
@@ -244,14 +291,14 @@ export function patchableDependencyChanges297(a:ActorPhaseDependencies297,b:Acto
  if(!a||!b||!ownedDependencies297.has(a)||!ownedDependencies297.has(b))return undefined;
  const x=a.data as Record<string,unknown>,y=b.data as Record<string,unknown>;
  const keys=Object.keys(x);if(keys.length!==Object.keys(y).length)return undefined;
- for(const key of keys)if(key!=='human'&&(!Object.hasOwn(y,key)||!equalDependencyValue297(x[key],y[key])))return undefined;
+ for(const key of keys)if(key!=='human'&&(!Object.hasOwn(y,key)||!equalOwnedDependencyValue297(x[key],y[key],true)))return undefined;
  const before=x.human,after=y.human;if(!Array.isArray(before)||!Array.isArray(after)||before.length!==after.length)return undefined;
  const humans:number[]=[];let cargo=false;
  for(let i=0;i<before.length;i++){
   const p=before[i] as unknown[],q=after[i] as unknown[];
   if(p===q)continue;if(!Array.isArray(p)||!Array.isArray(q)||p.length!==q.length||!Object.is(p[0],q[0]))return undefined;
   let changed=false;
-  for(let slot=0;slot<p.length;slot++)if(!equalDependencyValue297(p[slot],q[slot])){
+  for(let slot=0;slot<p.length;slot++)if(!equalOwnedDependencyValue297(p[slot],q[slot],true)){
    if(slot===HUMAN_CARGO_SLOT297)cargo=true;
    else if(slot!==HUMAN_CONTACT_SLOT297&&slot!==HUMAN_POSE_SLOT297)return undefined;
    changed=true;

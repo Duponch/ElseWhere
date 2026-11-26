@@ -15,11 +15,14 @@ export class ResidentVegetationAssembler extends ResidentPresentationAssembler {
  readMotion(packet:SnapshotMessage<true>){return this.auxiliary.readMotion(packet);}
  /** Internal composition notification; ordinary readers grant no provenance. */
  protected preparedPublication(_original:SnapshotMessage<true>,_prepared:SnapshotMessage<true>):void {}
+ /** Native fixed reader may supply a one-use exact raw-subsection lease.
+  * Its decoder verifies the private receipt; an override alone is no proof. */
+ protected privateAuxiliaryLease379(_original:SnapshotMessage<true>,_raw:unknown):unknown {return undefined;}
  override adopt(packet:SnapshotMessage<true>,acceptExtra?:(world:World)=>boolean):SnapshotAdoption {
   const original=packet,rawAuxiliary=readResidentAuxiliarySidecar(packet),rawNatural=readResidentNaturalSidecar(packet);
   let auxiliary:PreparedResidentAuxiliary|undefined;
   if(rawAuxiliary!==undefined){
-   const prepared=this.auxiliary.prepare(packet,rawAuxiliary);if(prepared==='stale')return {status:'stale'};
+   const prepared=this.auxiliary.prepare(packet,rawAuxiliary,this.privateAuxiliaryLease379(original,rawAuxiliary));if(prepared==='stale')return {status:'stale'};
    if(!prepared)return {status:'resync',reason:'Invalid resident auxiliary sections'};
    auxiliary=prepared;packet=prepared.packet;
   }

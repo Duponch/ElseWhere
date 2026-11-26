@@ -1,7 +1,8 @@
 import {roomBarrierValue,roomBarrierCells} from './room-barriers.ts';
 import type { World } from './types.ts';
-import {peekStructureMembershipToken} from './structure-navigation.ts';
-import { terrainWriteCount, verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
+import {captureStructureNavigation,peekStructureMembershipToken,type StructureNavigationGeometry} from './structure-navigation.ts';
+import { terrainWriteCount, verifyTerrainWriteCaches,captureTerrainReadCursor,readTerrainJournal,type TerrainJournalCursor } from './terrain-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 
 export interface RoomSpace {
   readonly kind: 'space';
@@ -77,9 +78,13 @@ export class RoomTopologyCache {
   private barriers: number[] = [];
   private topology: RoomTopology | undefined;
   private barrierToken: object | undefined;
+  private barrierGeometry?:StructureNavigationGeometry;
+  private barrierOwner?:object;
   private tileRefs: (World['tiles'][number] | undefined)[] = [];
   private scannedTiles?: World['tiles'];
   private scannedWrites = -1;
+  private terrainOwner?:object;
+  private terrainCursor?:TerrainJournalCursor;
 
   read(world: Pick<World, 'width' | 'height' | 'tiles' | 'structures'>): RoomTopology {
     const { width, height } = world, size = width * height;
@@ -100,8 +105,16 @@ export class RoomTopologyCache {
     // Only an existing index is used: building one just for the token costs
     // more than the barrier scan it would skip.
     const token = world.width === width && Array.isArray(world.structures) ? peekStructureMembershipToken(world as World) : undefined;
-    if (!token || token !== this.barrierToken || resized) {
-      for (const building of world.structures) {
+    const owner=terrainJournalReadOwner(),geometry=owner&&token?captureStructureNavigation(world as World):undefined;
+    if (!token || token !== this.barrierToken || resized||owner&&this.barrierOwner!==owner) {
+      // The real append producer retains the earlier immutable geometry
+      // entries, in order. Their already classified room codes remain the
+      // same prefix even when thousands of non-room buildings are appended.
+      const old=this.barrierGeometry?.entries,next=geometry?.entries,previous=old?.length??0;
+      const append=!!(!resized&&owner&&this.barrierOwner===owner&&old&&next&&next.length>previous&&(previous===0||next[0]===old[0]&&next[previous-1]===old[previous-1]));
+      if(append)count=this.barriers.length;
+      for (let i=append?previous:0;i<world.structures.length;i++) {
+        const building=world.structures[i]!;
         const value = roomBarrierValue(building.kind);
         if (!value) continue;
         for(const cell of roomBarrierCells(building)){
@@ -112,24 +125,45 @@ export class RoomTopologyCache {
       }
       if (this.barriers.length !== count) { this.barriers.length = count; inputChanged = true; }
       this.barrierToken = token;
+      if(append&&verifyTerrainWriteCaches){
+        let ordinal=0;
+        for(const building of world.structures){const value=roomBarrierValue(building.kind);if(!value)continue;
+          for(const cell of roomBarrierCells(building))if(this.barriers[ordinal++]!==(cell.z*width+cell.x)*3+value)throw Error('Unmarked room barrier append');
+        }
+        if(ordinal!==this.barriers.length)throw Error('Unmarked room barrier append');
+      }
     }
+    this.barrierOwner=owner;this.barrierGeometry=geometry;
     // Tile objects never change `terrain` in place (terrain edits replace the
     // Tile), so only replaced tiles need their rock bit re-read.
     if (this.tileRefs.length !== size) { this.tileRefs = new Array(size); this.scannedTiles = undefined; }
     const tiles = world.tiles, refs = this.tileRefs, writes = terrainWriteCount(tiles);
     // Same Tile[] and write count: no tile was replaced since the last scan.
     const unchanged = tiles === this.scannedTiles && writes === this.scannedWrites && tiles.length === size;
-    if (!unchanged || verifyTerrainWriteCaches) {
+    const delta=owner&&this.terrainOwner===owner&&tiles===this.scannedTiles&&this.terrainCursor?readTerrainJournal(tiles,this.terrainCursor):undefined;
+    if(delta){
+      // A room read owns its own closed journal cursor. Only actual changed
+      // cells can change the rock mask; unrelated snow/fog/floor writes no
+      // longer scan all 62.5k tile references. Unknown transactions retain
+      // the complete fallback below. Returned topologies stay immutable.
+      for(const i of delta.indices){
+        const tile=tiles[i]!;refs[i]=tile;
+        const value=tile.terrain==='rock'?1:0;
+        if(this.rocks[i]!==value){this.rocks[i]=value;inputChanged=true;}
+      }
+      if(verifyTerrainWriteCaches)for(let i=0;i<size;i++)if(tiles[i]!==refs[i]||this.rocks[i]!==+(tiles[i]!.terrain==='rock'))throw Error('Unmarked terrain write under an unchanged Tile[] count');
+    }else if (!unchanged || verifyTerrainWriteCaches || owner!==undefined) {
       for (let i = 0; i < size; i++) {
         const tile = tiles[i]!;
-        if (refs[i] === tile) continue;
-        if (unchanged) throw Error('Unmarked terrain write under an unchanged Tile[] count');
+        if (!owner&&refs[i]===tile)continue;
+        if (unchanged&&refs[i]!==tile&&!owner) throw Error('Unmarked terrain write under an unchanged Tile[] count');
         refs[i] = tile;
         const value = tile.terrain === 'rock' ? 1 : 0;
         if (this.rocks[i] !== value) { this.rocks[i] = value; inputChanged = true; }
       }
-      this.scannedTiles = tiles; this.scannedWrites = writes;
     }
+    this.scannedTiles=tiles;this.scannedWrites=writes;this.terrainOwner=owner;
+    this.terrainCursor=owner?delta?.cursor??captureTerrainReadCursor(tiles):undefined;
     if (!inputChanged) return this.topology!;
     const mask = this.scratch;
     mask.set(this.rocks);

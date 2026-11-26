@@ -1,4 +1,6 @@
 import {aimingFactorOf361} from './shooting-traits-361.ts';
+import {validPawnIdentity378} from './pawn-identity-state-378.ts';
+import {validOrderedQueuePawn378} from './ordered-queue-378.ts';
 import {validFramePawn301} from './finish-frame-save-301.ts';
 import {validHumanIngestionPawn299} from './human-ingestion-save-299.ts';
 import {validIdleWanderPawn300} from './idle-wander-save-300.ts';
@@ -69,6 +71,11 @@ import { initializePlayerOrders, validatePlayerOrders, validSowingDestination } 
 import { validateTravel,MIN_PAWN_SPEED_V87,MAX_PAWN_DELAY_V87,MAX_PAWN_DELAY_V226,MAX_PAWN_DELAY_V318,MIN_PAWN_SPEED_V86,MAX_PAWN_DELAY_V86,maxPawnSpeedFactor307 } from './travel-validation.ts';
 import { validPrisonerPawnShape,validatePrisoners } from './prisoner-save.ts';
 import { CARRY_CAPACITY, footprintCells, JOB_WOOD_COST, MAX_STACK } from './definitions.ts';
+import {carryShapeBound379} from './carry-quantity-379.ts';
+import {validConstructionBatchShape379} from './construction-batch-379.ts';
+import {validHaulOpportunityShape379} from './haul-opportunity-379.ts';
+import {validConstructionMarkers379} from './construction-state-379.ts';
+import {validConstructionTransport379} from './construction-forbid-save-379.ts';
 import type { Resource,World } from './types.ts';
 import { INGEST_TICKS } from './eating.ts';
 import { SCHEMA_VERSION, TICKS_PER_DAY } from './types.ts';
@@ -99,6 +106,9 @@ export function validateAwayPawnRecordShape(item:Record<string,unknown>,context:
 export function validateShipCasketPawnShape277(item:Record<string,unknown>,world:World,version:number,heldAt:number,casketId:number,coreNow297?:number):string[] {return pawnRecordShape(item,world,version,heldAt,false,undefined,undefined,{casketId,heldAt},isCorePhysicalSchema297(version)?coreNow297??heldAt*10:undefined);}
 export function validateRetainedShipCasketPawnShape277(item:Record<string,unknown>,context:PawnRecordContext,version:number,heldAt:number,casketId:number,coreNow297?:number):string[] {return pawnRecordShape(item,context,version,heldAt,true,undefined,undefined,{casketId,heldAt,retained:true},isCorePhysicalSchema297(version)?coreNow297??heldAt*10:undefined);}
 function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,version:number,validationTick:number,detached:boolean,awayAreaIds?:ReadonlySet<number>,heldPlayer271?:{casketId:number;heldAt:number;retained?:true},heldShip277?:{casketId:number;heldAt:number;retained?:true},coreNow297?:number):string[] {
+  if(!validPawnIdentity378(item,version,validationTick))return ['Invalid or future actual Pawn identity.'];
+  if(!validConstructionMarkers379(item,version)||!validConstructionBatchShape379(item,version)||!validHaulOpportunityShape379(item,version)||!validConstructionTransport379({pawns:[item]},version))return ['Invalid or future construction fields on actual Pawn owner.'];
+  if(!validOrderedQueuePawn378(item,version)||(detached||heldPlayer271||heldShip277)&&'orderedQueue378' in item)return ['Invalid or future personal order queue for its actual Pawn owner.'];
   const physicalCoreNow297=validationCore297(version,validationTick,coreNow297),physicalLocalNow297=isCorePhysicalSchema297(version)?physicalCoreNow297/10:validationTick;
   if(isCorePhysicalSchema297(version)&&!Number.isSafeInteger(physicalCoreNow297))return ['Invalid actual physical Pawn frontier.'];
   if(!validFramePawn301(item,version,!detached&&!heldPlayer271&&!heldShip277,physicalCoreNow297))return ['Invalid actual FinishFrame301 Pawn fields.'];
@@ -236,9 +246,11 @@ function pawnRecordShape(item:Record<string,unknown>,world:PawnRecordContext,ver
     }
   } else if (item.comfort !== undefined || item.memories !== undefined || (record(item.need) && item.need.dining !== undefined)) errors.push('Legacy save contains version 4 fields.');
   if (haul !== null) {
+    if(record(haul)&&!validConstructionBatchShape379(haul,version))errors.push('Invalid or future construction batch shape.');
+    if(record(haul)&&!validHaulOpportunityShape379(haul,version))errors.push('Invalid or future opportunistic hauling shape.');
     if(record(haul)&&record(haul.destination)&&haul.destination.forHunting!==undefined&&!(version>=79&&haul.destination.type==='stockpile'&&haul.destination.forHunting===true))errors.push('Invalid hunting haul provenance.');
-    if (record(haul) && haul.pickupCell!==undefined && (version<6 || haul.phase!=='deliver' || !record(haul.pickupCell) || !coord(haul.pickupCell))) errors.push('Invalid pickup facing cell.');
-    if (!record(haul) || !integer(haul.sourcePileId, 1) || !integer(haul.quantity, 1, CARRY_CAPACITY) || !oneOf(haul.phase, ['pickup', 'deliver'])
+    if (record(haul) && haul.pickupCell!==undefined && (version<6 || haul.phase!=='deliver'&&!(version>=379&&haul.phase==='pickup'&&haul.carryPileId!==null&&(Object.hasOwn(haul,'constructionBatch379')&&validConstructionBatchShape379(haul,version)||Object.hasOwn(haul,'haulOpportunity379')&&validHaulOpportunityShape379(haul,version))) || !record(haul.pickupCell) || !coord(haul.pickupCell))) errors.push('Invalid pickup facing cell.');
+    if (!record(haul) || !integer(haul.sourcePileId, 1) || !integer(haul.quantity, 1, carryShapeBound379(version)) || !oneOf(haul.phase, ['pickup', 'deliver'])
       || !(haul.carryPileId === null || integer(haul.carryPileId, 1)) || !record(haul.destination)
       || !(haul.destination.type === 'job' ? integer(haul.destination.jobId, 1) : (haul.destination.type === 'fuel' && version>=10 ||haul.destination.type==='turret'&&version>=193||haul.destination.type==='hopper'&&version>=217||haul.destination.type==='fermenting-barrel'&&version>=265) ? integer(haul.destination.structureId,1) : haul.destination.type === 'stockpile' ? integer(haul.destination.stockpileId, 1) : version >= 9 && haul.destination.type === 'aside' && coord(haul.destination))) errors.push('Invalid haul task.');
   }

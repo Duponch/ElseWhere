@@ -1,5 +1,6 @@
 import { isColonist } from './affiliation.ts';
 import { workPriority } from './work-types.ts';
+import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
 import type { Cell,Pawn,World } from './types.ts';
 
 export interface ShootingClock {lastAdvancedAtCore:number;pausedCore:number}
@@ -24,7 +25,7 @@ export type ShootingCommand={type:'shoot';pawnIds:number[];targetId:number};
 export function shootingOrderAuthority(world:World,pawn:Pawn,order:ShootingState['order']=pawn.shooting?.order??null):boolean {
   if(!order)return true;
   if(order.hunt)return !!pawn.hunting&&pawn.hunting.animalId===order.targetId&&pawn.hunting.phase==='stalk'
-    &&!pawn.draft&&workPriority(pawn,'hunt')>0&&!!world.hunting?.targets.includes(order.targetId);
+    &&!pawn.draft&&(workPriority(pawn,'hunt')>0||pawn.hunting.forced378===true&&!backgroundWorkRefusal(pawn,'hunt'))&&!!world.hunting?.targets.includes(order.targetId);
   const auto=order.auto;
   if(auto)return isColonist(pawn)&&(auto.kind==='draft'?!!pawn.draft&&!pawn.draft.holdFire
     :!pawn.draft&&pawn.hostilityResponse==='attack'&&world.tick<auto.until);

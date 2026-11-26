@@ -15,6 +15,9 @@ export interface CardboardPieceOptions {
   outline?:THREE.Shape|THREE.Shape[];
   surface?:'panel';
   paper?:boolean;
+  /** An exclusive transparent-surface producer retains and clears its own ink.
+   * Its callback must handle first paint, resize and every dirty pixel. */
+  retainPaint?:boolean;
   cacheBackground?:boolean;
   hitOnly?:boolean;
   textureWidth?:number;
@@ -390,7 +393,7 @@ const SHARED_CARDBOARD_GEOMETRIES = 4096;
 export function createCardboardPiece({
   w, h, depth = 0.044, bgColor = PALETTE.kraftBase,
   bevel = 0.026, seed = 1, drawFn, interactive = false,
-  onClick = null, hasBorder = true, tooltip = '', paper = true, textureWidth, textureHeight, uvPadding, cacheBackground = false, hitOnly = false, outline, surface, sharedGeometry = false
+  onClick = null, hasBorder = true, tooltip = '', paper = true, textureWidth, textureHeight, uvPadding, cacheBackground = false, hitOnly = false, outline, surface, sharedGeometry = false, retainPaint = false
 }: CardboardPieceOptions, cardboardEdgeMat: THREE.MeshStandardMaterial, shadowMat: THREE.MeshBasicMaterial, geometryCache?: CardboardGeometryCache): CardboardPiece {
   if(hitOnly)return createHitOnlyPiece({w,h,depth,seed,interactive,onClick,tooltip,drawFn,bgColor});
   const group = new THREE.Group() as CardboardPiece;
@@ -452,7 +455,7 @@ export function createCardboardPiece({
       ctx.fillStyle=backgroundFill;
       draw?.(ctx,wPx,hPx,inkRandom!.clone());
     }else if(paper)paintCardboardCanvas(ctx,wPx,hPx,bg,draw,hasBorder,seed,undefined,surface);
-    else{ctx.clearRect(0,0,wPx,hPx);draw?.(ctx,wPx,hPx,seededRandom(seed));}
+    else{if(!retainPaint)ctx.clearRect(0,0,wPx,hPx);draw?.(ctx,wPx,hPx,seededRandom(seed));}
   };
   paint(drawFn,bgColor);
 

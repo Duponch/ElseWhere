@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import { constructionHaulId } from './construction-rules.ts';
 import { footprintCells } from './definitions.ts';
 import { refreshStock } from './materials.ts';
@@ -70,7 +71,7 @@ export function cancelIntentJobs(world:World,ids:ReadonlySet<number>):CommandRes
 export function clearPileHaulFlags(world:World,ids:ReadonlySet<number>):number {
   let removed=0;
   for(const pile of world.piles)if(ids.has(pile.id)&&pile.kind==='chunk'&&pile.haulRequested){
-    delete pile.haulRequested;removed++;
+    delete markPileContentWrite379(pile).haulRequested;removed++;
     for(const pawn of world.pawns)if(pawn.haul?.sourcePileId===pile.id&&pawn.haul.phase==='pickup'&&pawn.orders.active!=='haul'){
       if(!releaseWork(world,pawn))throw Error('Empty automatic pickup could not release its designation.');
     }

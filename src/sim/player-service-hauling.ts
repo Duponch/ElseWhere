@@ -6,6 +6,7 @@ import { candidateAccess } from './candidate-access.ts';
 import { asBuilder, constructionHaulPriority, constructionObstruction, isConstruction } from './construction-rules.ts';
 import { growingJobValid } from './farming.ts';
 import { CARRY_CAPACITY } from './definitions.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import { refuelable, fuelCapacity, fuelStationReserved, fuelItem } from './fuel.ts';
 import { planTurretReload } from './mini-turret-reload.ts';
 import { findAsideDestination } from './haul-aside.ts';
@@ -38,7 +39,7 @@ export function planServiceHaul(world:World,pawn:Pawn,target:ServiceHaulTarget,a
   if(target.type==='fuel'&&!fire?.fuel)return no('Bâtiment introuvable.');
   const areaReason=fire?allowedAreaReason(world,pawn,fire):job?allowedAreaReason(world,pawn,job):undefined;if(areaReason)return no(areaReason);
   if(fire&&fuelStationReserved(world,fire.id))return no('Bâtiment déjà réservé.');
-  const capacity=fire?fuelCapacity(world,fire.id,undefined,true):CARRY_CAPACITY;
+  const capacity=fire?fuelCapacity(world,fire.id,undefined,true):Number(world.schemaVersion)>=379?Number.MAX_SAFE_INTEGER:CARRY_CAPACITY;
   if(!capacity)return no(`Le réservoir ne peut pas encore recevoir une unité entière de ${inputLabel}.`);
   const blocked=blockedCells(world),reach=access??candidateAccess(world,pawn,blocked,new Set());
   if(fire&&!canReach(world,fire,reach,true))return no('Aucun accès praticable au bâtiment.');
@@ -50,7 +51,7 @@ export function planServiceHaul(world:World,pawn:Pawn,target:ServiceHaulTarget,a
     const reserved=reservedSource(world,pile.id);
     // Clearing owns the obstructing pile, including trips smaller than a stack.
     if(job&&reserved>0)continue;
-    const quantity=Math.min(CARRY_CAPACITY,capacity,pile.quantity-reserved);if(quantity<=0)continue;
+    const quantity=Math.min(carryStackLimit379(world,pawn,pile.item),capacity,pile.quantity-reserved);if(quantity<=0)continue;
     if(!canReach(world,pile.owner,reach,true))continue;
     const aside=job?findAsideDestination(world,pile.owner,pile,quantity,blocked,budget,pawn):null;
     if(job&&!aside)return no('Aucune cellule proche accessible pour déposer la pile.');

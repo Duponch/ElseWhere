@@ -6,6 +6,7 @@ import {isShipComputerSensorsKind298} from './sim/ship-computer-sensors-content-
 import {isCorePhysicalSchema297} from './sim/physical-schema-297.ts';
 import {updateShipAssemblyInspection276} from './ui/ship-assembly-inspection-276';
 import {NativeStage} from './ui3d/NativeStage';
+import {refreshNativePage} from './ui3d/native-page-refresh';
 import {nativeTextEntitiesFor} from './ui3d/native-text-entities';
 import {createNativeFrontMenu} from './ui3d/native-front';
 import {browserRimWorldTexts} from './lore/rimworld-texts';
@@ -198,6 +199,9 @@ import { isRoofArea } from './sim/roof-rules';
 import { stationRecipe } from './sim/production-recipes';
 import { RoomInspection } from './ui/room-inspection';
 import { constructionControls, constructionDeliveryLabel, structureFootprintLabel,placementMaterial } from './ui/construction-controls';
+import {ConstructionMaterialChoices} from './ui/construction-material-choice';
+import {constructionThingLabel,constructionCostText} from './ui/construction-material-presentation';
+import {registeredMapId} from './sim/world-map-context';
 import { constructionRecipe } from './sim/construction-materials';
 import { rockInspection } from './ui/geology-inspection';
 import { hoverTemperatureText } from './ui/hover-temperature';
@@ -219,6 +223,7 @@ import { mechanoidView } from './sim/mechanoid-presentation';
 import './ui/animal-inspector.css';
 import { animalSpecies } from './sim/animal-species';
 import { OrderMenu } from './ui/order-menu';
+import {personalOrderCommands378} from './ui/order-queue-378';
 import type { SelectionGesture } from './render/PawnSelectionInput';
 import { createScheduleControls } from './ui/schedule-controls';
 import {createDrugPolicyControls265} from './ui/drug-policy-controls-265';
@@ -267,7 +272,7 @@ import { ITEM_DEFINITIONS, availableNutrition } from './sim/items';
 import { foodFreshnessLabel } from './ui/food-freshness';
 import { SimulationClient } from './bridge/SimulationClient';
 import type {SnapshotReader} from './bridge/SimulationClient';
-import {readNativeCorePhaseInput297,createNativeCloneResidentLane,type NativeCloneResidentLane} from './bridge/native-clone-resident';
+import {readNativeCorePhaseInput297,createPrivateNativeCloneResidentLane379,type PrivateNativeCloneResidentLane379} from './bridge/native-clone-resident';
 import {MainFrameAdmissionFIFO} from './bridge/main-frame-admission-fifo';
 import {readResidentWorkerMessage} from './bridge/resident-protocol';
 import type { AudioCue } from './bridge/audio-cues';
@@ -277,7 +282,7 @@ import { MusicDirector, type MusicMood } from './audio/MusicDirector';
 import { loadGainOffsets } from './audio/gain-offsets';
 import { developerPagesForMode } from './ui/developer-pages';
 import { ambientCameraGain, FoliageAmbience, gameAmbienceSources } from './audio/ambience';
-import { createNearbyFireCollector, createNearbyMachineCollector, MACHINE_LOOP_STRUCTURES, runningMachineAudioSource } from './audio/continuous';
+import { createNearbyFireCollector, createNearbyMachineCollector, MACHINE_LOOP_STRUCTURES, runningMachineAudioSource,ResidentContinuousStructures379 } from './audio/continuous';
 import { createDeveloperMode } from './ui/developer-mode';
 import { buildNativeDevPanel,devTargetId,DEV_PANEL_ID,type DevPanelHost,type DevPanelView } from './ui3d/native-dev-panel';
 import type { DevAction } from './sim/dev-actions';
@@ -348,6 +353,15 @@ let nativeCaravanProgress:CaravanEncounterProgressMessage261|undefined;
 let nativeEncounterKey:string|undefined;
 let nativeBeforeIncident:NativePage|undefined;
 let nativeConstructionMaterial:ConstructionMaterial='wood';
+const nativeConstructionChoices=new ConstructionMaterialChoices();
+let nativeConstructionChoiceEpoch=-1,nativeConstructionChoiceKey='',nativeResolvedMaterial:ConstructionMaterial|undefined;
+function selectedConstructionMaterial(tool:Tool):ConstructionMaterial|undefined {
+  if(!snapshot)return placementMaterial(tool,'wood');
+  if(nativeConstructionChoiceEpoch!==session.generation){nativeConstructionChoices.reset();nativeConstructionChoiceEpoch=session.generation;nativeConstructionChoiceKey='';}
+  const key=`${session.generation}:${nativePublicationRevision}:${registeredMapId(snapshot)??0}:${tool}`;
+  if(key!==nativeConstructionChoiceKey){nativeConstructionChoiceKey=key;nativeResolvedMaterial=nativeConstructionChoices.resolve(snapshot,tool);}
+  return nativeResolvedMaterial;
+}
 let nativeRoofsVisible=false,nativeZonesVisible=true,nativePerspective=false;
 const nativeEnvironmentModes:NativeEnvironmentModes={room:false,beauty:false},nativeEnvironmentReader=new NativeEnvironmentStatsReader();
 let nativeEnvironmentBlocked=true,nativePublicationRevision=0,nativeEnvironmentKey='',nativeEnvironmentAt=0;
@@ -391,26 +405,20 @@ let mainAdmissionCanFrame=()=>false;
 const client = (() => {
   // External WeakMap survives virtual createDecoder during super(), without a
   // subclass field initializer overwriting the freshly created lane afterward.
-  const lanes=new WeakMap<SimulationClient,NativeCloneResidentLane>();
+  const lanes=new WeakMap<SimulationClient,PrivateNativeCloneResidentLane379>();
   const queues=new WeakMap<SimulationClient,MainFrameAdmissionFIFO>();
   class MainSimulationClient extends SimulationClient {
     protected override createDecoder():SnapshotReader {
-      queues.get(this)?.close();lanes.get(this)?.close();const lane=createNativeCloneResidentLane();lanes.set(this,lane);
+      queues.get(this)?.close();lanes.get(this)?.close();const lane=createPrivateNativeCloneResidentLane379();lanes.set(this,lane);
       queues.set(this,new MainFrameAdmissionFIFO(()=>mainAdmissionCanFrame(),()=>this.stop('La file de présentation est saturée. Le résultat des opérations reste inconnu ; rechargez une colonie validée.'),undefined,()=>renderer?.suspendUntilNextFrame()));
       return lane.reader;
     }
     protected override createWorker():Worker {const lane=lanes.get(this);if(!lane)throw Error('Missing native clone lane');return lane.createWorker();}
+    protected override bindWorkerOutput(source:Worker,dispatch:(raw:unknown)=>void,invalid:()=>void):void {const lane=lanes.get(this),queue=queues.get(this);if(!lane||!queue)throw Error('Missing fixed Native output');lane.bindOwnedOutput379(source,dispatch,(run,info)=>{queue.enqueue(run,info);},invalid);}
+    protected override readNativeSnapshotDispatch379(raw:unknown){return lanes.get(this)?.readOwnedSnapshotDispatch379(raw);}
     // Saves are validated off the simulation thread (bridge/save-check.ts).
     protected override createSaveChecker():Worker {return new Worker(new URL('./bridge/save-check.worker.ts',import.meta.url),{type:'module'});}
     protected override readWorkerMessage(value:unknown){return readResidentWorkerMessage(value);}
-    protected override withWorkerMessage(source:Worker,event:MessageEvent<unknown>,dispatch:()=>void):void {
-      const lane=lanes.get(this);if(lane)lane.withWorkerMessage(source,event,dispatch);else dispatch();
-    }
-    protected override dispatchWorkerMessage(source:Worker,event:MessageEvent<unknown>,dispatch:(raw:unknown)=>void):void {
-      const ticket=lanes.get(this)?.takeDeferredMessage(source,event,dispatch),queue=queues.get(this);
-      if(queue){if(ticket)queue.enqueue(ticket.run,ticket);else {const raw=event.data;queue.enqueue(()=>dispatch(raw));}return;}
-      super.dispatchWorkerMessage(source,event,dispatch);
-    }
     protected override dispatchWorkerFailure(_source:Worker,dispatch:()=>void):void {const queue=queues.get(this);if(queue)queue.enqueue(dispatch);else dispatch();}
     protected override workerStopped(_source:Worker):void {queues.get(this)?.close();lanes.get(this)?.close();}
     admissionFIFODiagnostics475(){return queues.get(this)?.diagnostics();}
@@ -543,6 +551,7 @@ let lastAudioSourceFocus={x:Infinity,z:Infinity};
 let lastAudioSourceHeight=NaN;
 let lastAudioCamera:AudioCamera|undefined;
 const foliageAmbience = new FoliageAmbience();
+const continuousStructureCensus=new ResidentContinuousStructures379();
 function syncAudioSources(world: World,camera=lastAudioCamera): void {
   if (!soundEnabled) { audio.setContinuousSources([]); return; }
   // Rebuild on a snapshot or meaningful listener movement, never per image.
@@ -557,7 +566,7 @@ function syncAudioSources(world: World,camera=lastAudioCamera): void {
   const machinery=createNearbyMachineCollector(focus);
   for(const fire of world.fires?.items??[])if(fire.attachedPawnId===undefined&&fire.attachedAnimalId===undefined)
     nearby.add(`fire:${fire.id}`,fire.x,fire.z,Math.max(.2,Math.min(1,fire.size)));
-  for(const structure of world.structures){
+  for(const structure of continuousStructureCensus.read(world)){
     if(structure.kind==='campfire'&&structure.fuel?.ticks)
       nearby.add(`campfire:${structure.id}`,structure.x,structure.z,.48);
     if(MACHINE_LOOP_STRUCTURES.has(structure.kind)){
@@ -812,7 +821,7 @@ function setSoundEnabled(enabled: boolean): boolean {
     if (snapshot) { foliageAmbience.adopt(snapshot,true); syncAudioSources(snapshot); }
     unlockAudioFromGesture();
   }
-  else audio.reset();
+  else {audio.reset();foliageAmbience.reset();continuousStructureCensus.reset();}
   try { localStorage.setItem(SOUND_ENABLED_PREFERENCE_KEY, String(enabled)); return true; }
   catch { return false; }
 }
@@ -1056,7 +1065,7 @@ if(nativeMode){
     onPresentation:(ownerId,phase,fraction)=>nativeUi?.presentShipCurtain298(ownerId,phase,fraction),
   });
   nativeUi.setTextFont(UI_FONT_CHOICES.find(choice=>choice.id===uiFont)!.family);
-  nativeHud=new NativeHudCards(nativeUi.art,nativeUi.anchors,{selectPawn,focus:(target,tab)=>{nativeCustomPage=undefined;focusNotification(target);if(tab)setNativeInspectorTab(tab);refreshNativeUi();},
+  nativeHud=new NativeHudCards(nativeUi.art,nativeUi.anchors,{selectPawn,readState:readNativeState,readFood:world=>world===snapshot?confirmedFoodReadability():undefined,isCurrentPage:page=>nativeCustomPage===page,refresh:refreshNativeUi,focus:(target,tab)=>{nativeCustomPage=undefined;focusNotification(target);if(tab)setNativeInspectorTab(tab);refreshNativeUi();},
     domain:openNativeDomainAlert,campaign:target=>{nativeCustomPage=undefined;void attempt(async()=>{const reason=await viewUrgentThreat(target);if(reason)throw Error(reason);});},
     context:context=>{nativeCustomPage=undefined;if(context.tool){setTool(context.tool);return;}if(context.worldTab)setNativeWorldTab(context.worldTab==='group'?'groups':'individual');void attempt(async()=>{await switchPanel(context.panel);if(context.category)setCategory(context.category);});},
     speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();void attempt(()=>changeSpeed(value,token));},view:applyNativeViewControl,
@@ -1361,6 +1370,7 @@ function applyNativeViewControl(action:NativeHudViewAction):void {
   if(action==='room-stats'||action==='beauty'){if(!nativeEnvironmentModes.room&&!nativeEnvironmentModes.beauty)clearNativeEnvironmentStats(true);else updateNativeEnvironmentStats(true);}
 }
 function readNativeState():NativeUiState {
+  if(nativeUi){const material=selectedConstructionMaterial(currentTool);if(material&&material!==nativeConstructionMaterial){nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);}}
   return {world:snapshot,epoch:session.generation,publicationRevision:nativePublicationRevision,campaign:campaignOnly,panel:currentPanel,category:currentCategory,tool:currentTool,
     orientation:placementOrientation,constructionMaterial:nativeConstructionMaterial,creationStorage:nativeCreationStorage,selectedPawnIds:[...selection.ids],selectedCell,
     selectedObjects,campProgress:nativeCampProgress,caravanProgress:nativeCaravanProgress,
@@ -1382,7 +1392,7 @@ function nativeActions():NativeUiActions {
     },
     panel:panel=>switchPanel(panel),category:setCategory,tool:setTool,selectPawn,
     speed:value=>{learningRuntime?.speed(value);const token=client.getThreatPauseToken();return changeSpeed(value,token);},rotate:direction=>{if(isShipComputerSensorsKind298(currentTool))return;placementOrientation=((placementOrientation+direction+4)%4) as Orientation;renderer?.setPlacementRotation(placementOrientation);refreshNativeUi();},
-    material:material=>{if(isShipComputerSensorsKind298(currentTool))return;if(!tutorialAllows({tag:tutorialStuffTag349(currentTool,material)}))return;nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
+    material:material=>{if(isShipComputerSensorsKind298(currentTool))return;if(!tutorialAllows({tag:tutorialStuffTag349(currentTool,material)})||!nativeConstructionChoices.choose(currentTool,material))return;nativeConstructionChoiceKey='';nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);refreshNativeUi();},
     creationStorage:settings=>{nativeCreationStorage=structuredClone(settings);refreshNativeUi();},
     front:openFront,save,exportSave:exportCurrentColony,
     openSaveManager:openNativeSaveManager,openOptions:openNativeOptions,openHelp,
@@ -1435,14 +1445,9 @@ function refreshNativeUi():void {
     if(nativeEncounterKey!==encounter.id){nativeEncounterKey=encounter.id;nativeCustomPage=undefined;}
     if(!nativeCustomPage){encounter.closable=false;nativeUi.showPage(encounter);return;}
   }else if(nativeEncounterKey){nativeEncounterKey=undefined;nativeCustomPage=undefined;}
-  // The information sheet and the animal's actual possessions/training are
-  // projections of the latest accepted snapshot, not frozen popups. Retire
-  // a sheet if its selected owner disappears; other custom flows keep theirs.
-  if(nativeCustomPage&&(nativeCustomPage.layout==='info'&&nativeCustomPage.id.startsWith('inspect-')||nativeCustomPage.layout==='inspector'&&nativeCustomPage.id.startsWith('inspect-animal-'))){
-    const inspected=buildNativeInspector(state,actions);
-    nativeCustomPage=inspected&&(inspected.layout==='info'||inspected.id.startsWith('inspect-animal-'))?inspected:undefined;
-    if(inspected){nativeUi.showPage(inspected);return;}
-  }
+  // Each live page owns its projection; a custom slot is not a frozen copy of
+  // an inspector/table. Editors and confirmations retain their own sessions.
+  if(nativeCustomPage)nativeCustomPage=refreshNativePage(nativeCustomPage,state,actions)??undefined;
   if(nativeCustomPage){nativeUi.showPage(nativeCustomPage);return;}
   const page=currentPanel?buildNativePanel(state,actions):nativeHudHiddenInspectorKey!==undefined&&nativeHudHiddenInspectorKey===nativePawnInspectorKey()?null:buildNativeInspector(state,actions);
   if(page&&!page.onClose)page.onClose=()=>setPanel(null);
@@ -1738,7 +1743,7 @@ function applyTool(tool: Tool) {
     if(tool!=='install'){installationId=undefined;renderer?.setFurniturePlacement(undefined);}
     if(tool!=='replant-tree'){replantPileId=undefined;renderer?.setTreePlacement(undefined);}
     renderer?.setFloorSelection(isBuildableFloor(tool)?tool:undefined);renderer?.setTool(isBuildableFloor(tool)?'lay-floor':tool);
-    renderer?.setRoofAreasVisible(isRoofArea(tool));const material=isShipComputerSensorsKind298(tool)?'steel':placementMaterial(tool,nativeConstructionMaterial);
+    renderer?.setRoofAreasVisible(isRoofArea(tool));const material=isShipComputerSensorsKind298(tool)?'steel':selectedConstructionMaterial(tool);
     if(material)nativeConstructionMaterial=material;renderer?.setConstructionMaterial(material);
     refreshNativeUi();return;
   }
@@ -1897,7 +1902,7 @@ function pickCell(x: number, z: number, preferred?: MapObjectSelection) {
       if (tool==='stockpile'||tool==='remove-stockpile')return client.command({type:'area',action:tool,from:{x,z},to:{x,z},...(zoneEditTarget===undefined?{}:{targetZoneId:zoneEditTarget}),...(tool==='stockpile'?readStorageSettings('stockpile'):{})});
       const objects = tool==='deconstruct'||tool==='uninstall' ? snapshot?.structures.filter(s=>footprintCells(s).some(c=>c.x===x&&c.z===z))??[] : [];
       const target = objects.find(s=>s.kind!=='power-conduit')??objects[0];
-      const material=isShipComputerSensorsKind298(tool)?'steel':nativeUi?placementMaterial(tool,nativeConstructionMaterial):constructionUI.material(tool);
+      const material=isShipComputerSensorsKind298(tool)?'steel':nativeUi?selectedConstructionMaterial(tool):constructionUI.material(tool);
       return client.command(tool === 'cancel' ? { type: 'cancel', x, z } : { type: 'designate', kind: tool as JobKind, ...(target?{targetId:target.id}:{}), orientation: isShipComputerSensorsKind298(tool)||tool==='geothermal-generator'||tool==='mini-turret'||tool==='sandbags'||tool==='solar-generator'||tool==='power-conduit'||tool==='power-switch'||tool==='wood-generator'||tool==='chemfuel-generator'||tool==='sun-lamp'||tool==='standing-lamp'||tool==='table-large'||tool==='door'||tool==='autodoor'||tool==='passive-cooler'?0:placementOrientation, x, z, ...(material ? {material} : {}) });
     });
     return;
@@ -2395,8 +2400,9 @@ function renderState() {
     else if(!isColonist(pawn)){el('selected-name').textContent=pawn.name;el('selected-action').textContent=actionLabel(pawn,carriedPatients);}
     else {
       el('selected-name').textContent = pawn.name; el('selected-action').textContent = actionLabel(pawn,carriedPatients);
-      el('selected-orders').textContent=`${pawn.orders.active!==null?'Travail imposé · ':''}${pawn.orders.queue.length} ordre(s) en file${pawn.priorityWork?` · Priorité case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}`:''}`;
-      el<HTMLButtonElement>('clear-orders').disabled=pawn.orders.active===null&&!pawn.orders.queue.length&&!pawn.priorityWork&&!pawn.animalRescue&&!pawn.openCasket&&!pawn.shipCasketTask277;
+      const queued=pawn.orders.queue.length+(pawn.orderedQueue378?.length??0)+(pawn.draft?.queue.length??0),forcedAnimal=!!(pawn.hunting?.forced378||pawn.animalHandling?.forced378);
+      el('selected-orders').textContent=`${pawn.orders.active!==null||forcedAnimal?'Travail imposé · ':''}${queued} ordre(s) en file${pawn.priorityWork?` · Priorité case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}`:''}`;
+      el<HTMLButtonElement>('clear-orders').disabled=pawn.orders.active===null&&!queued&&!forcedAnimal&&!pawn.priorityWork&&!pawn.animalRescue&&!pawn.openCasket&&!pawn.shipCasketTask277;
     }
     if(pawn){
       updatePawnInspection(el('inspector'),world,pawn,c=>void attempt(()=>client.command(c)));
@@ -2432,7 +2438,7 @@ function renderState() {
       updateShipReactorInspection275(el('inspector'),world,structure,c=>void attempt(()=>client.command(c)));
       updateShipAssemblyInspection276(el('inspector'),world,structure);
       const zone=selectedObject.kind==='growing'?world.growingZones.find(z=>z.id===selectedObject!.id):undefined;
-      el('cell-title').textContent = geyser?geyser.title:packed ? `Meuble emballé · ${buildingLabels[packed.building.kind]}` : pile ? ITEM_DEFINITIONS[pile.item].label : structure ? buildingLabels[structure.kind] : resource ? (floraDefinition(resource)?.label??resourceLabels[resource.kind]) : job ? `${job.construction==='blueprint'?'Plan · ':job.construction==='frame'?'Cadre · ':''}${jobLabels[job.kind]}` : zone ? 'Zone de culture' : storage ? `Zone de stockage ${stockpileZoneId(storageCell!)}` : 'Massif rocheux';
+      el('cell-title').textContent = geyser?geyser.title:packed ? `Meuble emballé · ${constructionThingLabel(buildingLabels[packed.building.kind],packed.building)}` : pile ? ITEM_DEFINITIONS[pile.item].label : structure ? constructionThingLabel(buildingLabels[structure.kind],structure) : resource ? (floraDefinition(resource)?.label??resourceLabels[resource.kind]) : job ? `${constructionThingLabel(jobLabels[job.kind],job)}${job.construction==='blueprint'?' (plan)':job.construction==='frame'?' (construction)':''}` : zone ? 'Zone de culture' : storage ? `Zone de stockage ${stockpileZoneId(storageCell!)}` : 'Massif rocheux';
       let cellDescription = geyser?geyser.description:resource ? (isPlant(resource)||resource.kind==='tree') ? plantInspection(world,resource) : `Quantité : ${resource.amount}` : pile ? `Quantité : ${pile.quantity}${pile.kind==='food'?` · ${foodFreshnessLabel(pile,world.tick)}`:pile.kind==='corpse'?` · ${{fresh:'Fraîche',rotting:'Pourrie (impropre à la boucherie)',desiccated:'Desséchée'}[corpseStage(pile,world.tick)]}`:''}` : structure ? `${structureFootprintLabel(structure)} cases` : job ? queryJobStatus(world,job).reason??'' : zone ? `Culture : ${growingPlantLabel291(zone.plant)} · ${zone.cells.length} cases${growingTemperatureInspection(world,selectedCell,zone.plant)}` : storage ? `Taille : ${stockpileZoneCells(world,storageCell!.id).length} cases` : '';
       if(pile&&isMinifiedTree(pile)){cellDescription=minifiedTreeDescription(pile,world.tick);if(pile.plantPack.pendingExpiry)el('cell-title').textContent='Arbre mort · restes en attente';}
       let cellHealth:CellHealth|undefined;
@@ -2451,7 +2457,7 @@ function renderState() {
       }
       if(inspectedBuilding?.kind==='firefoam-popper')cellDescription+=' · Diffuseur à usage unique · Détection accessible < 3 cases · Mousse à 9,9 cases · Reconstruction : 75 acier + 1 composant';
       if(inspectedBuilding?.kind==='ied-high-explosive'||inspectedBuilding?.kind==='ied-incendiary')cellDescription+=` · ${inspectedBuilding.kind==='ied-incendiary'?'Flammes':'Bombe'} sur 3,9 cases · Risque allié : 0,5 % par entrée · Explose aussi sous une balle${inspectedBuilding.iedWick357?' · Mèche allumée':''} · Reconstruction : 2 obus`;
-      if(inspectedBuilding?.kind==='spike-trap')cellDescription+=' · Usage unique · Risque allié : 0,5 % par entrée · Aucun effet sur les visiteurs neutres · Reconstruction : 45 matériaux';
+      if(inspectedBuilding?.kind==='spike-trap')cellDescription+=` · Usage unique · Risque allié : 0,5 % par entrée · Aucun effet sur les visiteurs neutres · Reconstruction : ${constructionCostText(inspectedBuilding)}`;
       if(structure){const road=localRoadPropDescription256(structure);if(road)cellDescription+=' · '+road;}
       if(structure){const monument=ancientMonumentDescription256(structure);if(monument)cellDescription+=' · '+monument;}
       if(structure?.kind==='sandbags')cellDescription+=' · Couvert 55 % (selon la direction du tir) · Traversée ralentie, sans arrêt sur cette case';
@@ -2743,7 +2749,7 @@ tutorialLessons=createTutorialEngine349({
   selectedStructure:()=>selectedObjects.length===1&&selectedObjects[0]!.kind==='structure'?selectedObjects[0]!.id:undefined,
   now:()=>performance.now(),
   // Lesson_Instruction.resetBuildDesignatorStuffs: the material goes back to wood.
-  resetMaterial:()=>{nativeConstructionMaterial='wood';renderer?.setConstructionMaterial(placementMaterial(currentTool,nativeConstructionMaterial));},
+  resetMaterial:()=>{nativeConstructionChoices.reset();nativeConstructionChoiceKey='';nativeConstructionMaterial=selectedConstructionMaterial(currentTool)??'wood';renderer?.setConstructionMaterial(placementMaterial(currentTool,nativeConstructionMaterial));},
   changed:()=>syncTutorialLesson(),
   // LessonAutoActivator.Notify_TutorialEnding: the learning helper starts again from now.
   ended:()=>{learningRuntime?.helper.setSuspended(false);learningRuntime?.helper.tutorialEnded();syncNativeGuidance(true);},
@@ -3063,7 +3069,7 @@ function receiveMainSnapshot(world: World, cost: number, speed: number, replaced
   campaignOnly=undefined;shell.classList.remove('campaign-only');
   if(replaced){hoveredCell=null;hoverReadoutLayout?.reset();}
   if(replaced){nativeHudHiddenInspectorKey=undefined;campaignPresentationEpoch++;}
-  if (replaced) {audio.reset();lastAudioCamera=undefined;lastAudioSourceFocus={x:Infinity,z:Infinity};lastAudioSourceHeight=NaN;}
+  if (replaced) {audio.reset();foliageAmbience.reset();continuousStructureCensus.reset();lastAudioCamera=undefined;lastAudioSourceFocus={x:Infinity,z:Infinity};lastAudioSourceHeight=NaN;}
   const speedChanged=currentSpeed!==speed;
   if(speed>0)deferredResumeGuard.confirm(false);
   const role=(p:Pawn|undefined)=>p?p.prisoner?'prisoner':isColonist(p)?'colonist':'other':'absent';
@@ -3114,7 +3120,7 @@ function receiveMainCampaignOnly(summary:CampaignSummary,cost:number,speed:numbe
  firstGesturesLearning?.cancelPending();
  clearNativeEnvironmentStats(true);nativePublicationRevision++;
  const hadMap=!!snapshot;if(replaced||hadMap){nativeHudHiddenInspectorKey=undefined;campaignPresentationEpoch++;}
- if(hadMap||replaced){renderer?.dispose();renderer=undefined;audio.reset();latestMotion=undefined;latestCoreFullInput297=latestCorePhaseInput297=undefined;hoveredCell=null;hoverReadoutLayout?.reset();selection.clear();selectedPawn=undefined;selectedCell=undefined;selectedObject=undefined;selectedObjects=[];orderMenu.close();startingArrivalUI.reset();}
+ if(hadMap||replaced){renderer?.dispose();renderer=undefined;audio.reset();foliageAmbience.reset();continuousStructureCensus.reset();latestMotion=undefined;latestCoreFullInput297=latestCorePhaseInput297=undefined;hoveredCell=null;hoverReadoutLayout?.reset();selection.clear();selectedPawn=undefined;selectedCell=undefined;selectedObject=undefined;selectedObjects=[];orderMenu.close();startingArrivalUI.reset();}
  snapshot=undefined;latestFoodReadability=undefined;campaignOnly=summary;stepMs=cost;currentSpeed=speed;if(speed>0)deferredResumeGuard.confirm(false);session.hasWorld=true;frontMenu.setHasGame(true);
  if(worldTab==='individual')worldTab='maps';if(currentPanel!=='menu'&&currentPanel!=='world'&&currentPanel!=='quests')setPanel('world');
  if(!frontMenu.isOpen())shell.hidden=false;renderCampaignOnly();syncStorageButtons();
@@ -3246,7 +3252,7 @@ async function prepareWorldView(): Promise<void> {
         syncAudioSources(snapshot,view.camera);
       audio.update({ presentedTick: view.tick, paused: view.paused || frontMenu.isOpen() || replacingWorld, hidden: document.hidden, speed: currentSpeed });
     };
-    renderer.onSelection=gesture=>{if(shootingControls.active){const targetId=gesture.ids[0];if(targetId!==undefined){const type=shootingControls.mode!;shootingControls.cancel();void attempt(async()=>{await client.command({type,pawnIds:selectedColonyIds(),targetId});renderState();});}return;}selectPawns(gesture);};
+    renderer.onSelection=gesture=>{if(shootingControls.active){const targetId=gesture.ids[0];if(targetId!==undefined){const type=shootingControls.mode!;shootingControls.cancel();void attempt(async()=>{const direct:Command={type,pawnIds:selectedColonyIds(),targetId};for(const command of snapshot?personalOrderCommands378(snapshot,direct,gesture.additive):[direct])await client.command(command);renderState();});}return;}selectPawns(gesture);};
     renderer.onObjectSelection=selectObjects;
     renderer.onHover=cell=>{hoveredCell=cell;if(cell)hoverReadoutLayout?.resume();updateMapHover(true);};
     renderer.onCarpetEyedropper=cell=>{if(!snapshot||replacingWorld||frontMenu.isOpen())return;const floor=carpetEyedropper(snapshot,currentTool,cell);if(!floor){audio.playInterface('ui.reject');return;}if(floor!==currentTool)applyTool(floor);};
@@ -3256,7 +3262,7 @@ async function prepareWorldView(): Promise<void> {
       if(nativeUi){
         const epoch=session.generation,mapEpoch=campaignPresentationEpoch;let ownedPage:NativePage|undefined;
         void nativeOrderPage(snapshot,[...selection.ids],cell,x,y,queue,targetId,
-          {orderOptions:client.orderOptions,command:client.command,currentWorld:()=>snapshot,currentSelectedPawnIds:()=>[...selection.ids],
+          {orderOptions:client.orderOptions,command:client.command,currentWorld:()=>snapshot,currentSelectedPawnIds:()=>[...selection.ids],report:notify,
             isCurrent:()=>session.generation===epoch&&campaignPresentationEpoch===mapEpoch&&!replacingWorld&&!frontMenu.isOpen()&&
               (!ownedPage||(ownedPage.floatMenu?nativeUi!.isFloatMenuCurrent(ownedPage):nativeCustomPage===ownedPage)),
             close:()=>{

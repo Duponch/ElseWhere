@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {useInspiration360} from './inspirations-360.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
@@ -18,8 +20,8 @@ function take(w:World,id:number,quantity:number):MaterialPile|null {
   const pile=w.piles.find(p=>p.id===id);if(!pile||quantity<=0||quantity>pile.quantity)return null;
   if(quantity===pile.quantity)return pile;
   if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return null;
-  pile.quantity-=quantity;
-  const part={...pile,id:w.nextId++,quantity,owner:{...pile.owner},...copyPileCondition(pile)};w.piles.push(part);return part;
+  markPileContentWrite379(pile).quantity-=quantity;
+  const part={...pile,id:w.nextId++,quantity,owner:{...pile.owner},...copyPileCondition(pile)};appendPileEntries(w.piles,part);return part;
 }
 function move(w:World,id:number,quantity:number,owner:MaterialOwner):boolean {
   const part=take(w,id,quantity);if(!part)return false;

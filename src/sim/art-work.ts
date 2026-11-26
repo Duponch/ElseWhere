@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
 import { isArtMaterial, isArtRecipe, artWorkTotal, type ArtMaterial, type ArtRecipe } from './art-rules.ts';
 import { ingredientPlaceFree } from './cooking-bills.ts';
@@ -85,7 +86,7 @@ export function cancelArtWork(world: World, itemId: number): CommandResult {
     pawn.orders.queue = pawn.orders.queue.filter(o => typeof o === 'number' || (isCookingOrder(o)
       ? !o.cooking.ingredients.some(i => i.pileId === itemId) : o.sourcePileId !== itemId));
   }
-  world.piles = world.piles.filter(p => p !== pile);
+  world.piles = filterPileEntries(world.piles,p => p !== pile);
   for (const placement of placements) addMaterial(world,material === 'wood' ? 'wood' : material === 'steel' ? 'steel' : material === 'jade' ? 'jade' : 'blocks',placement.quantity,{type:'ground',...placement.cell},material);
   world.rng = random.rng;
   return {ok:true};

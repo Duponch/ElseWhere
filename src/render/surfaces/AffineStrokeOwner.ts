@@ -2,7 +2,7 @@
  * borrowed and untouched. This owner alone owns the prepared GPU coefficients.
  * No admission/settings/dirty work is called by an ordinary render frame. */
 import * as THREE from'three/webgpu';
-import{storage,uniform}from'three/tsl';
+import{renderGroup,storage,uniform}from'three/tsl';
 import type{FaceStrokeData}from'./FaceStrokeTable';
 import {SurfacePreparationSuperseded} from './SharedSurfacePreparation';
 import{FACE_STROKE_EDGE_ROWS}from'./FaceStrokeTable';
@@ -89,7 +89,11 @@ interface Span{row:number;values:Float32Array;undo?:Float32Array}
 export class AffineStrokeOwner{
  private attribute=new THREE.StorageBufferAttribute(new Float32Array(4),4);
  readonly node=storage(this.attribute,'vec4',0).toReadOnly();
- readonly width=uniform(1);readonly irregularity=uniform(0);
+ // One coefficient pair belongs to this canonical model for its entire
+ // surface-transaction revision, not to the object currently being drawn.
+ // Native render-group updates keep its actual settings value live without
+ // requiring the same per-object uniform buffer upload for every box.
+ readonly width=uniform(1).setGroup(renderGroup);readonly irregularity=uniform(0).setGroup(renderGroup);
  private readonly retired:THREE.StorageBufferAttribute[]=[];
  private staging:AffineStage|undefined;private closed=false;private ready=false;private currentKey='';private preparedRevision='';
  readonly counters={fullPreparations:0,dirtyPreparations:0,preparedFaces:0,preparedEdges:0,publishedRows:0,capacityGrowths:0};

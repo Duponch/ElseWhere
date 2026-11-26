@@ -3,6 +3,8 @@ import type {LightSource} from '../sim/light-sources';
 import type {Resource,World} from '../sim/types';
 import {readSnapshotChanges,readSnapshotResourceStructure,sameSnapshotChangeDomain,type SnapshotResourceStructure} from '../bridge/snapshot-changes';
 import {readResidentResourceBaseChanges} from '../bridge/resident-resource-base-changes';
+import {readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
+import {SceneResidentResourceMembership379} from './SceneResidentResourceMembership379';
 import {WORLD_SCALE} from '../world/scale';
 import {isClusterPlantSpecies,isResidentCrop} from './flora-presentation';
 import type {NaturalPresentationChange} from './NaturalResourcePresentation';
@@ -25,7 +27,7 @@ export interface SceneResourceAccess {
 type Capture={id:number;kind:Resource['kind'];species:Resource['species'];x:number;z:number;key:string|undefined;tree:number|undefined;rock:number|undefined};
 type FrameRecord={owner:SceneResourceIndex;generation:number;world:World;from:World|undefined;
   resources:readonly Resource[];tick:number;seed:number;width:number;height:number;
-  caves:readonly LightSource[];oldKeys:ReadonlyMap<number,string>;oldSources:ReadonlyMap<number,number>|undefined;edits:readonly RockCoverEdit[]|undefined;active:boolean};
+  caves:readonly LightSource[];oldKeys:ReadonlyMap<number,string>;oldSources:ReadonlyMap<number,number>|undefined;edits:readonly RockCoverEdit[]|undefined;projection?:SceneResourceAccess;active:boolean};
 const frames=new WeakMap<SceneResourceFrame,FrameRecord>();
 const records=new WeakSet<FrameRecord>();
 const capture=(world:World,r:Resource):Capture=>{
@@ -120,8 +122,27 @@ export class SceneResourceIndex {
   #chunks=new Map<string,number[]>();
   #trees=new Map<number,number[]>();
   #caves:readonly LightSource[]=[];
-  clear():void {this.#generation++;this.#world=undefined;this.#map=undefined;this.#captures=[];this.#byId.clear();this.#chunks.clear();this.#trees.clear();this.#caves=[];}
+  #resident:SceneResidentResourceMembership379|undefined;
+  residentMetrics379(){return this.#resident?.metrics();}
+  clear():void {this.#generation++;this.#world=undefined;this.#map=undefined;this.#captures=[];this.#byId.clear();this.#chunks.clear();this.#trees.clear();this.#caves=[];this.#resident=undefined;}
   adopt(world:World,reset=false):SceneResourceFrame {
+    if(readResidentCollectionDirectory379(world,'resources')){
+      if(!this.#resident){this.#resident=new SceneResidentResourceMembership379();if(this.#world)this.#resident.seed(this.#world,this.#captures,new Map(this.#byId));}
+      const projection=this.#resident.adopt(world,reset);
+      if(projection){
+        const from=this.#world,generation=++this.#generation;this.#world=world;this.#map={seed:world.seed,width:world.width,height:world.height};
+        const frame=Object.freeze({}) as SceneResourceFrame,record:FrameRecord={owner:this,generation,world,from,resources:world.resources,tick:world.tick,seed:world.seed,width:world.width,height:world.height,caves:projection.caveLightSources,oldKeys:new Map(),oldSources:undefined,edits:projection.rockCoverEdits,projection,active:true};
+        frames.set(frame,record);records.add(record);queueMicrotask(()=>{record.active=false;frames.delete(frame);});return frame;
+      }
+    }
+    if(this.#resident){
+      // Exceptional transition back to a public/missing-directory reader.
+      // Materialize the private previous captures, never reread old leaves.
+      const previous=this.#resident.export();this.#resident=undefined;
+      if(previous){this.#captures=new Array(previous.captures.length);this.#byId=new Map();this.#chunks=new Map();this.#trees=new Map();this.#caves=previous.caves;
+        for(const c of previous.captures){const source=previous.source(c.id);if(source===undefined)continue;this.#captures[source]=c;this.#byId.set(c.id,source);add(this.#chunks,c.key,source);add(this.#trees,c.tree,source);}
+      }
+    }
     const from=this.#world,generation=++this.#generation;
     let caveChanged=reset||!from||from.schemaVersion!==world.schemaVersion||from.seed!==world.seed||from.width!==world.width||from.height!==world.height;
     const cave=(c:Pick<Resource,'species'>|undefined)=>!!c&&isCavePlant256(c.species,world.schemaVersion);
@@ -269,17 +290,18 @@ export class SceneResourceIndex {
     &&record.resources===record.world.resources&&record.tick===record.world.tick&&record.seed===record.world.seed&&record.width===record.world.width&&record.height===record.world.height;}
   caveLightSources(record:FrameRecord):readonly LightSource[]|undefined {return this.accepts(record)?record.caves:undefined;}
   treeAt(record:FrameRecord,cell:number):number|undefined {
-    if(!this.accepts(record))return;const bucket=this.#trees.get(cell),source=bucket?.at(-1);
+    if(!this.accepts(record))return;if(record.projection)return record.projection.treeAt(cell);const bucket=this.#trees.get(cell),source=bucket?.at(-1);
     return source===undefined?undefined:record.resources[source]?.id;
   }
   resourceSource(record:FrameRecord,id:number):number|undefined {
-    return this.accepts(record)?this.#byId.get(id):undefined;
+    return this.accepts(record)?record.projection?record.projection.resourceSource(id):this.#byId.get(id):undefined;
   }
   previousResourceSource(record:FrameRecord,id:number):number|undefined {
-    return this.accepts(record)?record.oldSources?.get(id)??this.#byId.get(id):undefined;
+    return this.accepts(record)?record.projection?record.projection.previousResourceSource(id):record.oldSources?.get(id)??this.#byId.get(id):undefined;
   }
   chunksFor(record:FrameRecord,changes?:ReadonlyMap<number,NaturalPresentationChange>,additionalKeys?:ReadonlySet<string>):SceneResourceChunks|undefined {
     if(!this.accepts(record))return;
+    if(record.projection)return record.projection.chunksFor(changes,additionalKeys);
     const affected=new Set(additionalKeys);
     if(changes)for(const [id]of changes){
       const old=record.oldKeys.get(id),source=this.#byId.get(id),key=source===undefined?undefined:this.#captures[source]?.key;

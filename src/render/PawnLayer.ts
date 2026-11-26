@@ -1,10 +1,12 @@
+import {WorldCoordinateGroup} from './WorldCoordinateGroup';
 import {isDoubleBedKind} from '../sim/bed-kinds.ts';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
-import {POSE_SLEEP,POSE_DEAD,POSE_FIGHT_READY,READING_ACTIVITY295,seatedOnFurniture,workActivity,animationPose,humanCorpseVisualStage,humanWorkContact297} from '../bridge/actor-phase-dependencies-297';
+import {POSE_SLEEP,POSE_DEAD,POSE_FIGHT_READY,READING_ACTIVITY295,seatedOnFurniture,workActivity,animationPose,humanCorpseVisualStage,humanWorkContact297,humanContactOpponent297} from '../bridge/actor-phase-dependencies-297';
 export {humanCorpseVisualStage} from '../bridge/actor-phase-dependencies-297';
 import type {CoreActorScene297,CoreHumanPose297} from '../bridge/core-phase-projection-297';
 import {PawnTweener297} from './PawnTweener297';
-import {ActorPlayback435} from './ActorPlayback435';
+import {ActorPlayback435,ActorSpringWork435,isActorPlaybackWorld435} from './ActorPlayback435';
+import {readSnapshotChanges} from '../bridge/snapshot-changes';
 import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {isHatItem353} from '../sim/apparel-definitions';
 import {groupHumanCarryPairs257} from '../sim/group-human-admission-257.ts';
@@ -21,6 +23,7 @@ import {humanGesture,humanGestureCode,downedWigglePhase,HUMAN_GESTURE} from './a
 import {TSL_GESTURE_OPS,gestureNode,tslNode,tslBool} from './actor-idle-gestures-tsl';
 import { bedSlotBodyCenter,pawnBedSlot } from '../sim/bed-slots';
 import {coupleBed285} from '../sim/couple-bed-285';
+import {structureById} from '../sim/structure-navigation';
 import { corpseStage,CORPSE_ROT_TICKS,CORPSE_DESSICATION_TICKS } from '../sim/corpses';
 import { corpseVisualMask } from './corpse-presentation';
 import { humanCorpseAge } from '../sim/human-corpses';
@@ -51,7 +54,7 @@ import {MACE_ITEMS_269,isMaceItem269,maceColor269} from '../sim/mace-content-269
 import { doorAt } from '../sim/door-rules';
 import { furnitureSurfaces } from './furniture-motion';
 import { pawnPresentationPose } from './pawn-presentation';
-import { headingAt,turnToward,TURN_TICKS,type TurnHeading } from './turn-presentation';
+import { headingAt,turnToward,TURN_TICKS,TURN_SECONDS,type TurnHeading } from './turn-presentation';
 import { pawnWorkPose,pasteCollectionSource,workApproach,meleeApproach,WORK_POSE } from './work-presentation';
 import { GaitPhaseTracker,HUMAN_GAIT_RADIANS_PER_UNIT } from './gait-presentation';
 import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
@@ -70,7 +73,8 @@ import {ActorAtlasOwner,actorPoseIsRigid} from './origami/baked/actors/ActorAtla
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import { Fn, If, attribute, cos, float, instanceIndex, mix, positionLocal, sin, uniform, renderGroup,uv,vec2,vec3,vec4, varying } from 'three/tsl';
 import { TICKS_PER_SECOND,type MaterialPile,type Pawn,type World,type Job,type Structure } from '../sim/types';
-import { isDiningSeat,seatAt } from '../sim/dining';
+import { isDiningSeat,seatAt,seatCells,isDiningTable } from '../sim/dining';
+import {targetBuildingPlayerUse263} from '../sim/world-target-building-263';
 import {origamiWorkTool} from './origami/work-tools';
 import {encodeOrigamiEquipment,origamiWeaponVisualSignal,origamiEquipmentPositionNode,ORIGAMI_EQUIPMENT_HAND,ORIGAMI_EQUIPMENT_BELT,ORIGAMI_EQUIPMENT_SLING} from './origami/equipment-pose';
 import {ORIGAMI_HUMAN_BIND,ORIGAMI_DUSTER_DYE,ORIGAMI_PARKA_DYE,ORIGAMI_RECON_ARMOR_DYE,COWBOY_HAT_DYE353,BOWLER_HAT_DYE353,humanReferencePaintProfiles} from './origami/human-geometry';
@@ -86,6 +90,32 @@ import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
 /** Stable all-rigid real time before the colonists' body atlas is admitted again. */
 const BODY_ATLAS_READMIT_MS=6000;
+type PhaseAnimationKey297={posture:number;equipment:number;activity:number|undefined;tool:string|undefined;strike:number|undefined};
+type PhasePreparation297={world:World;indices:Map<number,number>;pawnsById:Map<number,Pawn>;bodies:Map<number,MaterialPile>;retainedOffsets:ReturnType<typeof retainedHumanCorpseOffsets>;
+ apparel:ReturnType<typeof apparelProjection>;gears:ReturnType<typeof equipmentProjection>;burning:Map<number,number>;carried:Map<number,MaterialPile>;pileOwners:Map<number,number>;carriedBuckets:Map<number,Map<number,MaterialPile>>;
+ seatCells?:ReadonlySet<string>;diningCells?:ReadonlyMap<string,number>;packedOwners:Set<number>;animalsById?:Map<number,NonNullable<World['wildlife']>['animals'][number]>;
+ geometry:THREE.BufferGeometry;modelKey:string;animationKeys?:PhaseAnimationKey297[]};
+const neutralReach297=Object.freeze({x:0,z:0});
+function nativePhasePose297(base:World,view:World,indices:ReadonlyMap<number,number>):boolean{
+ return readSnapshotChanges(base,base)!==undefined&&isActorPlaybackWorld435(view)&&Object.isFrozen(view.pawns)&&view.pawns.length===indices.size&&view.pawns.every((p,i)=>indices.get(p.id)===i)&&view.resources===base.resources&&view.structures===base.structures&&view.tiles===base.tiles&&view.wildlife===base.wildlife&&view.packed===base.packed&&view.fires===base.fires&&view.raids===base.raids&&view.width===base.width&&view.height===base.height&&view.seed===base.seed&&view.schemaVersion===base.schemaVersion;
+}
+function neutralWorkContact297(pawn:Pawn):boolean{
+ return pawn.state!=='working'&&!(pawn.state==='moving'&&pawn.moveCooldown>0&&pawn.path.length===0&&pawn.motion&&pawn.motion.to.x===pawn.x&&pawn.motion.to.z===pawn.z)&&!pawn.orbitalTrade&&!pasteCollectionSource(pawn)&&!pawn.social?.fight&&!pawn.melee?.order;
+}
+const cellKey297=(x:number,z:number)=>x+':'+z;
+/** These maps are derived from the authentic Full's fixed structure/layout
+ * section, not a mutable public World. Keep the first table in source order. */
+function phaseDining297(prepared:PhasePreparation297,pawn:Pawn):ReturnType<typeof adjacentTable>{
+ if(!prepared.diningCells){const map=new Map<string,number>();for(const s of prepared.world.structures)if(isDiningTable(s.kind)&&targetBuildingPlayerUse263(prepared.world,s))for(const cell of footprintCells(s)){const key=cellKey297(cell.x,cell.z);if(!map.has(key))map.set(key,s.id);}prepared.diningCells=map;}
+ const {x,z}=pawn;
+ for(const cell of [{x,z:z-1},{x:x+1,z},{x,z:z+1},{x:x-1,z}]){const id=prepared.diningCells.get(cellKey297(cell.x,cell.z));if(id!==undefined)return{id,cell};}
+ return null;
+}
+function phaseBenchSeated297(prepared:PhasePreparation297,pawn:Pawn):boolean{
+ if(pawn.state!=='working'||pawn.stun)return false;const spot=pawn.cooking?.phase==='work'?pawn.cooking.spot:pawn.research?.spot;if(!spot||spot.x!==pawn.x||spot.z!==pawn.z)return false;
+ if(!prepared.seatCells){const cells=new Set<string>();for(const s of prepared.world.structures)if(isDiningSeat(s.kind))for(const c of seatCells(s))cells.add(cellKey297(c.x,c.z));prepared.seatCells=cells;}
+ return prepared.seatCells.has(cellKey297(pawn.x,pawn.z));
+}
 /** One-instance mesh sharing the source's attribute objects, index and user
  * data with another material. Never disposed: its attributes are the source's. */
 function bodyVariantStandIn(source:THREE.Mesh,material:THREE.Material):THREE.Mesh{
@@ -236,6 +266,11 @@ export class PawnLayer {
    * crown: this is the crown's distance from the root along the bed. */
   readonly lieHeadExtent=(LIE_HEAD_TOP-this.humanBind.lieCenter)*PAWN_MODEL_SCALE;
   private workToolJobs=new Map<number,Job>();
+  private fullPreparation297:PhasePreparation297|undefined;
+  private phaseReuse297:PhasePreparation297|undefined;
+  private phaseNative297=false;
+  private phaseJobLookup297:ReadonlyMap<number,Job>|undefined;
+  private phasePileSource297:((id:number)=>number|undefined)|undefined;
   private equippedVisualItems=new Map<number,string>();
   private refreshOrigamiEquipmentSignal(pawn:Pawn,index:number):void {
     if(!this.referenceRig||!this.pawnMesh)return;
@@ -253,7 +288,7 @@ export class PawnLayer {
     const flags=this.selectionMesh.geometry.getAttribute('aSelected') as THREE.InstancedBufferAttribute;
     this.pawnIds.forEach((id,i)=>flags.setX(i,ids.has(id)?1:0));flags.needsUpdate=true;
   }
-  readonly group = new THREE.Group();
+  readonly group:THREE.Group;
   readonly time = uniform(0).setGroup(renderGroup);
   readonly travelTime = uniform(0).setGroup(renderGroup);
   readonly blend = uniform(1).setGroup(renderGroup);
@@ -262,7 +297,7 @@ export class PawnLayer {
   private partialOwners:number[]=[];
   private readonly animationOwners=new Map<number,number>();
   private readonly playback435=new ActorPlayback435<Pawn>((pawn,index)=>this.animationOwners.has(index)||this.handoffs.active.has(pawn.id)||this.groupHumanCarrierIds.has(pawn.id)||pawn.rescue?.phase==='carry'||pawn.animalRescue?.phase==='carry'||(this.pawnMesh?.geometry.getAttribute('aCargo').getX(index)??0)!==0,false);
-  actorPlaybackMetrics435(){return this.playback435.snapshot();}
+  actorPlaybackMetrics435(){return{...this.playback435.snapshot(),rootUpdates:{...this.springMetrics297}};}
   private readonly animationRoot={x:0,y:0,z:0,yaw:0};
   private readonly linkedRoot={x:0,y:0,z:0,yaw:0};
   readonly visuals = new Map<number, VisualPawn>();
@@ -359,7 +394,7 @@ export class PawnLayer {
   private travelSurfaces:ReadonlyMap<number,number>=new Map();
   private groupHumanCarrierIds=new Set<number>();
   private rescuePairs:readonly (readonly [number,number])[]=[];
-  constructor(private readonly configure?: (material: THREE.NodeMaterial) => void,private readonly animationDetail=new AnimationDetail()) {this.animationCache=new ActorAnimationCache(animationDetail);this.partialAnimationCache=new ActorAnimationCache(animationDetail);this.releaseFeatureRefresh=this.graphics?.trackSharedSurfaceRefresh(()=>this.refreshWearEffect());}
+  constructor(private readonly configure?: (material: THREE.NodeMaterial) => void,private readonly animationDetail=new AnimationDetail(),ownedGpuMatrices435=false) {this.group=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();this.animationCache=new ActorAnimationCache(animationDetail);this.partialAnimationCache=new ActorAnimationCache(animationDetail);this.releaseFeatureRefresh=this.graphics?.trackSharedSurfaceRefresh(()=>this.refreshWearEffect());}
   cpuPoseForId(id:number){const slot=this.pawnIndices.get(id),g=this.pawnMesh?.geometry;return slot===undefined||!g?undefined:this.animationCache.presentedRoot(slot,g.getAttribute('aFrom'),g.getAttribute('aTo'),g.getAttribute('aTravel'),this.travelTime.value,this.blend.value);}
   presentedPose(id:number){return this.cpuPoseForId(id);}
   /** Warm the resident fire graph before the first burning actor appears. */
@@ -1253,48 +1288,57 @@ export class PawnLayer {
    * and facing toward the work target come from the Worker's live World, as a
    * Full would compute them; everything else is derived exactly as in a Full. */
   update(world: World, oldBlend: number, newMap: boolean, poses297?: ReadonlyMap<number,Pick<CoreHumanPose297,'workPose'|'reach'|'yaw'>>): void {
-    if(this.referenceRig)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
+    const prepared=this.phaseReuse297;if(!prepared)this.fullPreparation297=undefined;
+    const native=!!prepared&&this.phaseNative297;
+    if(this.referenceRig&&!prepared)this.workToolJobs=new Map(world.jobs.map(job=>[job.id,job]));
     if(newMap){this.animationCache.reset();this.partialAnimationCache.reset();}
-    this.travelKeys.clear();this.travelSurfaces=furnitureSurfaces(world);
+    this.travelKeys.clear();if(!prepared)this.travelSurfaces=furnitureSurfaces(world);
     if(newMap){this.headings.clear();this.approachTransitions.clear();this.departureOffsets.clear();this.workOffsets.clear();this.crouchTransitions.clear();this.shownPoses.clear();this.gait.clear();this.handoffs.clear();}
-    const indices=new Map<number,number>(),pawnsById=new Map<number,Pawn>();
-    world.pawns.forEach((p,i)=>{indices.set(p.id,i);pawnsById.set(p.id,p);});
-    const humanCarry=[...groupHumanCarryPairs257(world),...world.pawns.flatMap(p=>p.cryptosleepTask?.action==='carry'&&(p.cryptosleepTask.phase==='carry'||p.cryptosleepTask.phase==='closing')&&p.cryptosleepTask.patientId!==undefined?[{carrierId:p.id,patientId:p.cryptosleepTask.patientId}]:[]),...world.pawns.flatMap(p=>p.raid?.kidnap261?.phase==='carry'?[{carrierId:p.id,patientId:p.raid.kidnap261.patientId}]:[])];
+    const indices=prepared?.indices??new Map<number,number>(),pawnsById=prepared?.pawnsById??new Map<number,Pawn>();
+    if(!prepared)world.pawns.forEach((p,i)=>{indices.set(p.id,i);pawnsById.set(p.id,p);});
+    if(!prepared){const humanCarry=[...groupHumanCarryPairs257(world),...world.pawns.flatMap(p=>p.cryptosleepTask?.action==='carry'&&(p.cryptosleepTask.phase==='carry'||p.cryptosleepTask.phase==='closing')&&p.cryptosleepTask.patientId!==undefined?[{carrierId:p.id,patientId:p.cryptosleepTask.patientId}]:[]),...world.pawns.flatMap(p=>p.raid?.kidnap261?.phase==='carry'?[{carrierId:p.id,patientId:p.raid.kidnap261.patientId}]:[])];
     this.rescuePairs=[...world.pawns.flatMap((p,i)=>p.rescue?.phase==='carry'&&indices.has(p.rescue.patientId)?[[i,indices.get(p.rescue.patientId)!] as const]:[]),...humanCarry.filter(pair=>indices.has(pair.carrierId)&&indices.has(pair.patientId)).map(pair=>[indices.get(pair.carrierId)!,indices.get(pair.patientId)!] as const)];
     this.groupHumanCarrierIds=new Set(humanCarry.map(pair=>pair.carrierId));
     this.rescuePairs=[...this.rescuePairs,...world.piles.flatMap(p=>p.humanCorpse&&p.owner.type==='pawn'&&indices.has(p.owner.pawnId)&&indices.has(p.humanCorpse.pawnId)?[[indices.get(p.owner.pawnId)!,indices.get(p.humanCorpse.pawnId)!] as const]:[])];
-    const bodies=new Map(world.piles.filter(p=>p.humanCorpse).map(p=>[p.humanCorpse!.pawnId,p]));
-    const retainedOffsets=retainedHumanCorpseOffsets(world);
-    const apparel=apparelProjection(world);
-    const gears=equipmentProjection(world);
-    if(this.referenceRig)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
+    }
+    const bodies=prepared?.bodies??new Map(world.piles.filter(p=>p.humanCorpse).map(p=>[p.humanCorpse!.pawnId,p]));
+    const retainedOffsets=prepared?.retainedOffsets??retainedHumanCorpseOffsets(world);
+    const apparel=prepared?.apparel??apparelProjection(world);
+    const gears=prepared?.gears??equipmentProjection(world);
+    if(this.referenceRig&&!prepared)this.equippedVisualItems=new Map([...gears].map(([id,piece])=>[id,piece.item]));
     let smithing=this.smithingGeometry,mace=this.maceGeometry,longsword=this.longswordGeometry,spear=this.spearGeometry,hats353=this.hatGeometry353;
-    if(!smithing)for(const pieces of apparel.values())if(pieces.some(p=>isSmithingApparel267(p.item))){smithing=true;break;}
-    if(!mace)for(const piece of gears.values())if(isMaceItem269(piece.item)){mace=true;break;}
-    if(!longsword)for(const piece of gears.values())if(isLongswordItem270(piece.item)){longsword=true;break;}
-    if(!spear)for(const piece of gears.values())if(isSpearItem272(piece.item)){spear=true;break;}
-    if(!hats353)for(const pieces of apparel.values())if(pieces.some(p=>isHatItem353(p.item))){hats353=true;break;}
-    this.extendResidentGeometry(smithing,mace,longsword,spear,hats353);
+    if(!prepared){
+      if(!smithing)for(const pieces of apparel.values())if(pieces.some(p=>isSmithingApparel267(p.item))){smithing=true;break;}
+      if(!mace)for(const piece of gears.values())if(isMaceItem269(piece.item)){mace=true;break;}
+      if(!longsword)for(const piece of gears.values())if(isLongswordItem270(piece.item)){longsword=true;break;}
+      if(!spear)for(const piece of gears.values())if(isSpearItem272(piece.item)){spear=true;break;}
+      if(!hats353)for(const pieces of apparel.values())if(pieces.some(p=>isHatItem353(p.item))){hats353=true;break;}
+      this.extendResidentGeometry(smithing,mace,longsword,spear,hats353);
+    }
     if (!this.pawnMesh) this.createPawnMesh(Math.max(1,world.pawns.length));
     else if(this.pawnMesh.geometry.getAttribute('aFrom').count<world.pawns.length){this.clearBodyPartUnions();growPawnBuffers([this.pawnMesh,this.cargoMesh!,this.selectionMesh!,this.fireMesh!,this.partialCargoMesh!],world.pawns.length,(geometry,mesh)=>{if(mesh===this.pawnMesh||mesh===this.cargoMesh||mesh===this.partialCargoMesh)this.retiredPawnGeometries.push(geometry);else geometry.dispose();});this.installBodyPartUnions();this.syncBodyInstances();}
     const geometry = this.pawnMesh!.geometry as THREE.InstancedBufferGeometry;
+    const modelKey=this.humanModel?.key??'',staticAppearance=!!(native&&prepared!.geometry===geometry&&prepared!.modelKey===modelKey);
+    if(prepared&&!staticAppearance)prepared.animationKeys=undefined;
+    const animationKeys=staticAppearance?(prepared!.animationKeys??=[]):!prepared&&isActorPlaybackWorld435(world)&&readSnapshotChanges(world,world)!==undefined?[]:undefined;
     if(this.targetOffsets297.length<world.pawns.length*3)this.targetOffsets297=new Float64Array(world.pawns.length*3);
     const flames=geometry.getAttribute('aFire') as THREE.InstancedBufferAttribute;
-    const burning=new Map((world.fires?.items??[]).filter(f=>f.attachedPawnId!==undefined).map(f=>[f.attachedPawnId!,f.size]));
-    let fireCount=0;
-    world.pawns.forEach((p,i)=>{
-      const size=burning.has(p.id)?Math.max(.5,burning.get(p.id)!):0;
-      flames.setX(i,size);if(size>0)fireCount=i+1;
-    });
-    if(!world.pawns.length)flames.setX(0,0);flames.needsUpdate=true;
-    // Keep actor indices and shared attributes; omit only the unused tail.
-    (this.fireMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount=fireCount;
-    this.springValid297.fill(0);if(newMap)this.tweener297.reset();
+    const burning=prepared?.burning??new Map((world.fires?.items??[]).filter(f=>f.attachedPawnId!==undefined).map(f=>[f.attachedPawnId!,f.size]));
+    if(!prepared){let fireCount=0;
+      world.pawns.forEach((p,i)=>{
+        const size=burning.has(p.id)?Math.max(.5,burning.get(p.id)!):0;
+        flames.setX(i,size);if(size>0)fireCount=i+1;
+      });
+      if(!world.pawns.length)flames.setX(0,0);flames.needsUpdate=true;
+      // Keep actor indices and shared attributes; omit only the unused tail.
+      (this.fireMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount=fireCount;
+    }
+    this.springValid297.fill(0);this.springWork297.clear();if(newMap)this.tweener297.reset();
     const fromAttribute = geometry.getAttribute('aFrom') as THREE.InstancedBufferAttribute;
     const toAttribute = geometry.getAttribute('aTo') as THREE.InstancedBufferAttribute;
     const travelAttribute = geometry.getAttribute('aTravel') as THREE.InstancedBufferAttribute;
     const presented=new Map<number,{x:number;z:number}>();
-    if(!newMap)for(const [id,index] of this.pawnIndices){
+    if(!newMap&&!prepared)for(const [id,index] of this.pawnIndices){
       const start=travelAttribute.getX(index),end=travelAttribute.getY(index);
       const alpha=end>start?THREE.MathUtils.clamp((this.travelTime.value-start)/(end-start),0,1):oldBlend;
       presented.set(id,{x:THREE.MathUtils.lerp(fromAttribute.getX(index),toAttribute.getX(index),alpha),z:THREE.MathUtils.lerp(fromAttribute.getZ(index),toAttribute.getZ(index),alpha)});
@@ -1306,19 +1350,39 @@ export class PawnLayer {
     const handoffFrom=this.cargoMesh!.geometry.getAttribute('aHandoffFrom') as THREE.InstancedBufferAttribute;
     const handoffTo=this.cargoMesh!.geometry.getAttribute('aHandoffTo') as THREE.InstancedBufferAttribute;
     const equipment=geometry.getAttribute('aEquipment') as THREE.InterleavedBufferAttribute;
-    const carried = new Map<number, World['piles'][number]>();
-    for (const pile of world.piles) if (pile.owner.type === 'pawn') carried.set(pile.owner.pawnId, pile);
-    let jobsById:Map<number,World['jobs'][number]>|undefined=this.referenceRig?this.workToolJobs:undefined;
+    const carried=prepared?.carried??new Map<number,MaterialPile>();
+    const pileOwners=prepared?.pileOwners??new Map<number,number>(),carriedBuckets=prepared?.carriedBuckets??new Map<number,Map<number,MaterialPile>>();
+    if(!prepared)for(const pile of world.piles)if(pile.owner.type==='pawn'){carried.set(pile.owner.pawnId,pile);pileOwners.set(pile.id,pile.owner.pawnId);let bucket=carriedBuckets.get(pile.owner.pawnId);if(!bucket){bucket=new Map();carriedBuckets.set(pile.owner.pawnId,bucket);}bucket.set(pile.id,pile);}
+    // The native projected job rows already own this exact immutable lookup.
+    // humanWorkContact297 only borrows it (its Map parameter predates this reader).
+    let jobsById:Map<number,World['jobs'][number]>|undefined=(native?this.phaseJobLookup297 as Map<number,Job>|undefined:undefined)??(this.referenceRig?this.workToolJobs:undefined);
+    const pileById=native&&this.phasePileSource297?(id:number)=>{const at=this.phasePileSource297!(id),pile=at===undefined?undefined:world.piles[at];return pile?.id===id?pile:world.piles.find(p=>p.id===id);}:undefined;
+    const packedOwners=native?prepared!.packedOwners:new Set((world.packed??[]).flatMap(p=>p.owner.type==='pawn'?[p.owner.pawnId]:[]));
+    const animalById=native?(id:number)=>{
+      if(!prepared!.animalsById){const map=new Map<number,NonNullable<World['wildlife']>['animals'][number]>();for(const a of world.wildlife?.animals??[])if(!map.has(a.id))map.set(a.id,a);prepared!.animalsById=map;}
+      return prepared!.animalsById.get(id);
+    }:(id:number)=>world.wildlife?.animals.find(a=>a.id===id);
     const present = new Set<number>();let atlasChanged=this.bodyAtlasPublishedCount!==world.pawns.length||this.bodyAtlasModelKey!==this.humanModel?.key,allRigid=true;
+    let cargoChanged=!prepared,handoffFromChanged=!prepared,handoffToChanged=!prepared;
+    const assignPhase4=(attribute:THREE.InstancedBufferAttribute,index:number,x:number,y:number,z:number,w:number):boolean=>{
+      if(prepared&&Object.is(attribute.getX(index),Math.fround(x))&&Object.is(attribute.getY(index),Math.fround(y))&&Object.is(attribute.getZ(index),Math.fround(z))&&Object.is(attribute.getW(index),Math.fround(w)))return false;
+      attribute.setXYZW(index,x,y,z,w);return true;
+    };
+    const findStructure=(id:number)=>prepared?structureById(world,id):world.structures.find(s=>s.id===id);
     world.pawns.forEach((pawn, index) => {
-      present.add(pawn.id);
+      if(!prepared)present.add(pawn.id);
       const previous = newMap ? undefined : this.visuals.get(pawn.id);
       // A stationary actor retains its last travel heading after a save reload.
       // Work with an external target and bed posture override it below.
       const initialYaw=pawn.motion?Math.atan2(pawn.motion.to.x-pawn.motion.from.x,pawn.motion.to.z-pawn.motion.from.z):arrivalRotationYaw256(pawn)??Math.PI*.2+(pawn.state==='dead'?(pawn.id%5-2)*.14:0);
       const from = previous ? previous.from.clone().lerp(previous.to, oldBlend) : new THREE.Vector4(pawn.x, 0, pawn.z, initialYaw);
-      const lastShown=presented.get(pawn.id);
-      if(lastShown){from.x=lastShown.x;from.z=lastShown.z;}
+      if(prepared){
+        // Same private slot order: read old displayed endpoints before this
+        // slot is written. Other actors' endpoints are independent inputs.
+        const start=travelAttribute.getX(index),end=travelAttribute.getY(index);
+        const alpha=end>start?THREE.MathUtils.clamp((this.travelTime.value-start)/(end-start),0,1):oldBlend;
+        from.x=THREE.MathUtils.lerp(fromAttribute.getX(index),toAttribute.getX(index),alpha);from.z=THREE.MathUtils.lerp(fromAttribute.getZ(index),toAttribute.getZ(index),alpha);
+      }else{const lastShown=presented.get(pawn.id);if(lastShown){from.x=lastShown.x;from.z=lastShown.z;}}
       const priorHeading=this.headings.get(pawn.id);
       if(priorHeading)from.w=headingAt(priorHeading,world.tick);
       let yaw = from.w;
@@ -1333,8 +1397,8 @@ export class PawnLayer {
       if(pawn.tend?.phase==='tend'&&pawn.tend.patientId!==pawn.id){const p=pawnsById.get(pawn.tend.patientId);if(p)yaw=Math.atan2(p.x-pawn.x,p.z-pawn.z);}
       if(pawn.surgery?.phase==='work'){const p=pawnsById.get(pawn.surgery.patientId);if(p)yaw=Math.atan2(p.x-pawn.x,p.z-pawn.z);}
       const coupleBed=coupleBed285(world,pawn);
-      const bed = coupleBed??((pawn.state === 'sleeping'||pawn.state==='resting'||pawn.state==='downed') && bedId !== null ? world.structures.find(item => item.id === bedId) : undefined);
-      const benchSeat=benchSeated(world,pawn),seated=seatedOnFurniture(pawn)||benchSeat;
+      const bed = coupleBed??((pawn.state === 'sleeping'||pawn.state==='resting'||pawn.state==='downed') && bedId !== null ? findStructure(bedId) : undefined);
+      const benchSeat=prepared?phaseBenchSeated297(prepared,pawn):benchSeated(world,pawn),seated=seatedOnFurniture(pawn)||benchSeat;
       let px = pawn.x, pz = pawn.z, py = seated||pawn.state==='eating'||pawn.state==='sleeping'||pawn.state==='resting'||medicallyStopped(pawn)?0:this.travelSurfaces.get(pawn.z*world.width+pawn.x)??0;
       const body=bodies.get(pawn.id);
       const hiddenBody=pawn.body?.lostAt!==undefined||pawn.body?.pileId!==undefined&&(!body||body.owner.type==='grave');
@@ -1354,7 +1418,7 @@ export class PawnLayer {
         yaw = from.w + Math.atan2(Math.sin(target - from.w), Math.cos(target - from.w));
       }
       const dining = pawn.state === 'eating' && pawn.need?.kind === 'eat' ? pawn.need.dining : null;
-      const surface = dining ? adjacentTable(world, pawn) : null;
+      const surface = dining ? prepared?phaseDining297(prepared,pawn):adjacentTable(world, pawn) : null;
       if (surface) {
         const target = Math.atan2(surface.cell.x - pawn.x, surface.cell.z - pawn.z);
         yaw = from.w + Math.atan2(Math.sin(target - from.w), Math.cos(target - from.w));
@@ -1362,23 +1426,28 @@ export class PawnLayer {
       // A task already owns the final travel edge before the worker changes to
       // `working`. Resolve that target early so the edge ends at its visual
       // contact pose instead of arriving at the cell centre and sliding later.
-      const contact297=humanWorkContact297(world,pawn,pawnsById,jobsById,yaw),patch297=poses297?.get(pawn.id);
-      const {arriving,humanOpponent,pasteCollect}=contact297;
+      const patch297=poses297?.get(pawn.id);
+      // The worker's validated pose patch already owns reach, work pose and
+      // facing. Its remaining presentation-only inputs need no job, resource
+      // or station resolution. For a public/full literal row keep the reader.
+      const neutral=native&&!patch297&&neutralWorkContact297(pawn);
+      const contact297=patch297||neutral?undefined:humanWorkContact297(world,pawn,pawnsById,jobsById,yaw,pileById);
+      const humanOpponent=patch297?humanContactOpponent297(pawn,pawnsById):contact297?.humanOpponent,pasteCollect=patch297?pasteCollectionSource(pawn):contact297?.pasteCollect;
       // Seated at a bench, the body stays on its seat; the arms reach the work.
-      const workPose=patch297?patch297.workPose:contact297.workPose,reach=benchSeat?{x:0,z:0}:patch297?{x:patch297.reach.x,z:patch297.reach.z}:contact297.reach;
-      jobsById=contact297.jobsById;yaw=patch297?patch297.yaw??yaw:contact297.yaw;
+      const workPose=patch297?patch297.workPose:contact297?.workPose??0,reach=benchSeat?{x:0,z:0}:patch297?{x:patch297.reach.x,z:patch297.reach.z}:contact297?.reach??neutralReach297;
+      if(contact297)jobsById=contact297.jobsById;yaw=patch297?patch297.yaw??yaw:contact297?.yaw??yaw;
       this.workOffsets.set(pawn.id,reach);
       if(newMap)this.approachTransitions.set(pawn.id,{fromX:reach.x,fromZ:reach.z,toX:reach.x,toZ:reach.z,start:world.tick,baseX:pawn.x,baseZ:pawn.z});
       px+=reach.x;pz+=reach.z;
       const recreation=pawn.state==='recreating'?pawn.recreation.task:null;
-      const leisureSite=recreation&&recreation.buildingId!==null&&recreation.activity!=='skygaze'?world.structures.find(s=>s.id===recreation.buildingId):undefined;
+      const leisureSite=recreation&&recreation.buildingId!==null&&recreation.activity!=='skygaze'?findStructure(recreation.buildingId):undefined;
       const leisureTarget=recreation?.activity==='visit-sick'?pawnsById.get(recreation.patientId!):leisureSite
         ?footprintCells(leisureSite).reduce((nearest,cell)=>(cell.x-pawn.x)**2+(cell.z-pawn.z)**2<(nearest.x-pawn.x)**2+(nearest.z-pawn.z)**2?cell:nearest)
         :undefined;
       if(leisureTarget)yaw=Math.atan2(leisureTarget.x-pawn.x,leisureTarget.z-pawn.z);
       const melee=pawn.melee?.strike;
       const shotTarget=pawn.shooting?.stance?pawn.shooting.order?.targetId??(pawn.shooting.stance.phase==='cooldown'?pawn.lastAttack?.targetId:undefined):undefined;
-      const aim=melee?(melee.structure??(melee.targetId===null?undefined:pawnsById.get(melee.targetId))??world.wildlife?.animals.find(a=>a.id===melee.targetId)??world.raids?.departed.find(d=>d.pawnId===melee.targetId)?.cell):humanOpponent??(shotTarget?(pawnsById.get(shotTarget)??world.wildlife?.animals.find(a=>a.id===shotTarget)):undefined);
+      const aim=melee?(melee.structure??(melee.targetId===null?undefined:pawnsById.get(melee.targetId)??animalById(melee.targetId))??world.raids?.departed.find(d=>d.pawnId===melee.targetId)?.cell):humanOpponent??(shotTarget?(pawnsById.get(shotTarget)??animalById(shotTarget)):undefined);
       if(aim)yaw=Math.atan2(aim.x-pawn.x,aim.z-pawn.z);
       const to = new THREE.Vector4(px, py, pz, yaw);
       if (!previous||hiddenBody||previous.to.y< -100) from.copy(to);
@@ -1388,10 +1457,10 @@ export class PawnLayer {
       fromAttribute.setXYZW(index, from.x, from.y, from.z, from.w);
       toAttribute.setXYZW(index, to.x, to.y, to.z, to.w);
       this.workPoses.set(pawn.id,workPose);
-      const smallMelee=!!pawn.melee?.strike&&(world.wildlife?.animals.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false);
+      const smallMelee=!!pawn.melee?.strike&&(native?pawn.melee.strike.targetId!==null&&animalById(pawn.melee.strike.targetId)?.species==='hare':(world.wildlife?.animals.some(animal=>animal.id===pawn.melee!.strike!.targetId&&animal.species==='hare')??false));
       const equipmentCode=weaponVisual(gears.get(pawn.id)?.item)?.equipment??0;
       motion.setXYZW(index, pawn.state === 'moving'&&!pawn.stun&&!pasteCollect ? 1 : 0,this.activity(pawn,equipmentCode),seatedWorkPose(animationPose(pawn,workPose,smallMelee,seated,!!coupleBed),workPose,benchSeat),pawn.melee?.strike ? coreTimeSeconds(pawn.melee.strike.atCore,Math.floor(world.tick/1024)*1024) : pawn.shooting?.stance?.phase==='cooldown'?coreTimeSeconds(pawn.shooting.stance.startedAtCore,Math.floor(world.tick/1024)*1024):idlePhase(pawn,this.travelOrigin));
-      const identity=appearanceOf(pawn,world.seed),variant=appearanceShape(identity);
+      if(!prepared){const identity=appearanceOf(pawn,world.seed),variant=appearanceShape(identity);
       blood.setX(index,bodyBloodWord(pawn.health));
       scratchColor.setHex(identity.skinColor);skin.setXYZ(index,scratchColor.r,scratchColor.g,scratchColor.b);
       scratchColor.setHex(identity.hairColor);hair.setXYZ(index,scratchColor.r,scratchColor.g,scratchColor.b);
@@ -1407,49 +1476,85 @@ export class PawnLayer {
         shape.setW(index,variant[3]+row*32);
       }
       equipment.setXYZW(index,equipmentCode,look.silhouette,(look.vest?1:0)+(look.simpleHelmet?10:look.reconHelmet?4:look.helmet?2:look.tuque===2?8:look.tuque===1?6:look.hat353===1?12:look.hat353===2?14:0)+(look.vestTintCode??0)/65536,look.pants+(look.simpleHelmet?look.simpleHelmetMaterial/16:look.plasteelHelmet?.5:0));
+      }
       this.refreshOrigamiEquipmentSignal(pawn,index);
-      atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;allRigid=this.observeBodyAtlasPose(pawn.id,index,geometry)&&allRigid;
+      // Full owns every appearance scalar; frontier equipment only changes
+      // the low ready/strike bits intentionally omitted by the atlas key.
+      if(!staticAppearance||!this.bodyAtlasAppearance.has(pawn.id))atlasChanged=this.bodyAtlasAppearanceChanged(pawn.id,index,geometry)||atlasChanged;allRigid=this.observeBodyAtlasPose(pawn.id,index,geometry)&&allRigid;
       const load = carried.get(pawn.id);
-      const packed=world.packed?.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id);
+      const packed=packedOwners.has(pawn.id);
       const handoff=this.handoffs.active.get(pawn.id);
       const mainHandoff=handoff?.partial?undefined:handoff;
       const [kind,size]=cargoAppearance(mainHandoff?.direction==='drop'?mainHandoff.pile:load);
-      cargo.setXYZW(index,pawn.rescue?.phase==='carry'||this.groupHumanCarrierIds.has(pawn.id)||pawn.animalRescue?.phase==='carry'||pawn.animalHandling?.kind==='release'&&pawn.animalHandling.phase==='carry'||load?.humanCorpse?-1:packed?4:kind,packed?1:size,
+      cargoChanged=assignPhase4(cargo,index,pawn.rescue?.phase==='carry'||this.groupHumanCarrierIds.has(pawn.id)||pawn.animalRescue?.phase==='carry'||pawn.animalHandling?.kind==='release'&&pawn.animalHandling.phase==='carry'||load?.humanCorpse?-1:packed?4:kind,packed?1:size,
         mainHandoff?localTimeSeconds(mainHandoff.start,this.carryOrigin):0,
-        mainHandoff?(mainHandoff.direction==='pickup'?1:-1)*localTimeSeconds(mainHandoff.end,this.carryOrigin):0);
+        mainHandoff?(mainHandoff.direction==='pickup'?1:-1)*localTimeSeconds(mainHandoff.end,this.carryOrigin):0)||cargoChanged;
       if(mainHandoff){
-        handoffFrom.setXYZW(index,mainHandoff.from.x,mainHandoff.from.y,mainHandoff.from.z,mainHandoff.from.yaw);
-        handoffTo.setXYZW(index,mainHandoff.to.x,mainHandoff.to.y,mainHandoff.to.z,mainHandoff.groundScale);
+        handoffFromChanged=assignPhase4(handoffFrom,index,mainHandoff.from.x,mainHandoff.from.y,mainHandoff.from.z,mainHandoff.from.yaw)||handoffFromChanged;
+        handoffToChanged=assignPhase4(handoffTo,index,mainHandoff.to.x,mainHandoff.to.y,mainHandoff.to.z,mainHandoff.groundScale)||handoffToChanged;
       }else{
-        handoffFrom.setXYZW(index,0,0,0,0);handoffTo.setXYZW(index,0,0,0,0);
+        handoffFromChanged=assignPhase4(handoffFrom,index,0,0,0,0)||handoffFromChanged;handoffToChanged=assignPhase4(handoffTo,index,0,0,0,0)||handoffToChanged;
       }
     });
-    for (const id of this.visuals.keys()) if (!present.has(id)){this.bodyAtlasAppearance.delete(id);this.bodyAtlasRigid.delete(id);this.visuals.delete(id);this.targetPoses.delete(id);this.headings.delete(id);this.workPoses.delete(id);this.workOffsets.delete(id);this.approachTransitions.delete(id);this.departureOffsets.delete(id);this.crouchTransitions.delete(id);this.shownPoses.delete(id);this.gait.delete(id);}
-    this.pawnIndices.clear();for(const [id,index] of indices)this.pawnIndices.set(id,index);
-    const patientOwners=new Map(this.rescuePairs.map(([carrier,patient])=>[patient,carrier] as const));
-    this.animationOwners.clear();for(const [patient,carrier] of patientOwners)this.animationOwners.set(patient,carrier);
+    if(!prepared){
+      for (const id of this.visuals.keys()) if (!present.has(id)){this.bodyAtlasAppearance.delete(id);this.bodyAtlasRigid.delete(id);this.visuals.delete(id);this.targetPoses.delete(id);this.headings.delete(id);this.workPoses.delete(id);this.workOffsets.delete(id);this.approachTransitions.delete(id);this.departureOffsets.delete(id);this.crouchTransitions.delete(id);this.shownPoses.delete(id);this.gait.delete(id);}
+      this.pawnIndices.clear();for(const [id,index] of indices)this.pawnIndices.set(id,index);
+      this.animationOwners.clear();for(const [carrier,patient] of this.rescuePairs)this.animationOwners.set(patient,carrier);
+    }
+    const patientOwners=this.animationOwners;
     world.pawns.forEach((p,i)=>{const owner=bodies.get(p.id)?.owner;
       const pose=motion.getZ(i),posture=pose===1||pose===3||pose===5||pose===6||pose===10||pose===POSE_SLEEP||pose===POSE_DEAD||pose===WORK_POSE.ground||pose===WORK_POSE.groundMelee?pose:0;
       // A new confirmed optional melee tool/strike invalidates its retained pose once.
       // Reach then follows ordinary sampling; no continuously changing tick.
       const activity=motion.getY(i),family=isMaceItem269(gears.get(p.id)?.item)||isLongswordItem270(gears.get(p.id)?.item)||isSpearItem272(gears.get(p.id)?.item),
         melee=family?[activity,p.melee?.strike?.tool,p.melee?.strike?.atCore]:[];
+      if(animationKeys){const x=equipment.getX(i),key=animationKeys[i],a=family?activity:undefined,tool=family?p.melee?.strike?.tool:undefined,strike=family?p.melee?.strike?.atCore:undefined;
+        if(staticAppearance&&key&&key.posture===posture&&key.equipment===x&&key.activity===a&&key.tool===tool&&key.strike===strike)return;
+        animationKeys[i]={posture,equipment:x,activity:a,tool,strike};}
       this.animationCache.reconcile(i,p.id,[posture,shape.getX(i),shape.getY(i),shape.getZ(i),shape.getW(i),equipment.getX(i),equipment.getY(i),equipment.getZ(i),equipment.getW(i),owner?.type,owner?.type==='pawn'?owner.pawnId:undefined,patientOwners.get(i),...melee].join(':'));});
-    for (const attr of [fromAttribute, toAttribute, motion, tint, cargo,handoffFrom,handoffTo]) attr.needsUpdate = true;
+    for (const attr of [fromAttribute, toAttribute, motion]) attr.needsUpdate = true;
+    if(!prepared)tint.needsUpdate=true;if(cargoChanged)cargo.needsUpdate=true;if(handoffFromChanged)handoffFrom.needsUpdate=true;if(handoffToChanged)handoffTo.needsUpdate=true;
     geometry.instanceCount = world.pawns.length;
     this.syncBodyInstances(geometry);
     (this.cargoMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount = world.pawns.length;
-    this.syncMainCargoKinds();
+    if(cargoChanged)this.syncMainCargoKinds();
     this.syncPartialCargo();
     (this.selectionMesh!.geometry as THREE.InstancedBufferGeometry).instanceCount=world.pawns.length;
-    this.pawnIds=world.pawns.map(p=>p.id);this.setSelected(this.selected);
+    if(!prepared){this.pawnIds=world.pawns.map(p=>p.id);this.setSelected(this.selected);}
     this.playback435.prepare(world,world.pawns,true);this.bodyAtlasPublishedCount=world.pawns.length;this.bodyAtlasModelKey=this.humanModel?.key??'';if(this.observeBodyAtlasPoseAggregate(allRigid)||atlasChanged)this.bodyAtlas?.invalidate();
+    if(!prepared)this.fullPreparation297={world,indices,pawnsById,bodies,retainedOffsets,apparel,gears,burning,carried,pileOwners,carriedBuckets,packedOwners,geometry,modelKey,animationKeys};
+  }
+
+  /** A native frontier changes contact/pose/cargo only; its dependency fence
+   * keeps appearance, equipment, body ownership, carrying pairs, fire and
+   * furniture geometry at the authentic Full. Retain those constructive
+   * inputs while preserving the existing actor/spring application exactly. */
+  updatePhase297(base:World,view:World,poses:ReadonlyMap<number,CoreHumanPose297>,changedHumans:ReadonlySet<number>,changedPoses:ReadonlyMap<number,CoreHumanPose297>,piles:ReadonlyMap<number,Readonly<MaterialPile>|null>,source?:(id:number)=>number|undefined,jobs?:ReadonlyMap<number,Job>):void {
+    const prepared=this.fullPreparation297;
+    if(!prepared||prepared.world!==base||!isActorPlaybackWorld435(base)||view.pawns.length!==prepared.indices.size){this.update(view,this.blend.value,false,poses);return;}
+    this.fullPreparation297=undefined;
+    for(const index of changedHumans){const pawn=view.pawns[index];if(!pawn||prepared.indices.get(pawn.id)!==index)throw Error('Phase human changed its Full slot');prepared.pawnsById.set(pawn.id,pawn);}
+    for(const row of changedPoses.values()){const pawn=view.pawns[row.index];if(!pawn||pawn.id!==row.id)throw Error('Phase pose changed its Full slot');prepared.pawnsById.set(row.id,pawn);if(this.referenceRig&&row.job)this.workToolJobs.set(row.job.id,row.job as Job);}
+    const owners=new Set<number>();
+    for(const [id,next]of piles){const oldOwner=prepared.pileOwners.get(id);if(oldOwner!==undefined){prepared.carriedBuckets.get(oldOwner)?.delete(id);prepared.pileOwners.delete(id);owners.add(oldOwner);}
+      if(next?.owner.type==='pawn'){const at=source?.(id),pile=at===undefined?view.piles.find(p=>p.id===id):view.piles[at];if(!pile||pile.id!==id)throw Error('Phase carried pile missing its target row');
+        let bucket=prepared.carriedBuckets.get(next.owner.pawnId);if(!bucket){bucket=new Map();prepared.carriedBuckets.set(next.owner.pawnId,bucket);}bucket.set(id,pile);prepared.pileOwners.set(id,next.owner.pawnId);owners.add(next.owner.pawnId);}
+    }
+    for(const owner of owners){const bucket=prepared.carriedBuckets.get(owner);let winner:MaterialPile|undefined,ordinal=-1;
+      if(source){for(const pile of bucket?.values()??[]){const at=source(pile.id);if(at!==undefined&&at>ordinal){ordinal=at;winner=pile;}}}
+      else for(const pile of view.piles)if(pile.owner.type==='pawn'&&pile.owner.pawnId===owner)winner=pile;
+      if(winner)prepared.carried.set(owner,winner);else prepared.carried.delete(owner);
+    }
+    this.phaseReuse297=prepared;this.phaseNative297=nativePhasePose297(base,view,prepared.indices);this.phaseJobLookup297=jobs;this.phasePileSource297=source;
+    try{this.update(view,this.blend.value,false,poses);this.fullPreparation297=prepared;}
+    finally{this.phaseReuse297=undefined;this.phaseNative297=false;this.phaseJobLookup297=undefined;this.phasePileSource297=undefined;}
   }
 
   /** No appearance, surface, ownership or job reconstruction on an actor-only
    * phase. Those changes are explicit Full barriers in the producer. */
   adoptPhase297(world:World,indices:readonly number[],actorScene?:CoreActorScene297,changedActorIds?:ReadonlySet<number>):void {
     const humans=actorScene?.humans??world.pawns,dirty=new Set(indices);
+    const prepared=this.fullPreparation297;if(prepared?.world===world&&isActorPlaybackWorld435(world))for(const index of indices){const pawn=humans[index];if(pawn&&prepared.indices.get(pawn.id)===index)prepared.pawnsById.set(pawn.id,pawn);}
     // A stationary attacker also depends on the confirmed position of its target.
     // Resolve this once per adoption, rather than scanning dependencies every RAF.
     if(actorScene){const targets=changedActorIds??new Set(indices.map(i=>humans[i]!.id));
@@ -1476,6 +1581,10 @@ export class PawnLayer {
   private springMotionW297=new Float32Array(0);
   private springGaitPhase297=new Float32Array(0);
   private springValid297=new Uint8Array(0);
+  private springActive297=new Uint8Array(0);
+  private readonly springWork297=new ActorSpringWork435();
+  private springRetainedAlpha297=new Float64Array(0);
+  private readonly springMetrics297={evaluations:0,retained:0,captures:0,hitWakes:0};
   /** Keyed motion x/z (walking code and pose) behind the arrival tail. */
   private springMotionX297=new Float32Array(0);
   private springMotionZ297=new Float32Array(0);
@@ -1492,6 +1601,7 @@ export class PawnLayer {
     const copy=(old:THREE.BufferAttribute)=>{const value=new THREE.BufferAttribute(new Float32Array(n*4),4);(value.array as Float32Array).set(old.array);return value;};
     this.springFrom297=copy(this.springFrom297);this.springTo297=copy(this.springTo297);this.springTravel297=copy(this.springTravel297);
     const w=new Float32Array(n),phase=new Float32Array(n),valid=new Uint8Array(n);w.set(this.springMotionW297);phase.set(this.springGaitPhase297);valid.set(this.springValid297);this.springMotionW297=w;this.springGaitPhase297=phase;this.springValid297=valid;this.springCapacity297=n;this.tweener297.ensure(n);
+    const active=new Uint8Array(n),retainedAlpha=new Float64Array(n);active.set(this.springActive297);retainedAlpha.set(this.springRetainedAlpha297);this.springActive297=active;this.springRetainedAlpha297=retainedAlpha;
     const x=new Float32Array(n),z=new Float32Array(n),tail=new Uint8Array(n),plan=new Float32Array(n*5);x.set(this.springMotionX297);z.set(this.springMotionZ297);tail.set(this.springTail297);plan.set(this.springTailPlan297);
     this.springMotionX297=x;this.springMotionZ297=z;this.springTail297=tail;this.springTailPlan297=plan;
   }
@@ -1499,10 +1609,17 @@ export class PawnLayer {
     this.springFrom297.setXYZW(slot,from.getX(slot),from.getY(slot),from.getZ(slot),from.getW(slot));
     this.springTo297.setXYZW(slot,to.getX(slot),to.getY(slot),to.getZ(slot),to.getW(slot));
     this.springTravel297.setXYZW(slot,travel.getX(slot),travel.getY(slot),travel.getZ(slot),travel.getW(slot));
-    this.springMotionW297[slot]=motion.getW(slot);this.springValid297[slot]=1;
+    this.springMotionW297[slot]=motion.getW(slot);this.springValid297[slot]=1;this.springActive297[slot]=1;this.springWork297.wake(slot);this.springMetrics297.captures++;
     this.springMotionX297[slot]=motion.getX(slot);this.springMotionZ297[slot]=motion.getZ(slot);
   }
-  private springPose297(slot:number,pawn:Pawn,dt:number,speed:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,motion:THREE.BufferAttribute|THREE.InterleavedBufferAttribute):boolean {
+  private springPose297(slot:number,pawn:Pawn,dt:number,speed:number,from:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,to:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,travel:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,motion:THREE.BufferAttribute|THREE.InterleavedBufferAttribute,retain=false):boolean {
+    // Exact Float32 terminal state, never an epsilon snap. A larger spring
+    // coefficient can unstick a previously rounded recurrence, so it must
+    // evaluate again; equal/smaller coefficients provably retain the root.
+    const alpha=speed>=5?1:Math.min(1,.09*dt*60*speed);
+    if(retain&&!this.springActive297[slot]&&dt>=0&&speed>=0&&Number.isFinite(dt)&&Number.isFinite(speed)&&alpha<=this.springRetainedAlpha297[slot]!){this.springMetrics297.retained++;return false;}
+    if(retain){this.springActive297[slot]=1;this.springWork297.wake(slot);}
+    this.springMetrics297.evaluations++;
     const target=sampleActorRoot(this.springFrom297,this.springTo297,this.springTravel297,slot,this.travelTime.value,this.blend.value,this.springTarget297);
     // Body transitions preserve their existing anchor. Ordinary stops retain
     // the tweened position; map and actor-slot resets clear its history.
@@ -1545,7 +1662,17 @@ export class PawnLayer {
       // The drawn body has arrived: the keyed pose (sitting, lying, working) begins.
       motion.setX(slot,keyedX);motion.setZ(slot,keyedZ);this.springTail297[slot]=0;changed=true;
     }
-    const visual=this.visuals.get(pawn.id)!;visual.from.set(x,pose.y,z,target.yaw);visual.to.copy(visual.from);return changed;
+    const visual=this.visuals.get(pawn.id)!;visual.from.set(x,pose.y,z,target.yaw);visual.to.copy(visual.from);
+    if(retain&&!stepping&&tailPose<0&&!struck&&!pushed&&!changed&&!this.tweener297.fresh&&speed>0&&dt>0){
+      const start=this.springTravel297.getX(slot),end=this.springTravel297.getY(slot),stationary=this.springTravel297.getW(slot)>1,time=this.travelTime.value;
+      const yawDiffers=this.springFrom297.getW(slot)!==this.springTo297.getW(slot);
+      const timed=end>start&&time<end;
+      const turning=yawDiffers&&(stationary||end>start)&&time<(stationary?this.springTravel297.getZ(slot):start)+TURN_SECONDS;
+      const blending=end<=start&&this.blend.value<1&&(this.springFrom297.getX(slot)!==this.springTo297.getX(slot)||this.springFrom297.getY(slot)!==this.springTo297.getY(slot)||this.springFrom297.getZ(slot)!==this.springTo297.getZ(slot)||!stationary&&yawDiffers);
+      const pendingStrike=!!pawn.melee?.strike&&this.frameCore297<pawn.melee.strike.atCore;
+      if(!timed&&!turning&&!blending&&!pendingStrike&&!this.meleeRecoil.hasPending(pawn.id,this.frameCore297)){this.springActive297[slot]=0;this.springRetainedAlpha297[slot]=alpha;this.springWork297.sleep(slot,alpha);}
+    }
+    return changed;
   }
 
   /** Registers each confirmed melee hit on a human once (attackers: humans,
@@ -1553,9 +1680,10 @@ export class PawnLayer {
    * its slot index when a new hit appears. */
   private observeMeleeHits(world:World,humans:readonly Pawn[],animals:readonly {id:number;x:number;z:number;strike?:MeleeState['strike']}[]|undefined):void {
     const victim=(id:number)=>{const slot=this.pawnIndices.get(id),pawn=slot===undefined?undefined:humans[slot];return pawn?.id===id?pawn:undefined;};
-    for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim);}
-    if(animals)for(const animal of animals)if(animal.strike)this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim);
-    for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim);}
+    const wake=(id:number|undefined)=>{if(id===undefined)return;const slot=this.pawnIndices.get(id);if(slot!==undefined){this.springActive297[slot]=1;this.springWork297.wake(slot);this.springMetrics297.hitWakes++;}};
+    for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)wake(this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim));}
+    if(animals)for(const animal of animals)if(animal.strike)wake(this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim));
+    for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)wake(this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim));}
   }
 
   /** CPU chooses a confirmed edge; translation, orientation and rig evaluation stay on GPU. */
@@ -1569,15 +1697,25 @@ export class PawnLayer {
     this.travelOrigin=origin;
     this.travelTime.value=localTimeSeconds(timeline.tick,origin);
     const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.travelKeys.clear();
+    // A mutable/exposed timeline revokes endpoint scheduling, not the exact
+    // terminal Float32 recurrence of an owned actor. The exhaustive endpoint
+    // writer below still captures every changed primitive before spring use.
+    const retainSpring=isActorPlaybackWorld435(world);
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
     this.frameCore297=timeline.tick*10;
     if(spring)this.observeMeleeHits(world,humans,animals);
     let dirty=false,partUnionDirty=false,allRigidBefore=true,allRigidAfter=true;
-    humans.forEach((pawn,i)=>{
-      allRigidBefore=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidBefore;
+    const scheduled=playback?this.playback435.frameIndices435(timeline,timeline.tick,origin):undefined;
+    if(scheduled&&spring)this.springWork297.wakeCoefficient(dt297,speed297);
+    // The real atlas still validates every pose before any endpoint writes.
+    // Without an atlas no per-slot aggregate work is needed.
+    if(scheduled){if(this.bodyAtlas)humans.forEach((pawn,i)=>{allRigidBefore=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidBefore;});else allRigidBefore=!humans.length;}
+    const updateSlot=(pawn:Pawn,i:number)=>{
+      if(!scheduled)allRigidBefore=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidBefore;
       const prepared=playback?this.playback435.select(i,timeline,timeline.tick,origin):undefined;
+      if(spring&&prepared){this.springActive297[i]=1;this.springWork297.wake(i);}
       if(spring&&!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);
-      if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
+      if(playback&&!prepared){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,retainSpring)||dirty;return;}
       if(this.referenceRig)this.refreshOrigamiEquipmentSignal(pawn,i);
       const segment=pawn.body?.pileId!==undefined||pawn.body?.lostAt!==undefined?undefined:(playback?prepared!.edge:timeline.segment(pawn.id));
       const active=!!segment && timeline.tick<segment.end;
@@ -1589,7 +1727,7 @@ export class PawnLayer {
         :seatedWorkPose(animationPose(pawn,this.workPoses.get(pawn.id)??0,smallMelee,seatedOnFurniture(pawn)),this.workPoses.get(pawn.id)??0,benchSeated(world,pawn));
       this.showPose(pawn.id,shownPose,timeline.tick);
       const key=`${origin}:${segment?.start}:${segment?.end}:${segment?.edgeStart}:${segment?.fromFraction}:${segment?.toFraction}:${active}:${!!segment&&timeline.tick>=segment.start}:${pawn.state}:${shownPose}:${pawn.path[0]?.x}:${pawn.path[0]?.z}:${pasteCollect?.dispenserId}`;
-      if(this.travelKeys.get(pawn.id)===key){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;return;}
+      if(this.travelKeys.get(pawn.id)===key){if(spring)dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,retainSpring)||dirty;return;}
       this.travelKeys.set(pawn.id,key);dirty=true;
       const priorActivity=motion.getY(i);
       const visual=this.visuals.get(pawn.id)!;
@@ -1679,8 +1817,22 @@ export class PawnLayer {
       from.setXYZW(i,visual.from.x,visual.from.y,visual.from.z,visual.from.w);to.setXYZW(i,visual.to.x,visual.to.y,visual.to.z,visual.to.w);
       allRigidAfter=this.observeBodyAtlasPose(pawn.id,i,geometry)&&allRigidAfter;
       if(motion.getY(i)!==priorActivity)partUnionDirty=true;
-      if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion)||dirty;}
-    });
+      if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,retainSpring)||dirty;}
+    };
+    if(scheduled&&scheduled.length===humans.length)humans.forEach(updateSlot);
+    else if(scheduled){
+      const visit=new Set(scheduled);
+      // Keep native source order while evaluating the small union of actual
+      // endpoint changes, dependent actors and still-active Float32 roots.
+      if(spring)for(const i of this.springWork297.active)if(i<humans.length)visit.add(i);
+      if(spring)this.springMetrics297.retained+=humans.length-visit.size;
+      const changedSlots=new Set(scheduled);
+      for(const i of [...visit].sort((a,b)=>a-b)){
+        const pawn=humans[i]!;
+        if(changedSlots.has(i))updateSlot(pawn,i);
+        else if(spring){if(!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,true)||dirty;}
+      }
+    }else humans.forEach(updateSlot);
     let crouchFinished=false;
     for(const [id,transition] of this.crouchTransitions){
       if(timeline.tick<transition.start+CROUCH_TICKS)continue;

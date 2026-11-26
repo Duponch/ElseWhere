@@ -20,6 +20,8 @@ import { isShelfKind,shelfFixedAccepts } from './shelf-storage.ts';
 import { structureById } from './structure-navigation.ts';
 import { resourceArrayDelta } from './resource-array-delta.ts';
 import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 export const isConstruction = (job: Pick<Job,'kind'>): boolean => job.kind==='build-bridge'||job.kind==='install'||job.kind==='lay-floor'||job.kind in STRUCTURE_DEFINITIONS;
 export const containsCell = (job: Job, cell: Cell): boolean => footprintCells(job).some(c=>c.x===cell.x&&c.z===cell.z);
@@ -31,11 +33,80 @@ export const constructionHaulPriority = (pawn: Pawn): number => Math.min(workPri
 export const asBuilder = (pawn: Pawn): boolean => workPriority(pawn,'build')>0&&workPriority(pawn,'build')<= (workPriority(pawn,'haul')||Infinity);
 
 export interface ConstructionObstruction { plant?:Resource; pile?:MaterialPile; pack?:import('./furniture-rules.ts').PackedFurniture }
+interface ConstructionSiteDirectory379 {
+ readonly owner:object;readonly source:readonly Job[];readonly count:number;readonly first?:Job;readonly last?:Job;readonly width:number;readonly version:number;
+ readonly sites:Map<number,number[]>;readonly ids:readonly number[];readonly clearItems:Set<number>;readonly shelves:Set<number>;readonly jobs:Map<number,Job>;
+}
+const constructionSiteDirectories379=new WeakMap<readonly Job[],ConstructionSiteDirectory379>();
+const constructionSiteWork={geometryBuilds:0,footprints:0,groundScans:0,indexedGroundReads:0};
+export const constructionSiteWork379=()=>({...constructionSiteWork});
+/** Construction footprint topology belongs to the actual jobs collection,
+ * not to the actor who happens to plan a task. Every live geometry writer
+ * creates a new job, appends it, or replaces the jobs array; status, progress,
+ * reservation and blueprint→frame transitions never move a footprint. A
+ * public observation revokes the directory. Partial/ad-hoc candidates use
+ * their own one-shot directory. Mutable resource and pile state stays live. */
+function constructionSites379(world:World,candidates:readonly Job[],owner:object):ConstructionSiteDirectory379 {
+ const source=world.jobs,cached=candidates===source?constructionSiteDirectories379.get(source):undefined;
+ if(cached&&cached.owner===owner&&cached.count===source.length&&cached.first===source[0]&&cached.last===source[source.length-1]&&cached.width===world.width&&cached.version===world.schemaVersion)return cached;
+ const sites=new Map<number,number[]>(),ids=new Set<number>(),clearItems=new Set<number>(),shelves=new Set<number>(),jobs=new Map<number,Job>();
+ for(const job of source)if(!jobs.has(job.id))jobs.set(job.id,job);
+ for(const job of candidates)if(isConstruction(job)){
+  ids.add(job.id);if(clearsGroundItems(world,job.furniture?.kind??job.kind))clearItems.add(job.id);
+  if(isShelfKind(job.furniture?.kind??job.kind))shelves.add(job.id);
+  for(const c of footprintCells(job)){const cell=c.z*world.width+c.x,rows=sites.get(cell);if(rows)rows.push(job.id);else sites.set(cell,[job.id]);}
+  constructionSiteWork.footprints++;
+ }
+ const next={owner,source,count:source.length,first:source[0],last:source[source.length-1],width:world.width,version:world.schemaVersion,sites,ids:[...ids],clearItems,shelves,jobs};
+ if(candidates===source)constructionSiteDirectories379.set(source,next);
+ constructionSiteWork.geometryBuilds++;return next;
+}
+/** Query only the physical footprint cells of real plans. Each cell's pile
+ * list is in original order. Most plans contain no blocker; a multi-cell plan
+ * with a different blocker in two cells uses one exact shared source-order
+ * merge. Invalid out-of-map piles keep the original scalar scan. */
+function constructionGroundObstructions379(world:World,sites:ReadonlyMap<number,number[]>,clearItems:ReadonlySet<number>,shelves:ReadonlySet<number>,result:Map<number,ConstructionObstruction>):void {
+ const index=pileIndex(world);
+ if(!index||index.groundOutside){constructionSiteWork.groundScans++;for(const pile of world.piles)if(pile.owner.type==='ground')for(const id of sites.get(pile.owner.z*world.width+pile.owner.x)??[])if(clearItems.has(id)&&(!shelves.has(id)||!shelfFixedAccepts(pile)))result.get(id)!.pile??=pile;return;}
+ constructionSiteWork.indexedGroundReads++;
+ let ambiguous:Map<number,Set<MaterialPile>>|undefined;
+ for(const [cell,ids] of sites){const rows=index.groundAt.get(cell);if(!rows?.length)continue;
+  for(const id of ids)if(clearItems.has(id)){
+   const choice=shelves.has(id)?rows.find(p=>!shelfFixedAccepts(p)):rows[0];if(!choice)continue;
+   const row=result.get(id)!,previous=row.pile;
+   if(!previous)row.pile=choice;
+   else if(previous!==choice){let options=ambiguous?.get(id);if(!options){options=new Set([previous]);(ambiguous??=new Map()).set(id,options);}options.add(choice);}
+  }
+ }
+ if(ambiguous?.size){
+  constructionSiteWork.groundScans++;
+  const byPile=new Map<MaterialPile,number[]>();for(const [id,options] of ambiguous)for(const pile of options){const rows=byPile.get(pile);if(rows)rows.push(id);else byPile.set(pile,[id]);}
+  for(const pile of world.piles){for(const id of byPile.get(pile)??[])if(ambiguous.delete(id))result.get(id)!.pile=pile;if(!ambiguous.size)break;}
+ }
+}
 /** One synchronous planner decision. Keep array ordering for multi-cell sites,
  * and discard this index before any transfer, cutting or construction occurs.
  * Small plants are not blockers; their Frame/final destruction is committed
  * separately after the physical placement and custody preflight succeeds. */
 export function constructionObstructions(world:World,candidates:readonly Job[]=world.jobs):ReadonlyMap<number,ConstructionObstruction> {
+  const owner=terrainJournalReadOwner();
+  if(!owner){retireResourceCellIndex379(world);constructionSiteDirectories379.delete(world.jobs);return scanConstructionObstructions(world,candidates);}
+  const resources=resourceCellIndex(world);if(!resources.unique)return scanConstructionObstructions(world,candidates);
+  const {sites,ids,clearItems,shelves,jobs}=constructionSites379(world,candidates,owner),result=new Map<number,ConstructionObstruction>();
+  for(const id of ids)result.set(id,{});
+  if(!sites.size)return result;
+  // Query only the footprint cells. A resident source ordinal chooses the
+  // same first plant across a multi-cell footprint as the old whole-array walk.
+  const selected=new Map<number,number>();
+  for(const [cell,ids] of sites)for(const resource of resources.byCell.get(cell)??[])for(const id of ids)if(constructionPlantBlocks(jobs.get(id)!,resource)){
+    const order=resources.order.get(resource)!;if(order<(selected.get(id)??Infinity)){selected.set(id,order);result.get(id)!.plant=resource;}
+  }
+  constructionGroundObstructions379(world,sites,clearItems,shelves,result);
+  for(const pack of world.packed??[])if(pack.owner.type==='ground')for(const id of sites.get(pack.owner.z*world.width+pack.owner.x)??[])if(clearItems.has(id)&&jobs.get(id)?.furniture?.structureId!==pack.building.id)result.get(id)!.pack??=pack;
+  if(verifyTerrainWriteCaches){const expected=scanConstructionObstructions(world,candidates);if(expected.size!==result.size)throw Error('Construction obstruction directory changed membership');for(const [id,row] of expected){const actual=result.get(id);if(!actual||row.plant!==actual.plant||row.pile!==actual.pile||row.pack!==actual.pack)throw Error('Construction obstruction directory changed source order');}}
+  return result;
+}
+function scanConstructionObstructions(world:World,candidates:readonly Job[]):ReadonlyMap<number,ConstructionObstruction> {
   const sites=new Map<number,number[]>(),result=new Map<number,ConstructionObstruction>(),clearItems=new Set<number>(),shelves=new Set<number>();
   for(const job of candidates)if(isConstruction(job)) {
     result.set(job.id,{});if(clearsGroundItems(world,job.furniture?.kind??job.kind))clearItems.add(job.id);
@@ -51,15 +122,16 @@ export function constructionObstructions(world:World,candidates:readonly Job[]=w
   for(const pack of world.packed??[])if(pack.owner.type==='ground')for(const id of sites.get(pack.owner.z*world.width+pack.owner.x)??[])if(clearItems.has(id)&&world.jobs.find(j=>j.id===id)?.furniture?.structureId!==pack.building.id)result.get(id)!.pack??=pack;
   return result;
 }
-type ResourceCellIndex={length:number;readonly width:number;readonly byCell:Map<number,Resource[]>};
+type ResourceCellIndex={length:number;readonly owner:object|undefined;readonly width:number;readonly byCell:Map<number,Resource[]>;readonly order:Map<Resource,number>;nextOrder:number;readonly unique:boolean};
 const resourceCellIndexes=new WeakMap<readonly Resource[],ResourceCellIndex>();
 /** The list whose index was last built or derived (deriving moves it on). */
 let lastResourceList:readonly Resource[]|undefined;
+function retireResourceCellIndex379(world:World):void {resourceCellIndexes.delete(world.resources);if(lastResourceList===world.resources)lastResourceList=undefined;}
 const RESOURCE_CELL_DELTA_LIMIT=256;
 function buildResourceCellIndex(list:readonly Resource[],width:number):ResourceCellIndex {
-  const byCell=new Map<number,Resource[]>();
-  for(let i=0;i<list.length;i++){const r=list[i]!,key=r.z*width+r.x,at=byCell.get(key);if(at)at.push(r);else byCell.set(key,[r]);}
-  return {length:list.length,width,byCell};
+  const byCell=new Map<number,Resource[]>(),order=new Map<Resource,number>();let unique=true;
+  for(let i=0;i<list.length;i++){const r=list[i]!,key=r.z*width+r.x,at=byCell.get(key);if(at)at.push(r);else byCell.set(key,[r]);if(order.has(r))unique=false;else order.set(r,i);}
+  return {length:list.length,owner:terrainJournalReadOwner(),width,byCell,order,nextOrder:list.length,unique};
 }
 /** Moves the index of `previous` to `next` when `next` is `previous` with some
  * resources dropped and new ones appended (resourceArrayDelta): each cell
@@ -67,17 +139,20 @@ function buildResourceCellIndex(list:readonly Resource[],width:number):ResourceC
 function deriveResourceCellIndex(previous:readonly Resource[],index:ResourceCellIndex,next:readonly Resource[]):boolean {
   const width=index.width;if(previous.length!==index.length)return false;
   const delta=resourceArrayDelta(previous,next,RESOURCE_CELL_DELTA_LIMIT);if(!delta)return false;
+  if(!index.unique||!Number.isSafeInteger(index.nextOrder+next.length-delta.appendedFrom))return false;
+  const removed=new Set(delta.removed),added=new Set<Resource>();
+  for(let k=delta.appendedFrom;k<next.length;k++){const r=next[k]!;if(index.order.has(r)&&!removed.has(r)||added.has(r))return false;added.add(r);}
   for(const r of delta.removed){const at=index.byCell.get(r.z*width+r.x);if(!at||!at.includes(r))return false;}
-  for(const r of delta.removed){const key=r.z*width+r.x,at=index.byCell.get(key)!;at.splice(at.indexOf(r),1);if(!at.length)index.byCell.delete(key);}
-  for(let k=delta.appendedFrom;k<next.length;k++){const r=next[k]!,key=r.z*width+r.x,at=index.byCell.get(key);if(at)at.push(r);else index.byCell.set(key,[r]);}
+  for(const r of delta.removed){const key=r.z*width+r.x,at=index.byCell.get(key)!;at.splice(at.indexOf(r),1);if(!at.length)index.byCell.delete(key);index.order.delete(r);}
+  for(let k=delta.appendedFrom;k<next.length;k++){const r=next[k]!,key=r.z*width+r.x,at=index.byCell.get(key);if(at)at.push(r);else index.byCell.set(key,[r]);index.order.set(r,index.nextOrder++);}
   index.length=next.length;resourceCellIndexes.delete(previous);resourceCellIndexes.set(next,index);
   return true;
 }
 function resourceCellIndex(world:World):ResourceCellIndex {
-  const list=world.resources,width=world.width;let index=resourceCellIndexes.get(list);
-  if(index&&index.length===list.length&&index.width===width)return index;
+  const list=world.resources,width=world.width,owner=terrainJournalReadOwner();let index=resourceCellIndexes.get(list);
+  if(index&&index.owner===owner&&index.length===list.length&&index.width===width)return index;
   const previous=lastResourceList,old=previous&&previous!==list?resourceCellIndexes.get(previous):undefined;
-  if(!index&&previous&&old&&old.width===width&&deriveResourceCellIndex(previous,old,list))index=old;
+  if(!index&&previous&&old&&old.owner===owner&&old.width===width&&deriveResourceCellIndex(previous,old,list))index=old;
   else {index=buildResourceCellIndex(list,width);resourceCellIndexes.set(list,index);}
   lastResourceList=list;return index;
 }
@@ -86,6 +161,7 @@ function resourceCellIndex(world:World):ResourceCellIndex {
  * with that key test. Indexed per resources array, which a running World
  * replaces instead of editing in place; a resource never moves. */
 function firstResourceAt(world:World,keys:ReadonlySet<number>,accept:(resource:Resource)=>boolean):Resource|undefined {
+  if(!terrainJournalReadOwner()){retireResourceCellIndex379(world);return world.resources.find(r=>keys.has(r.z*world.width+r.x)&&accept(r));}
   const index=resourceCellIndex(world);
   let found:Resource|undefined,several:Set<Resource>|undefined;
   for(const key of keys)for(const r of index.byCell.get(key)??[])if(accept(r)){if(found)(several??=new Set([found])).add(r);else found=r;break;}

@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {journalLetter352,actors352,cell352} from './letter-producers-352.ts';
@@ -138,7 +139,7 @@ export function createRaidGroup(w:World,options:RaidSpawnOptions):RaidGroup|null
   if(options.forceOneDowned347&&group.members.length)group.forcedDowned347=group.members[0]!;
   if(arrival)group.arrival333=arrival;
   if(independent)group.shipReactor275={...options.shipReactor275!};
-  w.nextId=made.next;w.pawns.push(...made.generated);w.piles.push(...made.piles);if(!options.preserveCalendarRng&&!independent)s.rng=random.rng;options.random.rng=random.rng;s.serial=id;
+  w.nextId=made.next;w.pawns.push(...made.generated);appendPileEntries(w.piles,...made.piles);if(!options.preserveCalendarRng&&!independent)s.rng=random.rng;options.random.rng=random.rng;s.serial=id;
   if(concurrent)group.concurrent341=true;
   if(independent||concurrent){s.extraActive261??=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];s.extraActive261.push(group);if(concurrent)s.nextCheck=null;}else{s.nextCheck=null;s.active=group;}
   const label=chosen?` (${w.worldFactions!.factions.find(f=>f.id===chosen.factionId)!.name})`:'';

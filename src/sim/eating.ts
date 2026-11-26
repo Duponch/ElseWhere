@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {localIngestionCore299,commitHumanIngestion299,selfFoodPermission299} from './human-ingestion-clock299.ts';
@@ -55,7 +57,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
     if(!meal){release();return;}
     task.carryPileId=meal.id;task.phase='collect';pawn.path=[];pawn.state='moving';return;
   }
-  const pile = world.piles.find(item => item.id === (task.phase === 'pickup' ? task.sourcePileId : task.carryPileId));
+  const pile = pileById(world,task.phase === 'pickup' ? task.sourcePileId : task.carryPileId);
   if (!pile || !(alcohol?beerPile265(pile):drug?penoxycylinePile337(pile):pile.kind==='food')||task.alcoholReason!=='binge'&&!selfFoodPermission299(pile,ignoreFoodForbidden299)) { release(); return; }
   if(alcohol&&(task.paste||task.phase==='collect'||(task.alcoholReason==='inventory'?(task.phase!=='pickup'||task.quantity<1||task.quantity>3):task.quantity!==1))){release();return;}
   if(drug&&(task.paste||task.phase==='collect'||task.quantity!==1)){release();return;}
@@ -76,8 +78,8 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
       assignPileOwner(pile,{ type: 'pawn', pawnId: pawn.id }); task.carryPileId = pile.id;
     } else {
       if (world.piles.length >= 32768 || !Number.isSafeInteger(world.nextId + 1)) { release(); return; }
-      pile.quantity -= task.quantity; task.carryPileId = world.nextId++;
-      world.piles.push({ id: task.carryPileId, kind: pile.kind, item: pile.item, quantity: task.quantity, owner: { type: 'pawn', pawnId: pawn.id }, ...copyPileCondition(pile) });
+      markPileContentWrite379(pile).quantity -= task.quantity; task.carryPileId = world.nextId++;
+      appendPileEntries(world.piles,{ id: task.carryPileId, kind: pile.kind, item: pile.item, quantity: task.quantity, owner: { type: 'pawn', pawnId: pawn.id }, ...copyPileCondition(pile) });
     }
     task.phase = 'choose-spot'; pawn.path = []; pawn.state = 'moving'; pawn.needCooldown = 0;
     return;
@@ -115,7 +117,7 @@ export function processEating(world: World, pawn: Pawn, context: NeedContext): v
   advanceWork(task,physicalEatingFactor(pawn));
   if (task.progress >= (drug?PENOXYCYLINE_FACTS_337.ingestTicks:INGEST_TICKS)) {
     const ingestedAt299=localIngestionCore299(world,pawn);
-    world.piles.splice(world.piles.indexOf(pile), 1);
+    splicePileEntries(world.piles,world.piles.indexOf(pile), 1);
     pawn.hunger = Math.min(100, pawn.hunger + nutritionOf(pile));
     commitHumanIngestion299(pawn,ingestedAt299);
     if(alcohol){

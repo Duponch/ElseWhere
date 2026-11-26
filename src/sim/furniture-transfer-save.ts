@@ -1,4 +1,5 @@
 import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';
+import {validConstructionMarkers379} from './construction-state-379.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {validBuildingFuelShape} from './biofuel-save.ts';
 import {validFirefoamPopper290} from './firefoam-state-290.ts';
@@ -104,6 +105,7 @@ export function validatePackedFurnitureRecords(packed:readonly import('./furnitu
     if(record(pack)&&record(pack.building)&&(pack.building.kind==='vent'||Object.hasOwn(pack.building,'vent'))){errors.push('Invalid vent state on packed furniture.');continue;}
     if(!record(pack)||!record(pack.building)||!record(pack.owner)) {errors.push('Invalid furniture package.');continue;}
     const b=pack.building,o:Record<string,unknown>=pack.owner;
+    if(!validConstructionMarkers379(b,version))errors.push('Invalid or future packed construction provenance.');
     if(!validPackedFirefoam290(b,version))errors.push('Invalid or future packed firefoam component.');
     if((b.kind==='fueled-smithy'||b.kind==='electric-smithy')&&(version<267||b.material!=='steel'||b.footprint!=='standard'||Object.hasOwn(b,'quality')))errors.push('Invalid or future packed smithy.');
     if(b.kind==='fermenting-barrel'?(version<265||!validFermentationState265(b.fermentation)):Object.hasOwn(b,'fermentation'))errors.push('Invalid or future packed fermentation.');
@@ -114,7 +116,7 @@ export function validatePackedFurnitureRecords(packed:readonly import('./furnitu
     if(!validAncientCasketWickField256(b,version,world.tick)){errors.push('Invalid future/extraneous casket wick on packed furniture.');continue;}
     if(!validBedrollBuilding256(b,version)||!validAncientMonumentBuilding256(b,version))errors.push('Invalid or future packed bedroll.');
     if(version>=258){
-      if(Reflect.ownKeys(b).some(k=>typeof k!=='string'||!['id','kind','x','z','orientation','footprint','material','quality','damage','medical','prisoner','fuel','bills','flower','gatherSpot','shelf','spikeTrap','art','power','battery','heater','breakdown','deepDrill','emp','factionId','glowPod',...(version>=265?['fermentation']:[]),...((version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))?['firefoam290']:[])].includes(k)))errors.push('Unknown packed building field.');
+      if(Reflect.ownKeys(b).some(k=>typeof k!=='string'||![...(version>=379?['tailorSteel379']:[]),'id','kind','x','z','orientation','footprint','material','quality','damage','medical','prisoner','fuel','bills','flower','gatherSpot','shelf','spikeTrap','art','power','battery','heater','breakdown','deepDrill','emp','factionId','glowPod',...(version>=265?['fermentation']:[]),...((version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))?['firefoam290']:[])].includes(k)))errors.push('Unknown packed building field.');
       if(b.damage!==undefined&&(!integer(b.damage,1)||b.damage>=structureMaxHp(b as unknown as import('./types.ts').Structure,version)))errors.push('Invalid packed building damage.');
       if(isHabitatFurnitureKind(b.kind)&&FURNITURE_DEFINITIONS[b.kind].quality||isJoyTableKind354(b.kind)&&JOY_TABLES_354[b.kind].quality||isSculptureKind(b.kind)){if(!isFurnitureQuality(b.quality))errors.push('Invalid packed furniture quality.');}else if(b.quality!==undefined)errors.push('Unexpected packed furniture quality.');
       if(b.flower!==undefined&&(b.kind!=='flower-pot'||validateFlowerPotState(b.flower,world.tick).length)||b.kind==='flower-pot'&&b.flower===undefined)errors.push('Invalid packed flower pot state.');

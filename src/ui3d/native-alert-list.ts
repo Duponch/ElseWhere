@@ -1,7 +1,7 @@
 import {animalSpecies} from '../sim/animal-species';
 import {ITEM_DEFINITIONS} from '../sim/items';
 import {mechanoidDefinition} from '../sim/mechanoid-definition';
-import type {World} from '../sim/types';
+import type {Resource,World} from '../sim/types';
 import {CORE_ALERT_PRIORITY_RANK,coreAlertPriority,coreAlertsStarted,type CoreAlertPriority} from '../ui/alert-priority';
 import {buildingLabels} from '../ui/building-labels';
 import type {FoodReadability} from '../sim/food-readability';
@@ -19,8 +19,8 @@ export const ALERT_RECHECK_MS=400;
 /** Core alerts appear only once 600 Core ticks have passed (AlertsReadout);
  * letter projections (domain rows) are messages, not alerts, and stay visible
  * from the start, like the arrival of the starting pods. Pure, no mutation. */
-export function readNativeAlertRows(world:World,food:FoodReadability|undefined,speed?:number):PrioritizedHudAlert[] {
-  const status:HudAlert[]=coreAlertsStarted(world)?readStatusAlerts(world,food):[];
+export function readNativeAlertRows(world:World,food:FoodReadability|undefined,speed?:number,knownBlighted?:()=>readonly Resource[]):PrioritizedHudAlert[] {
+  const status:HudAlert[]=coreAlertsStarted(world)?readStatusAlerts(world,food,knownBlighted):[];
   const domain:HudAlert[]=readNativeDomainAlerts(world,speed).map(row=>({...row,domain:row}));
   return [...status,...domain].map(row=>({...row,priority:coreAlertPriority(row)}));
 }

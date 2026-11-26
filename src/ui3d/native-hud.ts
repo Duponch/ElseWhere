@@ -13,7 +13,6 @@ import {WEATHER} from '../sim/weather-definitions';
 import {windIntensity} from '../sim/wind-rules';
 import {activeEclipse} from '../sim/eclipse';
 import {ITEM_DEFINITIONS, type ItemId} from '../sim/items';
-import {colonyPile} from '../sim/materials';
 import {captureFoodReadability, type FoodReadability} from '../sim/food-readability';
 import {appearanceOf} from '../sim/pawn-appearance';
 import {apparelAppearance} from '../render/character-apparel';
@@ -21,10 +20,14 @@ import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
 import {portraitDataUrl, portraitExpressionOf} from '../ui/pawn-portrait';
 import {colonistBarState346, type ColonistBarState346} from '../ui/colonist-bar-state-346';
 import {pawnShortName} from '../ui/pawn-short-name';
-import {colonistBarStateLabel346, drawColonistBarState346} from './native-colonist-bar-346';
-import {knownBuilding256, knownNutrition256, knownPile256, knownPosition256, knownStockCounts256} from '../ui/exploration-readers-256';
+import {colonistBarStateLabel346} from './native-colonist-bar-346';
+import {NativeColonistBarRaster379,type NativeColonistRasterPlacement379} from './NativeColonistBarRaster379';
+import {knownPosition256} from '../ui/exploration-readers-256';
+import {captureHudMapRead379,type HudPortraitOwnership379,type HudResourceRecord379} from '../ui/hud-map-read-379';
+import {ResidentBlightRead379} from '../ui/resident-blight-read-379';
 import type {StatusAlert} from '../ui/status-alerts';
-import type {NativePage, NativeRow} from './native-contract';
+import type {NativePage, NativeRow,NativeUiState} from './native-contract';
+import {liveNativePage} from './native-page-refresh';
 import {NATIVE_RIGHT_DOCK_WIDTH} from './native-layout';
 import {ALERT_COLUMN_WIDTH,BAR_BASE,BAR_MARGIN_TOP,NATIVE_VIEW_ACTIONS,colonistBarLayout,colonistBarVisible,globalColumn,type BarLayout,type ColumnRect} from './native-hud-rimworld';
 import {NotificationFocusCycle,type NotificationTarget} from '../ui/notification-focus';
@@ -34,7 +37,7 @@ import {STORAGE_FILTER_TREE,type StorageFilterNode} from '../ui/storage-filter-t
 import {modelIconUrl} from '../ui/pictograms';
 import {coreAlertPriority,type CoreAlertPriority} from '../ui/alert-priority';
 import {ALERT_PULSE_LEVELS,ALERT_RECHECK_MS,AlertActivationTracker,AlertBounce,alertHoverText,alertPulseLevel,readNativeAlertRows,type HudAlert} from './native-alert-list';
-import {PrototypeCardboardArt, PALETTE, createMaskingTape, drawHandBlob, drawHandRect, drawMarkerLine, type CardboardPiece, type CardboardPieceOptions} from './prototype-art';
+import {PrototypeCardboardArt, PALETTE, createMaskingTape, drawHandRect, drawMarkerLine, type CardboardPiece, type CardboardPieceOptions} from './prototype-art';
 import {applyNativeHudButtonPose,drawNativeSpeedIcon,drawNativeWeatherIcon,nativeWeatherColor,nativeWeatherIcon,nativeWeatherOutline,type NativeWeatherIcon} from './native-hud-art';
 
 export interface NativeHudAnchors {
@@ -47,6 +50,12 @@ export interface NativeHudActions {
   selectPawn(id: number): void;
   speed(value: number): void;
   showPage(page: NativePage): void;
+  readState?:()=>NativeUiState;
+  /** The adoption owner can share its exact known-food capture with other
+   * presentation readers for this World; no new authority is implied. */
+  readFood?:(world:World)=>FoodReadability|undefined;
+  isCurrentPage?:(page:NativePage)=>boolean;
+  refresh?:()=>void;
   showViewControls?:()=>void;
   view?: (action: NativeHudViewAction)=>void;
   focus?: (target:NotificationTarget,tab?:StatusAlert['tab'])=>void;
@@ -61,15 +70,6 @@ export interface NativeAlertStart {key:string;text:string;priority:Exclude<CoreA
 export type NativeHudViewAction=typeof NATIVE_VIEW_ACTIONS[number];
 export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string;roomStats:boolean;beauty:boolean}
 export interface NativeHudWindowBounds {x:number;y:number;width:number;height:number}
-interface ResourceRecord {
-  item: ItemId;
-  stock: number;
-  ground: number;
-  carried: number;
-  inventory: number;
-  equipped: number;
-  delivered: number;
-}
 interface ResourceTag {
   id: string;
   seed: number;
@@ -213,6 +213,7 @@ export class NativeHudCards {
   private readonly alertUpButton: CardboardPiece;
   private readonly alertDownButton: CardboardPiece;
   private readonly alertActivation=new AlertActivationTracker();
+  private readonly blightReader379=new ResidentBlightRead379();
   private readonly alertBounces=new Map<string,AlertBounce>();
   private alertScroll=0;
   private alertsReadAt=-Infinity;
@@ -226,8 +227,9 @@ export class NativeHudCards {
   private portraits: PortraitCard[] = [];
   private alertCards: AlertCard[] = [];
   private world?: World;
+  private livePageView?:NativePage;
   private colonists: Pawn[] = [];
-  private resources: ResourceRecord[] = [];
+  private resources: HudResourceRecord379[] = [];
   private alerts: HudAlert[] = [];
   private food?: FoodReadability;
   private physicalNutrition = 0;
@@ -240,6 +242,7 @@ export class NativeHudCards {
   private barSelection='';
   private barScanAt=-Infinity;
   private barDrawnAt=-Infinity;
+  private readonly barRaster379=new NativeColonistBarRaster379();
   private barTimer?: ReturnType<typeof setTimeout>;
   private allAlertsCount = 0;
   private weatherSignature = '';
@@ -335,13 +338,14 @@ export class NativeHudCards {
     }
     if (this.world === world) return;
     this.world = world;
-    if (!world) { this.alertSession=''; this.setVisible(false); return; }
+    if (!world) { this.alertSession=''; this.blightReader379.reset(); this.setVisible(false); return; }
     this.colonists = world.pawns.filter(p => isColonist(p) && !p.prisoner && p.state !== 'dead').sort((a, b) => a.id - b.id);
-    this.food = captureFoodReadability(world, {pileVisible: pile => knownPile256(world, pile), structureVisible: structure => knownBuilding256(world, structure)});
-    this.physicalNutrition = knownNutrition256(world);
-    this.readResources(world);
+    const reading=captureHudMapRead379(world,this.colonists);
+    this.food = this.actions.readFood?.(world)??captureFoodReadability(world,reading.visibility);
+    this.physicalNutrition = reading.physicalNutrition;
+    this.resources = reading.resources;
     this.readAlerts(world);
-    this.refreshPortraits(world);
+    this.refreshPortraits(world,reading.portraitOwnership,reading.structure);
     this.refreshResources();
     this.refreshAlerts();
     this.refreshWeather(world);
@@ -357,7 +361,9 @@ export class NativeHudCards {
     if(!fresh&&now-this.alertsReadAt<ALERT_RECHECK_MS){this.alertsPending=true;return;}
     this.alertsPending=false;this.alertsReadAt=now;this.alertSession=session;this.alertTick=world.tick;
     // Core StorytellerDef.disableAlerts (the tutorial's Tutor): no alert.
-    const {ordered,started}=this.alertActivation.update(alertsDisabled347(world)?[]:readNativeAlertRows(world,this.food,this.speedValue<0?undefined:this.speedValue),fresh);
+    if(fresh)this.blightReader379.reset();
+    const disabled=alertsDisabled347(world);if(disabled)this.blightReader379.reset();
+    const {ordered,started}=this.alertActivation.update(disabled?[]:readNativeAlertRows(world,this.food,this.speedValue<0?undefined:this.speedValue,()=>this.blightReader379.read(world)),fresh);
     this.alerts=ordered;
     if(fresh)this.alertBounces.clear();
     for(const row of started){
@@ -402,6 +408,7 @@ export class NativeHudCards {
   /** Layout is expressed in screen pixels, converted only by the native stage's
    * projection. Canvas measurements decide ink wrapping, never hit regions. */
   setViewport(width:number,height:number,unitsPerPixel:number,bottomDockHeight=96,leftHudBottom=Infinity):void {
+    const barWidthChanged=this.viewportWidth!==width;
     this.viewportWidth=width;this.viewportHeight=height;
     this.leftHudBottom=leftHudBottom;
     const scale=100*unitsPerPixel;
@@ -410,7 +417,9 @@ export class NativeHudCards {
     // The colonist bar follows ColonistBarDrawLocsFinder: the layout depends on
     // the screen width only, and is hidden under 800 × 500 like the game's.
     this.colonistsGroup.visible=this.shown&&!!this.world&&colonistBarVisible(width,height);
-    this.portraitIds='';
+    // The bar's geometry is width-only. A guide/letters reservation or height
+    // change must not dispose every portrait and restart asynchronous imagery.
+    if(barWidthChanged)this.portraitIds='';
     if(this.world)this.refreshPortraits(this.world);
     // The bottom shelf remains below the legacy-sized time and view controls.
     this.baseTimeY=30+Math.max(0,bottomDockHeight-96);
@@ -505,7 +514,12 @@ export class NativeHudCards {
    * second, never every frame. */
   private animateAlerts(deltaSeconds:number):boolean {
     let changed=false;
-    if(this.alertsPending&&this.world&&this.clock()-this.alertsReadAt>=ALERT_RECHECK_MS){this.readAlerts(this.world);this.refreshAlerts();changed=true;}
+    if(this.alertsPending&&this.world&&this.clock()-this.alertsReadAt>=ALERT_RECHECK_MS){
+      this.readAlerts(this.world);this.refreshAlerts();changed=true;
+      // This delayed Core alert reading may finish while paused, after the
+      // last snapshot refresh. Only its already-open dossier needs a refresh.
+      if(this.livePageView?.id.startsWith('hud-alert')&&this.actions.isCurrentPage?.(this.livePageView))this.actions.refresh?.();
+    }
     if(this.alertBounces.size){
       const cards=new Map(this.alertCards.map(card=>[card.key,card]));
       for(const [key,bounce] of this.alertBounces){
@@ -571,12 +585,13 @@ export class NativeHudCards {
     return this.makePiece({w: 0.34, h: 0.29, depth: 0.044, bgColor: PALETTE.kraftBase, bevel: 0.036, seed, interactive: true,
       drawFn: (ctx, w, h) => { ctx.font = `bold ${NATIVE_TEXT.medium*1.9}px ${FONT}`; ctx.fillStyle = PALETTE.inkDark; ctx.textAlign = 'center'; ctx.fillText(label, w / 2, h / 2 + 12); }, onClick});
   }
-  private refreshPortraits(world: World): void {
+  private refreshPortraits(world: World,ownership?:HudPortraitOwnership379,structure?: (id:number)=>World['structures'][number]|undefined): void {
     // Every colonist is on the bar (no pages): ColonistBarDrawLocsFinder scales the
     // cells down and wraps them into rows until all fit, so no entry is hidden.
     const shown = this.colonists;
     const ids = `${this.viewportWidth}:${shown.map(p => p.id).join(',')}`, changed = ids !== this.portraitIds;
     if (changed) {
+      this.barRaster379.clear();
       const bar = this.barLayout = colonistBarLayout(shown.map(() => 0), this.viewportWidth), scale = bar.scale;
       for (const entry of this.portraits) { if (entry.image) { entry.image.onload = null; entry.image.onerror = null; } this.dropPiece(entry.piece); }
       if (this.barPiece) { this.dropPiece(this.barPiece); this.barPiece = undefined; }
@@ -597,7 +612,7 @@ export class NativeHudCards {
         const pad = 8, left = bar.left - pad, top = BAR_MARGIN_TOP - 3 * scale - 2, width = bar.right - bar.left + 2 * pad, height = Math.max(...bar.locs.map(loc => loc.y)) + (BAR_CARD_H - 3) * scale + 2 - top;
         const k = Math.min(1.25, 4096 / Math.max(width, 1));
         this.barBox = {left, top, width, height};
-        this.barPiece = this.makePiece({w: width / 100, h: height / 100, depth: .001, paper: false, hasBorder: false, seed: 4401, textureWidth: Math.round(width * k), textureHeight: Math.round(height * k),
+        this.barPiece = this.makePiece({w: width / 100, h: height / 100, depth: .001, paper: false, retainPaint: true, hasBorder: false, seed: 4401, textureWidth: Math.round(width * k), textureHeight: Math.round(height * k),
           drawFn: (ctx, w, h, rng) => this.drawBar(ctx, w, h, rng)});
         this.barPiece.setBaseTransform((left + width / 2 - this.viewportWidth / 2) / 100, -(top + height / 2) / 100, 0, 0);
         this.colonistsGroup.add(this.barPiece);
@@ -611,12 +626,12 @@ export class NativeHudCards {
     const selectionKey = [...this.selectedIds].join(), now = this.clock();
     if (changed || selectionKey !== this.barSelection || now - this.barScanAt >= 1000) {
     this.barSelection = selectionKey; this.barScanAt = now;
-    const apparel = new Map<number, MaterialPile[]>(), weapons = new Map<number, string>();
-    const idsOnPage = new Set(shown.map(p => p.id));
+    const apparel = ownership?.apparel??new Map<number, MaterialPile[]>(), weapons = ownership?.weapons??new Map<number, string>();
+    if(!ownership){const ownedApparel=apparel as Map<number,MaterialPile[]>,ownedWeapons=weapons as Map<number,string>,idsOnPage = new Set(shown.map(p => p.id));
     for (const pile of world.piles) {
-      if (pile.owner.type === 'apparel' && idsOnPage.has(pile.owner.pawnId)) { const list = apparel.get(pile.owner.pawnId) ?? []; list.push(pile); apparel.set(pile.owner.pawnId, list); }
-      else if (pile.owner.type === 'equipment' && idsOnPage.has(pile.owner.pawnId)) weapons.set(pile.owner.pawnId, pile.item);
-    }
+      if (pile.owner.type === 'apparel' && idsOnPage.has(pile.owner.pawnId)) { const list = ownedApparel.get(pile.owner.pawnId) ?? []; list.push(pile); ownedApparel.set(pile.owner.pawnId, list); }
+      else if (pile.owner.type === 'equipment' && idsOnPage.has(pile.owner.pawnId)) ownedWeapons.set(pile.owner.pawnId, pile.item);
+    }}
     this.portraits.forEach((entry, idx) => {
       const pawn = shown[idx]!, appearance = appearanceOf(pawn, world.seed), look = apparelAppearance(apparel.get(pawn.id)), expression = portraitExpressionOf(pawn), limbMask = humanLimbVisualMask(pawn);
       entry.name = pawnShortName(pawn.name); entry.mood = rounded(pawn.mood); entry.selected = this.selectedIds.has(pawn.id); entry.sleeping = expression !== 'awake'; entry.skin = hex(appearance.skinColor); entry.shirt = look.color === undefined ? PALETTE.sageMountain : hex(look.color);
@@ -629,7 +644,7 @@ export class NativeHudCards {
         image.onerror = () => { if (entry.image === image) entry.loaded = false; };
         image.src = portraitDataUrl(appearance, look, weapons.get(pawn.id), expression, limbMask);
       }
-      entry.bar = colonistBarState346(world, pawn);
+      entry.bar = colonistBarState346(world, pawn,structure);
       entry.piece.userData.tooltip = `${pawn.name} · ${pawn.state} · Moral ${entry.mood}% · Nourriture ${rounded(pawn.hunger)}% · Repos ${rounded(pawn.rest)}%${colonistBarStateLabel346(entry.bar)}`;
       const signature = JSON.stringify([entry.name, entry.mood, entry.selected, appearanceKey, entry.bar]);
       if (entry.signature !== signature) { entry.signature = signature; this.barDirty = true; }
@@ -639,11 +654,11 @@ export class NativeHudCards {
     // The list of every colonist stays one click away at the bar's right end.
     const bar = this.barLayout;
     this.rosterButton.visible = shown.length > 1 && !!bar;
-    if (bar) this.rosterButton.setBaseTransform((bar.right + 24 - this.viewportWidth / 2) / 100, -(BAR_MARGIN_TOP + 14) / 100, .02);
+    if (bar) this.placePiece(this.rosterButton,(bar.right + 24 - this.viewportWidth / 2) / 100, -(BAR_MARGIN_TOP + 14) / 100, .02);
     this.setVisible(this.shown);
   }
 
-  /** Repaints the whole bar sheet when a card changed, at most once a second:
+  /** Repaints changed ink on the bar sheet, at most once a second:
    * never per frame. */
   private flushBar():void {
     if(!this.barDirty||!this.barPiece||this.disposed)return;
@@ -654,43 +669,14 @@ export class NativeHudCards {
   private drawBar(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
     const box=this.barBox,bar=this.barLayout;if(!box||!bar)return;
     const k=w/box.width,s=bar.scale;
+    const slots:NativeColonistRasterPlacement379[]=[];
     this.portraits.forEach((col,idx)=>{
       const loc=bar.locs[idx];if(!loc)return;
-      ctx.save();ctx.scale(k,k);ctx.translate(loc.x-4.5*s-box.left,loc.y-3*s-box.top);ctx.scale(s*BAR_CARD_W/70,s*BAR_CARD_H/96);
-      this.drawColonist(col,ctx,rng);ctx.restore();
+      slots.push({id:col.pawnId,key:col.signature,x:loc.x-4.5*s-box.left,y:loc.y-3*s-box.top,sx:s*BAR_CARD_W/70,sy:s*BAR_CARD_H/96,card:col});
     });
+    this.barRaster379.draw(ctx,w,h,k,this.portraitIds,slots,rng);
   }
-  private drawColonist(col:PortraitCard,ctx:CanvasRenderingContext2D,rng:()=>number):void {
-    ctx.save();
-    drawHandRect(ctx,0,0,70,96,col.selected?PALETTE.ochre:PALETTE.kraftBase,'#261e18',1.4,rng);
-    drawHandRect(ctx,6,6,58,54,col.selected?'#d8e4c4':'#b2c4ab','#261e18',1.2,rng);
-    if(col.loaded&&col.image)ctx.drawImage(col.image,6,6,58,54);
-    else {drawHandBlob(ctx,35,48,15,col.shirt,'#261e18',1,rng);drawHandBlob(ctx,35,26,11,col.skin,'#261e18',1,rng);}
-    if(col.bar)drawColonistBarState346(ctx,col.bar);
-    drawHandRect(ctx,5,63,60,15,PALETTE.creamPaper,PALETTE.inkDark,.8,rng);
-    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='center';fitText(ctx,col.name,35,75,57);
-    drawHandRect(ctx,10,81,50,5,'#423328',null,0,rng);
-    if(col.mood>0)drawHandRect(ctx,10,81,50*col.mood/100,5,col.mood>70?'#639452':'#d16b3b',null,0,rng);
-    ctx.restore();
-  }
-
-  private readResources(world: World): void {
-    const counts = knownStockCounts256(world), records = new Map<ItemId, ResourceRecord>();
-    const ownedPawns = new Set(world.pawns.filter(isColonist).map(p => p.id));
-    for (const pile of world.piles) {
-      if (pile.quantity <= 0 || !knownPile256(world, pile)) continue;
-      const owner = pile.owner;
-      if (owner.type !== 'ground' && owner.type !== 'job' && (!('pawnId' in owner) || !ownedPawns.has(owner.pawnId) && !colonyPile(world, pile))) continue;
-      const entry = records.get(pile.item) ?? {item: pile.item, stock: counts.get(pile.item) ?? 0, ground: 0, carried: 0, inventory: 0, equipped: 0, delivered: 0};
-      if (owner.type === 'ground') entry.ground += pile.quantity;
-      else if (owner.type === 'job') entry.delivered += pile.quantity;
-      else if (owner.type === 'pawn') entry.carried += pile.quantity;
-      else if (owner.type === 'inventory') entry.inventory += pile.quantity;
-      else if (owner.type === 'equipment' || owner.type === 'apparel') entry.equipped += pile.quantity;
-      records.set(pile.item, entry);
-    }
-    this.resources = [...records.values()].sort((a, b) => ITEM_DEFINITIONS[a.item].label.localeCompare(ITEM_DEFINITIONS[b.item].label, 'fr'));
-  }
+  colonistPaintMetrics379():Readonly<NativeColonistBarRaster379['stats']>{return {...this.barRaster379.stats};}
 
   private cornerWidth():number{
     const left=colonistBarVisible(this.viewportWidth,this.viewportHeight)&&this.barLayout?.locs.length?this.barLayout.left:this.viewportWidth/2;
@@ -887,28 +873,36 @@ export class NativeHudCards {
   /** Cream letters with a dark outline, as the resource column. */
   private letters(ctx:CanvasRenderingContext2D):void {ctx.strokeStyle='#19242b';ctx.lineWidth=3;ctx.lineJoin='round';ctx.fillStyle='#fff8e9';}
 
-  private showRoster(): void {
-    this.actions.showPage({id: 'hud-colonists', title: `${this.colonists.length} colons sur cette carte`, color: PALETTE.sageMountain,
+  private livePage(page:NativePage,make:()=>NativePage):NativePage {
+    const state=this.actions.readState?.();this.livePageView=page;
+    return state?liveNativePage(page,state,()=>this.disposed||!this.world?null:make()):page;
+  }
+  private showRoster(): void {this.actions.showPage(this.rosterPage());}
+  private rosterPage():NativePage {
+    return this.livePage({id: 'hud-colonists', title: `${this.colonists.length} colons sur cette carte`, color: PALETTE.sageMountain,
       subtitle: 'Liste complète · les flèches de la barre parcourent les mêmes personnes par pages compactes.',
       rows: this.colonists.map(pawn => ({id: `pawn-${pawn.id}`, label: pawn.name, value: `Moral ${rounded(pawn.mood)}%`, detail: `${pawn.state} · Nourriture ${rounded(pawn.hunger)}% · Repos ${rounded(pawn.rest)}%`,
-        controls: [{id: `select-${pawn.id}`, label: 'Sélectionner', onActivate: () => { this.setSelection([pawn.id]); this.actions.selectPawn(pawn.id); }}]}))});
+        controls: [{id: `select-${pawn.id}`, label: 'Sélectionner', onActivate: () => { this.setSelection([pawn.id]); this.actions.selectPawn(pawn.id); }}]}))},()=>this.rosterPage());
   }
-  private showResources(): void {
+  private showResources(): void {this.actions.showPage(this.resourcesPage());}
+  private resourcesPage():NativePage {
     const rows: NativeRow[] = [
       {id: 'nutrition-fresh', label: 'Nutrition fraîche connue', value: amount(this.food?.freshNutrition ?? 0), detail: 'Sol et portions portées par les civils vivants ; accès, réservations et régime non garantis.'},
       {id: 'nutrition-physical', label: 'Nutrition physique (lecture historique)', value: amount(this.physicalNutrition), detail: 'Hors foin, stocks de chantier et inventaires ; la fraîcheur n’est pas garantie.'},
       ...this.resources.map(row => ({id: `item-${row.item}`, label: ITEM_DEFINITIONS[row.item].label, value: `${amount(row.stock)} comptabilisé(s)`,
         detail: `Sol ${amount(row.ground)} · porté ${amount(row.carried)} · inventaire ${amount(row.inventory)} · équipé ${amount(row.equipped)} · livré aux chantiers ${amount(row.delivered)}${ITEM_DEFINITIONS[row.item].nutrition ? ` · ${amount(ITEM_DEFINITIONS[row.item].nutrition / 100)} nutrition/unité` : ''}`}))
     ];
-    this.actions.showPage({id: 'hud-resources', title: 'Stocks connus de la carte', subtitle: 'Chaque type présent est conservé dans cette liste. Les matières livrées et les inventaires sont distingués du stock comptabilisé.', color: PALETTE.kraftBase, rows});
+    return this.livePage({id: 'hud-resources', title: 'Stocks connus de la carte', subtitle: 'Chaque type présent est conservé dans cette liste. Les matières livrées et les inventaires sont distingués du stock comptabilisé.', color: PALETTE.kraftBase, rows},()=>this.resourcesPage());
   }
-  private showAlerts(): void {
-    this.actions.showPage({id: 'hud-alerts', title: 'Alertes actuelles', color: PALETTE.terracotta,
-      rows: this.alerts.length ? this.alerts.map(alert => ({id: alert.key, label: alert.text, controls: [{id: `details-${alert.key}`, label: 'Détails', onActivate: () => this.showAlert(alert.key)}]})) : [{id: 'none', label: 'Aucune alerte actuelle'}]});
+  private showAlerts(): void {this.actions.showPage(this.alertsPage());}
+  private alertsPage():NativePage {
+    return this.livePage({id: 'hud-alerts', title: 'Alertes actuelles', color: PALETTE.terracotta,
+      rows: this.alerts.length ? this.alerts.map(alert => ({id: alert.key, label: alert.text, controls: [{id: `details-${alert.key}`, label: 'Détails', onActivate: () => this.showAlert(alert.key)}]})) : [{id: 'none', label: 'Aucune alerte actuelle'}]},()=>this.alertsPage());
   }
-  private showAlert(key: string): void {
+  private showAlert(key: string): void {this.actions.showPage(this.alertPage(key));}
+  private alertPage(key:string):NativePage {
     const alert = this.alerts.find(row => row.key === key);
-    if (!alert) { this.showAlerts(); return; }
+    if (!alert) return this.alertsPage();
     const rows: NativeRow[] = [{id: 'text', label: alert.text}];
     if (alert.explanation) rows.push({id: 'explanation', label: alert.explanation});
     if (alert.tooltip) {
@@ -931,20 +925,22 @@ export class NativeHudCards {
     if(alert.campaign&&this.actions.campaign)actions.push({id:`open-map-${key}`,label:'Voir la carte',onActivate:()=>{const current=this.alerts.find(row=>row.key===key)?.campaign;if(current)this.actions.campaign?.(current);}});
     if(alert.context&&this.actions.context)actions.push({id:`open-context-${key}`,label:'Ouvrir les réglages',onActivate:()=>{const current=this.alerts.find(row=>row.key===key)?.context;if(current)this.actions.context?.(current);}});
     if(this.actions.focus&&alert.targets.length)actions.push({id:`focus-next-${key}`,label:'Repérer la cible suivante',onActivate:()=>{const current=this.alerts.find(row=>row.key===key);if(current){const target=this.alertFocus.next(key,current.targets);if(target)this.actions.focus?.(target,current.tab);}}});
-    this.actions.showPage({id: `hud-alert-${alert.key}`, title: domain?.title??'Alerte actuelle', subtitle: alert.text, color: PALETTE.terracotta, rows,actions});
+    return this.livePage({id: `hud-alert-${alert.key}`, title: domain?.title??'Alerte actuelle', subtitle: alert.text, color: PALETTE.terracotta, rows,actions},()=>this.alertPage(key));
   }
-  private showWeather(): void {
+  private showWeather(): void {this.actions.showPage(this.weatherPage());}
+  private weatherPage():NativePage {
     const readout = this.weatherReadout;
-    this.actions.showPage({id: 'hud-site', title: 'Heure et conditions du site', color: PALETTE.slateBlue, rows: [
+    return this.livePage({id: 'hud-site', title: 'Heure et conditions du site', color: PALETTE.slateBlue, rows: [
       {id: 'clock', label: 'Heure civile locale', value: readout.clock}, {id: 'date', label: 'Date', value: readout.date},
       {id: 'weather', label: 'Météo perçue', value: readout.weather}, {id: 'temperature', label: 'Température extérieure', value: readout.temperature},
       {id: 'wind', label: 'Intensité du vent', value: readout.wind}, ...(readout.condition ? [{id: 'condition', label: 'Condition active', value: readout.condition}] : [])
-    ]});
+    ]},()=>this.weatherPage());
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;if(this.barTimer!==undefined)clearTimeout(this.barTimer);
+    this.barRaster379.dispose();this.blightReader379.reset();
     for (const entry of this.portraits) if (entry.image) { entry.image.onload = null; entry.image.onerror = null; }
     for(const image of this.resourceImages.values()){image.onload=null;image.onerror=null;}this.resourceImages.clear();
     for (const piece of this.ownedPieces) this.art.disposePiece(piece);

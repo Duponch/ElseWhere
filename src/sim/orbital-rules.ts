@@ -1,4 +1,5 @@
 import {factionCommsTask298} from './faction-comms-state-298.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import { blockedCells,inBounds } from './pathfinding.ts';
 import { allowedAreaReason } from './allowed-area-state.ts';
 import { footprintCells } from './definitions.ts';
@@ -55,7 +56,7 @@ export function orbitalTradeReason(w:World,p:Pawn,ship:OrbitalShip,console?:Stru
   if(w.fires?.items.some(f=>footprintCells(console!).some(c=>c.x===f.x&&c.z===f.z)))return 'La console est en feu.';
   const spot=orbitalConsoleSpot(console);
   if(!canStandAt(w,spot))return 'La cellule de contact est inaccessible.';
-  if(w.pawns.some(q=>q!==p&&(q.orbitalTrade?.consoleId===console.id||q.orbitalTrade?.shipId===ship.id||factionCommsTask298(q)?.consoleId===console.id))||reservedServiceCells(w,p.id).has(spot.z*w.width+spot.x))return 'La console ou le vaisseau est déjà réservé.';
+  if(orderedTargetClaimed378(w,'structure',console.id,p.id)||orderedTargetClaimed378(w,'orbital-ship',ship.id,p.id)||w.pawns.some(q=>q!==p&&(q.orbitalTrade?.consoleId===console.id||q.orbitalTrade?.shipId===ship.id||factionCommsTask298(q)?.consoleId===console.id))||reservedServiceCells(w,p.id).has(spot.z*w.width+spot.x))return 'La console ou le vaisseau est déjà réservé.';
 }
 export function orbitalAtContact(w:World,p:Pawn,ship:OrbitalShip):boolean {
   const task=p.orbitalTrade;

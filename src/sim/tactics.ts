@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import { assaultTarget,distanceSquared,hostileTo } from './affiliation.ts';
 import { automaticShotScore,chooseAutomaticTarget } from './automatic-targets.ts';
 import { candidateAccess } from './candidate-access.ts';
@@ -103,6 +104,6 @@ export function processTactics(world:World,p:Pawn,getBlocked:NavigationGrid,budg
     if(!canStep(world,p,next,getBlocked(),EMPTY)||t.post&&tacticalClaims(world,p).has(t.post.z*world.width+t.post.x)){
       p.path=[];t.post=null;p.planCooldown=4;p.state='idle';return;
     }
-    p.state='moving';if(startTravel(world,p,next,getLight))p.path.shift();
+    p.state='moving';if(startTravel(world,p,next,getLight))shiftActorPath297(p.path);
   }
 }

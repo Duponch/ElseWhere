@@ -41,9 +41,19 @@ export function seasonalNaturalLight(latitude:number,civilTick:number):number {
   return Math.max(0,Math.min(1,Math.cos(angle)/.7));
 }
 
+interface SkySample {civil:number;latitude:number|undefined;seasonal:boolean;light:number}
+const skySamples=new WeakMap<ClimateWorld,SkySample>();
 export function annualNaturalLight(world:ClimateWorld,tick=world.tick):number {
   const civil=climateTick(world,tick);
-  const base=world.climate?seasonalNaturalLight(siteClimateDefinition(world).latitude,civil):naturalLight(civil);
+  const seasonal=!!world.climate,latitude=seasonal?siteClimateDefinition(world).latitude:undefined;
+  // The celestial geometry is evaluated many times per physical boundary
+  // (animals, actors, crops, solar generation, room reads). Retain only
+  // this fully described scalar. Eclipse and volcanic effects stay live at
+  // the original elapsed tick; no persisted event interval is memoized.
+  const previous=skySamples.get(world);
+  let base:number;
+  if(previous&&previous.seasonal===seasonal&&Object.is(previous.latitude,latitude)&&Object.is(previous.civil,civil))base=previous.light;
+  else{base=seasonal?seasonalNaturalLight(latitude!,civil):naturalLight(civil);skySamples.set(world,{civil,seasonal,latitude,light:base});}
   return volcanicGlow310(base*eclipseLightFactor(world,tick),volcanicWinterStrength310(world,tick));
 }
 

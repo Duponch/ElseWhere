@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {markPileMembershipChanged,appendPileEntries} from './pile-identity-directory.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {newCorePathBudget297} from './core-path-budget-297.ts';
 import {createDeteriorationState} from './deterioration-content.ts';
@@ -45,7 +47,7 @@ export function draftSite(root:World,tileId:number,kind:'camp'|'settlement'='cam
   generated.tick=root.tick;if(isCorePhysicalSchema297(Number(root.schemaVersion)))generated.corePathBudget297=newCorePathBudget297(root.tick);else delete generated.corePathBudget297;generated.site=site;generated.expeditionSite={tile:tileId,createdAt:root.tick,calendarOffset};
   generated.snow!.adoptedAt=root.tick;generated.snow!.lastTick=root.tick;
   generated.deterioration=createDeteriorationState(seed,root.tick);
-  for(const collection of [generated.resources,generated.piles])for(const item of collection)item.id+=offset;
+  for(const collection of [generated.resources,markPileMembershipChanged(generated.piles)])for(const item of collection)markPileContentWrite379(item).id+=offset;
   generated.nextId+=offset;
   enableBiomeWildlife(generated,tile.biome);
   for(const plant of generated.resources)if(isPlant(plant)){plant.growthTick=root.tick;plant.plantLife=createPlantLife(generated,plant);}
@@ -83,7 +85,7 @@ export function enterSecondarySite(root:World):CommandResult {
   // Closed adoption: no operation below can refuse or allocate a Thing.
   if(draft){root.secondarySite=draft.site;root.nextId=draft.nextId;}
   for(const {pawn,cell} of placements){pawn.x=cell.x;pawn.z=cell.z;pawn.path=[];pawn.moveCooldown=0;pawn.planCooldown=0;delete pawn.motion;delete pawn.allowedAreaId;if(pawn.state!=='downed')pawn.state='idle';}
-  site.map.pawns.push(...g.members);site.map.piles.push(...g.items);
+  site.map.pawns.push(...g.members);appendPileEntries(site.map.piles,...g.items);
   site.visit={groupId:g.id,memberIds:g.members.map(p=>p.id),homeEntry:{...g.entry}};
   site.selected=true;delete root.group;
   // A cached context can exist on a revisit; update its replaced containers.

@@ -6,7 +6,7 @@ import {planCryptosleepEntry271,planCryptosleepRelease271} from './cryptosleep-t
 import {allowedAreaReason} from './allowed-area-state.ts';
 import {reservedServiceCells} from './service-reservations.ts';
 import {patientClaimed} from './care-access.ts';
-import {carrierOf,syncPatient,releaseCryptosleepCarry271} from './rescue-state.ts';
+import {carrierOf,syncPatient,releaseCryptosleepCarry271,markHumanCarrierCandidatesDirty} from './rescue-state.ts';
 import {deconstructionReserved} from './deconstruction-rules.ts';
 import {updatePawnHealth} from './health.ts';
 import {planPawnDrops,releaseWork} from './work-release.ts';
@@ -49,6 +49,7 @@ export function applyCryptosleep271(w:World,c:CryptosleepCommand271):CommandResu
  if(!drops||!releaseWork(w,p,drops))return {ok:false,code:'invalid-command',reason:'La cargaison doit pouvoir être déposée avant cet ordre.'};
  clearQueuedOrders(w,p);delete p.priorityWork;
  p.cryptosleepTask={casketId:casket.id,action:c.type==='order-enter-cryptosleep'?'enter':c.type==='order-carry-cryptosleep'?'carry':'open',phase:'approach',...patient?{patientId:patient.id}:{},progressCore:0,lastWorkedAt:w.tick};
+ markHumanCarrierCandidatesDirty();
  p.path=path;p.state=path.length?'moving':'working';p.planCooldown=0;return {ok:true};
 }
 /** Runs after ordinary physiology and immediate danger, before civilian work. */

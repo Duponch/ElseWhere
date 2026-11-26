@@ -1,4 +1,7 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import {isLongswordItem270} from './longsword-content-270.ts';
 import {isSpearItem272} from './spear-content-272.ts';
 import {isMaceItem269} from './mace-content-269.ts';
@@ -28,7 +31,7 @@ export function equipmentReason(world:World,pawn:Pawn,pile:MaterialPile|undefine
   if(action==='drop')return pile.owner.type==='equipment'&&pile.owner.pawnId===pawn.id?undefined:'Cette arme n’est pas équipée par ce colon.';
   const violence=violentWorkRefusal(pawn);if(violence)return violence;
   if(pile.owner.type!=='ground')return 'Cette arme n’est plus au sol.';
-  if(reservedSource(world,pile.id,pawn.id)>0)return 'Cette arme est réservée par un autre travail.';
+  if(orderedTargetClaimed378(world,'pile',pile.id,pawn.id)||reservedSource(world,pile.id,pawn.id)>0)return 'Cette arme est réservée par un autre travail.';
   if(accepted&&pile.weapon?.forbidden&&!pawn.equipmentTask?.automatic)return 'Cette arme est interdite.';
 }
 /** A replacement command will release this actor's waiting reservations, but
@@ -48,10 +51,10 @@ function begin(pawn:Pawn,itemId:number,action:EquipmentAction,path:Cell[],automa
 export function applyEquipment(world:World,command:EquipmentCommand):CommandResult {
   const fail=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason});
   if(command.type==='weapon-permission'||command.type==='apparel-permission'){
-    const pile=world.piles.find(p=>p.id===command.itemId);
+    const pile=pileById(world,command.itemId);
     const state=command.type==='weapon-permission'?pile?.weapon:pile?.apparel;
     if(!pile||!state||pile.owner.type!=='ground'||typeof command.allowed!=='boolean')return fail('Objet au sol introuvable.');
-    if(command.allowed)delete state.forbidden;else state.forbidden=true;
+    if(command.allowed)delete markPileContentWrite379(state).forbidden;else markPileContentWrite379(state).forbidden=true;
     if(!command.allowed)for(const p of world.pawns){
       if(p.haul?.phase==='pickup'&&p.haul.sourcePileId===pile!.id)release(world,p);
       if(p.cooking&&gearRecoveryRecipe(p.cooking.recipe)&&p.cooking.ingredients.some(i=>i.pileId===pile.id))release(world,p);
@@ -65,13 +68,13 @@ export function applyEquipment(world:World,command:EquipmentCommand):CommandResu
   if(command.type==='forget-weapon'){delete pawn.droppedWeaponId;return {ok:true};}
   if(!['equip','drop','wear','remove'].includes(command.action)||typeof command.queue!=='boolean')return fail('Ordre d’équipement invalide.');
   if(command.queue)return fail('La file d’équipement n’est pas encore disponible.');
-  const pile=world.piles.find(p=>p.id===command.itemId),reason=equipmentOrderReason(world,pawn,pile,command.action);if(reason)return fail(reason);
+  const pile=pileById(world,command.itemId),reason=equipmentOrderReason(world,pawn,pile,command.action);if(reason)return fail(reason);
   const path=(command.action==='equip'||command.action==='wear')&&pile!.owner.type==='ground'?routeToJob(world,pile!.owner,reachableCells(world,pawn,blockedCells(world),new Set()),true):[];
   if(!path)return fail('Aucun chemin praticable vers cet objet.');
   const drops=planCommandDrops(world,command);if(!drops||!releaseWork(world,pawn,drops))return fail('Pas de place pour déposer la cargaison.');
   clearQueuedOrders(world,pawn);delete pawn.priorityWork;releaseDraftForOrder346(world,pawn);
-  if(command.action==='equip')delete pile!.weapon!.forbidden;
-  if(command.action==='wear')delete pile!.apparel!.forbidden;
+  if(command.action==='equip')delete markPileContentWrite379(pile!.weapon!).forbidden;
+  if(command.action==='wear')delete markPileContentWrite379(pile!.apparel!).forbidden;
   const duration=command.action==='wear'||command.action==='remove'?apparelDuration(world,pawn,pile!,command.action):undefined;
   begin(pawn,pile!.id,command.action,path,false,duration);return {ok:true};
 }
@@ -79,7 +82,7 @@ export function applyEquipment(world:World,command:EquipmentCommand):CommandResu
  * system. The ordinary equipment state machine owns travel, conflicts and the
  * final physical transfer. */
 export function beginAutomaticEquipment(world:World,pawn:Pawn,itemId:number,action:'wear'|'remove',reachable?:Reachability):boolean {
-  const pile=world.piles.find(p=>p.id===itemId),reason=equipmentReason(world,pawn,pile,action,true);if(reason)return false;
+  const pile=pileById(world,itemId),reason=equipmentReason(world,pawn,pile,action,true);if(reason)return false;
   if(pile?.owner.type==='ground'&&allowedAreaReason(world,pawn,pile.owner))return false;
   const path=action==='wear'&&pile!.owner.type==='ground'?routeToJob(world,pile!.owner,reachable??reachableCells(world,pawn,blockedCells(world),new Set()),true):[];
   if(!path)return false;
@@ -92,7 +95,7 @@ export function reconcileEquipmentTasks(world:World):void {
     const id=pile.owner.pawnId,pawn=world.pawns.find(p=>p.id===id);
     if(pawn?.health||pawn?.equipmentDropPending)dropIncapacitatedEquipment(world,pawn!,false,pile);
   }
-  for(const pawn of world.pawns)if(pawn.equipmentTask&&(!allowedAreaWorkAllowed(world,pawn)||equipmentReason(world,pawn,world.piles.find(p=>p.id===pawn.equipmentTask!.itemId),pawn.equipmentTask.action,true)))release(world,pawn);
+  for(const pawn of world.pawns)if(pawn.equipmentTask&&(!allowedAreaWorkAllowed(world,pawn)||equipmentReason(world,pawn,pileById(world,pawn.equipmentTask!.itemId),pawn.equipmentTask.action,true)))release(world,pawn);
 }
 /** At contact the new gun leaves the floor and the old gun can use that freed
  * cell. Preflight both owners against the same view, then commit without IDs/RNG. */
@@ -100,12 +103,12 @@ function exchange(world:World,pawn:Pawn,pile:MaterialPile):boolean {
   const old=equippedWeapon(world,pawn),view=old?{...world,piles:world.piles.filter(p=>p!==pile)}:world;
   const drop=old?nearbyGround(view,pawn).find(c=>groundCapacity(view,c,old.item,pawn.id)>=1):undefined;
   if(old&&!drop)return false;
-  if(old){assignPileOwner(old,{type:'ground',...drop!});delete old.weapon!.forbidden;}
-  assignPileOwner(pile,{type:'equipment',pawnId:pawn.id});if(pawn.draft)delete pawn.draft.holdFire;delete pile.weapon!.forbidden;delete pawn.droppedWeaponId;return true;
+  if(old){assignPileOwner(old,{type:'ground',...drop!});delete markPileContentWrite379(old.weapon!).forbidden;}
+  assignPileOwner(pile,{type:'equipment',pawnId:pawn.id});if(pawn.draft)delete pawn.draft.holdFire;delete markPileContentWrite379(pile.weapon!).forbidden;delete pawn.droppedWeaponId;return true;
 }
 export function processEquipment(world:World,pawn:Pawn,context:NeedContext):void {
   const task=pawn.equipmentTask;if(!task)return;
-  const pile=world.piles.find(p=>p.id===task.itemId);
+  const pile=pileById(world,task.itemId);
   if(!allowedAreaWorkAllowed(world,pawn)||equipmentReason(world,pawn,pile,task.action,true)){release(world,pawn);return;}
   if(task.action==='wear'||task.action==='remove'){processApparel(world,pawn,pile!,context);return;}
   if(task.action==='equip'){
@@ -118,7 +121,7 @@ export function processEquipment(world:World,pawn:Pawn,context:NeedContext):void
   pawn.path=[];pawn.state='working';task.progress++;
   if(task.progress<3)return; // Core DropEquipment: 30 ticks, independent of skill.
   const drop=nearbyGround(world,pawn).find(c=>groundCapacity(world,c,pile!.item,pawn.id)>=1);
-  if(drop){assignPileOwner(pile!,{type:'ground',...drop});pile!.weapon!.forbidden=true;announce(world,`${pawn.name} dépose ${weaponLabel(pile!)}.`);}
+  if(drop){assignPileOwner(pile!,{type:'ground',...drop});markPileContentWrite379(pile!.weapon!).forbidden=true;announce(world,`${pawn.name} dépose ${weaponLabel(pile!)}.`);}
   else announce(world,`${pawn.name} garde son arme : aucun dépôt disponible.`);
   release(world,pawn);
 }
@@ -126,7 +129,7 @@ export function processEquipment(world:World,pawn:Pawn,context:NeedContext):void
  * Invoked at an idle decision after personal needs and accepted orders. */
 export function recoverDroppedWeapon(world:World,pawn:Pawn,search:()=>Reachability|null):boolean {
   if(pawn.droppedWeaponId===undefined||equippedWeapon(world,pawn)||pawn.equipmentTask||pawn.orders.active!==null||pawn.jobId!==null||pawn.haul||pawn.cooking||pawn.tend||pawn.ward||pawn.feed||pawn.rescue||pawn.need||pawn.recreation.task)return false;
-  const pile=world.piles.find(p=>p.id===pawn.droppedWeaponId);
+  const pile=pileById(world,pawn.droppedWeaponId);
   if(pile?.owner.type==='ground'&&allowedAreaReason(world,pawn,pile.owner))return false;
   if(equipmentReason(world,pawn,pile,'equip'))return false;
   const reach=search();if(!reach)return true;

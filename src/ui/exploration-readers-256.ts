@@ -9,21 +9,27 @@ import type {World,Cell,MaterialPile,Structure} from '../sim/types';
 export const knownPosition256=(world:World,cell:Cell):boolean=>Number.isInteger(cell.x)&&Number.isInteger(cell.z)&&cell.x>=0&&cell.z>=0&&cell.x<world.width&&cell.z<world.height&&knownCell256(world,cell.z*world.width+cell.x);
 export const knownBuilding256=(world:World,structure:Structure):boolean=>knownSpawnedThing256(world,footprintCells(structure).map(c=>c.z*world.width+c.x));
 /** Held inventories remain owned knowledge; unknown ground piles do not. */
-export function knownPile256(world:World,pile:MaterialPile):boolean {
+export interface KnownPileLookup256 {
+ person(id:number):World['pawns'][number]|undefined;
+ animal(id:number):NonNullable<World['wildlife']>['animals'][number]|undefined;
+ job(id:number):World['jobs'][number]|undefined;
+ structure(id:number):Structure|undefined;
+}
+export function knownPile256(world:World,pile:MaterialPile,lookup?:KnownPileLookup256):boolean {
  if(!explorationEnabled256(world))return true;
  const owner=pile.owner;
  if(owner.type==='ground')return knownPosition256(world,owner);
- if(owner.type==='job'){const job=world.jobs.find(j=>j.id===owner.jobId);return !!job&&knownPosition256(world,job);}
+ if(owner.type==='job'){const job=lookup?lookup.job(owner.jobId):world.jobs.find(j=>j.id===owner.jobId);return !!job&&knownPosition256(world,job);}
  if('pawnId' in owner){
-  const id=owner.pawnId,person=world.pawns.find(p=>p.id===id);
+  const id=owner.pawnId,person=lookup?lookup.person(id):world.pawns.find(p=>p.id===id);
   if(person)return isColonist(person)||!!person.prisoner||knownPosition256(world,person);
   // A local animal can be the actual inventory owner (hauling/loading),
   // separately from the human pawn namespace. Its possessions follow the
   // same knowledge rule, never exposing an unknown wild animal in the fog.
-  const animal=owner.type==='inventory'?world.wildlife?.animals.find(entry=>entry.id===id):undefined;
+  const animal=owner.type==='inventory'?(lookup?lookup.animal(id):world.wildlife?.animals.find(entry=>entry.id===id)):undefined;
   return !!animal&&(!!animal.domestic||knownPosition256(world,animal));
  }
- if(owner.type==='grave'){const id=owner.graveId,grave=world.structures.find(s=>s.id===id);return !!grave&&knownBuilding256(world,grave);}
+ if(owner.type==='grave'){const id=owner.graveId,grave=lookup?lookup.structure(id):world.structures.find(s=>s.id===id);return !!grave&&knownBuilding256(world,grave);}
  return true;
 }
 export function knownStockCounts256(world:World):Map<ItemId,number> {

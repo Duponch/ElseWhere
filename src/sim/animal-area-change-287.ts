@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {animalAreaEffective287,animalAreaPolicyFromCells287} from './animal-area-policy-287.ts';
@@ -31,13 +32,13 @@ function prepareWrites(w:World,changes:readonly AnimalAreaChange287[],prior:Read
   const draft={...a},inside=(c:Cell)=>!policy||policy.has(c.z*w.width+c.x);
   let interrupted=false;
   if(!animalAreaProtected287(w,a)&&policy){
-   if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(p=>p.id===a.meal!.id):w.piles.find(p=>p.id===a.meal!.id)?.owner;
+   if(a.meal){const source=a.meal.kind==='plant'?w.resources.find(p=>p.id===a.meal!.id):pileById(w,a.meal!.id)?.owner;
     if(source&&'x'in source&&!inside(source)){delete draft.meal;interrupted=true;}
    }
    if(a.animalRest){const spot=structureById(w,a.animalRest!.spotId);if(spot&&!inside(spot)){delete draft.animalRest;interrupted=true;if(draft.state==='sleeping')draft.state='idle';}}
    if(a.eggLay&&!inside(a.eggLay.target)){delete draft.eggLay;interrupted=true;}
    if(a.haul&&a.haul.phase!=='holding'){
-    const task=a.haul,zone=(zones??=storageCells(w)).find(c=>c.id===task.destination.stockpileId),source=task.phase==='pickup'?w.piles.find(p=>p.id===task.sourcePileId):undefined;
+    const task=a.haul,zone=(zones??=storageCells(w)).find(c=>c.id===task.destination.stockpileId),source=task.phase==='pickup'?pileById(w,task.sourcePileId):undefined;
     if(zone&&!inside(zone)||source?.owner.type==='ground'&&!inside(source.owner)){delete draft.haul;interruptedHauls.add(a);interrupted=true;}
    }
    if(draft.state==='sleeping'&&!a.sleepUntilCore&&!inside(a)){draft.state='idle';interrupted=true;}
@@ -60,7 +61,7 @@ function prepareWrites(w:World,changes:readonly AnimalAreaChange287[],prior:Read
   ...w.wildlife?{wildlife:{...w.wildlife,animals:w.wildlife.animals.map(a=>drafts.get(a)??a)}}:{}};
  for(const [id,cell]of prior){
   if(!Number.isInteger(cell.x)||!Number.isInteger(cell.z)||cell.x<0||cell.z<0||cell.x>=w.width||cell.z>=w.height)return;
-  const pile=placement.piles.find(p=>p.id===id),pack=placement.packed.find(p=>p.building.id===id);
+  const pile=pileById(placement,id),pack=placement.packed.find(p=>p.building.id===id);
   if(!!pile===!!pack)return;
   if(pile){
    const owner=pile.owner;

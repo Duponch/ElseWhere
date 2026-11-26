@@ -1,3 +1,4 @@
+import {pileById,splicePileEntries} from './pile-identity-directory.ts';
 import { releaseAssignments } from './work-release.ts';
 import { resolveArmor,type ArmorCategory,type ArmorWear } from './armor.ts';
 import { armorPiece,wornApparel } from './apparel-rules.ts';
@@ -18,9 +19,9 @@ export function apparelProtection(world:World,pawn:Pawn,category:ArmorCategory,p
     wear=result.wear;return {amount:result.amount,converted:category==='sharp'&&result.category==='blunt'};
   }:undefined; // Preserve the existing unarmored PRNG contract in historical saves.
   return {protect,commit:()=>{
-    for(const entry of wear){const pile=world.piles.find(p=>p.id===entry.id)!;
+    for(const entry of wear){const pile=pileById(world,entry.id)!;
       if(entry.remaining)pile.apparel!.hitPoints=entry.remaining;
-      else {world.piles.splice(world.piles.indexOf(pile),1);if(pawn.equipmentTask?.itemId===entry.id)releaseAssignments(world,pawn);}
+      else {splicePileEntries(world.piles,world.piles.indexOf(pile),1);if(pawn.equipmentTask?.itemId===entry.id)releaseAssignments(world,pawn);}
     }
   }};
 }

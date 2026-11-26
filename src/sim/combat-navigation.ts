@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {humanById379} from './human-roster-379.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {targetDoorCanOpen263} from './world-target-building-263.ts';
 import { hostileTo,isColonist } from './affiliation.ts';
@@ -9,14 +10,19 @@ import { prisonBreakActive } from './prison-break-state.ts';
 import type { Cell,Pawn,World } from './types.ts';
 import type { Mechanoid } from './mechanoid-state.ts';
 import { isMechanoidTarget } from './combat-target.ts';
+import {humanThreatCandidates379} from './human-threat-candidates-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 
-const actor=(world:World,origin:Cell):Pawn|Mechanoid|undefined=>'id' in origin?world.pawns.find(p=>p.id===origin.id)??world.mechanoids?.find(m=>m.id===origin.id):undefined;
+const actor=(world:World,origin:Cell):Pawn|Mechanoid|undefined=>'id' in origin?humanById379(world.pawns,origin.id)??world.mechanoids?.find(m=>m.id===origin.id):undefined;
 const opensDoors=(pawn:Pawn|Mechanoid)=>!isMechanoidTarget(pawn)&&(isColonist(pawn)||!!pawn.visitor||pawn.prisoner?.releasedAt!==undefined||prisonBreakActive(pawn));
+// A mutual melee order can make two otherwise friendly actors impede each
+// other. Such an observer still needs every human (including new orders).
+const obstacleCandidates=(world:World,pawn:Pawn|Mechanoid):readonly Pawn[]=>isMechanoidTarget(pawn)||pawn.melee?.order?world.pawns:humanThreatCandidates379(world,pawn);
 /** Capture only within one synchronous decision. Both endpoints protect 3D travel. */
 export function hostileCells(world:World,pawn:Pawn|Mechanoid):Set<number> {
   const local=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
   const cells=new Set<number>();
-  for(const p of world.pawns)if(p!==pawn&&(isMechanoidTarget(pawn)?!p.prisoner:hostileTo(pawn,p)||!!pawn.melee?.order&&!!p.melee?.order&&!(pawn.prisoner&&p.prisoner&&(prisonBreakActive(pawn)||prisonBreakActive(p))))&&p.state!=='dead'&&p.state!=='downed') {
+  for(const p of obstacleCandidates(world,pawn))if(p!==pawn&&(isMechanoidTarget(pawn)?!p.prisoner:hostileTo(pawn,p)||!!pawn.melee?.order&&!!p.melee?.order&&!(pawn.prisoner&&p.prisoner&&(prisonBreakActive(pawn)||prisonBreakActive(p))))&&p.state!=='dead'&&p.state!=='downed') {
     cells.add(p.z*world.width+p.x);
     if(p.motion&&p.motion.end>local)cells.add(p.motion.from.z*world.width+p.motion.from.x);
   }
@@ -32,7 +38,7 @@ export function hostileCells(world:World,pawn:Pawn|Mechanoid):Set<number> {
 function hostileProbeCells(world:World,pawn:Pawn|Mechanoid,probes:readonly number[]):Set<number> {
   const local=isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick;
   const hit=new Set<number>(),width=world.width;
-  for(const p of world.pawns){
+  for(const p of obstacleCandidates(world,pawn)){
     if(p===pawn)continue;
     const at=p.z*width+p.x,leaving=!!p.motion&&p.motion.end>local,from=leaving?p.motion!.from.z*width+p.motion!.from.x:0;
     const atHit=probes.includes(at),fromHit=leaving&&probes.includes(from);
@@ -79,5 +85,10 @@ export function actorStepAllowed(world:World,origin:Cell,next:Cell):boolean {
 }
 
 export function openHostileDoor(world:World,origin:Cell,x:number,z:number):boolean {
-  const p=actor(world,origin);if(p&&!isMechanoidTarget(p)&&world.structures.some(s=>s.x===x&&s.z===z&&targetDoorCanOpen263(world,p,s)===true&&(!s.door?.forbidden||!isColonist(p))))return true;return !!p&&world.structures.some(s=>(!isMechanoidTarget(p)&&prisonBreakActive(p)?isPassageDoor(s.kind):isRoomDoor(s.kind))&&s.x===x&&s.z===z&&(!isMechanoidTarget(p)&&prisonBreakActive(p)||!opensDoors(p)&&(!isMechanoidTarget(p)&&p.prisoner?prisonDoorPassable(world,s):s.door?.open)));
+  const p=actor(world,origin);if(!p)return false;
+  // An anchored door is the only structure either branch could admit. Keep
+  // the public scan for unknown/out-of-map coordinates and arbitrary fixtures.
+  const structures=terrainJournalReadOwner()&&Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&x<world.width&&z>=0&&z<world.height?structureAnchors(world).anchoredAt(x,z):world.structures;
+  if(!isMechanoidTarget(p)&&structures.some(s=>s.x===x&&s.z===z&&targetDoorCanOpen263(world,p,s)===true&&(!s.door?.forbidden||!isColonist(p))))return true;
+  return structures.some(s=>(!isMechanoidTarget(p)&&prisonBreakActive(p)?isPassageDoor(s.kind):isRoomDoor(s.kind))&&s.x===x&&s.z===z&&(!isMechanoidTarget(p)&&prisonBreakActive(p)||!opensDoors(p)&&(!isMechanoidTarget(p)&&p.prisoner?prisonDoorPassable(world,s):s.door?.open)));
 }

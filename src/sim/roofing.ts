@@ -13,12 +13,13 @@ import { RoofContext, roofCoverage, roofKindAt, isRoofJob, roofIndex, roofJobWan
 import { releaseWork } from './work-release.ts';
 import { isPlant, plantGrowth } from './plants.ts';
 import type { Cell, Job, World } from './types.ts';
+import {invalidateResourceJournal} from './resource-mutation-journal.ts';
 
 function setConstructedRoofs(world: World, cells: number[]): void {
   const old=new Set(world.roofing!.constructed),next=new Set(cells);
   const changed=world.resources.some(r=>isPlant(r)&&old.has(roofIndex(world,r))!==next.has(roofIndex(world,r)));
-  if(changed)world.resources=world.resources.map(r=>isPlant(r)&&old.has(roofIndex(world,r))!==next.has(roofIndex(world,r))
-    ?{...r,growth:plantGrowth(world,r),growthTick:world.tick}:r);
+  if(changed){invalidateResourceJournal(world);world.resources=world.resources.map(r=>isPlant(r)&&old.has(roofIndex(world,r))!==next.has(roofIndex(world,r))
+    ?{...r,growth:plantGrowth(world,r),growthTick:world.tick}:r);}
   world.roofing!.constructed=cells;
 }
 
@@ -141,6 +142,7 @@ import { damageFromRoofCollapse } from './roof-damage.ts';
  * coverage. References change only at the actual roof mutation. */
 function setNaturalRoofCoverage256(world:World,constructed:number[],thin:number[],thick:number[]):void {
  const state=world.roofing!,old=new Set(roofCoverage(world)),next=new Set([...constructed,...thin,...thick]);
+ invalidateResourceJournal(world);
  world.resources=world.resources.map(r=>isPlant(r)&&old.has(roofIndex(world,r))!==next.has(roofIndex(world,r))?{...r,growth:plantGrowth(world,r),growthTick:world.tick}:r);
  state.constructed=constructed;state.natural={thin,thick};
 }

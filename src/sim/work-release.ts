@@ -53,7 +53,7 @@ export function humanSleepingSpotActors(world:World,ids:ReadonlySet<number>):Paw
  * pawn a Shift-click on a Work column turns off (schema 344). */
 function priorityZeroReleases(world:World,pawnId:number,work:WorkType,pawns:Set<number>):void {
   const pawn=world.pawns.find(p=>p.id===pawnId),job=world.jobs.find(j=>j.id===pawn?.jobId);
-  if(pawn?.ward&&work==='warden'||pawn?.animalHandling&&work==='handle'||(pawn?.animalCare||pawn?.animalFeed||pawn?.animalRescue)&&work==='doctor')pawns.add(pawn.id);
+  if(pawn?.ward&&work==='warden'||pawn?.animalHandling&&work==='handle'&&!(Number(world.schemaVersion)>=378&&pawn.animalHandling.forced378===true)||(pawn?.animalCare||pawn?.animalFeed||pawn?.animalRescue)&&work==='doctor')pawns.add(pawn.id);
   if(pawn?.burial&&work==='haul'&&pawn.orders.active!=='bury'||pawn?.cleaning&&!pawn.cleaning.forced&&work==='clean')pawns.add(pawn!.id);
   if(pawn&&((pawn.surgery&&work==='doctor')||(pawn.tend&&work==='doctor'&&pawn.orders.active!=='tend')||(pawn.feed&&work===feedingWork(world.pawns.find(p=>p.id===pawn.feed!.patientId))&&pawn.orders.active!=='feed')||(pawn.brewing&&work==='haul')||(pawn.haul&&pawn.orders.active!=='haul'&&work===haulingWork(pawn.haul.destination))||(job&&workType(job)===work&&pawn.orders.active===null)||(pawn.cooking&&pawn.orders.active!=='cook'&&disablesWork(world,pawn,work,taskWork(pawn.cooking)))))pawns.add(pawn.id);
 }
@@ -235,6 +235,7 @@ export function releaseAssignments(world:World,pawn:Pawn,despawning=false,ownerL
     for(const p of world.pawns)p.orders.queue=p.orders.queue.filter(o=>o!==releasedJob.id);
   }
   clearReleasedPawnAssignments259(pawn);
+  if(ownerLoss)delete pawn.orderedQueue378;
 }
 
 /** Own-record half of the real release. Contextual claims/clinical/rescue

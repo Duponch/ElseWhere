@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import {isDoubleBedKind} from './bed-kinds.ts';
 import { canStandAt, captureStandability } from './furniture-travel.ts';
 import { footprintCells } from './definitions.ts';
@@ -52,6 +53,6 @@ export function leaveTransitCell(world:World,pawn:Pawn,getBlocked:NavigationGrid
     if(!path?.length)return true;
     pawn.path=path;next=path[0];
   }
-  if(next){pawn.transitExit=true;pawn.state='moving';if(startTravel(world,pawn,next,getLight,budget.structureGeometry?.()))pawn.path.shift();}
+  if(next){pawn.transitExit=true;pawn.state='moving';if(startTravel(world,pawn,next,getLight,budget.structureGeometry?.()))shiftActorPath297(pawn.path);}
   return true;
 }

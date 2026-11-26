@@ -1,4 +1,5 @@
 import {assignPileOwner} from './pile-index.ts';
+import {orderedTargetClaimant378} from './order-types.ts';
 import {isBurialContainer256} from './ancient-monument-runtime-256.ts';
 import { storageAt,storageCellAccepts } from './shelf-storage.ts';
 import { workPriority } from './work-types.ts';
@@ -31,7 +32,7 @@ const fail=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reas
 const bodyPile=(w:World,p:Pawn)=>w.piles.find(i=>i.id===p.body?.pileId);
 
 export function burialClaim(w:World,bodyPawnId:number,exceptPawn?:number):Pawn|undefined {
-  return w.pawns.find(p=>p.id!==exceptPawn&&p.burial?.bodyPawnId===bodyPawnId);
+  return w.pawns.find(p=>p.id!==exceptPawn&&p.burial?.bodyPawnId===bodyPawnId)??orderedTargetClaimant378(w,'pawn',bodyPawnId,exceptPawn);
 }
 export function graveAccepts(w:World,grave:Structure,body:Pawn,exceptPawn?:number):boolean {
   return isBurialContainer256(grave.kind,w.schemaVersion)&&!!grave.grave&&grave.grave.corpseId===undefined

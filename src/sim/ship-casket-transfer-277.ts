@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,heldCore297,captureOccupiedHeldCore297,suspensionDeltas297,type SuspensionClock297} from './core-phase-297.ts';
 import {prepareShipCasketDespawn277,prepareShipCasketSpawn277} from './ship-casket-notifications-277.ts';
@@ -71,7 +72,7 @@ export function planShipCasketEntry277(w:World,c:ShipCasket277,o:ShipCasketOccup
   done=true;delete a.motion;a.path=[];if(a.state!=='downed')a.state='idle';a.shipCryptosleepHeldAt277=tick;
   c.shipCryptosleep277={revision:1,heldAt:tick,...isCorePhysicalSchema297(Number(w.schemaVersion))?captureOccupiedHeldCore297(w):{},occupant:o,items,packed};
   if(o.kind==='human')w.pawns=w.pawns.filter(p=>p!==a);else if(o.kind==='animal')w.wildlife!.animals=w.wildlife!.animals.filter(p=>p!==a);else w.mechanoids=w.mechanoids!.filter(p=>p!==a);
-  w.piles=w.piles.filter(p=>!items.includes(p));w.packed=w.packed.filter(p=>!packed.includes(p));if(!notification.commit())throw Error('Spatial casket despawn changed during synchronous commit');refreshStock(w);return true;
+  w.piles=filterPileEntries(w.piles,p=>!items.includes(p));w.packed=w.packed.filter(p=>!packed.includes(p));if(!notification.commit())throw Error('Spatial casket despawn changed during synchronous commit');refreshStock(w);return true;
  }};
 }
 /** Ejection is actorless. Destruction uses the same original-owner preflight

@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {recordTutorialStartingItem349} from './tutorial-lessons-349.ts';
 import {findStartingPlaceNear256,planStartingPlaceDirect256,type StartingPlaceThing256} from './starting-place-near-256.ts';
 import {captureStartingPlacePhysics256} from './starting-place-physics-256.ts';
@@ -49,10 +50,10 @@ export function prepareStartingPodDischarge256(world:World,arrival:CoreStartingA
    for(const operation of plan.operations){
     if(operation.kind==='absorb'){
      const target=(ground.get(key)??[]).find(p=>p.id===operation.targetId);if(!target)throw Error('Starting absorption lost its actual target');const out=writable(target);
-     mergePileEgg256(out,operation.quantity,working.egg);mergePileContamination(out,operation.quantity,working.foodPoison);mergeThingDamage(out,operation.quantity,working.damage,pileMaxHp(out,world.schemaVersion));mergeRot(out,operation.quantity,rotAge(working,0),world.tick);out.quantity+=operation.quantity;
+     mergePileEgg256(out,operation.quantity,working.egg);mergePileContamination(out,operation.quantity,working.foodPoison);mergeThingDamage(out,operation.quantity,working.damage,pileMaxHp(out,world.schemaVersion));mergeRot(out,operation.quantity,rotAge(working,0),world.tick);markPileContentWrite379(out).quantity+=operation.quantity;
     }else {const out={...structuredClone(working),id:operation.id,quantity:operation.quantity,owner:{type:'ground' as const,...cell}};spawnedItems.push(out);const list=ground.get(key)??[];list.push(out);ground.set(key,list);}
    }
-   working.quantity=plan.remaining;if(plan.complete)return true;if(working.quantity===oldQuantity)return false;
+   markPileContentWrite379(working).quantity=plan.remaining;if(plan.complete)return true;if(working.quantity===oldQuantity)return false;
   }
  };
  try {

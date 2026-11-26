@@ -5,9 +5,17 @@ import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {createShipCountdownRuntime298} from './ship-countdown-runtime-298.ts';
 import type {ShipRuntimeRequest298,ShipRuntimeResponse298,ShipOwnerReplyMetadata298} from './ship-countdown-wire-298.ts';
 import {advanceWorldCore297} from '../sim/engine';
+import {withJournalTerrainReadScope,withTerrainBlockedReadScope} from '../sim/terrain-read-scope';
+import {invalidateResourceJournal} from '../sim/resource-mutation-journal';
+import {invalidateFullRetained379} from './resident-full-retained-379';
+import {markPileIdentityUnknownWrite} from '../sim/pile-identity-directory';
+import {invalidateStaticStructurePublication379} from './static-structure-publication-379';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {FixedCoreClock297} from './fixed-core-clock-297';
 import {CorePhasePublisher297} from './core-phase-publisher-297';
+import {invalidateActorMotionSources297} from '../sim/actor-motion-source-297';
+import {invalidateActorPathSources297} from '../sim/actor-path-source-297';
+import {invalidateActorRecordSources297} from '../sim/actor-record-source-297';
 import {coreMapId297,physicalVisibleCoreMap297} from './core-phase-data-297';
 import type {CorePhaseEnvelope297} from './core-phase-projection-297';
 /// <reference lib="webworker" />
@@ -33,7 +41,7 @@ import {validStartingOriginalRequest256} from '../sim/starting-original-request-
 import {ACTUAL_SHRINES_750_256} from '../sim/ancient-temple-orchestration-256';
 
 import {prepareActualCampEntry256,prepareActualSettlementEntry257} from '../sim/group-camp-entry-256';
-import {registeredCampaign} from '../sim/world-map-context';
+import {registeredCampaign,registeredMaps} from '../sim/world-map-context';
 import {groupEntryActions,validWorldMapCommand} from '../sim/world-map-authority';
 import {GroupCampaignRuntime256} from '../sim/group-campaign-runtime-256';
 import {GroupCaravanPhysical256} from '../sim/group-caravan-physical-256';
@@ -45,7 +53,7 @@ import {selectedRegisteredMap} from '../sim/world-map-context';
 import {campaignOnlySummary} from '../sim/world-map-presentation';
 import {deserializeCampaign,serializeCampaign,serializeCampaignUnchecked} from '../sim/serialization';
 import { UrgentThreatObserver, validThreatPauseMode, type ThreatPauseMode } from './urgent-threats';
-import {selectedMap} from '../sim/secondary-site-context';
+import {selectedMap,secondaryContext} from '../sim/secondary-site-context';
 import {campaignPresentation,campaignPresentationView} from '../sim/secondary-site-presentation';
 import { createScenarioWorld } from '../sim/new-game';
 import { MotionRecorder } from './motion-tracks';
@@ -65,8 +73,31 @@ import { AudioCueRecorder } from './audio-cues';
 /** Both fixed entrypoints execute this identical authoritative engine. The
  * closed entry supplies its concrete transport encoder; public default stays
  * complete. Request ordering, clocks, ACK and SAVE never select that boundary. */
-export function startSimulationWorker(scope:DedicatedWorkerGlobalScope,send:(message:(Response&ShipOwnerReplyMetadata298)|ShipRuntimeResponse298)=>void,snapshots:SnapshotEncoder<true>=new SnapshotEncoder({structureDelta:true,minimumStructures:1000}),publishLocal?:(world:World,publication:SnapshotMessage<true>,originalPacket:SnapshotMessage<true>)=>void,createMotionRecorder:()=>MotionRecorder=()=>new MotionRecorder(),publishPhaseLocal?:(world:World,phase:CorePhaseEnvelope297)=>void):void {
+export function startSimulationWorker(scope:DedicatedWorkerGlobalScope,send:(message:(Response&ShipOwnerReplyMetadata298)|ShipRuntimeResponse298)=>void,snapshots:SnapshotEncoder<true>=new SnapshotEncoder({structureDelta:true,minimumStructures:1000}),publishLocal?:(world:World,publication:SnapshotMessage<true>,originalPacket:SnapshotMessage<true>)=>void,createMotionRecorder:()=>MotionRecorder=()=>new MotionRecorder(),publishPhaseLocal?:(world:World,phase:CorePhaseEnvelope297)=>void,exclusiveTerrainOwner?:object,createPhasePublisher:()=>CorePhasePublisher297=()=>new CorePhasePublisher297()):void {
 let world: CampaignState | undefined;
+// Only fixed Worker entrypoints provide this owner. Mutable test/public
+// runtimes retain the complete scope-entry reference checks.
+const ownedTerrain=<T>(run:()=>T):T=>exclusiveTerrainOwner?withJournalTerrainReadScope(exclusiveTerrainOwner,run):withTerrainBlockedReadScope(run);
+/** The closed clock paths mark their actual writes at the producers. A
+ * command/reorganization is a different, potentially speculative transaction;
+ * it cannot inherit those collection witnesses across its boundary. The
+ * resulting Full still has the ordinary exhaustive fallback. */
+function invalidateRuntimeCollectionJournals(root:CampaignState|undefined=world):void {
+ if(!exclusiveTerrainOwner||!root)return;
+ invalidateActorMotionSources297();
+ invalidateActorPathSources297();
+ invalidateActorRecordSources297();
+ invalidateFullRetained379();
+ markPileIdentityUnknownWrite();
+ invalidateStaticStructurePublication379();
+ for(const map of registeredMaps(root))invalidateResourceJournal(map);
+ if(!root.worldMaps&&(root as World).secondarySite){const secondary=secondaryContext(root as World);if(secondary)invalidateResourceJournal(secondary);}
+}
+function unknownRuntimeMutation<T>(run:()=>T,root:CampaignState|undefined=world):T{
+ if(!exclusiveTerrainOwner)return run();
+ invalidateRuntimeCollectionJournals(root);
+ try{return run();}finally{invalidateRuntimeCollectionJournals(root);}
+}
 let actualViewEpoch301=0;
 const shipCountdown298=createShipCountdownRuntime298();
 let caravans:GroupCampaignRuntime256|undefined;
@@ -80,10 +111,10 @@ function prepareCaravans(root:CampaignState):GroupCampaignRuntime256|undefined {
 let maxSettlements:SettlementLimit=1;
 let speed = 1;
 let threatPauseMode: ThreatPauseMode = 'major';
-const urgentThreats = new UrgentThreatObserver();
+const urgentThreats = new UrgentThreatObserver(!!exclusiveTerrainOwner);
 const clock=new FixedClock();clock.reset(performance.now());
 const coreClock297=new FixedCoreClock297();coreClock297.reset(performance.now());
-const phasePublisher297=new CorePhasePublisher297();
+const phasePublisher297=createPhasePublisher();
 type CoreBatch297={owner:CampaignState;remaining:number;completed:number;simulationMs:number};
 let coreBatch297:CoreBatch297|undefined;
 type LogicalTickBatch={owner:CampaignState;remaining:number;completed:number;simulationMs:number};
@@ -214,12 +245,15 @@ const publishCapturedTick = (checkpoint = false) => {
   return published;
 };
 const publish = (checkpoint = false) => {
-  if (world) {urgentThreats.prepareMaps(world);const visible=visibleWorld();if(visible){presentationChanges.capture(visible);motion.capture(visible);audioCues.capture(visible);}}
+  if (world) {urgentThreats.prepareMaps(world);const visible=visibleWorld();if(visible){presentationChanges.capture(visible);motion.capture(visible);ownedTerrain(()=>audioCues.capture(visible));}}
   return publishCapturedTick(checkpoint);
 };
 
 function stopFatal(error: unknown): void {
   if (fault) return;
+  // A partially failed owner transaction must never seed a later sparse
+  // capture. A malformed owner still takes the existing fatal path.
+  try{invalidateRuntimeCollectionJournals();}catch{/* replacement is required */}
   shipCountdown298.cleanup();
   shipCreditsHold298=undefined;
   neutralResume261=undefined;
@@ -263,7 +297,7 @@ async function handleCamp256(request:Extract<Request,{type:'command'}>):Promise<
     if(step.done){
      completed=true;if(step.value.status==='blocked')throw Error(step.value.reason);
      if(activeCamp256!==owned||owned.cancelled||world!==root)throw Error('La préparation de la carte locale a été annulée.');
-     committing=true;const result=step.value.commit(true);
+     const prepared=step.value;committing=true;const result=unknownRuntimeMutation(()=>prepared.commit(true),root);
      if(!result.ok){committing=false;throw Error(result.reason??'Entrée de la carte locale refusée.');}
      const checkpoint=publish(true);if(!checkpoint)throw Error('La carte confirmée n’a pas été publiée.');
      send({type:'reply',id:request.id,ok:true,checkpoint});return;
@@ -300,7 +334,7 @@ function startEncounter261():void {
     if(world!==root||activeEncounter261!==owner||row.pending261!==pending)throw Error('La vraie préparation a été remplacée.');
     const step=iterator.next();
     if(step.done){finished=true;if(step.value.status==='blocked')throw Error(step.value.reason);
-     const result=step.value.commit();if(!result.ok)throw Error(result.reason??'Entrée refusée.');committed=true;
+     const prepared=step.value,result=unknownRuntimeMutation(()=>prepared.commit(),root);if(!result.ok)throw Error(result.reason??'Entrée refusée.');committed=true;
      caravans?.encounterChanged261(root,owner.groupId);publish(true);
      send({type:'caravan-encounter-progress',groupId:owner.groupId,phase:'complete'});return;
     }
@@ -332,7 +366,7 @@ function startWorldEntry263():void {
     if(fault)throw Error(fault.reason);
     if(world!==root||activeWorldEntry263!==owner||pendingWorldEntry263(root)?.pending!==owner.pending)throw Error('La préparation de cette entrée a été remplacée ou annulée.');
     const step=iterator.next();if(step.done){finished=true;if(step.value.status==='blocked')throw Error(step.value.reason);
-     const result=step.value.commit();if(!result.ok)throw Error(result.reason??'Entrée refusée.');committed=true;
+     const prepared=step.value,result=unknownRuntimeMutation(()=>prepared.commit(),root);if(!result.ok)throw Error(result.reason??'Entrée refusée.');committed=true;
      caravans?.encounterChanged261(root,owner.groupId);publish(true);send({type:'caravan-encounter-progress',groupId:owner.groupId,phase:'complete'});return;
     }
     send({type:'caravan-encounter-progress',groupId:owner.groupId,phase:step.value.phase});await nextCampTurn256();
@@ -452,6 +486,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
       const result=shipCountdown298.frame(world,request,blocked);
       if(result.unknown)stopFatal(result.unknown);
       if(result.departed){
+        invalidateRuntimeCollectionJournals();
         // The physical departure opens a real forcePause before any next Core,
         // snapshot or Main ACK. No already committed Core is rolled back.
         syncShipCreditsHold298(performance.now());
@@ -487,11 +522,11 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
     if(request.type==='ship-launch-298'){
       if(!world)throw Error('La simulation ne répond pas encore.');
       const local=world.worldMaps?selectedRegisteredMap(world):selectedMap(world as World);if(!local)throw Error('Sélectionnez une vraie carte pour lancer le vaisseau.');
-      const result=shipCountdown298.launch(world,local,request);if(!result.ok)throw Error(result.reason);data=JSON.stringify(result);
+      const result=unknownRuntimeMutation(()=>shipCountdown298.launch(world!,local,request));if(!result.ok)throw Error(result.reason);data=JSON.stringify(result);
     }else if(request.type==='ship-credits-continue-298'){
       // This request declares the END of the UI's native three-second closing
       // transition, not its beginning. There is no Worker timer/deadline.
-      mutating=true;const result=shipCountdown298.continueCredits(world,request);if(!result.ok){mutating=false;throw Error(result.reason);}resumeAfterShipCredits298(performance.now());data=JSON.stringify(result);
+      mutating=true;const result=unknownRuntimeMutation(()=>shipCountdown298.continueCredits(world,request));if(!result.ok){mutating=false;throw Error(result.reason);}resumeAfterShipCredits298(performance.now());data=JSON.stringify(result);
     }else if(request.type==='settlement-limit'){if(!validSettlementLimit(request.maxSettlements))throw Error('Plafond de colonies invalide.');maxSettlements=request.maxSettlements;if(world?.worldMaps)configureSettlementLimit(world,maxSettlements);
     } else if (request.type === 'dev-mode') {
       if (typeof request.enabled !== 'boolean' || typeof request.god !== 'boolean') throw new Error('Réglage développeur invalide.');
@@ -559,10 +594,10 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
     } else {
       if (!world) throw new Error('La simulation ne répond pas encore.');
       if(request.type==='order-options') {
-        data=JSON.stringify(queryOrderOptions(selectedMap(world as World),request.pawnId,request,request.queue));
+        data=JSON.stringify(ownedTerrain(()=>queryOrderOptions(selectedMap(world as World),request.pawnId,request,request.queue)));
       } else if(request.type==='bill-worker-options') {
         if(!Number.isSafeInteger(request.structureId)||request.structureId<1||!Number.isSafeInteger(request.billId)||request.billId<1)throw Error('Poste ou facture invalide.');
-        const options=queryBillWorkerOptions283(selectedMap(world as World),request.structureId,request.billId);
+        const options=ownedTerrain(()=>queryBillWorkerOptions283(selectedMap(world as World),request.structureId,request.billId));
         if(!options)throw Error('Cette facture ou son poste n’est plus disponible.');
         // Metadata replies never publish/capture a snapshot, change revision,
         // advance the clock or start a deferred map preparation.
@@ -572,7 +607,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
         const retry=validCaravanCommand261(request.command)&&request.command.type==='caravan-encounter-choice'&&request.command.choice==='retry'?pendingCaravan261(world)?.pending261:undefined;
         const previousEncounter=pendingCaravan261(world)?.pending261;
         const previousTarget=targetOrder?pendingWorldEntry263(world)?.pending:undefined;
-        const result = applyCommand(world as World, request.command,caravans);
+        const result = unknownRuntimeMutation(()=>withTerrainBlockedReadScope(()=>applyCommand(world as World,request.command,caravans)));
         if(result.ok&&retry)attemptedEncounter261.delete(retry);
         if(result.ok&&previousTarget&&pendingWorldEntry263(world)?.pending===previousTarget)attemptedWorldEntry263.delete(previousTarget);
         if (!result.ok) { mutating = false; throw new Error(result.reason ?? 'Ordre refusé.'); }
@@ -615,7 +650,7 @@ function publishActualFull297():void {
  // Observers were already captured at the actual Core boundary. Calling
  // publish() here would scan Audio again even for silent terrain changes.
  const previous=observedWorld,current=visibleWorld();
- if(current&&current!==previous){presentationChanges.capture(current);motion.capture(current);audioCues.capture(current);}
+ if(current&&current!==previous){presentationChanges.capture(current);motion.capture(current);ownedTerrain(()=>audioCues.capture(current));}
  publishCapturedTick();
 }
 function publishDuePhysical297(force=false,batchTail=false):void {
@@ -659,7 +694,7 @@ function runCoreTask297(now:number):void {
  if(!coreBatch297){wakeDue=false;const budget=coreClock297.reserve(now,speed);if(speed&&coreClock297.lastReserveGapMs>250)saturatedUntil=now+CALM_FULL_SATURATION_HOLD_MS;if(budget===0){publishDuePhysical297(false,true);return;}coreBatch297={owner:world,remaining:budget,completed:0,simulationMs:0};}
  const batch=coreBatch297;if((effectiveCore297(world)+1)%10===0)urgentThreats.prepareMaps(world);
  if(!coreClock297.consume())throw Error('Missing reserved Core transaction');
- const started=performance.now(),result=advanceWorldCore297(world,undefined,caravans);
+ const started=performance.now(),result=ownedTerrain(()=>advanceWorldCore297(world!,undefined,caravans));
  if(result.core!==effectiveCore297(world))throw Error('Engine returned an uncommitted Core watermark');
  batch.simulationMs+=performance.now()-started;batch.completed++;batch.remaining--;stepMs=batch.simulationMs/batch.completed*10;
  for(const row of result.maps){const effects=row.observerEffects297;if(!effects||typeof effects.threatsChanged!=='boolean'||typeof effects.audioChanged!=='boolean'||typeof row.requiresHardFull297!=='boolean'||!Array.isArray(row.strikeAudio297)||!Array.isArray(row.shotAudio297))throw Error('Missing causal Core observer receipt');}
@@ -689,7 +724,8 @@ function runCoreTask297(now:number):void {
   }
   // visibleWorld may revoke an old map's Recorder/Audio/Publisher ownership.
   // Capture this Core only after that synchronous owner check.
-  motion.capture(visible);
+  if(!exclusiveTerrainOwner||result.localTickCompleted||hard||paused)motion.capture(visible);
+  else motion.capturePhysicalFromCore379(visible,row,exclusiveTerrainOwner);
   phasePublisher297.observe({core:result.core,actorsChanged:row.actorsChanged,projectileEvents:row.projectileEvents,requiresFull:hard,deferredFull297:result.maps.some(item=>item.deferredFull297)},result.localTickCompleted,performance.now());
   // Doors that opened or closed on the visible map: a frontier anchor ships
   // their state in the next actor packet; any other anchor needs a Full.
@@ -701,7 +737,7 @@ function runCoreTask297(now:number):void {
   if(phasePublisher297.canDeferFull&&(event||phasePublisher297.hasPendingProjectileEvents))phasePublisher297.requestFull();
   const captureAudio=result.localTickCompleted||row.observerEffects297.audioChanged||row.strikeAudio297.length>0||row.shotAudio297.length>0||paused;
   if(captureAudio){
-   audioCues.capturePhysical297(visible,result.core,row.strikeAudio297,row.shotAudio297);
+   ownedTerrain(()=>audioCues.capturePhysical297(visible,result.core,row.strikeAudio297,row.shotAudio297));
    // Only prepare/commit around an actual send consumes the owned cue prefix.
    // publishDuePhysical297 checks the shared strict phase audio validator and
    // falls back to a genuine Full for a cue outside that guarded domain.
@@ -720,7 +756,7 @@ function playDevTicks(ticks:number):void {
   for(let left=ticks;left>0;){
     const n=Math.min(left,250);
     urgentThreats.prepareMaps(world);
-    stepWorld(world,n,undefined,caravans);left-=n;
+    ownedTerrain(()=>stepWorld(world!,n,undefined,caravans));left-=n;
     if(urgentThreats.capture(world,threatPauseMode)){speed=0;break;}
   }
   motion.reset();phasePublisher297.reset();audioCues.reset();
@@ -744,12 +780,12 @@ function runRegularTask():void {
     const active=logicalBatch;
     urgentThreats.prepareMaps(world);
     if(!clock.consume())throw Error('Missing reserved simulation tick.');
-    const started=performance.now();stepWorld(world,1,undefined,caravans);
+    const started=performance.now();ownedTerrain(()=>stepWorld(world!,1,undefined,caravans));
     active.simulationMs+=performance.now()-started;active.completed++;active.remaining--;stepMs=active.simulationMs/active.completed;
     const encounter=pendingCaravan261(world),entry=pendingWorldEntry263(world),threatPaused=urgentThreats.capture(world,threatPauseMode),paused=!!encounter||!!entry||threatPaused;
     if(threatPaused){speed=0;resetSimulationClock(now);}
     if(encounter)holdEncounterPause261(now);if(entry)holdWorldEntry263(now);
-    const visible=visibleWorld();if(visible){motion.capture(visible);audioCues.capture(visible);}
+    const visible=visibleWorld();if(visible){motion.capture(visible);ownedTerrain(()=>audioCues.capture(visible));}
     const changed=visible?presentationChanges.capture(visible):false;
     if(changed||paused)publishCapturedTick();
     if(paused){if(encounter)startEncounter261();if(entry)startWorldEntry263();return;}

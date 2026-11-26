@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isSchema274OrLater} from './schema-compatibility-257.ts';
 import {registeredCampaign,boundWorldGroup} from './world-map-context.ts';
 import {groupGeographicTradeTarget256} from './group-geographic-post-256.ts';
@@ -99,9 +100,9 @@ export function prepareGroupGift274(w:World,lines:readonly CommercialBuyLine[],s
  if(!current())return no('Un véritable destinataire du don n’est pas modifiable.');
  return {ok:true,current,commit(){
   if(!current())throw Error('Stale actual diplomatic gift');used=true;
-  for(const u of updates)u.original.quantity=u.quantity;
-  for(const p of whole)delete (p as Partial<MaterialPile>).owner;
-  g.items=remaining;g.reorganization=history;post.stock=[...stock,...incoming];post.gifts274=gifts;relation.goodwill=q.goodwillAfter;relation.kind=q.relationAfter;root.nextId=allocated;
+  for(const u of updates)markPileContentWrite379(u.original).quantity=u.quantity;
+  for(const p of whole)delete markPileContentWrite379((p as Partial<MaterialPile>)).owner;
+  g.items=remaining;g.reorganization=history;post.stock=[...stock,...incoming];post.gifts274=gifts;relation.goodwill=q.goodwillAfter;markPileContentWrite379(relation).kind=q.relationAfter;root.nextId=allocated;
   events.push({tick,type:'command',message:`Don remis à ${q.factionName} : ${totals.cloth} tissus, ${totals['muffalo-wool']} laines de mufalo ; relations ${q.goodwillBefore} → ${q.goodwillAfter} (${q.appliedGain>=0?'+':''}${q.appliedGain}).`});if(events.length>80)events.splice(0,events.length-80);
  }};
 }

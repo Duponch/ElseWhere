@@ -1,4 +1,5 @@
-import type { Structure } from '../sim/types';
+import type { Structure,World } from '../sim/types';
+import {ResidentStructureSignature379} from './ResidentStructureSignature379';
 
 // This owns primitive captures, never a World, source array, building or policy.
 type Scalar = string | number | boolean | bigint | null | undefined;
@@ -23,6 +24,8 @@ function legacyStructureSignature(structures: readonly Structure[], doorAxesKey:
  * Caller supplies freshly computed door/package strings; neither dependency is
  * replaced by a structures-only witness, tick, reference or public boolean. */
 export class ConfirmedStructurePresentationSignature {
+  private readonly resident=new ResidentStructureSignature379();
+  private residentActive=false;
   private readonly slots: { values: Scalar[]; text: string }[] = [];
   private readonly scratch: Scalar[] = [];
   private doorAxesKey: string | undefined;
@@ -38,6 +41,7 @@ export class ConfirmedStructurePresentationSignature {
   private pendingOther = true;
 
   clear(): void {
+    this.resident.clear();this.residentActive=false;
     this.pendingFlowers.clear();this.flowerPlanValid=false;this.pendingKinds.clear();this.pendingOther=true;
     this.slots.length = this.scratch.length = 0;
     this.doorAxesKey = this.packageKey = undefined;
@@ -46,6 +50,7 @@ export class ConfirmedStructurePresentationSignature {
   }
 
   read(structures: readonly Structure[], doorAxesKey: string, packageKey: string, reset = false): string {
+    if(this.residentActive)this.clear();
     if (reset) this.clear();
     const previousFlowerPlanValid=this.flowerPlanValid;
     // Poison before even the historical length/guard reads can throw.
@@ -98,6 +103,7 @@ export class ConfirmedStructurePresentationSignature {
   // V299_CONFIRMED_READ_BEGIN
   // Only the central native closure may supply an exhaustive confirmed suffix.
   readConfirmed(structures: readonly Structure[], doorAxesKey: string, packageKey: string, indices?: readonly number[], reset = false): string {
+    if(this.residentActive)return this.read(structures,doorAxesKey,packageKey,reset);
     if (reset || !this.valid || this.slots.length !== structures.length || indices === undefined) return this.read(structures,doorAxesKey,packageKey,reset);
     let previousIndex = -1;
     for (const index of indices) {
@@ -153,20 +159,30 @@ export class ConfirmedStructurePresentationSignature {
 
   // V299_CONFIRMED_READ_END
 
+  /** Closed producer uses accepted stable IDs through structural membership
+   * edits. A public flag or caller-supplied ordinal list grants no authority. */
+  readResident(world:World,doorAxesKey:string,packageKey:string,reset=false):string|undefined {
+    const key=this.resident.read(world,doorAxesKey,packageKey,reset);if(key!==undefined)this.residentActive=true;return key;
+  }
+  residentMetrics379(){return this.resident.metrics();}
+
   /** Cumulative since the last successful furniture build ACK. A colliding
    * non-floral raw change remains a full barrier even if its text is equal. */
   flowerChanges(): readonly number[] | undefined {
+    if(this.residentActive)return this.resident.flowerChanges();
     return this.valid&&this.flowerPlanValid?[...this.pendingFlowers].sort((a,b)=>a-b):undefined;
   }
 
   /** Kinds of every structure slot that changed since the last furniture build
    * ACK, or undefined when anything else changed (or the read is not valid). */
   changedKinds(): ReadonlySet<Scalar> | undefined {
+    if(this.residentActive)return this.resident.changedKinds();
     return this.valid && !this.pendingOther ? this.pendingKinds : undefined;
   }
 
   /** Caller ACKs only after a full or partial build succeeds, never on throw. */
   ackFurnitureBuild(): void {
+    if(this.residentActive){this.resident.acknowledge();return;}
     this.pendingFlowers.clear();this.flowerPlanValid=this.valid;this.pendingKinds.clear();this.pendingOther=!this.valid;
   }
 }

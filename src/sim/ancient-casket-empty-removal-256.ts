@@ -1,3 +1,4 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -131,7 +132,7 @@ export function damageEmptyAncientCasket256(w:World,s:Structure,amount:number,ca
  const minX=Math.min(...cells.map(c=>c.x))-1,maxX=Math.max(...cells.map(c=>c.x))+1,minZ=Math.min(...cells.map(c=>c.z))-1,maxZ=Math.max(...cells.map(c=>c.z))+1;
  for(let z=minZ;z<=maxZ;z++)for(let x=minX;x<=maxX;x++)if(x>=0&&z>=0&&x<w.width&&z<w.height&&!blocked[z*w.width+x])candidates.push({x,z});
  if(candidates.length){const total=amount/60,floor=Math.floor(total),n=floor+(healthRandom(random)<total-floor?1:0);for(let i=0;i<n;i++){const cell=candidates[Math.floor(healthRandom(random)*candidates.length)]!;addFilth(trial,cell,'building-rubble');}}
- s.damage=next;w.nextId=trial.nextId;if(trial.filth)w.filth=trial.filth;
+ s.damage=next;structureDamageChanged379(w,s);w.nextId=trial.nextId;if(trial.filth)w.filth=trial.filth;
  if(fire){if(w.fires)w.fires.rng=random.rng;else w.fires={...fire,rng:random.rng};}else w.rng=random.rng;
  if(next>=200&&!s.casketWick){const draw=shipChunkNextRandom256(w.rng);w.rng=draw.rng;s.casketWick={startedAtCore:core,endCore:core+140+Math.abs((draw.rng|0)%11),...external?.instigatorKey?{instigatorKey:external.instigatorKey}:{}};}
  return true;

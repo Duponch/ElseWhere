@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
 import {componentWorkpiecePlaceFree,cookingSpot,ingredientPlaceFree} from './cooking-bills.ts';
 import {footprintCells} from './definitions.ts';
@@ -127,13 +128,13 @@ function cancelAdvancedComponentWork(world:World,piece:MaterialPile):CommandResu
     const placements=planGroundPlacement(shadow,refund[item],origin,item,cell=>routeToJob(shadow,cell,reach,true)!==null);
     if(!placements||shadow.piles.length+placements.length>32768||!Number.isSafeInteger(world.nextId+plans.reduce((n,p)=>n+p.placements.length,0)+placements.length))return {ok:false,code:'occupied',reason:'Aucune place pour conserver tous les matériaux récupérés.'};
     plans.push({item,placements});
-    shadow.piles.push(...placements.map((p,i):MaterialPile=>({id:-(plans.length*1000+i+1),item,kind:item,quantity:p.quantity,owner:{type:'ground',...p.cell}})));
+    appendPileEntries(shadow.piles,...placements.map((p,i):MaterialPile=>({id:-(plans.length*1000+i+1),item,kind:item,quantity:p.quantity,owner:{type:'ground',...p.cell}})));
   }
   for(const pawn of world.pawns){
     if(pawn.cooking?.ingredients.some(i=>i.pileId===piece.id)||pawn.haul?.sourcePileId===piece.id)releaseAssignments(world,pawn);
     pawn.orders.queue=pawn.orders.queue.filter(o=>typeof o==='number'||(isCookingOrder(o)?!o.cooking.ingredients.some(i=>i.pileId===piece.id):o.sourcePileId!==piece.id));
   }
-  world.piles=world.piles.filter(p=>p!==piece);
+  world.piles=filterPileEntries(world.piles,p=>p!==piece);
   for(const {item,placements} of plans)for(const placement of placements)addMaterial(world,item,placement.quantity,{type:'ground',...placement.cell},item);
   world.rng=random.rng;return {ok:true};
 }

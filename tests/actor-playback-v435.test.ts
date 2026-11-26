@@ -70,3 +70,17 @@ test('clock buffering, starvation, pause, resume and speed changes remain identi
   for(const at of [now,now+4,now+16]){expect(closed.advance(at)).toBe(native.advance(at));expect(closed.playbackSegment435(1)).toBe(closed.segment(1));}
  }
 });
+
+test('immutable owner reschedules corrected boundaries without retaining stale events',()=>{
+ const world=createWorld(),actors=[{id:1,dependent:true},{id:2,dependent:false},{id:3,dependent:false}],p=new ActorPlayback435<typeof actors[number]>(actor=>actor.dependent),timeline=new MotionTimeline();ownActorPlaybackWorld435(world,true);p.prepare(world,actors);
+ const frozen=(start:number,end:number)=>{const value=edge(start,end);Object.freeze(value.from);Object.freeze(value.to);Object.freeze(value);const segments=[value];Object.freeze(segments);return segments;};
+ timeline.adopt(0,1,actors.map(actor=>({id:actor.id,segments:frozen(10,10000)})),0,true,true);
+ const at=(tick:number)=>{timeline.tick=tick;expect(p.beginFrame(timeline)).toBe(true);const rows=p.frameIndices435(timeline,tick,0)!;for(const index of rows)p.select(index,timeline,tick,0);p.commit();return rows;};
+ expect(at(0)).toEqual([0,1,2]);expect(p.snapshot().scheduledBoundaries).toBe(3);
+ for(let i=0;i<100;i++)expect(at(1)).toEqual([0]);expect(p.snapshot().scheduledBoundaries).toBe(3);
+ for(let n=0;n<250;n++){timeline.adopt(2,1,[{id:2,segments:frozen(100+n,10000+n)}],n,false,true);expect(at(2)).toEqual([0,1]);expect(p.snapshot().scheduledBoundaries).toBe(3);}
+ expect(at(10)).toEqual([0,2]);expect(at(348)).toEqual([0]);expect(at(349)).toEqual([0,1]);expect(at(10250)).toEqual([0,1,2]);expect(p.snapshot().scheduledBoundaries).toBe(0);
+ // A public reader may keep the Map and mutate a historical edge. It forfeits
+ // the private schedule rather than losing that ordinary observable update.
+ timeline.tracks;expect(p.beginFrame(timeline)).toBe(false);expect(p.frameIndices435(timeline,10250,0)).toBeUndefined();
+});

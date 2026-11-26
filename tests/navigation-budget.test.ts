@@ -21,7 +21,10 @@ test('logistics proves only competitive access, retains ties and skips an inacce
   expect(p.haul?.destination).toEqual({type:'stockpile',stockpileId:w.stockpiles[0]!.id});
   // RimWorld's haul scan (schema 301) looks at the closest accepting cell
   // first and stops there: one pair, not the whole window of three.
-  expect(p.haul?.quantity).toBe(10);expect(budget.pairs).toBe(32768-1);expect(budget.remaining).toBe(7);
+  // Schema379 takes the entire available twenty-unit stack when it fits the
+  // colon's capacity. The historical ten-unit cap is tested separately.
+  expect(p.haul?.quantity).toBe(20);expect(w.piles.find(i=>i.item==='wood')?.quantity).toBe(20);
+  expect(budget.pairs).toBe(32768-1);expect(budget.remaining).toBe(7);
   // Both close cells tie. Array order chooses the first; the remote reserve
   // cannot beat it and must not flood the map merely to prove its existence.
   expect(stats.searches[0]!.connectivityVisited).toBeLessThan(100);

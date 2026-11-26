@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import type {CampaignState} from './world-map-state.ts';
 import type {AwayGroup} from './group-capture.ts';
@@ -89,7 +90,7 @@ export function prepareDemandPayment261(root:CampaignState,record:EncounterGroup
   // All refusal work, native-set plans and RNG draws are complete. No await,
   // future source lookup or new validation occurs after this first publication.
   foreign.commit(cession);if(inventory)commitSplitInventory(inventory);
-  for(const update of updates)update.original.quantity=update.quantity;
+  for(const update of updates)markPileContentWrite379(update.original).quantity=update.quantity;
   const items=inventory?inventory.source:g.items.filter(p=>!gone.has(p.id)),packs=inventory?inventory.sourcePacked:(g.packed??[]).filter(p=>!removedPacks.includes(p));
   const next:AwayGroup={...g,members:g.members.filter(p=>!cededIds.has(p.id)),items,reorganization:history,...packs.length?{packed:packs}:{}};
   if(!packs.length)delete next.packed;

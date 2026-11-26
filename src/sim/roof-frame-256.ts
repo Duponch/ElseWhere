@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 /** Roof-only physical Frame boundary. No recipe ingredients are manufactured:
  * leavings are fractions of the original delivered piles in container order. */
 import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
@@ -5,6 +6,7 @@ import {structureMaxHp} from './thing-damage-rules.ts';
 import {healthRandom} from './health.ts';
 import {groundCapacity,planGroundPlacement} from './ground-placement.ts';
 import {transferPile,refreshStock} from './materials.ts';
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {copyPileCondition} from './pile-condition.ts';
 import {neutralLossPlan} from './destruction-losses.ts';
 import {interruptWork} from './interrupted-cargo.ts';
@@ -31,7 +33,7 @@ function splitActual(world:World,source:MaterialPile,quantity:number):MaterialPi
  if(quantity===source.quantity)return source;
  if(!Number.isSafeInteger(world.nextId+1)||world.piles.length>=32768)throw RangeError('Roof Frame fragment capacity exhausted');
  const fragment:MaterialPile={...source,...copyPileCondition(source),id:world.nextId++,quantity,owner:{...source.owner}};
- source.quantity-=quantity;world.piles.push(fragment);return fragment;
+ markPileContentWrite379(source).quantity-=quantity;appendPileEntries(world.piles,fragment);return fragment;
 }
 /** Run on the isolated roof projection; caller adopts only after every death,
  * release, drop and late capacity check succeeds. */
@@ -49,7 +51,7 @@ export function damageFrameFromRoof256(world:World,job:Job,amount:number,thick:b
    if(!placements)throw RangeError('Roof Frame leavings have no physical place');
    for(const placement of placements){const part=splitActual(world,fragment,placement.quantity);if(!transferPile(world,part,{type:'ground',...placement.cell}))throw RangeError('Roof Frame leavings deposit refused');}
   }
-  if(lost)world.piles=world.piles.filter(p=>p!==source);
+  if(lost)world.piles=filterPileEntries(world.piles,p=>p!==source);
  }
  const plan=Object.keys(items).length?neutralLossPlan(world,{items}):undefined;if(plan===null)throw RangeError('Roof Frame loss ledger exhausted');if(plan)world.destroyed=plan;
  // Retire the intention before release, so interruption cannot return a

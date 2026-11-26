@@ -1,4 +1,5 @@
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isDevilstrandApparel358} from './devilstrand-358.ts';
 import { SCHEMA_VERSION } from './types.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -130,11 +131,11 @@ export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
   return p.item==='wood'?1:p.item==='cloth'?1.2:p.item==='light-leather'?1:p.item==='component'?.6:0;
 }
 export function pileDamage(p:MaterialPile):number {return p.apparel?pileMaxHp(p)-p.apparel.hitPoints:p.weapon?pileMaxHp(p)-p.weapon.hitPoints:p.damage??0;}
-export function copyThingDamage(target:{damage?:number},source:{damage?:number}):void {if(source.damage)target.damage=source.damage;else delete target.damage;}
+export function copyThingDamage(target:{damage?:number},source:{damage?:number}):void {markPileContentWrite379(target);if(source.damage)markPileContentWrite379(target).damage=source.damage;else delete markPileContentWrite379(target).damage;}
 /** Call before adding quantity. Core stacks average surviving HP, rounding up. */
 export function mergeThingDamage(target:Pick<MaterialPile,'item'|'kind'|'quantity'|'damage'>,quantity:number,sourceDamage=0,maxHp=pileMaxHp(target)):void {
   if(!maxHp||!quantity)return;const hp=Math.ceil(((maxHp-(target.damage??0))*target.quantity+(maxHp-sourceDamage)*quantity)/(target.quantity+quantity));
-  if(hp<maxHp)target.damage=maxHp-hp;else delete target.damage;
+  markPileContentWrite379(target);if(hp<maxHp)markPileContentWrite379(target).damage=maxHp-hp;else delete markPileContentWrite379(target).damage;
 }
 export type FireItemLoss=Partial<Record<ItemId,number>>;
 
@@ -151,7 +152,7 @@ export function rescaleStructureDamage311(value:unknown):void {
     const s=o as unknown as Pick<Structure,'kind'|'material'>,oldMax=structureMaxHp(s,310),newMax=structureMaxHp(s,311);
     if(oldMax>0&&newMax>0&&Number(o.damage)<oldMax){
       const hp=Math.max(1,Math.round((oldMax-Number(o.damage))*newMax/oldMax)),damage=Math.max(1,newMax-hp);
-      if(damage<newMax)o.damage=damage;
+      if(damage<newMax)markPileContentWrite379(o).damage=damage;
     }
   }
   for(const v of Object.values(o))if(v&&typeof v==='object')rescaleStructureDamage311(v);

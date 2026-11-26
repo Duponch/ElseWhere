@@ -64,11 +64,17 @@ interface MapBaseline { map: LocalMap; raids: Map<string,{kind: 'raid'|'mechanoi
 export class UrgentThreatObserver {
   private maps = new Map<ThreatSite|number, MapBaseline>();
   private state: UrgentThreatSnapshot = { generation: 0, serial: 0, pauseRevision: 0, urgentHeld: false, rows: [] };
+  // The fixed deserialized Worker never changes a live world's schema; every
+  // replacement bootstraps this observer. Modern schemas derive all arrivals
+  // from the letter ledger, not a second census of raids and animals.
+  private ledgerOnly = false;
+  constructor(private readonly fixedWorldSchema = false) {}
   /** Next letter id already seen (schema 352): a load or a new game adopts its
    * current stack silently, nothing pauses retroactively. */
   private letterNext = 1;
   bootstrap(world: CampaignState): void {
     this.state = { generation: this.state.generation + 1, serial: 0, pauseRevision: 0, urgentHeld: false, rows: [] };
+    this.ledgerOnly = this.fixedWorldSchema && isSchema352OrLater(Number(world.schemaVersion));
     this.maps.clear(); this.prepareMaps(world);
     this.letterNext = campaignLetters352(world as World)?.next ?? 1;
   }
@@ -83,7 +89,7 @@ export class UrgentThreatObserver {
     const owners = this.owners(world);
     for (const site of this.maps.keys()) if (!owners.some(([s]) => s === site)) this.maps.delete(site);
     // Registry IDs are monotone physical owners. Promotion only replaces their context views.
-    for (const [site, map,,detected] of owners) { const before=this.maps.get(site); if (!before || typeof site!=='number'&&before.map!==map) this.maps.set(site, this.read(map,detected)); }
+    for (const [site, map,,detected] of owners) { const before=this.maps.get(site); if (!before || typeof site!=='number'&&before.map!==map) this.maps.set(site, this.ledgerOnly?{map,raids:new Map(),animals:new Map(),warnings:new Set(),detected:!!detected}:this.read(map,detected)); }
   }
   private read(map: LocalMap,detected=false): MapBaseline {
     const raids:MapBaseline['raids'] = new Map(), animals = new Map<number, number>();
@@ -108,6 +114,7 @@ export class UrgentThreatObserver {
     // Schema 352: letters replace the threat page. Each class pauses as in
     // Core LetterStack.ReceiveLetter (preference >= the letter's pause mode).
     const letters = isSchema352OrLater(Number(world.schemaVersion));
+    if(this.ledgerOnly&&!letters)throw Error('Fixed letter-observer schema changed without bootstrap.');
     let letterPause = false;
     if (letters) {
       const state = campaignLetters352(world as World), next = state?.next ?? 1;
@@ -121,6 +128,10 @@ export class UrgentThreatObserver {
     for (const [site, map,tile,detected] of this.owners(world)) {
       const before = this.maps.get(site);
       if (!before || typeof site!=='number'&&before.map!==map) throw new Error('Threat observer map was not bootstrapped before step.');
+      // Still verify every map's physical ownership. No old-style episode
+      // transition is observable in the modern ledger, even at pause or on
+      // a new map. Refresh the private map reference without scanning actors.
+      if(this.ledgerOnly){before.map=map;before.detected=!!detected;continue;}
       const after = this.read(map,detected);
       if (!letters) {
         if(after.detected&&!before.detected)arrive(site,tile,'camp-detected',1);

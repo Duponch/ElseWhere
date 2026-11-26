@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 /** CompSpawner's real new Thing is allocated even when Direct placement
  * absorbs the whole stack. A failed/stale plan consumes nothing. */
@@ -12,8 +14,8 @@ export function planHiveJellyDeposit256(w:World,cell:Cell,count:20|30,forbidden:
  let committed=false;
  return {commit(){if(committed||w.piles!==piles||w.nextId!==nextId||target&&target.quantity!==before)return false;
   committed=true;w.nextId++;
-  if(target){mergeThingDamage(target,count,0,60);target.quantity+=count;if(forbidden)setMaterialForbidden256(target,true);}
-  else {const made:MaterialPile={id:nextId,kind:'food',item:'insect-jelly',quantity:count,owner:{type:'ground',...cell}};setMaterialForbidden256(made,forbidden);w.piles.push(made);}
+  if(target){mergeThingDamage(target,count,0,60);markPileContentWrite379(target).quantity+=count;if(forbidden)setMaterialForbidden256(target,true);}
+  else {const made:MaterialPile={id:nextId,kind:'food',item:'insect-jelly',quantity:count,owner:{type:'ground',...cell}};setMaterialForbidden256(made,forbidden);appendPileEntries(w.piles,made);}
   return true;
  }};
 }

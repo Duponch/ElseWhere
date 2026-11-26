@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
@@ -118,22 +120,22 @@ function taskValid(w:World,doctor:Pawn,a:WildAnimal,task:AnimalCareTask):boolean
 }
 function releaseCare(w:World,doctor:Pawn):void {if(!releaseWork(w,doctor))interruptWork(w,doctor);}
 function pickup(w:World,doctor:Pawn,task:AnimalCareTask,ctx:NeedContext):void {
-  const m=task.medicine!,pile=w.piles.find(p=>p.id===m.sourcePileId);
+  const m=task.medicine!,pile=pileById(w,m.sourcePileId);
   if(!pile||!materialAllowedForPlayer256(pile)||pile.owner.type!=='ground'||reservedSource(w,pile.id)>pile.quantity){interruptWork(w,doctor);return;}
   if(!adjacent(doctor,pile.owner)&&(doctor.x!==pile.owner.x||doctor.z!==pile.owner.z)){ctx.move(pile.owner,false);return;}
   if(pile.quantity===m.quantity){assignPileOwner(pile,{type:'pawn',pawnId:doctor.id});m.carryPileId=pile.id;}
   else {
     if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){interruptWork(w,doctor);return;}
-    pile.quantity-=m.quantity;m.carryPileId=w.nextId++;
-    w.piles.push({id:m.carryPileId,kind:'medicine',item:m.item,quantity:m.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)});
+    markPileContentWrite379(pile).quantity-=m.quantity;m.carryPileId=w.nextId++;
+    appendPileEntries(w.piles,{id:m.carryPileId,kind:'medicine',item:m.item,quantity:m.quantity,owner:{type:'pawn',pawnId:doctor.id},...copyPileCondition(pile)});
   }
   task.phase='approach';doctor.path=[];doctor.state='moving';
 }
 function consumeMedicine(w:World,task:AnimalCareTask):void {
   const m=task.medicine;if(!m)return;
-  const pile=w.piles.find(p=>p.id===m.carryPileId)!;
-  pile.quantity--;m.quantity--;
-  if(!pile.quantity){w.piles.splice(w.piles.indexOf(pile),1);delete task.medicine;}
+  const pile=pileById(w,m.carryPileId)!;
+  markPileContentWrite379(pile).quantity--;markPileContentWrite379(m).quantity--;
+  if(!pile.quantity){splicePileEntries(w.piles,w.piles.indexOf(pile),1);delete task.medicine;}
 }
 export function processAnimalCare(w:World,doctor:Pawn,ctx:AnimalCareContext,light:()=>number):void {
   if(!allowedAreaServicesAllowed(w,doctor)){releaseCare(w,doctor);return;}

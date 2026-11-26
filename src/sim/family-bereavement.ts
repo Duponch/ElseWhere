@@ -9,7 +9,7 @@ import { TICKS_PER_DAY,type Pawn,type World } from './types.ts';
 import type { MoodThought } from './mood.ts';
 
 export type FamilyDeathKind=`${FamilyDeathRelation}-died`;
-export interface FamilyDeathMemory {otherId:number;kind:FamilyDeathKind;at:number;suspendedTicks?:number}
+export interface FamilyDeathMemory {otherId:number;kind:FamilyDeathKind;at:number;suspendedTicks?:number;banishedToDie378?:true}
 export const FAMILY_DEATH_DURATION=30*TICKS_PER_DAY,FAMILY_DEATH_LIMIT=10;
 export const FAMILY_DEATH_LABELS:Readonly<Record<FamilyDeathKind,string>>=Object.freeze({
   'parent-died':'parent','child-died':'enfant','sibling-died':'fratrie','lover-died':'partenaire','spouse-died':'conjoint',

@@ -1,4 +1,7 @@
-import { assertHarvestPhase,confirmedTravelExcess,presentationStarvations,tweenedRootStep,visibleSpeedResponse } from './harvest-assertions.ts';
+import { assertHarvestPhase,confirmedTravelExcess,presentationStarvations,presentationSubmissionStalls,tweenedRootStep,visibleSpeedResponse } from './harvest-assertions.ts';
+import {confirmedContactDepartureDiagnostic} from './harvest-contact-departure.ts';
+import {captureRockCellDiagnostic} from './harvest-rock-witness.ts';
+import {qualifySubmittedHarvestPhase} from './harvest-submitted-qualification.ts';
 import { writeTestFile, testOutputPath } from '../tests/test-output.ts';
 import { resolve } from 'node:path';
 import os from 'node:os';
@@ -16,8 +19,27 @@ const stats=a=>{if(!a.length)return null;const s=a.slice().sort((a,b)=>a-b);retu
 const probe=`
 const visibleSpeedResponse=${visibleSpeedResponse.toString()};
 const confirmedTravelExcess=${confirmedTravelExcess.toString()};
+const confirmedContactDepartureDiagnostic=${confirmedContactDepartureDiagnostic.toString()};
+const captureRockCellDiagnostic=${captureRockCellDiagnostic.toString()};
 const tweenedRootStep=${tweenedRootStep.toString()};
-window.__sync={view:null,active:false,frames:[],snapshots:[],removals:[],previous:null,poses:new Map(),jumps:[],rawJumpCount:0,continuousTravelExcess:[],contactStalls:[],gaps:[],solidOccupancy:[],controls:[],adopts:[],compiles:[],lastPlay:null,receptions:0};
+window.__sync={view:null,active:false,frames:[],snapshots:[],removals:[],previous:null,poses:new Map(),jumps:[],rawJumpCount:0,continuousTravelExcess:[],contactStalls:[],gaps:[],solidOccupancy:[],controls:[],adopts:[],compiles:[],lastPlay:null,receptions:0,submissionSerial:0,submissions:[],submittedFrames:[],submittedPrevious:null,submittedPoses:new Map(),submittedJumps:[],submittedRawJumpCount:0,submittedContinuousTravelExcess:[]};
+// This is the actual map submission boundary: SceneRenderCore calls it once
+// only after preparation gates and endpoint publication. Early-returning RAF
+// calls still retain their original diagnostics below, but mint no submission.
+const originalSubmission=ColonyRenderer.prototype.renderScene;
+if(typeof originalSubmission!=='function')throw Error('Missing actual scene submission boundary');
+ColonyRenderer.prototype.renderScene=function(...args){const result=originalSubmission.apply(this,args),b=window.__sync;b.submissionSerial++;if(b.active)b.submissions.push({serial:b.submissionSerial,at:performance.now(),play:this.timeline.tick});return result;};
+const originalSubmissionFrame=ColonyRenderer.prototype.frame;
+ColonyRenderer.prototype.frame=function(...args){window.__sync.frameSubmissionBefore=window.__sync.submissionSerial;return originalSubmissionFrame.apply(this,args);};
+const harvestTrackSources=new WeakMap();
+const harvestFullReceipts=[];
+for(const method of ['setWorld','setCorePhase297']){const original=ColonyRenderer.prototype[method];ColonyRenderer.prototype[method]=function(...args){
+ const receivedAt=performance.now(),playAtReceipt=this.timeline.tick,result=original.apply(this,args),input=readNativeCorePhaseInput297(method==='setWorld'?args[5]:args[0]);
+ if(input){const source={kind:input.kind,core:input.core,fullTick:input.world.tick,anchorCore:input.anchor.core,revision:input.anchor.revision,epoch:input.anchor.epoch,mapId:input.anchor.mapId,receivedAt,playAtReceipt};
+  Object.defineProperty(source,'world',{value:input.world});for(const track of input.tracks)harvestTrackSources.set(track.segments,source);
+  if(method==='setWorld')for(const track of args[3]??[])harvestTrackSources.set(track.segments,source);
+  if(input.kind==='full'){harvestFullReceipts.push(source);if(harvestFullReceipts.length>16)harvestFullReceipts.shift();}
+ }return result;};}
 ${process.env.HARVEST_TRACE==='1'?`window.__sync.longTasks=[];new PerformanceObserver(list=>{for(const e of list.getEntries())window.__sync.longTasks.push({at:e.startTime,duration:e.duration});}).observe({type:'longtask'});`:''}
 document.addEventListener('click',e=>{const button=e.target.closest?.('[data-speed]');if(!button||!window.__sync.active)return;const b=window.__sync,speed=Number(button.dataset.speed),old=b.view.received?.speed;if(speed>0&&old>0&&speed!==old)b.controls.push({speed,previousSpeed:old,at:performance.now(),delay:null,fullRateDelay:null});},true);
 for(const method of ['frame','setWorld','applyWorld']){const original=ColonyRenderer.prototype[method];if(!original)continue;ColonyRenderer.prototype[method]=function(...args){
@@ -26,8 +48,13 @@ if(!b.active)return result;
 if(method!=='frame'){b.snapshots.push({method,ms:performance.now()-start,tick:args[0].tick,play:this.timeline.tick,at:start});
 if((method==='applyWorld'||!ColonyRenderer.prototype.applyWorld)&&old&&old.jobs.length>args[0].jobs.length)b.removals.push({tick:args[0].tick,play:this.timeline.tick,removed:old.jobs.length-args[0].jobs.length});return result;}
 const now=args[0],dt=b.previous===null?0:now-b.previous;b.previous=now;
+const submitted=b.submissionSerial>b.frameSubmissionBefore,submittedDt=b.submittedPrevious===null?0:now-b.submittedPrevious;
+if(submitted)b.submittedPrevious=now;
 const control=b.controls.at(-1);if(control&&b.lastPlay!==null&&dt>0){const delta=this.timeline.tick-b.lastPlay;if(control.delay===null&&visibleSpeedResponse(delta,dt,control.previousSpeed,control.speed))control.delay=performance.now()-control.at;if(control.fullRateDelay===null&&Math.abs(delta/dt-control.speed*.006)<.00001)control.fullRateDelay=performance.now()-control.at;}b.lastPlay=this.timeline.tick;
-b.frames.push({at:now,buffering:this.timeline.buffering,history:this.timeline.latest-this.timeline.tick,fineRate:this.timeline.fineFrameRate297,nominal:this.timeline.rate,compatible:this.timeline.fineNominalCompatible297,speed:this.received?.speed,dt,cpu:performance.now()-start,lag:(this.received?.world.tick??this.world.tick)-this.timeline.tick,tick:this.world.tick,play:this.timeline.tick});
+if(control){control.submittedDelay??=null;control.submittedFullRateDelay??=null;}
+if(submitted){if(control&&b.submittedLastPlay!==undefined&&submittedDt>0){const delta=this.timeline.tick-b.submittedLastPlay;if(control.submittedDelay===null&&visibleSpeedResponse(delta,submittedDt,control.previousSpeed,control.speed))control.submittedDelay=performance.now()-control.at;if(control.submittedFullRateDelay===null&&Math.abs(delta/submittedDt-control.speed*.006)<.00001)control.submittedFullRateDelay=performance.now()-control.at;}b.submittedLastPlay=this.timeline.tick;}
+b.frames.push({at:now,buffering:this.timeline.buffering,history:this.timeline.latest-this.timeline.tick,fineRate:this.timeline.fineFrameRate297,nominal:this.timeline.rate,compatible:this.timeline.fineNominalCompatible297,speed:this.received?.speed,dt,cpu:performance.now()-start,lag:(this.received?.world.tick??this.world.tick)-this.timeline.tick,tick:this.world.tick,play:this.timeline.tick,submitted,submissionSerial:b.submissionSerial,submissions:b.submissionSerial-b.frameSubmissionBefore});
+if(submitted)b.submittedFrames.push({...b.frames.at(-1),dt:submittedDt});
 const g=this.pawns.pawnMesh?.geometry;if(!g)return result;
 const f=g.getAttribute('aFrom'),t=g.getAttribute('aTo'),travel=g.getAttribute('aTravel'),motion=g.getAttribute('aMotion');
 // Live roots (schema 297 and later): the drawn pose is PawnTweener297's output,
@@ -35,22 +62,35 @@ const f=g.getAttribute('aFrom'),t=g.getAttribute('aTo'),travel=g.getAttribute('a
 // in its spring copies. The leg proof runs on the root sampled from those legs,
 // and the drawn pose must be the tween of the previous one toward that root.
 this.world.pawns.forEach((p,i)=>{const duration=travel.getY(i)-travel.getX(i),a=duration>0?Math.min(1,Math.max(0,(this.pawns.travelTime.value-travel.getX(i))/duration)):this.pawns.blend.value;
-const x=f.getX(i)+(t.getX(i)-f.getX(i))*a,z=f.getZ(i)+(t.getZ(i)-f.getZ(i))*a,prev=b.poses.get(p.id),distance=prev?Math.hypot(x-prev.shown.x,z-prev.shown.z):0;
+const x=f.getX(i)+(t.getX(i)-f.getX(i))*a,z=f.getZ(i)+(t.getZ(i)-f.getZ(i))*a,prev=b.poses.get(p.id);
 const live=(this.pawns.springCapacity297??0)>i&&!!this.pawns.springValid297,lf=live?this.pawns.springFrom297:f,lt=live?this.pawns.springTo297:t,lv=live?this.pawns.springTravel297:travel;
 const legDuration=lv.getY(i)-lv.getX(i),la=legDuration>0?Math.min(1,Math.max(0,(this.pawns.travelTime.value-lv.getX(i))/Math.max(.0001,legDuration))):this.pawns.blend.value;
 const rx=lf.getX(i)+(lt.getX(i)-lf.getX(i))*la,rz=lf.getZ(i)+(lt.getZ(i)-lf.getZ(i))*la;
 const confirmed=this.timeline.segment(p.id),segment=confirmed?{from:{x:confirmed.from.x,z:confirmed.from.z},to:{x:confirmed.to.x,z:confirmed.to.z},start:confirmed.start,end:confirmed.end}:null;
 const base=(this.pawns.travelOrigin??0)/6,stationary=lv.getX(i)===0&&lv.getY(i)===0;
-const witness={position:{x:rx,z:rz},shown:{x,z},live,speed:this.received?.speed??0,from:{x:lf.getX(i),z:lf.getZ(i)},to:{x:lt.getX(i),z:lt.getZ(i)},start:stationary?0:lv.getX(i)+base,end:stationary?0:lv.getY(i)+base,time:this.pawns.travelTime.value+base,play:this.timeline.tick,segment};
-if(this.world.tiles[Math.round(z)*this.world.width+Math.round(x)]?.terrain==='rock'&&Math.hypot(x-Math.round(x),z-Math.round(z))<.35)b.solidOccupancy.push({tick:this.world.tick,play:this.timeline.tick,pawn:p.id,x,z});
-if(prev&&dt>0&&dt<100&&distance>dt*.013+.02){b.rawJumpCount++;const candidate={at:now,tick:this.world.tick,play:this.timeline.tick,distance,dt,pawn:p.id,state:p.state,from:[prev.shown.x,prev.shown.z],to:[x,z],segment:witness.segment,gpuFrom:[witness.from.x,witness.from.z],gpuTo:[witness.to.x,witness.to.z],gpuTravel:[lv.getX(i),lv.getY(i),lv.getZ(i),lv.getW(i)],workOffset:this.pawns.workOffsets.get(p.id),approach:this.pawns.approachTransitions.get(p.id),previousWitness:prev,currentWitness:witness};
+const witness={position:{x:rx,z:rz},shown:{x,z},live,speed:this.received?.speed??0,from:{x:lf.getX(i),z:lf.getZ(i)},to:{x:lt.getX(i),z:lt.getZ(i)},start:stationary?0:lv.getX(i)+base,end:stationary?0:lv.getY(i)+base,time:this.pawns.travelTime.value+base,play:this.timeline.tick,segment,submitted,submissionSerial:b.submissionSerial};
+if(this.world.tiles[Math.round(z)*this.world.width+Math.round(x)]?.terrain==='rock'&&Math.hypot(x-Math.round(x),z-Math.round(z))<.35){
+ const cell=Math.round(z)*this.world.width+Math.round(x),full=this.coreFullInputs297.get(this.world),received=this.received&&this.coreFullInputs297.get(this.received.world);
+ const trackSource=harvestTrackSources.get(this.timeline.tracks.get(p.id));
+ const frontier=input=>input?{kind:input.kind,core:input.core,fullTick:input.world.tick,anchorCore:input.anchor.core,revision:input.anchor.revision}:null;
+ b.solidOccupancy.push({at:now,tick:this.world.tick,play:this.timeline.tick,pawn:p.id,x,z,cell,submitted,submissionSerial:b.submissionSerial,
+  travelTime:witness.time,segment,actorCore:this.actorScene297?.core,appliedCore:this.appliedCore297,presented:frontier(full),received:frontier(received),
+  receivedTerrain:this.received?.world.tiles[cell]?.terrain,rockTilesMatchWorld:this.rocks.tiles===this.world.tiles,
+  trackSource:trackSource?{...trackSource,terrain:trackSource.world.tiles[cell]?.terrain}:null,recentFulls:harvestFullReceipts.map(source=>({...source,terrain:source.world.tiles[cell]?.terrain})),rock:captureRockCellDiagnostic(this.rocks,cell,this.camera.layers.mask,this.staticSceneCompiler435),
+  pendingFulls:this.presentation.pending.map(entry=>({at:entry.at,tick:entry.world.tick,terrain:entry.world.tiles[cell]?.terrain,notBeforeFrame:entry.notBeforeFrame})),
+  frameGate:this.presentationFrame297,pendingSurface:this.pendingSurfaceWorld?{tick:this.pendingSurfaceWorld.world.tick,terrain:this.pendingSurfaceWorld.world.tiles[cell]?.terrain}:null});
+}
+const compareTravel=(previous,elapsed,displayed)=>{const prev=previous,dt=elapsed,distance=prev?Math.hypot(x-prev.shown.x,z-prev.shown.z):0;
+if(prev&&dt>0&&dt<100&&distance>dt*.013+.02){if(displayed)b.submittedRawJumpCount++;else b.rawJumpCount++;const candidate={at:now,tick:this.world.tick,play:this.timeline.tick,distance,dt,pawn:p.id,state:p.state,from:[prev.shown.x,prev.shown.z],to:[x,z],segment:witness.segment,gpuFrom:[witness.from.x,witness.from.z],gpuTo:[witness.to.x,witness.to.z],gpuTravel:[lv.getX(i),lv.getY(i),lv.getZ(i),lv.getW(i)],workOffset:this.pawns.workOffsets.get(p.id),approach:this.pawns.approachTransitions.get(p.id),previousWitness:prev,currentWitness:witness};
 // The confirmed root moved continuously (little, or along proven legs), and the drawn pose followed it as the tween does.
 const rootDistance=Math.hypot(witness.position.x-prev.position.x,witness.position.z-prev.position.z),rootContinuous=rootDistance<=dt*.013+.02||confirmedTravelExcess(prev,witness,dt);
 const drawn=!live||!prev.live?rootContinuous&&Math.hypot(x-rx,z-rz)<=.0005:rootContinuous&&tweenedRootStep(prev.shown,witness.shown,witness.position,dt,witness.speed);
+candidate.contactDepartureProven=confirmedContactDepartureDiagnostic(prev,witness,dt);
 candidate.rootDistance=rootDistance;candidate.rootContinuous=rootContinuous;candidate.recent=b.frames.slice(-10).map(f=>[Math.round(f.dt*10)/10,Math.round(f.play*1000)/1000,Math.round(f.cpu*10)/10,f.buffering?1:0]);candidate.apps=b.snapshots.filter(s=>s.at>now-160).map(s=>s.method+':'+Math.round(s.ms)+'@'+Math.round(s.at-now));candidate.compiles=(b.compiles??[]).filter(c=>c.at+c.ms>now-160).map(c=>Math.round(c.ms)+'@'+Math.round(c.at-now));candidate.sinceControl=b.controls.length?Math.round(now-b.controls.at(-1).at)+'ms after '+b.controls.at(-1).previousSpeed+'>'+b.controls.at(-1).speed:null;
-if(drawn)b.continuousTravelExcess.push(candidate);else b.jumps.push(candidate);}
+if(displayed){if(drawn)b.submittedContinuousTravelExcess.push(candidate);else b.submittedJumps.push(candidate);}else{if(drawn)b.continuousTravelExcess.push(candidate);else b.jumps.push(candidate);}}};
+compareTravel(prev,dt,false);if(submitted)compareTravel(b.submittedPoses.get(p.id),submittedDt,true);
 const track=this.timeline.tracks.get(p.id);if(track?.length&&track[0].start>this.timeline.tick)b.gaps.push({tick:this.world.tick,play:this.timeline.tick,first:track[0].start});
-b.poses.set(p.id,witness);if(i===0){const last=b.frames.at(-1);if(last)last.pawn=[Math.round(x*1000)/1000,Math.round(z*1000)/1000,p.state];}});
+b.poses.set(p.id,witness);if(submitted)b.submittedPoses.set(p.id,witness);if(i===0){const last=b.frames.at(-1);if(last)last.pawn=[Math.round(x*1000)/1000,Math.round(z*1000)/1000,p.state];}});
 ${process.env.HARVEST_CONTACT_STALL==='1'?`if(!b.contactStalls.length&&this.timeline.tick>=2744.5&&this.timeline.tick<2746&&this.received?.speed===6){b.contactStalls.push({at:now,play:this.timeline.tick,milliseconds:30});const until=performance.now()+30;while(performance.now()<until){}}`:''}
 return result;};}
 `;
@@ -79,6 +119,8 @@ if(process.env.HARVEST_EMIT_PROBE){
 if(process.env.HARVEST_PREINSTRUMENTED==='1'&&process.env.HARVEST_TRACE==='1')throw Error('Compiled presentation probe does not contain the optional worker trace');
 const {createWorld,applyCommand,serializeWorld}=await import('../src/sim/index.ts');
 const targetUrl=new URL(process.env.HARVEST_URL??'http://127.0.0.1:5173/');
+const offlineBuild=process.env.HARVEST_LOCAL_BUILD;
+if(offlineBuild&&process.env.HARVEST_PREINSTRUMENTED!=='1')throw Error('Offline presentation requires a compiled probe');
 for(const [key,value]of [['scenario','camp'],['e2e','1'],['size','250']])if(!targetUrl.searchParams.has(key))targetUrl.searchParams.set(key,value);
 const report={date:new Date().toISOString(),cpu:os.cpus()[0].model,seconds,switches,initialSpeed,speedCycle,viewport:{width:1440,height:1000},contactStallDiagnostic:process.env.HARVEST_CONTACT_STALL==='1',protocol:'Native Chromium WebGPU, seed 42 / 250² / 3 colonists, rectangular designations, actual worker at initialSpeed; switches=true uses speedCycle every 2 seconds. Frame pose read from shared GPU inputs; no full-world serialization in frames. Runtime clock: 6 local ticks/s at 1x. 13 cells/s candidate bound includes neutral 6x travel (12 cells/s). An excess is continuous only on one unchanged confirmed segment or exactly one contiguous grid/GPU boundary with exact shared endpoint and timestamp; both witnessed legs stay within the contact envelope and independent time/pose/arc bounds. Raw candidates are reported separately.',phases:[]};
 report.browserChannel=browserChannel;report.url=targetUrl.href;
@@ -91,6 +133,7 @@ try{for(const action of (process.env.HARVEST_ACTIONS??'mine,chop').split(',')){
  const command={type:'area',action,from:{x:Math.max(0,c.x-20),z:Math.max(0,c.z-20)},to:{x:Math.min(249,c.x+20),z:Math.min(249,c.z+20)}};
  if(!applyCommand(w,command).ok)throw Error('Designation rejected');
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],failedRequests=[];page.setDefaultTimeout(30000);
+ if(offlineBuild)await (await import('./local-build-router.mjs')).installLocalBuildRoutes(page.context(),offlineBuild,targetUrl.origin);
  page.on('requestfailed',request=>failedRequests.push({url:request.url(),failure:request.failure()?.errorText,resourceType:request.resourceType(),at:Date.now()}));
  if(process.env.HARVEST_TRACE==='1'){
   // Diagnostic only: compare worker publication with main-thread receipt in a
@@ -152,10 +195,24 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
  await page.evaluate(()=>clearInterval(window.__sync.switchTimer));await clickSpeed(0);
  const data=await page.evaluate(()=>{const b=window.__sync;b.active=false;const d=b.view.renderer.getContext().getConfiguration().device;return {workerBatches:b.workerBatches,workerSnapshots:b.workerSnapshots,adapter:{vendor:d.adapterInfo.vendor,architecture:d.adapterInfo.architecture},longTasks:b.longTasks,frames:b.frames,snapshots:b.snapshots,adopts:b.adopts,compiles:b.compiles,seeks:b.seeks??[],controls:b.controls,removals:b.removals,jumps:b.jumps,rawJumpCount:b.rawJumpCount,continuousTravelExcess:b.continuousTravelExcess,contactStalls:b.contactStalls,gaps:b.gaps,solidOccupancy:b.solidOccupancy,stepMs:b.stepMs,receptions:b.receptions,tick:b.view.world.tick,jobs:b.view.world.jobs.length};});
  if(!Number.isFinite(data.stepMs)||data.receptions<1)throw Error('Presentation probe did not observe the actual MAIN snapshot reception');
+ const submitted=await page.evaluate(()=>{const b=window.__sync;return {submissions:b.submissions,frames:b.submittedFrames,jumps:b.submittedJumps,rawJumpCount:b.submittedRawJumpCount,continuousTravelExcessCount:b.submittedContinuousTravelExcess.length};});
  const starvation=presentationStarvations(data.frames);
  const starvedFrames=starvation.length;
  const trace=process.env.HARVEST_TRACE==='1'?{longTasks:data.longTasks,workerBatchMs:Object.fromEntries(['wakeGap','simulation','encoding','sending','elapsed'].map(k=>[k,stats((data.workerBatches??[]).filter(b=>b.speed>0).map(b=>b[k]))])),slowWorkerBatches:(data.workerBatches??[]).filter(b=>b.speed>0&&(b.elapsed>20||b.wakeGap>50)),workerDeliveryMs:stats((data.workerSnapshots??[]).map(s=>s.received-s.published)),workerPublicationGapMs:stats((data.workerSnapshots??[]).flatMap((s,i,a)=>i&&s.speed===a[i-1].speed?[s.published-a[i-1].published]:[])),starvationContext:starvation.slice(0,10).map(s=>({frames:data.frames.filter(f=>Math.abs(f.at-s.current.at)<300),snapshots:data.snapshots.filter(f=>Math.abs(f.at-s.current.at)<300),worker:(data.workerSnapshots??[]).filter(f=>Math.abs(f.received-s.current.at)<300),batches:(data.workerBatches??[]).filter(b=>Math.abs(b.at-s.current.at)<300)}))}:{};
  const phase={starvation:starvation.slice(0,10),starvedFrames,controls:data.controls,action,command,initialJobs:w.jobs.length,adapter:data.adapter,errors,tick:data.tick,remainingJobs:data.jobs,stepMs:data.stepMs,frames:stats(data.frames.filter(f=>f.dt>0).map(f=>f.dt)),frameCpu:stats(data.frames.map(f=>f.cpu)),lagTicks:stats(data.frames.map(f=>f.lag)),adoptions:stats(data.snapshots.map(s=>s.ms)),deliveries:stats(data.snapshots.filter(s=>s.method==='setWorld').map(s=>s.ms)),sceneApplications:stats(data.snapshots.filter(s=>s.method==='applyWorld').map(s=>s.ms)),jumpCount:data.jumps.length,jumps:data.jumps.slice(0,80),rawJumpCount:data.rawJumpCount,continuousTravelExcessCount:data.continuousTravelExcess.length,continuousTravelExcess:data.continuousTravelExcess.slice(0,10),contactStalls:data.contactStalls,gapCount:data.gaps.length,gaps:data.gaps.slice(0,5),solidOccupancyCount:data.solidOccupancy.length,solidOccupancy:data.solidOccupancy.slice(0,5),removals:data.removals,lagTimeline:data.frames.filter((_,i)=>i%240===0).map(f=>({tick:f.tick,play:f.play,lag:f.lag}))};report.phases.push(phase);console.log(JSON.stringify({action,frames:phase.frames,jumpCount:phase.jumpCount,rawJumpCount:phase.rawJumpCount,continuousTravelExcessCount:phase.continuousTravelExcessCount,solidOccupancyCount:phase.solidOccupancyCount}));
+ // Preserve every original RAF alarm alongside submitted-frame qualification.
+ // Skipped calls never drop elapsed wall time or erase a submission outage.
+ phase.submissionDiagnostics={actualSubmissionCount:submitted.submissions.length,submittedFrameCount:submitted.frames.length,
+  skippedFrameCount:data.frames.filter(f=>!f.submitted).length,multipleSubmissionFrames:data.frames.filter(f=>f.submissions>1),
+  unpairedSubmissions:submitted.submissions.length-data.frames.reduce((n,f)=>n+f.submissions,0),
+  frameMs:stats(submitted.frames.filter(f=>f.dt>0).map(f=>f.dt)),
+  starvation:presentationStarvations(submitted.frames),stalls:presentationSubmissionStalls(data.frames),
+  jumpCount:submitted.jumps.length,jumps:submitted.jumps.slice(0,80),rawJumpCount:submitted.rawJumpCount,continuousTravelExcessCount:submitted.continuousTravelExcessCount,
+  rawJumpsWithUnsubmittedOperand:data.jumps.filter(j=>!j.previousWitness.submitted||!j.currentWitness.submitted).length,
+  solidOccupancyCount:data.solidOccupancy.filter(s=>s.submitted).length,solidOccupancy:data.solidOccupancy.filter(s=>s.submitted).slice(0,80),
+  solidOccupancySamples:data.solidOccupancy,
+  activeRockOccupancyCount:data.solidOccupancy.filter(s=>s.submitted&&s.rock.activeSubmittedCellIndices>0).length,
+  skippedFrames:data.frames.filter(f=>!f.submitted).slice(0,100)};
  if(process.env.HARVEST_SPEED_TRACE==='1'){
   // Main-thread side of each speed change: when the timeline adopted the new
   // speed, how much confirmed history it had against its new reserve, how long
@@ -224,5 +281,9 @@ const originalTraceAdvance=advanceSimulation;advanceSimulation=now=>{const at=pe
  }
  await page.screenshot({path:testOutputPath('artifacts/harvest-'+action+'-'+label+'.png')});await page.close();
  if(process.env.HARVEST_DEBUG_PHASE)console.log(JSON.stringify({action,starvedFrames,controls:phase.controls,starvation:phase.starvation}));
- assertHarvestPhase(phase,process.env.HARVEST_VERIFY_SPEED!=='0',process.env.HARVEST_VERIFY!=='0',switches);
+ const verifySpeed=process.env.HARVEST_VERIFY_SPEED!=='0',verifyActions=process.env.HARVEST_VERIFY!=='0';
+ if(verifySpeed&&verifyActions){
+  phase.submittedQualification=qualifySubmittedHarvestPhase(phase,switches);
+  if(!phase.submittedQualification.qualified)throw Error('Submitted harvest presentation regression: '+action+'; '+phase.submittedQualification.failures.join('; '));
+ }else assertHarvestPhase(phase,verifySpeed,verifyActions,switches);
  }}finally{await browser.close();await writeTestFile('artifacts/harvest-sync-'+label+'.json',JSON.stringify(report,null,2)+'\n');}

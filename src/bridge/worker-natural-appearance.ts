@@ -13,6 +13,8 @@ type Capture=Pick<Resource,'kind'|'x'|'z'|'stone'|'species'>&{
  due:number;
 };
 type CropCapture=Pick<Resource,'kind'|'x'|'z'>&{growth:number;leafless:boolean;blighted:boolean;supported:boolean;seen:number};
+type VisualCapture=Capture|CropCapture;
+const naturalCapture=(capture:VisualCapture|undefined):capture is Capture=>capture!==undefined&&'size' in capture;
 function same(before:Capture,r:Resource,size:number,ripe:boolean,leafless:boolean,ready:boolean,support:boolean):boolean {
  return before.kind===r.kind&&before.x===r.x&&before.z===r.z&&before.stone===r.stone&&before.species===r.species
   &&Object.is(before.size,size)&&before.ripe===ripe&&before.leafless===leafless&&before.harvestable===ready
@@ -52,9 +54,12 @@ function naturalVisualDue(world:World,r:Resource,readGrowth:()=>number,ready:boo
  * non-crop resource whose record did not change since the previous
  * publication is re-read only from its due tick (naturalVisualDue). */
 export class WorkerNaturalAppearance {
- private captures=new Map<number,Capture>();private cropCaptures=new Map<number,CropCapture>();
+ // One private ID domain: a resource occupies exactly one visual stream.
+ // A kind transition still emits removal in the previous stream and a full
+ // write in the next one; the owned value capture never comes from a packet.
+ private captures=new Map<number,VisualCapture>();
  private epoch=0;private revision=0;private tick=-1;private visit=0;
- clear():void {this.captures.clear();this.cropCaptures.clear();this.epoch=0;this.revision=0;this.tick=-1;this.visit=0;}
+ clear():void {this.captures.clear();this.epoch=0;this.revision=0;this.tick=-1;this.visit=0;}
  protected canReuseInputs(_world:World,_publication:SnapshotMessage<true>):boolean{return false;}
  capture(world:World,publication:SnapshotMessage<true>):TypedCropNaturalVisualDelta {
   const checkpoint=publication.kind==='checkpoint';
@@ -69,10 +74,10 @@ export class WorkerNaturalAppearance {
    this.visit++;this.epoch=publication.epoch;this.revision=publication.revision;this.tick=world.tick;
    return {epoch:publication.epoch,revision:publication.revision,baseRevision:publication.baseRevision,tick:world.tick,checkpoint:false,upsert:[],removed:[],crops};
   }
-  const staged=new Map<number,Capture>(),cropStaged=new Map<number,CropCapture>(),removed=new Set<number>(),cropRemoved=new Set<number>(),
+  const staged=new Map<number,VisualCapture>(),removed=new Set<number>(),cropRemoved=new Set<number>(),
    upsert:NaturalVisualUpsert[]=[],cropColumns=new CropVisualColumnWriter(world.resources.length),visit=++this.visit,
    physicalRemoved=!checkpoint&&publication.resources?.removed.length?new Set(publication.resources.removed):undefined;
-  for(const id of physicalRemoved??[]){if(this.captures.has(id))removed.add(id);if(this.cropCaptures.has(id))cropRemoved.add(id);}
+  for(const id of physicalRemoved??[]){const before=this.captures.get(id);if(naturalCapture(before))removed.add(id);else if(before)cropRemoved.add(id);}
   // Resources whose record changed in this publication (complete upserts,
   // growth and plant-age tuples): their visual values are re-read at once.
   const touched=new Set<number>(),changes=checkpoint?undefined:publication.resources;
@@ -90,16 +95,17 @@ export class WorkerNaturalAppearance {
    const r=world.resources[ordinal]!,id=r.id;
    if(!Number.isSafeInteger(id)||id<=0||id>=world.nextId)throw Error('Invalid natural visual resource ID');
    if(physicalRemoved?.has(id))throw Error('Natural visual resource is both present and removed');
-   const before=staged.get(id)??(!checkpoint?this.captures.get(id):undefined),cropBefore=cropStaged.get(id)??(!checkpoint?this.cropCaptures.get(id):undefined);
-   if(before?.seen===visit||cropBefore?.seen===visit)throw Error('Duplicate natural visual resource ID');
-   if(before)before.seen=visit;if(cropBefore)cropBefore.seen=visit;
+   const previous=staged.get(id)??(!checkpoint?this.captures.get(id):undefined),
+    before=naturalCapture(previous)?previous:undefined,cropBefore=previous&&!naturalCapture(previous)?previous:undefined;
+   if(previous?.seen===visit)throw Error('Duplicate natural visual resource ID');
+   if(previous)previous.seen=visit;
    if(isResidentCrop(r)){
     if(before)removed.add(id);
     const number=matureOrRead(r),leafless=plantLeafless(world,r),blighted=!!r.blight,supported=supports.has(r.z*world.width+r.x);
     if(!Number.isFinite(number)||number<0||number>1)throw Error('Invalid crop visual growth');
     if(cropBefore&&cropBefore.kind===r.kind&&cropBefore.x===r.x&&cropBefore.z===r.z&&Object.is(cropBefore.growth,number)
      &&cropBefore.leafless===leafless&&cropBefore.blighted===blighted&&cropBefore.supported===supported)continue;
-    cropStaged.set(id,{kind:r.kind,x:r.x,z:r.z,growth:number,leafless,blighted,supported,seen:visit});
+    staged.set(id,{kind:r.kind,x:r.x,z:r.z,growth:number,leafless,blighted,supported,seen:visit});
     cropColumns.append(id,ordinal,number,(leafless?1:0)|(blighted?2:0)|(supported?4:0));continue;
    }
    if(cropBefore)cropRemoved.add(id);
@@ -115,10 +121,10 @@ export class WorkerNaturalAppearance {
   }
   // Finish owned wire buffers BEFORE committing either capture stream.
   const crops=cropColumns.finish(checkpoint?[]:cropRemoved);
-  if(checkpoint){this.captures=staged;this.cropCaptures=cropStaged;}
+  if(checkpoint)this.captures=staged;
   else {
-   for(const id of removed)this.captures.delete(id);for(const [id,capture]of staged)this.captures.set(id,capture);
-   for(const id of cropRemoved)this.cropCaptures.delete(id);for(const [id,capture]of cropStaged)this.cropCaptures.set(id,capture);
+   for(const id of removed)this.captures.delete(id);for(const id of cropRemoved)this.captures.delete(id);
+   for(const [id,capture]of staged)this.captures.set(id,capture);
   }
   this.epoch=publication.epoch;this.revision=publication.revision;this.tick=world.tick;
   if(verifyNaturalAppearance&&!checkpoint)this.verify(world);
@@ -131,7 +137,7 @@ export class WorkerNaturalAppearance {
   for(const r of world.resources){
    if(isResidentCrop(r))continue;
    let value:number|undefined;const readGrowth=():number=>value??(value=(r.growth??1)===1?1:growth(r));
-   const capture=this.captures.get(r.id);if(!capture)throw Error(`Natural visual capture missing for resource ${r.id}`);
+   const capture=this.captures.get(r.id);if(!naturalCapture(capture))throw Error(`Natural visual capture missing for resource ${r.id}`);
    const size=floraSize(world,r,readGrowth),ready=harvestable(world,r,readGrowth),ripe=r.kind==='berries'&&ready,
     leafless=plantLeafless(world,r),support=r.kind==='healroot'&&hydroponicBasinAt(world,r)!==undefined;
    if(!same(capture,r,size,ripe,leafless,ready,support))throw Error(`Skipped natural visual change for resource ${r.id} at tick ${world.tick} (due ${capture.due})`);

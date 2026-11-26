@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {markTerrainCellChanged} from './terrain-mutation-journal.ts';
 import {isAncientGeneratedFloor256,type AncientGeneratedFloor256} from './ancient-generated-floor-state-256.ts';
 import {refreshDuckWaterCell256} from './duck-water-256.ts';
@@ -86,7 +87,7 @@ export function finishFloor(w:World,job:Job):boolean {
   // Preflight all exact claims/cargo before any plant, material or tile mutation.
   const retirement=planConstructionPlantRetirement(w,job,job.id);
   if(!retirement||!commitConstructionPlantRetirement(w,retirement))return false;
-  w.piles=w.piles.filter(p=>p.owner.type!=='job'||p.owner.jobId!==job.id);tile.floor=job.floor;markTerrainCellChanged(w.tiles,job.z*w.width+job.x);refreshDuckWaterCell256(w,job);job.escrow.wood=0;job.escrow.food=0;
+  w.piles=filterPileEntries(w.piles,p=>p.owner.type!=='job'||p.owner.jobId!==job.id);tile.floor=job.floor;markTerrainCellChanged(w.tiles,job.z*w.width+job.x);refreshDuckWaterCell256(w,job);job.escrow.wood=0;job.escrow.food=0;
   // Keep the growing-zone intention; zero fertility prevents sowing until the
   // floor is removed. Matching plant jobs were retired by exact source IDs.
   refreshStock(w);return true;

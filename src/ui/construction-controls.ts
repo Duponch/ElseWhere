@@ -1,10 +1,10 @@
-import { constructionRecipe, constructionMaterials, validConstructionMaterial, deliveredMaterial, type ConstructionMaterial } from '../sim/construction-materials';
+import { constructionMaterials, validConstructionMaterial, type ConstructionMaterial } from '../sim/construction-materials';
 import { BUILDING_MATERIALS } from '../sim/building-materials';
-import { ITEM_DEFINITIONS } from '../sim/items';
 import { footprintCells } from '../sim/definitions';
 import type { Job, JobKind, Structure, World } from '../sim/types';
+import {CONSTRUCTION_STUFF_KINDS,constructionCostText,constructionDeliveryText,constructionMaterialLabel} from './construction-material-presentation';
 
-const stuffable = new Set<string>(['egg-box','bedroll','shelf','small-shelf','spike-trap','electric-crematorium','drug-lab','art-bench','research-bench','tailor-bench','electric-tailor-bench','door','autodoor','wall','fence','fence-gate','pen-marker','bed','double-bed','hospital-bed','table','table-square','table-long','table-large','double-bedroll','stool','dining-chair','armchair','couch','end-table','dresser','flower-pot','horseshoes','chess-table','hoopstone-ring','billiards-table','game-of-ur-board','poker-table','stonecutter']);
+const stuffable = CONSTRUCTION_STUFF_KINDS;
 export const defaultPlacementMaterial = (tool:string):ConstructionMaterial =>
   validConstructionMaterial(tool,'wood')?'wood':constructionMaterials(tool)[0]!;
 export const placementMaterial = (tool:string, material:ConstructionMaterial):ConstructionMaterial|undefined =>
@@ -22,21 +22,20 @@ export function constructionControls(onChange:()=>void) {
       if(stuffable.has(tool)&&tool!==previousTool) {
         const preferred=select.value;
         select.replaceChildren(...constructionMaterials(tool).map(material=>{
-          const option=document.createElement('option');option.value=material;option.textContent=ITEM_DEFINITIONS[material].label;return option;
+          const option=document.createElement('option');option.value=material;option.textContent=constructionMaterialLabel(material);return option;
         }));
         select.value=validConstructionMaterial(tool,preferred)?preferred:defaultPlacementMaterial(tool);previousTool=tool;
       }
       const material = placementMaterial(tool, select.value as ConstructionMaterial);
       if (!material&&tool!=='build-bridge') return hint;
-      const recipe = constructionRecipe({ kind:tool as JobKind, material });
       const rest=(tool==='bed'||tool==='double-bed')&&material&&BUILDING_MATERIALS[material].restFactor<1?' · Efficacité du repos : 90 %':'';
-      return `${recipe.ingredients.map(c => `${c.quantity} ${ITEM_DEFINITIONS[c.item].label}`).join(' + ')} à livrer${rest} · ${hint}`;
+      return `${constructionCostText({kind:tool as JobKind,material},true)} à livrer${rest} · ${hint}`;
     },
   };
 }
 
 export function constructionDeliveryLabel(world:World, job:Job):string {
-  return constructionRecipe(job).ingredients.map(c => `${deliveredMaterial(world, job, c.item)}/${c.quantity} ${ITEM_DEFINITIONS[c.item].label}`).join(' + ');
+  return constructionDeliveryText(world,job);
 }
 
 export function structureFootprintLabel(structure:Structure):string {

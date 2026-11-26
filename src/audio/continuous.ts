@@ -1,6 +1,7 @@
 import { audibleRange, listenerPose, sourceDistance, type AudioCamera } from './spatial';
 import { isPowerActive } from '../sim/power-rules.ts';
-import type { Structure } from '../sim/types.ts';
+import type { Structure,World } from '../sim/types.ts';
+import {readResidentCollectionChanges379,readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379.ts';
 
 export interface ContinuousSource {
   id: string;
@@ -17,6 +18,32 @@ export type MachineLoopKind='machine.wood-generator'|'machine.wind-turbine'|'mac
  * ChemfuelFiredGenerator_Ambience (soundAmbientProducingPower), WindTurbine_Ambience,
  * GeothermalPlant_Ambience (CompProperties_AmbientSound, disabledOnUnpowered). */
 export const MACHINE_LOOP_STRUCTURES:ReadonlySet<string>=new Set(['wood-generator','wind-turbine','chemfuel-generator','geothermal-generator']);
+const continuousStructure=(s:Structure)=>s.kind==='campfire'||MACHINE_LOOP_STRUCTURES.has(s.kind);
+
+/** Only the accepted immutable MAIN owner may reuse its ordered membership.
+ * Camera movement and ordinary Fulls must not look through thousands of walls,
+ * conduits and beds to discover this small family of audio producers. The
+ * running/fuel/power state is always read from the actual current row. */
+export class ResidentContinuousStructures379 {
+ private world:World|undefined;
+ private ids=new Set<number>();
+ private rows:readonly Structure[]=[];
+ reset():void{this.world=undefined;this.ids.clear();this.rows=[];}
+ read(world:World):readonly Structure[]{
+  const directory=readResidentCollectionDirectory379(world,'structures');
+  if(!directory){this.reset();return world.structures;}
+  if(this.world===world)return this.rows;
+  const proof=this.world?readResidentCollectionChanges379(this.world,world,'structures'):undefined;
+  if(!proof){this.rows=world.structures.filter(continuousStructure);this.ids=new Set(this.rows.map(s=>s.id));}
+  else{
+   const dirty=new Set<number>();for(const edge of proof.edges)for(const list of [edge.removed,edge.added,edge.updated])for(const row of list)dirty.add(row.id);
+   for(const id of dirty){const slot=directory.source(id),s=slot===undefined?undefined:world.structures[slot];if(s&&continuousStructure(s))this.ids.add(id);else this.ids.delete(id);}
+   const slots:number[]=[];for(const id of this.ids){const slot=directory.source(id);if(slot!==undefined)slots.push(slot);}
+   slots.sort((a,b)=>a-b);this.rows=slots.map(slot=>world.structures[slot]!);
+  }
+  this.world=world;return this.rows;
+ }
+}
 export function runningMachineAudioSource(structure:Structure):
   (ContinuousSource&{kind:MachineLoopKind;gain:number})|undefined {
   if (!isPowerActive(structure)) return;

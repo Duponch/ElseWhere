@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {newCorePathBudget297} from './core-path-budget-297.ts';
 import {initialWorldRegistry,finalizeInitialWorldRegistry} from './world-map-context.ts';
 import {createDeteriorationState} from './deterioration-content.ts';
@@ -227,7 +228,7 @@ export function generateWorld(seed: number, width: number, height: number, profi
       const roll = sample(world.seed, x, z, 60);
       if (roll < rockChance) {
         if (!occupiedPiles.has(index)) {
-          world.piles.push({id:world.nextId++,kind:'chunk',item:`${stoneAt(x,z)}-chunk`,quantity:1,owner:{type:'ground',x,z}});
+          appendPileEntries(world.piles,{id:world.nextId++,kind:'chunk',item:`${stoneAt(x,z)}-chunk`,quantity:1,owner:{type:'ground',x,z}});
           occupiedPiles.add(index);
         }
         continue;

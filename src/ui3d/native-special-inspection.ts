@@ -1,8 +1,10 @@
 import {isDoubleBedKind} from '../sim/bed-kinds';
+import {constructionCostText} from '../ui/construction-material-presentation';
 import { IED_COMMON_357,IED_TRAPS_357,iedsUnlocked357,isIedTrapKind357 } from '../sim/ied-traps-357';
 import { toolCabinetWorkSpeedOffset355 } from '../sim/tool-cabinet-355';
 import {isSchema298OrLater} from '../sim/schema-compatibility-257.ts';
-import type { NativeControl, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
+import type { NativeControl, NativeGesture, NativePage, NativeRow, NativeUiActions, NativeUiState } from './native-contract';
+import {personalOrderCommands378} from '../ui/order-queue-378';
 import type { Cell, Command, Pawn, Structure, World } from '../sim/types';
 import type { MedicalRecord } from '../sim/injury-types';
 import type { LinkedStorageGroup286 } from '../sim/linked-storage-state-286';
@@ -77,11 +79,11 @@ function show(title: string, rows: NativeRow[], controls: NativeControl[] = []):
   for (const entry of rows) { if (entry.detail) { entry.hint = [entry.hint, entry.detail].filter(Boolean).join(' · '); delete entry.detail; } if (entry.hint) for (const action of entry.controls ?? []) action.hint = [action.hint, entry.hint].filter(Boolean).join(' · '); }
   actions.showPage({ id: `inspect-special-${title}`, title, modal: true, rows, actions: [...controls, button('special-close', 'Retour', close)], onClose: close, layout: 'inspector', width: 600, height: 430 });
 }
-function button(id: string, label: string, action: () => unknown, disabled = false, active = false, hint?: string): NativeControl {
-  return { id, label, disabled, active, hint: hint ?? label, onActivate: async () => {
+function button(id: string, label: string, action: (gesture?:NativeGesture) => unknown, disabled = false, active = false, hint?: string): NativeControl {
+  return { id, label, disabled, active, hint: hint ?? label, onActivate: async gesture => {
     if (disabled || pending || now().busy) return;
     pending = true;
-    try { await action(); } catch (cause) { show('Choix non appliqué', [row('special-error', cause instanceof Error ? cause.message : String(cause))]); }
+    try { await action(gesture); } catch (cause) { show('Choix non appliqué', [row('special-error', cause instanceof Error ? cause.message : String(cause))]); }
     finally { pending = false; actions.refresh(); }
   } };
 }
@@ -89,6 +91,7 @@ async function send(command: Command): Promise<void> {
   const result = await actions.command(command);
   if (result && typeof result === 'object' && 'ok' in result && result.ok === false) throw Error('reason' in result ? String(result.reason) : 'La commande a été refusée.');
 }
+async function sendPersonal(world:World,command:Command,gesture?:NativeGesture):Promise<void>{for(const order of personalOrderCommands378(world,command,!!gesture?.shift))await send(order);}
 function confirm(title: string, message: string, action: () => Promise<unknown>, extra: NativeRow[] = []): void {
   show(title, [row('special-confirmation', message), ...extra], [button('special-confirm', 'Confirmer', async () => { await action(); close(); })]);
 }
@@ -170,10 +173,10 @@ function burialPage(scope: Scope, bodyId: number): void {
   const pile = world.piles.find(pile => pile.id === body.body?.pileId), rows: NativeRow[] = [row('burial-body', body.name, body.body?.lostAt !== undefined ? 'Dépouille détruite' : pile?.owner.type === 'grave' ? 'Inhumée' : pile?.owner.type === 'pawn' ? 'Déjà portée' : 'Dépouille sur place', pile?.humanCorpse ? `État : ${corpseStage(pile, world.tick)}` : undefined), row('burial-guidance', 'Une sépulture arrête le renouvellement des pensées de corps vu', undefined, 'Les souvenirs d’un décès ou d’un corps déjà vu persistent jusqu’à leur propre expiration.')];
   for (const pawn of workers(world)) {
     const reason = burialReason(world, pawn, body);
-    rows.push({ id: `bury-auto-${pawn.id}`, label: `Porteur : ${pawn.name}`, detail: reason, controls: [button(`bury-auto-${pawn.id}`, 'Sépulture compatible disponible', async () => { assertScope(scope); await send({ type: 'order-bury', pawnId: pawn.id, bodyPawnId: bodyId }); close(); }, !!reason)] });
+    rows.push({ id: `bury-auto-${pawn.id}`, label: `Porteur : ${pawn.name}`, detail: reason, controls: [button(`bury-auto-${pawn.id}`, 'Sépulture compatible disponible', async gesture => {const current=assertScope(scope); await sendPersonal(current,{ type: 'order-bury', pawnId: pawn.id, bodyPawnId: bodyId },gesture); close(); }, !!reason)] });
     if (!reason) for (const grave of world.structures.filter(grave => isBurialContainer256(grave.kind, world.schemaVersion) && knownBuilding256(world, grave))) {
       const accepted = graveAccepts(world, grave, body, pawn.id);
-      rows.push({ id: `bury-${pawn.id}-${grave.id}`, label: `${pawn.name} → ${buildingLabels[grave.kind]} ${grave.id} (${grave.x}, ${grave.z})`, controls: [button(`bury-command-${pawn.id}-${grave.id}`, 'Inhumer ici', async () => { assertScope(scope); await send({ type: 'order-bury', pawnId: pawn.id, bodyPawnId: bodyId, graveId: grave.id }); close(); }, !accepted)] });
+      rows.push({ id: `bury-${pawn.id}-${grave.id}`, label: `${pawn.name} → ${buildingLabels[grave.kind]} ${grave.id} (${grave.x}, ${grave.z})`, controls: [button(`bury-command-${pawn.id}-${grave.id}`, 'Inhumer ici', async gesture => {const current=assertScope(scope); await sendPersonal(current,{ type: 'order-bury', pawnId: pawn.id, bodyPawnId: bodyId, graveId: grave.id },gesture); close(); }, !accepted)] });
     }
   }
   show('Inhumer la dépouille', rows);
@@ -245,16 +248,16 @@ function ordinaryCasketPage(scope: Scope, casketId: number): void {
   if (casket.cryptosleep.human) rows.push(...heldHumanRows(casket.cryptosleep.human));
   for (const item of casket.cryptosleep.items) rows.push(row(`held-item-${item.id}`, ITEM_DEFINITIONS[item.item].label, `× ${item.quantity}`));
   for (const item of casket.cryptosleep.packed) rows.push(row(`held-pack-${item.building.id}`, buildingLabels[item.building.kind], 'Emballé · Possession conservée'));
-  const apply = async (command: CryptosleepCommand271) => { const current = assertScope(scope), intent = cryptosleepIntent271(current, command); if (!intent.ok) throw Error(intent.reason); await send(command); close(); };
+  const apply = async (command: CryptosleepCommand271,gesture?:NativeGesture) => { const current = assertScope(scope), intent = cryptosleepIntent271(current, command); if (!intent.ok) throw Error(intent.reason); await sendPersonal(current,command,gesture); close(); };
   for (const pawn of world.pawns.filter(pawn => cryptosleepActorCapable271(world, pawn))) {
-    if (casket.cryptosleep.human) rows.push({ id: `open-casket-${pawn.id}`, label: `${pawn.name} · Ouvrir le caisson`, controls: [button(`open-casket-${pawn.id}`, 'Ordonner l’ouverture', () => apply({ type: 'order-open-cryptosleep', pawnId: pawn.id, casketId }))] });
+    if (casket.cryptosleep.human) rows.push({ id: `open-casket-${pawn.id}`, label: `${pawn.name} · Ouvrir le caisson`, controls: [button(`open-casket-${pawn.id}`, 'Ordonner l’ouverture', gesture => apply({ type: 'order-open-cryptosleep', pawnId: pawn.id, casketId },gesture))] });
     else {
-      rows.push({ id: `enter-casket-${pawn.id}`, label: `${pawn.name} · Entrer`, controls: [button(`enter-casket-${pawn.id}`, 'Entrer en cryptosommeil', () => {
+      rows.push({ id: `enter-casket-${pawn.id}`, label: `${pawn.name} · Entrer`, controls: [button(`enter-casket-${pawn.id}`, 'Entrer en cryptosommeil', gesture => {
         const current = assertScope(scope), last = cryptosleepLastColonist271(current, pawn.id);
-        if (last) confirm('Dernier colon libre', `${pawn.name} est le dernier colon libre. Ce caisson exige une autre personne sur place pour être ouvert. Confirmer son entrée ?`, () => apply({ type: 'order-enter-cryptosleep', pawnId: pawn.id, casketId, confirmLastColonist: true }));
-        else return apply({ type: 'order-enter-cryptosleep', pawnId: pawn.id, casketId });
+        if (last) confirm('Dernier colon libre', `${pawn.name} est le dernier colon libre. Ce caisson exige une autre personne sur place pour être ouvert. Confirmer son entrée ?`, () => apply({ type: 'order-enter-cryptosleep', pawnId: pawn.id, casketId, confirmLastColonist: true },gesture));
+        else return apply({ type: 'order-enter-cryptosleep', pawnId: pawn.id, casketId },gesture);
       })] });
-      for (const patient of world.pawns.filter(patient => patient.id !== pawn.id && patient.state === 'downed' && cryptosleepHuman271(patient))) rows.push({ id: `carry-casket-${pawn.id}-${patient.id}`, label: `${pawn.name} → ${patient.name}`, controls: [button(`carry-casket-${pawn.id}-${patient.id}`, 'Porter vers le caisson', () => apply({ type: 'order-carry-cryptosleep', pawnId: pawn.id, patientId: patient.id, casketId }))] });
+      for (const patient of world.pawns.filter(patient => patient.id !== pawn.id && patient.state === 'downed' && cryptosleepHuman271(patient))) rows.push({ id: `carry-casket-${pawn.id}-${patient.id}`, label: `${pawn.name} → ${patient.name}`, controls: [button(`carry-casket-${pawn.id}-${patient.id}`, 'Porter vers le caisson', gesture => apply({ type: 'order-carry-cryptosleep', pawnId: pawn.id, patientId: patient.id, casketId },gesture))] });
     }
   }
   show('Caisson de cryptosommeil', rows);
@@ -274,11 +277,11 @@ function shipCasketPage(scope: Scope, casketId: number): void {
   const controls: NativeControl[] = [];
   if (occupant) controls.push(button('ship-casket-eject', 'Éjecter l’occupant', async () => { assertScope(scope); await send({ type: 'eject-ship-casket', casketId }); close(); }));
   else {
-    const apply = async (command: Exclude<ShipCasketCommand277, { type: 'eject-ship-casket' }>) => { const current = assertScope(scope), intent = shipCasketIntent277(current, command); if (!intent.ok) throw Error(intent.reason); await send(command); close(); };
+    const apply = async (command: Exclude<ShipCasketCommand277, { type: 'eject-ship-casket' }>,gesture?:NativeGesture) => { const current = assertScope(scope), intent = shipCasketIntent277(current, command); if (!intent.ok) throw Error(intent.reason); await sendPersonal(current,command,gesture); close(); };
     const patients: { patient: ShipCasketPatient277; label: string }[] = [...world.pawns.filter(pawn => pawn.state === 'downed').map(pawn => ({ patient: { kind: 'human' as const, id: pawn.id }, label: pawn.name })), ...(world.wildlife?.animals ?? []).filter(animal => animal.state === 'downed').map(animal => ({ patient: { kind: 'animal' as const, id: animal.id }, label: `${animalSpecies(animal.species).label} ${animal.id}` })), ...(world.mechanoids ?? []).filter(mech => mech.state === 'downed').map(mech => ({ patient: { kind: 'mechanical' as const, id: mech.id }, label: `Mécanoïde ${mech.id}` }))];
     for (const pawn of world.pawns.filter(pawn => shipCasketActorCapable277(world, pawn))) {
-      rows.push({ id: `enter-spatial-${pawn.id}`, label: `${pawn.name} · Entrer`, controls: [button(`enter-spatial-${pawn.id}`, 'Entrer dans le caisson', () => apply({ type: 'order-enter-ship-casket', pawnId: pawn.id, casketId }))] });
-      for (const { patient, label } of patients) if (patient.kind !== 'human' || patient.id !== pawn.id) rows.push({ id: `spatial-carry-${pawn.id}-${patient.kind}-${patient.id}`, label: `${pawn.name} → ${label}`, controls: [button(`spatial-carry-${pawn.id}-${patient.kind}-${patient.id}`, 'Porter vers le caisson', () => apply({ type: 'order-carry-ship-casket', pawnId: pawn.id, patient, casketId }))] });
+      rows.push({ id: `enter-spatial-${pawn.id}`, label: `${pawn.name} · Entrer`, controls: [button(`enter-spatial-${pawn.id}`, 'Entrer dans le caisson', gesture => apply({ type: 'order-enter-ship-casket', pawnId: pawn.id, casketId },gesture))] });
+      for (const { patient, label } of patients) if (patient.kind !== 'human' || patient.id !== pawn.id) rows.push({ id: `spatial-carry-${pawn.id}-${patient.kind}-${patient.id}`, label: `${pawn.name} → ${label}`, controls: [button(`spatial-carry-${pawn.id}-${patient.kind}-${patient.id}`, 'Porter vers le caisson', gesture => apply({ type: 'order-carry-ship-casket', pawnId: pawn.id, patient, casketId },gesture))] });
     }
   }
   show('Caisson spatial de cryptosommeil', rows, controls);
@@ -344,7 +347,7 @@ export function nativeSpecialRows(state: NativeUiState, nativeActions: NativeUiA
     if(wick)rows.push(row('ied-trap-wick','Mèche','Allumée · explosion imminente'));
     if(iedsUnlocked357(world))rows.push(toggle('spike-trap-auto-rebuild','Reconstruire automatiquement le piège',!!structure.spikeTrap?.autoRebuild,async on=>{assertScope(scope);await send({type:'spike-trap-auto-rebuild',structureId:structure.id,on});}),row('ied-trap-rebuild-cost','Après explosion',`Nouveau plan, livraison de ${IED_COMMON_357.shellCount} ${facts.shell==='shell-incendiary'?'obus incendiaires':'obus explosifs'} et construction complète.`));
   }
-  if (structure.kind === 'spike-trap') rows.push(toggle('spike-trap-auto-rebuild','Reconstruire automatiquement le piège',!!structure.spikeTrap?.autoRebuild,async on=>{assertScope(scope);await send({type:'spike-trap-auto-rebuild',structureId:structure.id,on});}),row('spike-trap-rebuild-cost','Après déclenchement','Nouveau plan, livraison de 45 matériaux et construction complète.','Les alliés conservent un risque d’accident.'));
+  if (structure.kind === 'spike-trap') rows.push(toggle('spike-trap-auto-rebuild','Reconstruire automatiquement le piège',!!structure.spikeTrap?.autoRebuild,async on=>{assertScope(scope);await send({type:'spike-trap-auto-rebuild',structureId:structure.id,on});}),row('spike-trap-rebuild-cost','Après déclenchement',`Nouveau plan, livraison de ${constructionCostText(structure)} et construction complète.`,'Les alliés conservent un risque d’accident.'));
   rows.push(...bedPolicyRows(world, structure, scope));
   if (isBurialContainer256(structure.kind, world.schemaVersion)) rows.push(...gravePolicyRows(world, structure, scope));
   if (structure.shelf && world.schemaVersion >= 286) rows.push({ id: 'special-linked-storage', label: 'Réglages liés des étagères', controls: [button('special-linked-storage', 'Lier, délier ou renommer…', () => linkedStoragePage(scope, structure.id))] });
@@ -354,7 +357,7 @@ export function nativeSpecialRows(state: NativeUiState, nativeActions: NativeUiA
     if (foam.wick) rows.push(row('firefoam-wick', 'Déclenchement engagé', `${(Math.max(0, foam.wick.endCore - world.tick * 10) / 60).toFixed(1)} s restantes`));
     else rows.push({ id: 'firefoam-manual', label: 'Déclenchement manuel', controls: [button('firefoam-manual', 'Choisir le colon…', () => {
       const current = assertScope(scope), choices = current.pawns.filter(pawn => firefoamManualCapable290(pawn, current.tick));
-      show('Déclencher le diffuseur de mousse', choices.map(pawn => ({ id: `foam-actor-${pawn.id}`, label: pawn.name, controls: [button(`foam-use-${pawn.id}`, 'Déclencher sur place', async () => { const fresh = assertScope(scope), reason = queryFirefoamUseReason290(fresh, pawn.id, structure.id); if (reason) throw Error(reason); await send({ type: 'firefoam-trigger', pawnId: pawn.id, structureId: structure.id }); close(); })] })));
+      show('Déclencher le diffuseur de mousse', choices.map(pawn => ({ id: `foam-actor-${pawn.id}`, label: pawn.name, controls: [button(`foam-use-${pawn.id}`, 'Déclencher sur place', async gesture => { const fresh = assertScope(scope), reason = queryFirefoamUseReason290(fresh, pawn.id, structure.id); if (reason) throw Error(reason); await sendPersonal(fresh,{ type: 'firefoam-trigger', pawnId: pawn.id, structureId: structure.id },gesture); close(); })] })));
     })] });
   }
   if (isPlayerCasket271(structure)) rows.push({ id: 'special-cryptosleep', label: 'Cryptosommeil', controls: [button('special-cryptosleep', 'Occupant et ordres…', () => ordinaryCasketPage(scope, structure.id))] });

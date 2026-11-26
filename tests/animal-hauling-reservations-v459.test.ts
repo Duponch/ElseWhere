@@ -1,5 +1,7 @@
 import {expect,test} from 'vitest';
 import {animalHaulingCamp459} from './scenarios/animal-hauling-v459.ts';
+import {asOldSchema} from './scenarios/old-schema.ts';
+import {serializeWorld} from '../src/sim/serialization.ts';
 import {constructFreshInitialWildAnimal256} from '../src/sim/initial-animal-constructor-256.ts';
 import {INITIAL_ANIMAL_FACTS_256} from '../src/sim/initial-animal-data-256.ts';
 import {WorldGenerationRandom} from '../src/sim/world-generation-random.ts';
@@ -124,22 +126,28 @@ test('split pickup and deposit preserve condition and total quantity while relea
  expect(w.nextId).toBe(originalNextId+1);
 });
 
-test('pickup rechecks current volume: adult Labrador refuses fifty-seven wood but can pick the same count of small-volume silver',()=>{
+test.each([378,379])('schema %i pickup rechecks current volume and preserves every original unit',version=>{
  for(const item of ['wood','silver'] as const){
-  const f=animalHaulingCamp459(),{world:w,animal:a}=f;prepareUnitHauler(f);
+  const f=animalHaulingCamp459();if(version===378){f.world=JSON.parse(asOldSchema(serializeWorld(f.world),version)) as World;f.handler=f.world.pawns[0]!;}const w=f.world,a=w.wildlife!.animals[0]!;prepareUnitHauler(f,a);
   const source=wood(f),zone=w.stockpiles[0]!;
   // Explicit initial transaction input, never newly manufactured by Haul.
   source.kind=item;source.item=item;source.quantity=57;zone.filters={wood:false,food:false,[item]:true};zone.capacity=500;
   a.x=8;a.z=15;a.path=[];a.haul=pickup(w,source,zone.id,57);
   const beforeId=w.nextId,result=createAnimalHaulingPass282(w).process(a,animalNavigation(w),()=>true,()=>{throw Error('OnCell pickup should not move');});
-  if(item==='wood'){
+  if(item==='wood'&&version<379){
    expect(animalCarryLimit282(a,item)).toBe(56);expect(result).toBe(false);expect(a.haul).toBeUndefined();
    expect(source.owner).toEqual({type:'ground',x:8,z:15});
-  }else{
+  }else if(item==='silver'){
    expect(animalCarryLimit282(a,item)).toBe(500);expect(result).toBe(true);expect(a.haul).toMatchObject({phase:'deliver',carryPileId:source.id,quantity:57});
    expect(source.owner).toEqual({type:'inventory',pawnId:a.id});
+  }else{
+   expect(result).toBe(true);expect(a.haul).toMatchObject({phase:'deliver',carryPileId:beforeId,quantity:56});
+   expect(source).toMatchObject({quantity:1,owner:{type:'ground',x:8,z:15}});
+   const carry=w.piles.find(p=>p.id===beforeId)!;expect(carry).toMatchObject({quantity:56,owner:{type:'inventory',pawnId:a.id}});
+   expect(w.nextId).toBe(beforeId+1);expect(reservedSource(w,source.id)).toBe(0);
   }
-  expect(source.quantity).toBe(57);expect(w.nextId).toBe(beforeId);
+  expect(w.piles.filter(p=>p.item===item).reduce((n,p)=>n+p.quantity,0)).toBe(57);
+  if(item==='silver'||version<379){expect(source.quantity).toBe(57);expect(w.nextId).toBe(beforeId);}
  }
 });
 

@@ -1,3 +1,4 @@
+import {revokeActorRecordSource297} from './actor-record-source-297.ts';
 import {isSchema286OrLater} from './schema-compatibility-257.ts';
 import {prepareLinkedStorageRemoval286,type LinkedStoragePlanResult286,type LinkedStoragePlan286} from './linked-storage-plan-286.ts';
 import {isShelfKind} from './shelf-storage.ts';
@@ -27,6 +28,7 @@ export function prepareLinkedShelfInstall286(world:World,building:Structure):Lin
  * Used only after successful plant retirement at the installation frontier. */
 export function adoptLinkedShelfInstallWrites286(plan:LinkedStoragePlan286):void{
  for(const w of plan.writes){
+  revokeActorRecordSource297(w.object);
   if(w.present){if(Object.hasOwn(w.object,w.key)){if(!Reflect.set(w.object,w.key,w.value))throw Error('Admitted linked shelf install write failed');}
    else Object.defineProperty(w.object,w.key,{value:w.value,writable:true,enumerable:true,configurable:true});}
   else if(!Reflect.deleteProperty(w.object,w.key))throw Error('Admitted linked shelf install deletion failed');

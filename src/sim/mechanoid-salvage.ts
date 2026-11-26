@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import { learnSkill,type SkillRecord } from './skills.ts';
 import { pawnBody } from './health-rules.ts';
 import { craftingSkill } from './crafting-quality.ts';
@@ -38,10 +39,10 @@ export function finishMechSalvage(w:World,p:Pawn,bill:CookingBill,context:Produc
   if(!Number.isSafeInteger(ledger.completed+1)||!Number.isSafeInteger(ledger.steel+quantity)
     ||quantity>0&&(!Number.isSafeInteger(w.nextId+1)||w.piles.some(pile=>pile.owner.type==='pawn'&&pile.owner.pawnId===p.id)))return false;
   // Consuming the whole corpse frees its pile slot; one steel output needs no new ground cell.
-  w.piles=w.piles.filter(pile=>pile!==corpse);w.rng=random.rng;p.skills.crafting=skill;
+  w.piles=filterPileEntries(w.piles,pile=>pile!==corpse);w.rng=random.rng;p.skills.crafting=skill;
   w.mechSalvage={completed:ledger.completed+1,steel:ledger.steel+quantity};
   if(quantity){
-    const id=w.nextId++;w.piles.push({id,item:'steel',kind:'steel',quantity,owner:{type:'pawn',pawnId:p.id}});
+    const id=w.nextId++;appendPileEntries(w.piles,{id,item:'steel',kind:'steel',quantity,owner:{type:'pawn',pawnId:p.id}});
     task.ingredients=[];task.productId=id;task.phase='output';task.progress=0;task.storageId=null;
     delete task.workTicks;delete task.storageQuantity;
   }else {p.cooking=null;if(p.orders.active==='cook')p.orders.active=null;p.state='idle';}

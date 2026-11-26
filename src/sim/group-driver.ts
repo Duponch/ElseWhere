@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {foodPoisonFactor347,profileInfectionFactor347} from './game-profile.ts';
 import {VERY_LOW_EXPECTATION313} from './expectations.ts';
@@ -211,7 +212,7 @@ export function tryGroupDeparture(w:World,retreatRuntime261?:GroupCampaignRuntim
     for(const p of plan.capture.members){if(undraftIds.has(p.id))delete p.draft;rememberMapAreaDeparture(world,p);releaseAllowedAreaReturn(p);if(isSecondaryContext(world))delete p.allowedAreaId;if(bedCapture)rememberActorBedDeparture256(p,mapId!,bedCapture.refs,world.schemaVersion);else {p.bedId=null;delete p.bedSlot;}p.path=[];p.moveCooldown=0;p.planCooldown=0;if(p.state!=='downed')p.state='idle';if(p.mental)p.mental.below=[0,0,0];delete p.motion;delete p.shooting;delete p.stagger;delete p.stun;if((Number(world.schemaVersion)===259||Number(world.schemaVersion)===260||(Number(world.schemaVersion)===261||(Number(world.schemaVersion)===262||isSchema263OrLater(Number(world.schemaVersion)))))&&g.admission?.revision===2&&p.prisoner){delete p.prisoner.escape;if(p.prisoner.breakout)delete p.prisoner.breakout.active;delete p.raid;delete p.visitor;}}
     for(const a of plan.capture.animals??[]){if(bedCapture)rememberActorBedDeparture256(a,mapId!,bedCapture.refs,world.schemaVersion);delete a.animalThermalRefuge288;delete a.animalAreaReturn287;delete a.haul;if(a.wander)delete a.wander.job;a.path=[];delete a.motion;delete a.animalRest;delete a.meal;delete a.eggLay;delete a.flight;delete a.stagger;delete a.stun;delete a.sleepUntilCore;if(a.domestic)delete a.domestic.penMarkerId;if(a.state!=='downed')a.state='idle';a.nextDecision=world.tick;}
     if(world.wildlife&&plan.capture.animals){const ids=new Set(plan.capture.animals.map(a=>a.id));world.wildlife.animals=world.wildlife.animals.filter(a=>!ids.has(a.id));}
-    world.pawns=world.pawns.filter(p=>!people.has(p.id));world.piles=world.piles.filter(p=>!items.has(p.id));const packs=new Set(plan.capture.packed??[]);world.packed=world.packed.filter(p=>!packs.has(p));
+    world.pawns=world.pawns.filter(p=>!people.has(p.id));world.piles=filterPileEntries(world.piles,p=>!items.has(p.id));const packs=new Set(plan.capture.packed??[]);world.packed=world.packed.filter(p=>!packs.has(p));
     if(combat?.ok)combat.commit();
     if(world.worldMaps){const record=boundWorldGroup(world);if(!record)throw Error('Missing group authority');record.localMapId=null;world.group=plan.next;if(isRetreat){const joined=retreat.commit();retreatMotion!.commit();if(joined)delete world.group;}}else if(isSecondaryContext(world)){
       const root=campaignAuthority(world),site=root.secondarySite!;
@@ -231,7 +232,7 @@ function returnGroup(w:World,g:AwayGroup):boolean {
   for(const pawn of g.members){const cell=find(g.entry,c=>!used.has(c.z*w.width+c.x));if(!cell)return false;used.add(cell.z*w.width+cell.x);placements.push({pawn,cell});}
   captureHumanOwners(w);
   for(const {pawn,cell} of placements){pawn.x=cell.x;pawn.z=cell.z;pawn.path=[];pawn.moveCooldown=0;pawn.planCooldown=0;delete pawn.motion;if(pawn.state!=='downed')pawn.state='idle';}
-  w.pawns.push(...g.members);w.piles.push(...g.items);if(g.packed)w.packed.push(...g.packed);
+  w.pawns.push(...g.members);appendPileEntries(w.piles,...g.items);if(g.packed)w.packed.push(...g.packed);
   const pending=g.items.filter(i=>i.owner.type==='inventory').map(i=>i.id),pendingPacked=g.packed?.map(p=>p.building.id)??[];
   if(pending.length||pendingPacked.length)w.group={...g.admission?{admission:g.admission}:{},id:g.id,startedAt:g.startedAt,destination:g.destination,ledger:g.ledger,...g.provisions?{provisions:g.provisions}:{},...g.freight?{freight:g.freight}:{},phase:'unloading',memberIds:g.members.map(p=>p.id),pendingPileIds:pending,...pendingPacked.length?{pendingPackedIds:pendingPacked}:{}};else delete w.group;
   // Reinsert the real owners together before the local physical drop. A full

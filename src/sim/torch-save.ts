@@ -1,4 +1,5 @@
 import {captureHumanOwners} from './human-owners.ts';
+import {carryQuantityBound379} from './carry-quantity-379.ts';
 import {validBuildingFuelShape} from './biofuel-save.ts';
 import {reservedSource} from './materials.ts';
 import {fuelLimit,FUEL_UNIT_TICKS,REFUEL_WORK_TICKS} from './fuel.ts';
@@ -58,7 +59,7 @@ export function validTorchTransport(w:World,version:number):boolean {
         if(slot.kind!=='map'||!pile||pile.item!=='wood'||!obj(task)
           ||!keys(task as unknown as Record<string,unknown>,['sourcePileId','quantity','phase','destination','carryPileId'],queued?[]:['pickupCell','serviceProgress'])
           ||!obj(task.destination)||!keys(task.destination as unknown as Record<string,unknown>,['type','structureId'],['forced'])
-          ||!int(task.sourcePileId,1,w.nextId-1)||!int(task.quantity,1,10)||!['pickup','deliver'].includes(task.phase)
+          ||!int(task.sourcePileId,1,w.nextId-1)||!int(task.quantity,1,carryQuantityBound379({schemaVersion:version},pile.item))||!['pickup','deliver'].includes(task.phase)
           ||Object.hasOwn(task.destination,'forced')&&task.destination.forced!==true||queued&&(task.phase!=='pickup'||task.destination.forced!==true)
           ||!queued&&(task.destination.forced===true?pawn.orders.active!=='haul':pawn.orders.active!==null)
           ||task.pickupCell!==undefined&&(!obj(task.pickupCell)||!keys(task.pickupCell as unknown as Record<string,unknown>,['x','z'])||!int(task.pickupCell.x,0,w.width-1)||!int(task.pickupCell.z,0,w.height-1))

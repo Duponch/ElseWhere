@@ -9,7 +9,7 @@ const lanes=new Set(['world','summary','dynamic','campaign','map','worldMaps','s
  'pawns','wildlife','animals','mechanoids','flyers','structures','packed','building','casket','cryptosleep','shipCryptosleep277','occupant',
  'human','pawn','animal','mech','actor','piles','items','corpse','mechCorpse','worldGroups','groups','state','group','pending261','people','animalOwners','members',
  'groupLosses','animalLosses','losses','abandonedPawns','abandonedContents','humans','worldPawns','owners','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277',
- 'worldFactions','leaders','visitors','podRescues','departed','startingArrival','pods','scout','commercialTrip','legacyTravellers','upserted']);
+ 'worldFactions','leaders','visitors','podRescues','banishedDepartures378','departed','startingArrival','pods','scout','commercialTrip','legacyTravellers','upserted']);
 const laneList:readonly string[]=[...lanes],laneReads=laneOrder(laneList);
 
 /** Supplemental closed owner-context fence. Main guards still own actor shapes,

@@ -1,10 +1,13 @@
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {readNativeCorePhaseInput297} from '../bridge/native-clone-resident';
+import {readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
 import type {CorePhaseTypedProjection297,CorePhaseAnchor297,CoreActorScene297,CoreHumanPose297,CoreDoorPatch297,CorePilePatch297} from '../bridge/core-phase-projection-297';
-import {OwnedOpaqueRevisions435} from './OwnedOpaqueRevisions435';
+import {canRetainOpaqueWorld435,OwnedOpaqueRevisions435} from './OwnedOpaqueRevisions435';
+import {createOwnedMaterialResources435} from './OwnedMaterialResources435';
 import {ownActorPlaybackWorld435,isActorPlaybackWorld435} from './ActorPlayback435';
 import {StaticSceneCompiler435} from './StaticSceneCompiler435';
 import type {SceneApplicationContext} from './SceneApplicationContext';
+import {PhaseJobRows297} from './PhaseJobRows297';
 import{createSurfaceMaterial}from'./SurfaceMaterials';
 import {GraphicsStyleContext,currentGraphicsStyle} from './graphics-style';
 import {normalizeGraphicsStylePreferences,graphicsStylePipelineKey,type GraphicsStylePreferences} from '../ui3d/native-preferences';
@@ -46,7 +49,8 @@ import { MechanoidLayer } from './MechanoidLayer';
 import { RopeLayer } from './RopeLayer';
 import { NaturalResourcePresentation } from './NaturalResourcePresentation';
 import {PreparedNaturalPresentation} from './PreparedNaturalPresentation';
-import {withPreparedSceneMatrices} from './scene-matrix-pass';
+import {retainFixedLocalMatrix,withPreparedSceneMatrices} from './scene-matrix-pass';
+import {WorldCoordinateGroup} from './WorldCoordinateGroup';
 import {readPreparedNaturalFrame} from '../bridge/prepared-natural-frame';
 import { SceneResourceIndex, readSceneResourceFrame, type SceneResourceFrame } from './scene-resource-index';
 import { ProjectileLayer } from './ProjectileLayer';
@@ -185,15 +189,22 @@ function isNaturalSceneWorld(value:World|{changed:boolean}):value is World {
 /** Read-only presentation view for a frontier pose patch: the presented Full
  * World at the phase's Core time, its humans replaced by the current actor
  * records and the patched humans' jobs inserted or replaced (same order). */
-function posedWorld297(world:World,actors:CoreActorScene297,poses:ReadonlyMap<number,CoreHumanPose297>,core:number,piles:World['piles']=world.piles):World {
-  const jobs=new Map<number,World['jobs'][number]>();for(const row of poses.values())if(row.job)jobs.set(row.job.id,row.job as World['jobs'][number]);
-  const merged=jobs.size?[...world.jobs.map(job=>{const next=jobs.get(job.id);if(next)jobs.delete(job.id);return next??job;}),...jobs.values()]:world.jobs;
+function posedWorld297(world:World,actors:CoreActorScene297,poses:ReadonlyMap<number,CoreHumanPose297>,core:number,piles:World['piles']=world.piles,preparedJobs?:World['jobs']):World {
+  let merged=preparedJobs;
+  if(!merged){
+    const jobs=new Map<number,World['jobs'][number]>();for(const row of poses.values())if(row.job)jobs.set(row.job.id,row.job as World['jobs'][number]);
+    merged=jobs.size?[...world.jobs.map(job=>{const next=jobs.get(job.id);if(next)jobs.delete(job.id);return next??job;}),...jobs.values()]:world.jobs;
+  }
   return {...world,tick:Math.floor(core/10),phaseCore297:core%10,pawns:actors.humans as World['pawns'],jobs:merged,piles};
 }
 /** The presented Full's piles with the frontier pile patches applied: patched
  * records replace theirs in place, removed ones leave, new ones follow in id
  * order. Untouched piles keep the Full's references. */
-function patchedPiles297(world:World,patches:ReadonlyMap<number,CorePilePatch297['pile']>):World['piles'] {
+function patchedPiles297(world:World,patches:ReadonlyMap<number,CorePilePatch297['pile']>,previous?:World['piles'],changes?:ReadonlyMap<number,CorePilePatch297['pile']>,source?:(id:number)=>number|undefined):World['piles'] {
+  if(previous&&changes&&source){const writes:{source:number;pile:World['piles'][number]}[]=[];let stable=true;
+    for(const [id,pile]of changes){const at=source(id);if(!pile||at===undefined||previous[at]?.id!==id){stable=false;break;}writes.push({source:at,pile:pile as World['piles'][number]});}
+    if(stable){const next=previous.slice();for(const write of writes)next[write.source]=write.pile;return next;}
+  }
   const added=new Map(patches),piles:World['piles']=[];
   for(const pile of world.piles){if(!added.has(pile.id)){piles.push(pile);continue;}const next=added.get(pile.id);added.delete(pile.id);if(next)piles.push(next as World['piles'][number]);}
   for(const [,next] of [...added].sort((a,b)=>a[0]-b[0]))if(next)piles.push(next as World['piles'][number]);
@@ -305,7 +316,8 @@ export class SceneRenderCore {
     if(!this.world)return false;
     this.deferFixedTreeWorld(this.world,reset,true);return true;
   }
-  private uploadSharedSurfaceAssets():void{const textures=this.graphicsStyle.prepareSharedSurfaceAssets();for(const texture of textures)this.renderer.initTexture(texture);this.sharedSurfaceBudgetTextures=textures;}
+  private publishSharedSurfaceStorage435():void{this.ownedOpaqueRevisions435?.publishSharedSurfaceStorage(this.graphicsStyle.preparedStrokes.ownedStorage435());}
+  private uploadSharedSurfaceAssets():void{const textures=this.graphicsStyle.prepareSharedSurfaceAssets();for(const texture of textures)this.renderer.initTexture(texture);this.sharedSurfaceBudgetTextures=textures;this.ownedOpaqueRevisions435?.publishSharedSurfaceTextures(textures);this.publishSharedSurfaceStorage435();}
   /** Operation-only nominal ledger; no Scene census occurs in stable frames. */
   private rockFinalBudgetDeclarations(input:RockFinalInput,oldGpu:number,oldCpu:number):RockFinalBudgetDeclarations{
     const canonical=this.rocks.rockFinalCanonicalTable(),all=this.graphicsStyle.preparedStrokes.surfaceBudget(),rest=this.graphicsStyle.preparedStrokes.surfaceBudget(canonical),owned=this.rocks.rockFinalSourceInventory(),affineGpu=all.gpuBufferBytes-rest.gpuBufferBytes-owned.gpuBufferBytes,affineCpu=all.cpuBytes-rest.cpuBytes-owned.gpuBufferBytes;
@@ -344,7 +356,8 @@ export class SceneRenderCore {
           // writers. New arrivals remain held and can supersede this target.
           const latestBeforeApply=this.takePendingSurfaceWorld();
           if(latestBeforeApply){reset=reset||latestBeforeApply.reset;entry={...latestBeforeApply,reset};continue;}
-          assertCurrent();this.presentation.clear();
+          assertCurrent();const full=this.coreFullInputs297.get(target.world);
+          this.presentation.discardThrough(full?full.core/10:target.world.tick);
           if(!target.alreadyApplied){this.applyAdmittedWorld(target.world,reset,plan);applied=true;}
           batch=await this.stageCoordinatedSurfaces('world',assertCurrent,reset);
           const latestBeforePublish=this.takePendingSurfaceWorld();
@@ -375,7 +388,7 @@ export class SceneRenderCore {
           if(++superseded>SURFACE_SUPERSESSION_RETRIES){this.pendingSurfaceWorld=entry;this.graphicsStyle.surfacePreparation?.invalidate();break;}
           continue;
         }
-        finally{try{batch?.dispose();}finally{trees?.dispose();}}
+        finally{try{batch?.dispose();}finally{try{trees?.dispose();}finally{this.publishSharedSurfaceStorage435();}}}
       }
     }catch(error){if(!this.closingPresentation&&!this.fatalError)this.reportFailure('Préparation du dernier affichage interrompue : '+(error instanceof Error?error.message:String(error)));throw error;}finally{this.holdSurfaceWorld=false;this.preparing=false;this.lastFrame=0;this.invalidatePausedShadow();}
     if(this.disposed||this.closingPresentation||this.fatalError||this.hostPort.hidden()||this.presentationSuspendedUntilFrame325)return;
@@ -561,7 +574,7 @@ export class SceneRenderCore {
     if(input.speed===0)this.presentCorePhases297();
   }
   private presentCorePhases297():void {
-    if(this.holdSurfaceWorld)return;
+    if(this.holdSurfaceWorld||!this.pendingCore297.length)return;
     const anchor=this.appliedCoreAnchor297;if(!anchor)return;
     const received=this.received&&this.coreFullInputs297.get(this.received.world),applicable:CorePhaseTypedProjection297[]=[],retained:CorePhaseTypedProjection297[]=[];
     for(const input of this.pendingCore297){
@@ -582,27 +595,31 @@ export class SceneRenderCore {
     for(const p of applicable)for(const row of p.actors){changedIds.add(row.id);(row.kind==='human'?human:row.kind==='animal'?animal:mechanical).add(row.index);}
     const world=this.world;if(!world||last.world!==world)throw Error('Actor frontier lost its presented authentic Full');
     const actors=last.actorScene;let posed=false,doored=false,piled=false;
+    const poseChanges=new Map<number,CoreHumanPose297>(),doorChanges=new Map<number,CoreDoorPatch297['door']>(),pileChanges=new Map<number,CorePilePatch297['pile']>();
     // Patches accumulate until the next Full: a later packet about other doors
     // or humans must not revert the ones already presented.
-    for(const p of applicable){for(const row of p.poses297??[]){this.posePatches297.set(row.id,row);posed=true;}for(const row of p.doors297??[]){this.doorPatches297.set(row.id,row.door);doored=true;}for(const row of p.piles297??[]){this.pilePatches297.set(row.id,row.pile);piled=true;}}
+    for(const p of applicable){for(const row of p.poses297??[]){this.posePatches297.set(row.id,row);poseChanges.set(row.id,row);human.add(row.index);posed=true;}for(const row of p.doors297??[]){this.doorPatches297.set(row.id,row.door);doorChanges.set(row.id,row.door);doored=true;}for(const row of p.piles297??[]){this.pilePatches297.set(row.id,row.pile);pileChanges.set(row.id,row.pile);piled=true;}}
     const poses=this.posePatches297;
     // Frontier door patch: animate the doors that opened or closed, as a Full
     // would, with the presented Full's door list and axes.
-    if(doored)this.adoptDoors297(world,this.doorPatches297);
-    if(piled)this.patchedPiles297=patchedPiles297(world,this.pilePatches297);
+    if(doored)this.adoptDoors297(world,doorChanges,this.doorPatches297);
+    if(piled){const directory=this.pileView297?this.applicationContext?.piles.viewDirectory297(this.pileView297):readResidentCollectionDirectory379(world,'piles');this.patchedPiles297=patchedPiles297(world,this.pilePatches297,this.patchedPiles297??world.piles,pileChanges,directory?.source);}
     // Like a Full adoption, pile support reads (cargo hand-off endpoints) use
     // the prepared supports of the Full and of the registered views.
     if(posed||piled)withPileSurfaceReads(()=>{
       // Frontier pose patch: the same human/effect derivation as a Full, over
       // the presented Full World with the current humans and their jobs, and
       // the patched piles (a carried pile changed in the same packet).
-      const view=posedWorld297(world,actors,poses,last.core,this.patchedPiles297??world.piles);
+      const jobs=this.applicationContext&&this.immutableWorlds.has(world)?this.phaseJobs297.read(world,poses,poseChanges):undefined;
+      const view=posedWorld297(world,actors,poses,last.core,this.patchedPiles297??world.piles,jobs?.rows);
       // The view presents the same admitted Full: it inherits its playback ownership.
       ownActorPlaybackWorld435(view,isActorPlaybackWorld435(world));
+      // The same Full supports are needed even on a pure pose frontier.
+      // Reusing the admitted pile array also covers phases after a pile patch.
+      if(this.applicationContext?.preparePileView297(view,world,this.pilePatches297,this.pileView297))this.pileViews297.add(view);
       if(this.patchedPiles297){
         // Same cargo hand-off and pile chunks as a Full adoption, from the
         // previously presented piles to the patched ones.
-        if(this.applicationContext?.preparePileView297(view,world))this.pileViews297.add(view);
         if(piled){
           const tick=this.hasTracks?this.timeline.tick:view.tick;
           this.pawns.adoptCargo(this.pileView297??world,view,tick,this.hasTracks&&(this.received?.speed??0)>0);
@@ -610,9 +627,11 @@ export class SceneRenderCore {
         }
         this.pileView297=view;
       }
-      this.pawns.update(view,this.pawns.blend.value,false,poses);
-      this.actionParticles.update(view,this.pawns.feedbackSource,this.wildlife);
-      this.actionFeedback.update(view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents);
+      const directory=this.applicationContext?.piles.viewDirectory297(view)??readResidentCollectionDirectory379(world,'piles');
+      this.pawns.updatePhase297(world,view,poses,human,poseChanges,pileChanges,directory?.source,jobs?.byId);
+      this.actionParticles.update(view,this.pawns.feedbackSource,this.wildlife,{jobs:jobs?.byId,pileSource:directory?.source,base:world,humans:human,piles:pileChanges,
+        pawnSource:jobs?id=>{const found=actors.byId[id];return found?.kind==='human'?found.actor:undefined;}:undefined});
+      this.actionFeedback.updatePhase297(world,view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents,human,pileChanges,jobs?.byId);
     },this.applicationContext?.readSupports);
     else this.pawns.adoptPhase297(world,[...human],actors,changedIds);
     this.wildlife.adoptPhase297(world,[...animal],actors,changedIds);this.mechanoids.adoptPhase297(world,[...mechanical],actors);
@@ -620,6 +639,7 @@ export class SceneRenderCore {
   }
   private readonly doorPatches297=new Map<number,CoreDoorPatch297['door']>();
   private readonly posePatches297=new Map<number,CoreHumanPose297>();
+  private readonly phaseJobs297=new PhaseJobRows297();
   private readonly pilePatches297=new Map<number,CorePilePatch297['pile']>();
   /** Presented Full's piles with the accumulated pile patches, and the latest
    * view World presenting them (cargo hand-offs and pile chunks read it). */
@@ -627,7 +647,8 @@ export class SceneRenderCore {
   private pileView297:World|undefined;
   /** Pile-patch views whose pile supports are registered for incremental reads. */
   private readonly pileViews297=new WeakSet<World>();
-  private adoptDoors297(world:World,doors:ReadonlyMap<number,CoreDoorPatch297['door']>):void {
+  private adoptDoors297(world:World,changes:ReadonlyMap<number,CoreDoorPatch297['door']>,doors=changes):void {
+    if(this.doors.adoptPhase297(world,changes))return;
     const patch=<S extends World['structures'][number]>(s:S):S=>{const door=doors.get(s.id);return door&&s.door?{...s,door:door as NonNullable<S['door']>}:s;};
     const prepared=this.preparedStructures;
     if(prepared)this.doors.updateNative(world,this.wallCutaway,false,prepared.doors.map(patch),prepared.axes,prepared.gateAxes);
@@ -645,9 +666,9 @@ export class SceneRenderCore {
   protected readonly projectiles = new ProjectileLayer(this.animationDetail);
   protected readonly wildlife:WildlifeLayer;
   protected readonly animalCargo = new AnimalCargoLayer282(this.environmentLighting.configure);
-  protected readonly mechanoids = new MechanoidLayer(this.environmentLighting.configure,this.animationDetail);
+  protected readonly mechanoids = new MechanoidLayer(this.environmentLighting.configure,this.animationDetail,!!this.applicationContext);
   protected readonly ropes = new RopeLayer();
-  protected readonly pawns = new PawnLayer(this.environmentLighting.configure,this.animationDetail);
+  protected readonly pawns = new PawnLayer(this.environmentLighting.configure,this.animationDetail,!!this.applicationContext);
   protected readonly actionFeedback = new ActionFeedbackLayer(this.pawns);
   protected readonly actionParticles = new ActionParticleLayer(this.pawns);
   protected readonly structureVfx = new StructureVfxLayer(this.animationDetail);
@@ -689,15 +710,15 @@ export class SceneRenderCore {
   protected readonly rig: SceneCameraPort;
   protected get camera(): THREE.OrthographicCamera | THREE.PerspectiveCamera { return this.rig.camera; }
   protected get controls(): SceneCameraPort['controls'] { return this.rig.controls; }
-  protected readonly terrainGroup = new THREE.Group();
-  protected readonly resourceGroup = new THREE.Group();
+  protected readonly terrainGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
+  protected readonly resourceGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
   protected readonly roofs=new RoofLayer(this.environmentLighting.configure,world=>this.applicationContext?.read(world)?.roofs);
   protected readonly doors=new DoorLayer(this.environmentLighting.configure,this.animationDetail);
   protected readonly walls=new WallLayer(this.environmentLighting.configure);
-  protected readonly structureGroup = new THREE.Group();
-  protected readonly jobGroup = new THREE.Group();
-  protected readonly pileGroup = new THREE.Group();
-  protected readonly storageGroup = new THREE.Group();
+  protected readonly structureGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
+  protected readonly jobGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
+  protected readonly pileGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
+  protected readonly storageGroup = this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
   protected zonesVisible=true;
   protected roofAreasVisible=false;
   protected zoneTarget:number|undefined;
@@ -771,6 +792,10 @@ export class SceneRenderCore {
   protected readonly terrainPaintPatchDestination=new THREE.Vector2();
   protected terrainPaintResident=false;
   protected readonly terrainPaintMaterial = opaqueGroundExplorationMaterial256(createSurfaceMaterial('diffuse',0xffffff,{vertexColors:false,map:this.terrainPaintTexture}));
+  private readonly terrainCommandMaterialOwners435=this.applicationContext?[
+    createOwnedMaterialResources435(this.terrainPlainMaterial,{textures:[],arrayTextures:[],sharedGroups:[]}),
+    createOwnedMaterialResources435(this.terrainPaintMaterial,{textures:[this.terrainPaintTexture],arrayTextures:[],sharedGroups:[]}),
+  ]:[];
   protected readonly staticPaint=createStylizedSurfaceTexture('vegetation');
   protected readonly texturedStaticMaterial=createSurfaceMaterial('diffuse',0xffffff,{vertexColors:true,map:this.staticPaint});
   protected readonly waterMaterial = material(0xffffff, { vertexColors: true, roughness: 0.45, metalness: 0.08 });
@@ -831,8 +856,8 @@ export class SceneRenderCore {
   protected pointerDown: { x: number; y: number; button: number; pointerId: number } | null = null;
 
   constructor(renderer: THREE.WebGPURenderer, groundGrassEnabled: boolean, protected readonly rendererLifetime: RendererLifetime, protected readonly hostPort:SceneRenderHostPort) {
-    this.renderer = renderer; this.ownedOpaqueRevisions435?.attach(renderer,this.scene,this.environmentLighting.exploration.ownedObjectUniforms435(),[this.environmentLighting.map,this.environmentLighting.exploration.map]); this.designations=new DesignationIconLayer(hostPort.loadTexture);
-    this.wildlife=new WildlifeLayer(this.environmentLighting.configure,hostPort.loadTexture,this.animationDetail);
+    this.renderer = renderer; this.ownedOpaqueRevisions435?.attach(renderer,this.scene,this.environmentLighting.exploration.ownedObjectUniforms435(),[this.environmentLighting.map,this.environmentLighting.exploration.map,this.staticPaint]); this.designations=new DesignationIconLayer(hostPort.loadTexture);
+    this.wildlife=new WildlifeLayer(this.environmentLighting.configure,hostPort.loadTexture,this.animationDetail,!!this.applicationContext);
     try {
     const lost = renderer.onDeviceLost.bind(renderer);
     renderer.onDeviceLost = info => { lost(info); this.reportFailure(`Périphérique graphique perdu : ${info.message}`); };
@@ -841,6 +866,10 @@ export class SceneRenderCore {
       this.reportFailure(`Erreur du périphérique graphique : ${detail}`);
     };
     this.scene.matrixAutoUpdate = false;
+    // In the closed game presentation these are permanent identity-local
+    // containers. All placement is in child/instance transforms; a routine
+    // RAF must not dirty the world matrices of every resident chunk.
+    if(this.applicationContext)for(const group of [this.terrainGroup,this.resourceGroup,this.structureGroup,this.jobGroup,this.pileGroup,this.storageGroup])retainFixedLocalMatrix(group);
     // WebGPU has selected its HDR/MSAA target before this public callback, but
     // has not begun the scene pass. Composing here avoids an intermediate screen
     // output transform while preserving room -> bundles -> objects draw order.
@@ -1019,7 +1048,7 @@ export class SceneRenderCore {
     if(tracks){this.timeline.adopt(at,speed,tracks,this.hostPort.now(),reset||!this.hasTracks,!!this.applicationContext&&immutableSnapshot,!!coreInput);this.hasTracks=true;}
     if(this.holdSurfaceWorld){
       if(speed===0&&!tracks&&this.hasTracks)this.timeline.adopt(at,0,[],this.hostPort.now(),reset,!!this.applicationContext&&immutableSnapshot,!!coreInput);
-      this.presentation.clear();this.applyWorld(world,reset);return;
+      this.presentation.discardThrough(at);this.applyWorld(world,reset);return;
     }
     if(speed===0){
       // This World has already been received/admitted. Pause presents this
@@ -1051,13 +1080,14 @@ export class SceneRenderCore {
     this.applyAdmittedWorld(world,resetPresentation,plan);this.deferDirtySharedSurfaces(resetPresentation);
   }
   private applyAdmittedWorld(world:World,resetPresentation=false,treePlan?:FixedTreeCohortPlan):void{
-    const phase=this.coreFullInputs297.get(world);this.appliedCoreAnchor297=phase?.anchor;this.appliedCore297=phase?.core??-Infinity;this.actorScene297=phase?.actorScene;
+    const phase=this.coreFullInputs297.get(world),retainOpaque=canRetainOpaqueWorld435(this.world,world,this.appliedCoreAnchor297,phase?.anchor,!!this.applicationContext&&!!this.world&&this.immutableWorlds.has(this.world)&&this.immutableWorlds.has(world),resetPresentation);
+    this.appliedCoreAnchor297=phase?.anchor;this.appliedCore297=phase?.core??-Infinity;this.actorScene297=phase?.actorScene;
     const calm=this.calmFullFrame297;if(calm&&phase?.anchor.epoch===calm.anchor.epoch&&phase.anchor.mapId===calm.anchor.mapId&&phase.anchor.revision>=calm.anchor.revision)this.calmFullFrame297=undefined;
-    this.ownedOpaqueRevisions435?.setEnabled(!!this.applicationContext&&this.immutableWorlds.has(world));this.ownedOpaqueRevisions435?.invalidateResources();
+    this.ownedOpaqueRevisions435?.setEnabled(!!this.applicationContext&&this.immutableWorlds.has(world));this.ownedOpaqueRevisions435?.adoptWorldContinuity435(retainOpaque);
     if(!this.immutableWorlds.has(world))this.applicationContext?.clear();
     ownActorPlaybackWorld435(world,!!this.applicationContext&&this.immutableWorlds.has(world));
     try{this.resources.beginFixedWorldApplication(world,treePlan,resetPresentation,this.immutableWorlds.has(world));withPileSurfaceReads(()=>this.applyWorldWithinSurfaceReads(world,resetPresentation),this.applicationContext?.readSupports);if(this.applicationContext?.read(world))this.applicationContext.commit(world);this.resources.completeFixedWorld(world,treePlan,this.immutableWorlds.has(world));}
-    catch(error){this.resources.abortFixedWorldApplication();this.applicationContext?.abort();throw error;}
+    catch(error){this.ownedOpaqueRevisions435?.invalidateResources();this.resources.abortFixedWorldApplication();this.applicationContext?.abort();throw error;}
   }
 
   private applyWorldWithinSurfaceReads(world: World, resetPresentation = false): void {
@@ -1136,7 +1166,8 @@ export class SceneRenderCore {
       this.daylight.configureShadow(world.width, world.height);
       this.resize();
     }
-    this.hygiene.update(world,this.boxes,newMap);
+    if(application)this.hygiene.updateWorld(world,this.boxes,newMap);
+    else this.hygiene.update(world,this.boxes,newMap);
     if (previousWorld?.resources !== world.resources || newMap || this.preparedNaturalPresentation.hasFrameChange(world) || this.preparedNaturalPresentation.active&&!this.immutableWorlds.has(world) || Math.floor(previousWorld.tick / 25) !== Math.floor(world.tick / 25)) this.updateResources(world, newMap,resourceFrame);
     const packageKey=(world.packed??[]).filter(p=>p.owner.type==='ground').map(p=>`${p.building.id}:${p.building.material}:${p.owner.type==='ground'?`${p.owner.x}:${p.owner.z}`:''}`).join('|');
     if(this.confirmedIntents)this.roofs.updatePhysical(world,this.wallCutaway,newMap);
@@ -1146,13 +1177,14 @@ export class SceneRenderCore {
     // A Full supersedes every frontier door/pose/pile patch received since the
     // last one. Cargo hand-offs continue from the piles last presented.
     const cargoPrevious=this.pileView297??previousWorld;
-    this.doorPatches297.clear();this.posePatches297.clear();this.pilePatches297.clear();this.patchedPiles297=undefined;this.pileView297=undefined;
+    this.doorPatches297.clear();this.posePatches297.clear();this.phaseJobs297.clear();this.pilePatches297.clear();this.patchedPiles297=undefined;this.pileView297=undefined;
     const prepared=this.preparedStructures=application?.structures??this.structurePreparation?.read(world,resetPoses);
     if(prepared)this.doors.updateNative(world,this.wallCutaway,resetPoses,prepared.doors,prepared.axes,prepared.gateAxes);
     else this.doors.update(world,this.wallCutaway,resetPoses);
-    const structureKey = prepared
+    const residentStructureKey=prepared?this.structurePreparation!.signature.readResident(world,prepared.axesKey,packageKey,resetPoses):undefined;
+    const structureKey = residentStructureKey??(prepared
       ? this.structurePreparation!.signature.readConfirmed(world.structures,prepared.axesKey,packageKey,prepared.indices,resetPoses)
-      : this.structureSignature.read(world.structures,[...doorOrientations(world)].join(':'),packageKey,resetPoses);
+      : this.structureSignature.read(world.structures,[...doorOrientations(world)].join(':'),packageKey,resetPoses));
     if (structureKey !== this.structureKey || newMap) { this.structureKey = structureKey; this.buildStructures(world); }
     if(this.geysers.adopt(world,newMap))this.invalidatePausedShadow();
     this.turretTops.update(world,this.structureGroup,this.boxes,resetPoses);
@@ -2004,7 +2036,7 @@ export class SceneRenderCore {
       // Reserve one empty batch per spatial chunk while the map is loading.
       // First material drops then reuse compiled objects and resident buffers.
       for(let z=0;z<world.height;z+=WORLD_SCALE.chunkSize)for(let x=0;x<world.width;x+=WORLD_SCALE.chunkSize) {
-        const key=`${x/WORLD_SCALE.chunkSize}:${z/WORLD_SCALE.chunkSize}`,group=new THREE.Group();
+        const key=`${x/WORLD_SCALE.chunkSize}:${z/WORLD_SCALE.chunkSize}`,group=this.createPileChunkGroup();
         group.name=`Material piles ${key}`;this.pileGroup.add(group);
         this.boxes.set(group,`pile:${key}`,[]);this.pileChunks.set(key,{signature:'',group});
       }
@@ -2015,8 +2047,8 @@ export class SceneRenderCore {
       this.designations.updatePileIcons(world,prepared.changedChunks,prepared.activeKeys,newMap);
       for(const [key,chunk]of this.pileChunks)if(!prepared.activeKeys.has(key)&&chunk.signature!==''){this.boxes.set(chunk.group,`pile:${key}`,[]);chunk.signature='';}
       for(const change of prepared.changedChunks){const {key,signature}=change,previous=this.pileChunks.get(key);if(previous?.signature===signature)continue;
-        const group=previous?.group??new THREE.Group();if(!previous)this.pileGroup.add(group);group.name=`Material piles ${key}`;
-        this.boxes.set(group,`pile:${key}`,this.applicationContext!.piles.placements(prepared,change));this.pileChunks.set(key,{signature,group});
+        const group=previous?.group??this.createPileChunkGroup();if(!previous)this.pileGroup.add(group);group.name=`Material piles ${key}`;
+        this.boxes.set(group,`pile:${key}`,this.applicationContext!.piles.ownedPlacements(prepared,change));this.pileChunks.set(key,{signature,group});
       }
       this.applicationContext!.acknowledgePiles(prepared);return;
     }
@@ -2054,13 +2086,20 @@ export class SceneRenderCore {
       const signature = bundles.map(bundle => `${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}${bundle.forbidden?':forbidden':''}${bundle.markerOnly?':marker-only':''}`).join('|');
       const previous = this.pileChunks.get(key);
       if (previous?.signature === signature) continue;
-      const group = previous?.group ?? new THREE.Group();
+      const group = previous?.group ?? this.createPileChunkGroup();
       if (!previous) this.pileGroup.add(group);
       group.name = `Material piles ${key}`;
       this.boxes.set(group, `pile:${key}`, pileParts(bundles));
       this.pileChunks.set(key, { signature, group });
     }
   }
+
+  private createPileChunkGroup():THREE.Group {
+    const group=this.applicationContext?new WorldCoordinateGroup():new THREE.Group();
+    return this.applicationContext?retainFixedLocalMatrix(group):group;
+  }
+
+  worldCoordinateMatrixMetrics(){return[this.terrainGroup,this.resourceGroup,this.structureGroup,this.jobGroup,this.pileGroup,this.storageGroup,this.pawns.group,this.mechanoids.group,this.wildlife.mesh,this.wildlife.flames].filter((group):group is WorldCoordinateGroup=>group instanceof WorldCoordinateGroup).map(group=>group.matrixMetrics());}
 
   visibilityChanged():void {
     if(this.hostPort.hidden())this.cancelGraphicsMeasurement('hidden');
@@ -2522,6 +2561,7 @@ export class SceneRenderCore {
     for (const group of [this.terrainGroup, this.resourceGroup, this.structureGroup, this.jobGroup, this.storageGroup, this.pileGroup]) clearGroup(group);
     this.pileChunks.clear();this.applicationContext?.clear();
     this.staticMaterial.dispose();
+    for(const owner of this.terrainCommandMaterialOwners435)owner.dispose();
     this.terrainPlainMaterial.dispose();
     this.terrainPaintMaterial.dispose();this.terrainPaintTexture.dispose();this.terrainPaintStaging.dispose();
     this.texturedStaticMaterial.dispose();this.staticPaint.dispose();

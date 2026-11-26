@@ -44,3 +44,15 @@ test('projection forces full for order/checkpoint/same World and retains old arr
   expect(projection.read(d).indices).toBeUndefined();const clone=structuredClone(d);check(projection.read(clone),clone);expect(projection.read(clone).indices).toBeUndefined();
   projection.clear();expect(projection.read(d).indices).toBeUndefined();verify();
 });
+
+test('unrelated building and tile writers retain both exact axis maps; only actual door scores change them',()=>{
+  const {world,send}=publisher(),projection=new SceneStructurePreparation(),a=send(),first=projection.read(a);
+  world.structures[1]!.x=13;world.tiles[3*world.width+3]={terrain:'water'};world.tiles[7*world.width+8]!.floor='wood-planks';
+  const b=send(),second=projection.read(b);check(second,b);expect(second.axes).toBe(first.axes);expect(second.gateAxes).toBe(first.gateAxes);
+  expect(applyCommand(world,{type:'designate',kind:'wall',material:'wood',x:8,z:7}).ok).toBe(true);
+  const c=send(),third=projection.read(c);check(third,c);expect(third.axes.get(8+8*world.width)).toBe(1);expect(third.gateAxes).toBe(first.gateAxes);
+  world.tiles[8*world.width+9]={terrain:'rock'};const d=send(),fourth=projection.read(d);check(fourth,d);expect(fourth.axes.get(8+8*world.width)).toBe(0);
+  world.structures.push({id:world.nextId++,kind:'fence',x:8,z:9,material:'wood',orientation:0,footprint:'standard'});
+  const e=send(),fifth=projection.read(e);check(fifth,e);expect(fifth.axes).toBe(fourth.axes);expect(fifth.gateAxes).not.toBe(fourth.gateAxes);
+  const raw=structuredClone(e);raw.tiles[8*raw.width+9]={terrain:'grass'};const publicRead=projection.read(raw);check(publicRead,raw);expect(publicRead.axes.get(8+8*raw.width)).toBe(1);
+});

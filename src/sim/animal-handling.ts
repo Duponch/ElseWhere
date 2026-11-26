@@ -1,7 +1,10 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,splicePileEntries} from './pile-identity-directory.ts';
 import {processReleaseWild364,releaseWildHolding364,type ReleaseWildTask364} from './execute-release-364.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {releaseAnimalThermalRefuge288} from './animal-thermal-refuge-288.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
+import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
 // Scaria remains a real illness even after actual ClearMind.
 
 import {tameHiveInsect256} from './cave-hive-lifecycle-256.ts';
@@ -73,7 +76,7 @@ function animalAvailable(a:WildAnimal):boolean {
 }
 function handlerAvailable(p:Pawn):boolean {
   const body=pawnBody(p).capacities;
-  return isColonist(p)&&workPriority(p,'handle')>0&&!p.draft&&!p.mental?.crisis&&!p.flee&&!p.interruptedCargo
+  return isColonist(p)&&(workPriority(p,'handle')>0||p.animalHandling?.forced378===true&&!backgroundWorkRefusal(p,'handle'))&&!p.draft&&!p.mental?.crisis&&!p.flee&&!p.interruptedCargo
     &&!medicalWorkRefusal(p)&&body.talking>0&&body.hearing>0&&body.manipulation>0;
 }
 function trainableAt(w:World,a:WildAnimal):boolean {
@@ -100,15 +103,15 @@ export function animalHandlingHolding(w:World,id:number):boolean {
     &&allowedAreaAllows(w,p,a)&&p.moveCooldown===0&&adjacent(p,a)
     &&((p.animalHandling.kind==='milk'||p.animalHandling.kind==='shear')?productHandlerAvailable(p):handlerAvailable(p)));
 }
-export function handlingWanted(w:World,p:Pawn):boolean {
+export function handlingWanted(w:World,p:Pawn,animalId?:number):boolean {
   if(!handlerAvailable(p))return false;
-  return !!w.wildlife?.animals.some(a=>allowedAreaAllows(w,p,a)&&animalAvailable(a)&&!animalHandlingClaimed(w,a.id)
+  return !!w.wildlife?.animals.some(a=>(animalId===undefined||a.id===animalId)&&allowedAreaAllows(w,p,a)&&animalAvailable(a)&&!animalClaimed(w,a.id,animalId===undefined?undefined:p.id)
     &&(animalTrainingLesson282(w,p,a)!==undefined||trainableAt(w,a)||tameableAt(w,a,p)));
 }
 export interface HandlingProposal { task:AnimalHandlingTask; path:Cell[]; target:Cell }
-export function handlingProposal(w:World,p:Pawn,reach:Reachability):HandlingProposal|undefined {
-  if(!handlingWanted(w,p))return;
-  const animals=w.wildlife!.animals.filter(a=>allowedAreaAllows(w,p,a)&&animalAvailable(a)&&!animalHandlingClaimed(w,a.id)
+export function handlingProposal(w:World,p:Pawn,reach:Reachability,animalId?:number):HandlingProposal|undefined {
+  if(!handlingWanted(w,p,animalId))return;
+  const animals=w.wildlife!.animals.filter(a=>(animalId===undefined||a.id===animalId)&&allowedAreaAllows(w,p,a)&&animalAvailable(a)&&!animalClaimed(w,a.id,animalId===undefined?undefined:p.id)
     &&(animalTrainingLesson282(w,p,a)!==undefined||trainableAt(w,a)||tameableAt(w,a,p)))
     .sort((a,b)=>(a.x-p.x)**2+(a.z-p.z)**2-((b.x-p.x)**2+(b.z-p.z)**2)||a.id-b.id);
   const sources=w.piles.filter(i=>i.kind==='food'&&eggAllowedForPlayer256(i)&&(w.schemaVersion>=256||handlingFoodCollectable(w,i.item))&&i.owner.type==='ground'&&allowedAreaAllows(w,p,i.owner))
@@ -120,7 +123,7 @@ export function handlingProposal(w:World,p:Pawn,reach:Reachability):HandlingProp
     // An inaccessible animal must not reserve food, a worker or its attempt.
     if(!routeToJob(w,a,reach,false))continue;
     for(const pile of sources) {
-    if(pile.owner.type!=='ground'||!(trainable?!pile.forbidden&&animalTrainingFood282(a,pile.item):handlingFoodCollectable(w,pile.item,a)))continue;
+    if(pile.owner.type!=='ground'||Number(w.schemaVersion)>=378&&pile.forbidden||!(trainable?!pile.forbidden&&animalTrainingFood282(a,pile.item):handlingFoodCollectable(w,pile.item,a)))continue;
     const feedUnits=trainable?animalTrainingFeedUnits282(a,pile.item):handlingFeedUnits(a.species,pile.item),feeds=feedUnits*2;
     if(pile.quantity-reservedSource(w,pile.id)<feeds)continue;
     const path=routeToJob(w,pile.owner,reach,true);if(!path)continue;
@@ -241,15 +244,15 @@ export function processHandling(w:World,p:Pawn,ctx:HandlingContext):void {
   const a=w.wildlife?.animals.find(a=>a.id===task.animalId);
   if(!a||!stillValid(w,p,a,task)){interruptWork(w,p);return;}
   if(task.phase==='pickup') {
-    const pile=w.piles.find(i=>i.id===task.sourcePileId);
+    const pile=pileById(w,task.sourcePileId);
     if(!pile||pile.owner.type!=='ground'||pile.kind!=='food'||!eggAllowedForPlayer256(pile)||!handlingFoodCollectable(w,pile.item,a)
       ||pile.quantity-reservedSource(w,pile.id,p.id)<task.quantity){interruptWork(w,p);return;}
     if(!adjacent(p,pile.owner)&&(p.x!==pile.owner.x||p.z!==pile.owner.z)){ctx.move(pile.owner,false);return;}
     if(pile.quantity===task.quantity){assignPileOwner(pile,{type:'pawn',pawnId:p.id});task.carryPileId=pile.id;}
     else {
       if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1)){interruptWork(w,p);return;}
-      pile.quantity-=task.quantity;task.carryPileId=w.nextId++;
-      w.piles.push({id:task.carryPileId,kind:'food',item:pile.item,quantity:task.quantity,
+      markPileContentWrite379(pile).quantity-=task.quantity;task.carryPileId=w.nextId++;
+      appendPileEntries(w.piles,{id:task.carryPileId,kind:'food',item:pile.item,quantity:task.quantity,
         owner:{type:'pawn',pawnId:p.id},...copyPileCondition(pile)});
     }
     task.phase='approach';p.path=[];p.state='moving';return;
@@ -274,8 +277,8 @@ export function processHandling(w:World,p:Pawn,ctx:HandlingContext):void {
     const consumed=food!;
     const foodRisk={item:consumed.item,...consumed.foodPoison?{foodPoison:{...consumed.foodPoison}}:{}};
     const units=handlingFeedUnits(a.species,consumed.item);
-    consumed.quantity-=units;task.quantity-=units;
-    if(!consumed.quantity){w.piles.splice(w.piles.indexOf(consumed),1);task.carryPileId=null;}
+    markPileContentWrite379(consumed).quantity-=units;markPileContentWrite379(task).quantity-=units;
+    if(!consumed.quantity){splicePileEntries(w.piles,w.piles.indexOf(consumed),1);task.carryPileId=null;}
     a.food=Math.min(animalNutritionMax(a),a.food+units*ITEM_DEFINITIONS[consumed.item].nutrition/100);
     ingestFoodRisk(w,a,foodRisk,false);
     if(a.state==='dead'||a.state==='downed'){interruptWork(w,p);return;}

@@ -18,7 +18,7 @@ import { cancelMelee } from './melee-state.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { blockedCells,reachableCells,routeToCell,type Reachability } from './pathfinding.ts';
 import { clearQueuedOrders } from './player-orders.ts';
-import { carrierOf,rescueClaim,syncPatient } from './rescue-state.ts';
+import { carrierOf,rescueClaim,syncPatient,markHumanCarrierCandidatesDirty } from './rescue-state.ts';
 import { planCommandDrops,releaseWork } from './work-release.ts';
 import type { NeedContext } from './needs.ts';
 import type { Cell,CommandResult,Pawn,World } from './types.ts';
@@ -75,6 +75,7 @@ export function applyArrest(world:World,command:{pawnId:number;patientId:number;
   if(!drops||!releaseWork(world,actor,drops))return fail('Pas de place pour déposer la cargaison avant l’arrestation.');
   clearQueuedOrders(world,actor);delete actor.priorityWork;cancelMelee(actor);cancelShooting(actor);
   actor.rescue={patientId:patient.id,bedId:proposal.bedId,phase:'approach',arrest:true};
+  markHumanCarrierCandidatesDirty();
   actor.path=proposal.path;actor.state='moving';actor.planCooldown=0;actor.orders.active='rescue';
   return {ok:true};
 }

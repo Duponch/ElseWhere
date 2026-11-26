@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {noteBondedAnimalDeaths350} from './mood-pool-memories-350.ts';
 import {toxicCorpseRot256} from './toxic-victim-256.ts';
 import {planAnimalBodyRetirement256} from './animal-body-retirement-256.ts';
@@ -78,7 +79,7 @@ export function pickUpRetainedCorpse(w:World,p:Pawn,id:number):MaterialPile|null
     ||w.packed.some(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id)||reservedSource(w,id,p.id)>0)return null;
   const view=new TemperatureView(w),sourceRot=thermalAnchor(a.corpseRot??toxicCorpseRot256(a.health,{progress:0,atTick:w.tick}),w.tick,rotRateAtTemperature(view.at(w,a)));
   const pile=corpsePile(a,{type:'pawn',pawnId:p.id},thermalAnchor(sourceRot,w.tick,rotRateAtTemperature(view.at(w,p))));
-  w.piles.push(pile);w.wildlife!.animals.splice(w.wildlife!.animals.indexOf(a),1);releaseBodyTargets(w,id);
+  appendPileEntries(w.piles,pile);w.wildlife!.animals.splice(w.wildlife!.animals.indexOf(a),1);releaseBodyTargets(w,id);
   return pile;
 }
 
@@ -96,7 +97,7 @@ export function advanceCorpses(w:World,layout?:ThermalLayout):void {
     a.corpseRot=thermalAnchor(a.corpseRot??toxicCorpseRot256(a.health,{progress:0,atTick:w.tick}),w.tick,rotRateAtTemperature(view.at(w,a)));
     const pile=corpsePile(a,{type:'ground',x:a.x,z:a.z},a.corpseRot);
     if((a.motion?.end??0)>w.tick||w.piles.length>=32768||groundCapacity(w,a,pile)<1)continue;
-    w.piles.push(pile);
+    appendPileEntries(w.piles,pile);
     removed.add(a.id);
     releaseBodyTargets(w,a.id);
   }

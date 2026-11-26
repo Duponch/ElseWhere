@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {EGG_BOX_374,EGG_BOX_EXTRACT_TICKS_374,EGG_BOX_MAX_CONTENT_374,eggBoxOwner374,eggBoxScore374,isEggBoxSchema374,withinEggBoxRadius374} from './egg-box-state-374.ts';
 import {ANIMAL_EGG_CONTENT_256,eggSpeciesForItem256} from './animal-egg-content-v256.ts';
 import {mergeFertilizedEgg256,type FertilizedEggState256} from './animal-egg-state-v256.ts';
@@ -15,7 +17,7 @@ import {workPriority} from './work-types.ts';
 import {horizontalDistanceSquared} from './work-givers-rimworld.ts';
 import {adjacent,routeToJob,type Reachability} from './pathfinding.ts';
 import {releaseWork} from './work-release.ts';
-import {CARRY_CAPACITY} from './definitions.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
 import type {ItemId} from './items.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {Cell,HaulTask,MaterialPile,Pawn,Structure,World} from './types.ts';
@@ -68,12 +70,12 @@ export function eggBoxLayChoice374(w:World,a:WildAnimal,item:ItemId,pen?:Readonl
  * new stack into the held one (weighted incubation, as CompHatcher absorbs). */
 export function addEggsToBox374(w:World,box:Structure,item:ItemId,quantity:number,egg:FertilizedEggState256|undefined):void {
  const pile=eggBoxContent374(w,box.id);
- if(!pile){w.piles.push({id:w.nextId++,kind:'food',item,quantity,owner:eggBoxOwner374(box.id),...egg?{egg}:{},...freshRot(item,w.tick)});return;}
+ if(!pile){appendPileEntries(w.piles,{id:w.nextId++,kind:'food',item,quantity,owner:eggBoxOwner374(box.id),...egg?{egg}:{},...freshRot(item,w.tick)});return;}
  if(pile.item!==item)throw Error('Egg box holds another kind of egg.');
  // The held stack may still be at the previous tick (eggs advance after the
  // animals): the new eggs join it at that frontier, progress 0.
- if(pile.egg&&egg)pile.egg=mergeFertilizedEgg256(pile.egg,pile.quantity,{...egg,atTick:pile.egg.atTick},quantity);
- mergeRot(pile,quantity,0,w.tick);pile.quantity+=quantity;
+ if(pile.egg&&egg)markPileContentWrite379(pile).egg=mergeFertilizedEgg256(pile.egg,pile.quantity,{...egg,atTick:pile.egg.atTick},quantity);
+ mergeRot(pile,quantity,0,w.tick);markPileContentWrite379(pile).quantity+=quantity;
 }
 
 const capable=(w:World,p:Pawn)=>!backgroundWorkRefusal(p,'haul')&&!medicalWorkRefusal(p)&&!p.collapsePending&&(p.faction??'colony')==='colony'&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue&&!p.draft&&!p.stun&&!p.burning&&!p.mental?.crisis&&p.state!=='dead'&&p.state!=='downed'&&pawnBody(p).capacities.manipulation>0&&allowedAreaWorkAllowed(w,p)&&workPriority(p,'haul')>0;
@@ -106,7 +108,7 @@ export function eggBoxEmptyProposal374(w:World,p:Pawn,reach:Reachability,allows:
   if(!eggBoxCanEmpty374(pile)||!allows(box)||eggBoxClaimed374(w,box.id,p.id)||reservedSource(w,pile!.id,p.id)>0)continue;
   const storage=eggBoxStorage374(w,p,pile!,box,storeReachable,allows);if(!storage)continue;
   const path=routeToJob(w,box,reach,true);if(!path)continue;
-  return {boxId:box.id,pileId:pile!.id,quantity:Math.min(CARRY_CAPACITY,pile!.quantity,storage.capacity),stockpileId:storage.zone.id,cell:{x:box.x,z:box.z},path};
+  return {boxId:box.id,pileId:pile!.id,quantity:Math.min(carryStackLimit379(w,p,pile!.item),pile!.quantity,storage.capacity),stockpileId:storage.zone.id,cell:{x:box.x,z:box.z},path};
  }
 }
 /** The job reserves the box and the store cell: a hauling task whose source is

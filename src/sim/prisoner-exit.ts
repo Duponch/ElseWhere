@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import { atMapEdge } from './raid-space.ts';
 import { isColonist } from './affiliation.ts';
 import { exitRaider } from './raids.ts';
@@ -27,7 +28,7 @@ export function exitPrisoner(world:World,pawn:Pawn):boolean {
     if(actor.tactics?.targetId===pawn.id){resetTactics(actor);actor.path=[];}
   }
   (world.prisonDepartures??=[]).push({pawnId:pawn.id,name:pawn.name,capturedAt:pawn.prisoner.capturedAt,tick:world.tick,cell:{x:pawn.x,z:pawn.z},items,...released?{reason:'released' as const,releasedAt:pawn.prisoner.releasedAt}:{}});
-  world.pawns=world.pawns.filter(p=>p!==pawn);world.piles=world.piles.filter(i=>!items.includes(i));
+  world.pawns=world.pawns.filter(p=>p!==pawn);world.piles=filterPileEntries(world.piles,i=>!items.includes(i));
   world.events.push({tick:world.tick,type:'command',message:released?`${pawn.name} a été libéré et quitte la carte avec ses objets portés.`:`${pawn.name} s'est échappé au bord de la carte avec ses objets portés.`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);
   return true;

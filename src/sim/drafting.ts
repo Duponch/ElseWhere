@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {noPaidTravel297} from './core-path-progress-297.ts';
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
@@ -40,7 +41,7 @@ export function interruptDraftWork(world:World,pawn:Pawn):void {
 export function endDraft(world:World,pawn:Pawn):void {
   cancelShooting(pawn);cancelMelee(pawn);delete pawn.draft;interruptDraftWork(world,pawn);pawn.planCooldown=0;pawn.needCooldown=0;
 }
-export function applyDraftCommand(world:World,command:DraftCommand):CommandResult {
+export function applyDraftCommand(world:World,command:DraftCommand,preview=false):CommandResult {
   if(!Array.isArray(command.pawnIds)||!command.pawnIds.length||command.pawnIds.some(id=>!Number.isSafeInteger(id))||new Set(command.pawnIds).size!==command.pawnIds.length)return refuse('Sélection tactique invalide.');
   const pawns=command.pawnIds.map(id=>world.pawns.find(p=>p.id===id));
   if(pawns.some(p=>!p))return refuse('Colon introuvable.');
@@ -95,6 +96,7 @@ export function applyDraftCommand(world:World,command:DraftCommand):CommandResul
     context.claimed.add(plan.target.z*world.width+plan.target.x);plans.push({pawn,reset297,...plan});
   }
   // Validate the whole group before releasing any ownership or reservation.
+  if(preview)return {ok:true};
   for(const {pawn,target,path,reset297} of plans) {
     const draft=pawn.draft!;
     if(command.queue&&(draft.target||draft.queue.length)){draft.queue.push(target);continue;}
@@ -103,7 +105,7 @@ export function applyDraftCommand(world:World,command:DraftCommand):CommandResul
     pawn.path=path;pawn.planCooldown=0;pawn.state=path.length||pawn.moveCooldown>0?'moving':'idle';
     if(pawn.shooting?.stance?.phase==='cooldown'||pawn.melee?.strike){pawn.path=[];pawn.state='idle';}
     if(isCorePhysicalSchema297(Number(world.schemaVersion))&&(pawn.motion?.end??0)<=effectiveLocal297(world)&&pawn.path.length){
-      const next=pawn.path[0]!;if(startTravel(world,pawn,next,undefined,undefined,true))pawn.path.shift();
+      const next=pawn.path[0]!;if(startTravel(world,pawn,next,undefined,undefined,true))shiftActorPath297(pawn.path);
     }
   }
   return {ok:true};
@@ -130,7 +132,7 @@ export function processDraft(world:World,pawn:Pawn,getBlocked:NavigationGrid,bud
       if(!path){draft.target=null;pawn.path=[];pawn.state='idle';announce(world,pawn,'chemin interrompu.');return;}
       pawn.path=path;next=path[0];
     }
-    if(next&&startTravel(world,pawn,next,getLight))pawn.path.shift();
+    if(next&&startTravel(world,pawn,next,getLight))shiftActorPath297(pawn.path);
     return;
   }
   if(leaveTransitCell(world,pawn,getBlocked,budget,getLight)){draft.lastActiveTick=world.tick;return;}

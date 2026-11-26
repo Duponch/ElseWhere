@@ -20,6 +20,9 @@ import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedS
 import {SURFACE_STROKE_FACE,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
 import type {PreparedSurfaceModel} from './origami/baked/surfaces/PreparedSurfaceTypes';
 import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBoxPaintUv';
+import {markResidentAttributeRange} from './resident-attribute-range';
+import {isActorPlaybackWorld435} from './ActorPlayback435';
+import type {CoreDoorPatch297} from '../bridge/core-phase-projection-297';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
 const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
@@ -39,6 +42,8 @@ export class DoorLayer {
   readonly mesh:BoxMesh;
   private key='';
   private history=new Map<number,{current:DoorState;previous:DoorState}>();
+  private phaseWorld297:World|undefined;
+  private phaseSlots297=new Map<number,{slot:number;structure:World['structures'][number]}>();
   private readonly targetTint=new InstanceTargetTint();
   private readonly preparedSurfaces:PreparedSurfaceOwner|undefined;
   private readonly preparedModel:PreparedSurfaceModel|undefined;
@@ -89,9 +94,10 @@ export class DoorLayer {
   // V299_NATIVE_DOOR_BEGIN
   // Central native admission owns these preparations; arguments do not grant it.
   updateNative(world:World,cutaway:boolean,reset:boolean,doors:ReadonlyArray<World['structures'][number]>,axes:ReadonlyMap<number,0|1>,gateAxes:ReadonlyMap<number,0|1>):void {
+    this.phaseWorld297=undefined;const phaseSlots=new Map(doors.map((structure,index)=>[structure.id,{slot:index*2,structure}]));
     if(reset){this.history.clear();this.key='';this.animation.reset();}
     const key=String(cutaway)+doors.map(s=>`${s.id}:${s.kind}:${s.material}:${s.x}:${s.z}:${(s.kind==='fence-gate'?gateAxes:axes).get(s.z*world.width+s.x)??0}:${s.door!.changedAt}:${s.door!.from}:${s.door!.open}:${doorMotionTicks(s)}`).join('|');
-    if(key===this.key)return;this.key=key;this.targetTint.restore();
+    if(key===this.key){this.phaseWorld297=world;this.phaseSlots297=phaseSlots;return;}this.key=key;this.targetTint.restore();
     const live=new Set(doors.map(s=>s.id));for(const id of this.history.keys())if(!live.has(id))this.history.delete(id);
     const count=doors.length*2;
     if(count>this.mesh.instanceMatrix.count){const capacity=2**Math.ceil(Math.log2(count));this.mesh.allocate(this.base,capacity);this.allocateAttributes(capacity);}
@@ -116,15 +122,35 @@ export class DoorLayer {
     }
     this.preparedSurfaces?.setContribution(this.mesh,preparedIds);this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).needsUpdate=true;
     this.mesh.activeCount=count;this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=true;
-    for(const attribute of [current,previous,shift])attribute.needsUpdate=true;
+    for(const attribute of [current,previous,shift])markResidentAttributeRange(attribute as THREE.BufferAttribute,0,count*attribute.itemSize);
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));
+    this.phaseWorld297=world;this.phaseSlots297=phaseSlots;
 
   }
   // V299_NATIVE_DOOR_END
 
+  /** The real phase channel changes only door segments. Keep the Full's
+   * authored leaves, axes, pigments, target IDs, bounds and retained anchors.
+   * Reversals retain exactly the old current segment as their predecessor. */
+  adoptPhase297(world:World,patches:ReadonlyMap<number,CoreDoorPatch297['door']>):boolean {
+    if(this.phaseWorld297!==world||!isActorPlaybackWorld435(world))return false;
+    for(const id of patches.keys())if(!this.phaseSlots297.has(id))return false;
+    const current=this.mesh.geometry.getAttribute('doorCurrent') as THREE.BufferAttribute,previous=this.mesh.geometry.getAttribute('doorPrevious') as THREE.BufferAttribute;
+    for(const [id,d]of patches){const {slot,structure:s}=this.phaseSlots297.get(id)!,old=this.history.get(id);
+      const changed=!old||old.current.changedAt!==d.changedAt||old.current.from!==d.from||old.current.open!==d.open||doorMotionTicks({...s,door:old.current})!==doorMotionTicks({...s,door:d});
+      if(!changed)continue;const pair={current:{...d},previous:old?.current??{...d}};this.history.set(id,pair);this.key='';
+      for(const [attribute,state]of [[current,pair.current],[previous,pair.previous]] as const){
+        const velocity=(state.open?1:-1)/doorMotionTicks({...s,door:state});for(let leaf=0;leaf<2;leaf++)attribute.setXYZW(slot+leaf,state.changedAt,state.from,velocity,0);
+        markResidentAttributeRange(attribute,slot*4,8);
+      }
+    }
+    return true;
+  }
+
   update(world:World,cutaway:boolean,reset=false):void {
+    this.phaseWorld297=undefined;this.phaseSlots297.clear();
     if(reset){this.history.clear();this.key='';this.animation.reset();}
     const doors=world.structures.filter(s=>isRoomDoor(s.kind)||s.kind==='fence-gate');
     const axes=doors.some(s=>isRoomDoor(s.kind))?doorOrientations(world):EMPTY_AXES;
@@ -155,7 +181,7 @@ export class DoorLayer {
     }
     this.preparedSurfaces?.setContribution(this.mesh,preparedIds);this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).needsUpdate=true;
     this.mesh.activeCount=count;this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=true;
-    for(const attribute of [current,previous,shift])attribute.needsUpdate=true;
+    for(const attribute of [current,previous,shift])markResidentAttributeRange(attribute as THREE.BufferAttribute,0,count*attribute.itemSize);
     this.mesh.computeBoundingSphere();this.mesh.boundingSphere.radius+=.5;
     this.targetTint.setInstances(this.mesh.colorBuffer,targetIds);
     this.animation.reconcile(doors.map(s=>({id:s.id,x:s.x,y:1,z:s.z})));

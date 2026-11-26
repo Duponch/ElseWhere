@@ -50,6 +50,9 @@ function strip(value:unknown,version:number):void {
   if(Array.isArray(value)){for(const v of value)strip(v,version);return;}
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
+  // A custom title can be omitted; a real banishment/departure or queued
+  // intent cannot be erased to manufacture a historical save.
+  if(version<378&&o.identity378&&typeof o.identity378==='object'&&!Object.hasOwn(o.identity378,'banishedAt'))delete o.identity378;
   // Schema 374: the tainted apparel filter of a policy and the tainted option of a bill's apparel count.
   if(version<374){
     if(Array.isArray(o.allowedItems)&&Object.hasOwn(o,'taintedAllowed374'))delete o.taintedAllowed374;
@@ -139,7 +142,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<377)strip(value,version);
+  if(version<378)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

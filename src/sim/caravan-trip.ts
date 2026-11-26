@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {hungerRateFactor361} from './traits.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {offMapIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
@@ -139,7 +141,7 @@ export function departScout(w:World,p:Pawn):boolean {
   delete p.motion;delete p.shooting;delete p.stagger;delete p.stun;
   w.scout={phase:'travelling',pawn:p,items,foodPileId:s.foodPileId,quantity:s.quantity,startedAt:s.startedAt,departedAt:w.tick,returnAt:w.tick+SCOUT_TRIP_TICKS,consumed:0,entry};
   const ids=new Set(items.map(i=>i.id));
-  w.piles=w.piles.filter(i=>!ids.has(i.id));
+  w.piles=filterPileEntries(w.piles,i=>!ids.has(i.id));
   w.pawns=w.pawns.filter(q=>q!==p);
   log(w,`${p.name} quitte la carte pour une reconnaissance de six heures avec ${s.quantity} repas de survie.`);
   return true;
@@ -161,7 +163,7 @@ function consumeTrailFood(w:World,s:Extract<ScoutState,{phase:'travelling'|'awai
   if(!pile||pile.quantity<1)return;
   const ingestedAt299=offMapIngestionCore299(w,p);
   p.hunger=Math.min(100,p.hunger+ITEM_DEFINITIONS['survival-meal'].nutrition);
-  pile.quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
+  markPileContentWrite379(pile).quantity--;s.consumed++;commitHumanIngestion299(p,ingestedAt299);
   if(pile.quantity===0)s.items.splice(s.items.indexOf(pile),1);
   log(w,`${p.name} mange un repas de survie pendant la reconnaissance.`);
 }
@@ -195,7 +197,7 @@ export function advanceScoutTrip(w:World):void {
   s.pawn.x=entry.x;s.pawn.z=entry.z;s.pawn.path=[];s.pawn.state='idle';s.pawn.moveCooldown=0;s.pawn.planCooldown=0;
   delete s.pawn.motion;
   for(const pile of s.items)if(pile.owner.type==='inventory')assignPileOwner(pile,{type:'ground',...entry});
-  w.pawns.push(s.pawn);w.piles.push(...s.items);delete w.scout;
+  w.pawns.push(s.pawn);appendPileEntries(w.piles,...s.items);delete w.scout;
   notifyActualExplorationSpawn256(w,s.pawn);
   log(w,`${s.pawn.name} revient au bord de la colonie avec ses possessions restantes.`);
 }

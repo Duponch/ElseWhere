@@ -5,15 +5,21 @@ import type {World,Pawn,MaterialPile} from '../sim/types';
 import type {WildAnimal} from '../sim/wildlife-state';
 import type {Mechanoid} from '../sim/mechanoid-state';
 import type {PresentationSegment} from '../sim/travel-timing';
-import type {PawnTrack} from './motion-tracks';
+import {changedMotionSlots,isSealedMotionHistory,ownedMotionPiece297,type PawnTrack} from './motion-tracks';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {coreAnchor297,coreMapId297,validCoreAudioCues297} from './core-phase-data-297';
 import type {CoreActorProjection297,CorePhaseAnchor297,CorePhaseEnvelope297,CoreFullPhaseMetadata297,CoreProjectileEvents297,CoreProjectileTrace297,CoreMotionPatch297,CoreHumanPose297,CoreDoorPatch297,CorePilePatch297,CorePathKeep297} from './core-phase-projection-297';
 import {structureById} from '../sim/structure-navigation';
-import {captureCoreActorFast297,captureCoreActorHeldPath297,frozenDataCopy297,sameCapturedActor297} from './core-frozen-copy-297';
+import {captureCoreActorFast297,captureCoreActorHeldPath297,frozenDataCopy297,sameCapturedActor297,withCapturedCoreActorPath297} from './core-frozen-copy-297';
 
 type PriorTrack={sources:readonly PresentationSegment[];values:readonly PresentationSegment[]};
 const own=Object.hasOwn;
+type PileBaseline297=Map<number,Readonly<MaterialPile>>;
+interface FullPilePreparation297 {readonly baseline:PileBaseline297;readonly updates?:readonly CorePilePatch297[];readonly commit?:()=>void}
+interface PhasePilePreparation297 {readonly rows:readonly CorePilePatch297[];readonly commit?:()=>void}
+function applyPileUpdates297(base:PileBaseline297,updates:readonly CorePilePatch297[]):void {
+ for(const row of updates){if(row.pile)base.set(row.id,row.pile);else base.delete(row.id);}
+}
 function sameCoreValue297(a:unknown,b:unknown):boolean {
  if(Object.is(a,b))return true;if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;
  if(Array.isArray(a))return Array.isArray(b)&&a.length===b.length&&a.every((v,i)=>sameCoreValue297(v,b[i]));
@@ -39,7 +45,35 @@ export interface CorePhaseStepObservation297 {readonly core:number;readonly acto
  * never samples wall time to invent physical progress. Its wall budget limits
  * publication only, not simulation or command/fault barriers. */
 export class CorePhasePublisher297 {
+ /** The ordinary publisher stays exhaustive for every mutable caller. The
+  * fixed entry may override only nested source capture, never the envelope,
+  * membership, generation or publication timing rules. */
+ protected captureActor297(kind:CoreActorProjection297['kind'],index:number,actor:Pawn|WildAnimal|Mechanoid,heldPath:boolean):CoreActorProjection297 {
+  if(heldPath)return captureCoreActorHeldPath297(kind,index,actor);
+  return kind==='human'?captureCoreActorFast297('human',index,actor as Pawn):kind==='animal'?captureCoreActorFast297('animal',index,actor as WildAnimal):captureCoreActorFast297('mechanical',index,actor as Mechanoid);
+ }
+ protected sameActor297(kind:CoreActorProjection297['kind'],actor:Pawn|WildAnimal|Mechanoid,fields:Readonly<Record<string,unknown>>,heldPath:boolean):boolean {
+  return sameCapturedActor297(kind,actor,fields,heldPath);
+ }
+ protected captureDependencies297(world:World,held?:ActorPhaseDependencies297):ActorPhaseDependencies297 {return captureActorPhaseDependencies297(world,held);}
+ protected samePilePresentation297(pile:MaterialPile,previous:Readonly<MaterialPile>):boolean {return samePilePresentation297(pile,previous);}
+ protected capturePilePatch297(pile:MaterialPile):CorePilePatch297 {return frozenDataCopy297({id:pile.id,pile}) as CorePilePatch297;}
+ protected captureFullPileBaseline297(pile:MaterialPile,previous:Readonly<MaterialPile>|undefined):Readonly<MaterialPile> {return previous!==undefined&&equalDependencyValue297(previous,pile)?previous:frozenDataCopy297(pile) as Readonly<MaterialPile>;}
+ /** Ordinary public publishers retain an exhaustive baseline. The closed
+  * fixed entry may stage sparse updates, committed only after actual send. */
+ protected prepareFullPileBaseline297(world:World,prior:PileBaseline297|undefined):FullPilePreparation297 {
+  return {baseline:new Map(world.piles.map(p=>[p.id,this.captureFullPileBaseline297(p,prior?.get(p.id))] as const))};
+ }
+ protected preparePhasePiles297(world:World,baseline:PileBaseline297):PhasePilePreparation297 {
+  return {rows:this.capturePiles297(world,baseline)};
+ }
+ protected captureActorPathReference297(live:unknown):unknown {return Array.isArray(live)?live.slice():[];}
+ protected retainActorPathReference297(reference:unknown,from:number):unknown {return (reference as readonly unknown[]).slice(from);}
+ protected heldActorPathTail297(path:readonly {readonly x:number;readonly z:number}[],reference:unknown,live:unknown):number {
+  return Array.isArray(reference)?heldPathTail297(path,reference,live):-1;
+ }
  private state:SourceCommit|undefined;
+ private committedTrackSource?:readonly PawnTrack[];
  private readonly dirtyActors=new Set<number>();
  private readonly retained=new Map<number,CoreProjectileTrace297>();
  private readonly fxUpserted=new Map<number,CoreProjectileTrace297>();
@@ -72,7 +106,7 @@ export class CorePhasePublisher297 {
  private readonly sentRows297=new Map<number,CoreActorProjection297>();
  /** For each sent row, the live path cell objects its path was copied from,
   * in the same order (see heldPathTail297). */
- private readonly sentPathCells297=new Map<number,readonly unknown[]>();
+ private readonly sentPathCells297=new Map<number,unknown>();
  reset():void{this.pileBaseline297=undefined;this.pileDirty297=false;this.sentRows297.clear();this.sentPathCells297.clear();this.doorDirty297.clear();this.poseDirty297.clear();this.pendingDependencies297=undefined;this.state=undefined;this.dirtyActors.clear();this.retained.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;this.fullPending=false;this.quietFullPending=false;this.macroActorProofPending297=false;this.quietObservedAt=undefined;this.lastSentAt=-Infinity;this.sourceGeneration++;this.slots.clear();}
  get needsFull():boolean{return this.fullPending||this.quietFullPending||!this.state;}
  /** Quiet needs a new complete anchor at the logical tail. Only an explicitly
@@ -105,7 +139,7 @@ export class CorePhasePublisher297 {
   for(const kind of ['human','animal','mechanical'] as const){const actors=populations[kind],layout=before.anchor.layout[kind];
    if(actors.length!==layout.length||layout.some((id,index)=>actors[index]?.id!==id)){this.requestFull();return;}
   }
-  const dependencies=captureActorPhaseDependencies297(world,this.pendingDependencies297??before.dependencies);
+  const dependencies=this.captureDependencies297(world,this.pendingDependencies297??before.dependencies);
   // Compared with the latest baseline, including patches not yet sent. Only
   // contact/animation pose and carried-pile changes of existing humans can
   // travel as frontier patches; anything else still requires a genuine Full.
@@ -152,17 +186,21 @@ export class CorePhasePublisher297 {
  }
  due(now:number):boolean {if(!Number.isFinite(now))throw Error('Invalid publication time');return now-this.lastSentAt>=20;}
  private captureTracks(tracks:readonly PawnTrack[]){
-  const previous=this.state?.tracks??new Map<number,PriorTrack>(),next=new Map<number,PriorTrack>(),patches:CoreMotionPatch297[]=[];
-  for(const track of tracks){const prior=previous.get(track.id),current=track.segments;let drop=0,keep=0;
+  const previous=this.state?.tracks??new Map<number,PriorTrack>(),indices=this.state?changedMotionSlots(this.committedTrackSource,tracks):undefined;
+  if(indices?.length===0)return {next:previous,patches:[] as CoreMotionPatch297[]};
+  const next=indices?new Map(previous):new Map<number,PriorTrack>(),patches:CoreMotionPatch297[]=[];
+  const changed=indices?indices.map(i=>tracks[i]!):tracks;
+  for(const track of changed){const prior=previous.get(track.id),current=track.segments;let drop=0,keep=0;
+   if(prior?.sources===current&&isSealedMotionHistory(current)){next.set(track.id,prior);continue;}
    if(prior){drop=current.length?prior.sources.indexOf(current[0]!):prior.sources.length;if(drop<0)drop=0;while(keep<current.length&&drop+keep<prior.sources.length&&current[keep]===prior.sources[drop+keep]){const piece=current[keep]!;if((own(piece,'stagger')||own(piece,'stuns'))&&!sameCoreValue297(prior.values[drop+keep],piece))break;keep++;}}
    // Recorder owns segment identities. All newly appended pieces are copied at
    // this synchronous publication boundary, including corrections/stationary STOP.
-   const appended=current.slice(keep).map(value=>frozenDataCopy297(value));
+   const appended=current.slice(keep).map(value=>ownedMotionPiece297(value)??frozenDataCopy297(value));
    const values=prior?prior.values.slice(drop,drop+keep).concat(appended):appended;
    if(!prior||drop||keep!==prior.sources.length||appended.length)patches.push(Object.freeze({id:track.id,drop,keep,append:Object.freeze(appended)}));
-   next.set(track.id,{sources:current.slice(),values});
+   next.set(track.id,{sources:isSealedMotionHistory(current)?current:current.slice(),values});
   }
-  for(const id of previous.keys())if(!next.has(id))throw Error('Recorder membership change requires a full anchor');
+  if(!indices)for(const id of previous.keys())if(!next.has(id))throw Error('Recorder membership change requires a full anchor');
   return{next,patches};
  }
  preparePhase(world:World,tracks:readonly PawnTrack[],speed:0|1|3|6,audioCues:readonly AudioCue[]=[]){
@@ -170,27 +208,27 @@ export class CorePhasePublisher297 {
   if(this.terrainNeedsFull297(world))this.requestFull();
   const before=this.state,generation=this.sourceGeneration;if(!before||!this.canPublishActors297)throw Error('Full publication must precede actor watermark');
   const core=effectiveCore297(world);if(this.pendingCore!==core||coreMapId297(world)!==before.anchor.mapId||before.actorMode297!=='frontier'&&Math.floor(core/10)!==Math.floor(before.anchor.core/10))throw Error('Actor watermark escaped its actual World anchor');
-  const rows:CoreActorProjection297[]=[],held=new Map<number,{row:CoreActorProjection297;cells:readonly unknown[]}>(),keeps:CorePathKeep297[]=[],frontier=before.actorMode297==='frontier';
+  const rows:CoreActorProjection297[]=[],held=new Map<number,{row:CoreActorProjection297;cells:unknown}>(),keeps:CorePathKeep297[]=[],frontier=before.actorMode297==='frontier';
   for(const id of this.dirtyActors){const slot=this.slots.get(id);if(!slot)throw Error('New actor requires a full membership anchor');const source=slot.kind==='human'?world.pawns[slot.index]:slot.kind==='animal'?world.wildlife?.animals[slot.index]:world.mechanoids?.[slot.index];if(!source||source.id!==id)throw Error('Changed actor escaped its full layout');
    const sent=this.sentRows297.get(id),sentCells=this.sentPathCells297.get(id),live:unknown=(source as {path?:unknown}).path;
    // Frontier: the renderer holds the path of this actor's last row. When the
    // live path is its tail (the actor advanced along its route), the row
    // carries no cells and the packet says how many to keep.
-   const keep=frontier&&sent&&sentCells&&sent.kind===slot.kind&&sent.index===slot.index?heldPathTail297(sent.fields.path,sentCells,live):-1;
+   const keep=frontier&&sent&&sentCells&&sent.kind===slot.kind&&sent.index===slot.index?this.heldActorPathTail297(sent.fields.path,sentCells,live):-1;
    // An unchanged actor (most of them after a macro tick marks all dirty)
    // is kept unsent without first copying its row: the same answer as the
    // comparison of the copy below (sameCapturedActor297).
    if(sent&&sent.kind===slot.kind&&sent.index===slot.index&&!this.poseDirty297.has(id)&&(keep<0||keep===sent.fields.path.length)
-    &&sameCapturedActor297(slot.kind,source,sent.fields as unknown as Readonly<Record<string,unknown>>,keep>=0))continue;
-   let row:CoreActorProjection297,actual:CoreActorProjection297,cells:readonly unknown[];
+    &&this.sameActor297(slot.kind,source,sent.fields as unknown as Readonly<Record<string,unknown>>,keep>=0))continue;
+   let row:CoreActorProjection297,actual:CoreActorProjection297,cells:unknown;
    if(keep>=0){
     const path=sent!.fields.path,from=path.length-keep;
-    row=captureCoreActorHeldPath297(slot.kind,slot.index,source);
-    actual=Object.freeze({...row,fields:Object.freeze({...row.fields,path:from===0?path:Object.freeze(path.slice(from))})}) as CoreActorProjection297;
-    cells=from===0?sentCells!:sentCells!.slice(from);
+    row=this.captureActor297(slot.kind,slot.index,source,true);
+    actual=withCapturedCoreActorPath297(row,from===0?path:Object.freeze(path.slice(from)));
+    cells=from===0?sentCells!:this.retainActorPathReference297(sentCells!,from);
    }else{
-    row=actual=slot.kind==='human'?captureCoreActorFast297('human',slot.index,source as Pawn):slot.kind==='animal'?captureCoreActorFast297('animal',slot.index,source as WildAnimal):captureCoreActorFast297('mechanical',slot.index,source as Mechanoid);
-    cells=Array.isArray(live)?live.slice():[];
+    row=actual=this.captureActor297(slot.kind,slot.index,source,false);
+    cells=this.captureActorPathReference297(live);
    }
    if(sent&&sent.kind===actual.kind&&sent.index===actual.index&&sameCoreValue297(sent.fields,actual.fields)&&!this.poseDirty297.has(id))continue;
    rows.push(row);held.set(id,{row:actual,cells});if(keep>=0)keeps.push(Object.freeze({id,keep}));}
@@ -198,13 +236,14 @@ export class CorePhasePublisher297 {
   const poses=before.actorMode297==='frontier'&&this.poseDirty297.size?this.capturePoses297(world):[];
   const doors:CoreDoorPatch297[]=[];
   if(before.actorMode297==='frontier')for(const id of [...this.doorDirty297].sort((a,b)=>a-b)){const s=structureById(world,id);if(s?.door)doors.push(frozenDataCopy297({id,door:s.door}) as CoreDoorPatch297);}
-  const piles=before.actorMode297==='frontier'&&this.pileDirty297?this.capturePiles297(world):[];
+  const pilePreparation=before.actorMode297==='frontier'&&this.pileDirty297?this.preparePhasePiles297(world,this.pileBaseline297!):undefined;
+  const piles=pilePreparation?.rows??[];
   const motion=this.captureTracks(tracks),packet:CorePhaseEnvelope297=Object.freeze({type:before.actorMode297==='frontier'?'actor-frontier-297':'actor-phase-297',audioCues:frozenDataCopy297(audioCues),epoch:before.anchor.epoch,mapId:before.anchor.mapId,baseRevision:before.anchor.revision,phaseSeq:before.seq+1,nextId:world.nextId,fromCore:before.core,toCore:core,speed,actors:Object.freeze(rows),tracks:Object.freeze(motion.patches),projectiles:Object.freeze({upserted:Object.freeze([...this.fxUpserted.values()]),removed:Object.freeze([...this.fxRemoved])}),...poses.length?{poses297:Object.freeze(poses)}:{},...doors.length?{doors297:Object.freeze(doors)}:{},...piles.length?{piles297:Object.freeze(piles)}:{},...keeps.length?{paths297:Object.freeze(keeps)}:{}});
-  return{packet,before,generation,held,next:{anchor:before.anchor,core,seq:packet.phaseSeq,nextId:world.nextId,tracks:motion.next,...before.actorMode297?{actorMode297:before.actorMode297,dependencies:this.pendingDependencies297??before.dependencies,terrainCursor:before.terrainCursor}:{}}};
+  return{packet,before,generation,held,trackSource:tracks,pilePreparation,next:{anchor:before.anchor,core,seq:packet.phaseSeq,nextId:world.nextId,tracks:motion.next,...before.actorMode297?{actorMode297:before.actorMode297,dependencies:this.pendingDependencies297??before.dependencies,terrainCursor:before.terrainCursor}:{}}};
  }
  commitPhase(prepared:ReturnType<CorePhasePublisher297['preparePhase']>,sentAt:number):void {
   if(prepared.before!==this.state||prepared.generation!==this.sourceGeneration||!Number.isFinite(sentAt))throw Error('Stale actor publication');
-  this.state=prepared.next;this.lastSentAt=sentAt;this.dirtyActors.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;
+  this.state=prepared.next;this.committedTrackSource=prepared.trackSource;this.lastSentAt=sentAt;this.dirtyActors.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;
   // The row as the renderer now holds it (with its rebuilt path), not as sent.
   for(const[id,value]of prepared.held){this.sentRows297.set(id,value.row);this.sentPathCells297.set(id,value.cells);}
   // A pose patch replaces the renderer's whole record: without a row of the
@@ -212,15 +251,16 @@ export class CorePhasePublisher297 {
   for(const pose of prepared.packet.poses297??[])if(!prepared.held.has(pose.id)){this.sentRows297.delete(pose.id);this.sentPathCells297.delete(pose.id);}
   this.poseDirty297.clear();this.pendingDependencies297=undefined;this.doorDirty297.clear();
   const piles=prepared.packet.piles297;
-  if(piles){const base=this.pileBaseline297!;for(const row of piles){if(row.pile)base.set(row.id,row.pile);else base.delete(row.id);}}
+  if(piles)applyPileUpdates297(this.pileBaseline297!,piles);
+  prepared.pilePreparation?.commit?.();
   this.pileDirty297=false;
  }
  /** Every pile whose presented record differs from the baseline (complete
   * current record), and every baseline pile that is gone (null), by id. */
- private capturePiles297(world:World):CorePilePatch297[] {
-  const base=this.pileBaseline297;if(!base)throw Error('Pile patch requires a Full pile baseline');
+ private capturePiles297(world:World,base:PileBaseline297):CorePilePatch297[] {
+  if(!base)throw Error('Pile patch requires a Full pile baseline');
   const rows:CorePilePatch297[]=[],seen=new Set<number>();
-  for(const pile of world.piles){seen.add(pile.id);const prior=base.get(pile.id);if(!prior||!samePilePresentation297(pile,prior))rows.push(frozenDataCopy297({id:pile.id,pile}) as CorePilePatch297);}
+  for(const pile of world.piles){seen.add(pile.id);const prior=base.get(pile.id);if(!prior||!this.samePilePresentation297(pile,prior))rows.push(this.capturePilePatch297(pile));}
   if(seen.size!==base.size||rows.length)for(const id of base.keys())if(!seen.has(id))rows.push(Object.freeze({id,pile:null}));
   return rows.sort((a,b)=>a.id-b.id);
  }
@@ -248,12 +288,11 @@ export class CorePhasePublisher297 {
   for(const p of world.projectiles??[]){const f=p.flight,durationCore=Math.max(.001,Math.hypot(f.destination.x-f.origin.x,f.destination.z-f.origin.z)/f.speedPerCoreTick),total=Math.ceil(durationCore);
    retained.set(p.id,frozenDataCopy297({id:p.id,emittedAtCore:p.emittedAtCore,endCore:p.arrival?p.advancedAtCore:p.emittedAtCore+total,durationCore,delayCore:total-durationCore,from:{x:f.origin.x,z:f.origin.z},to:{x:f.destination.x,z:f.destination.z},emp:p.weaponItem==='emp-launcher'}));}
   for(const[id,t]of retained)if(t.endCore<core-640)retained.delete(id);
-  const dependencies=actorMode297==='frontier'?captureActorPhaseDependencies297(world,this.pendingDependencies297??this.state?.dependencies):undefined;
+  const dependencies=actorMode297==='frontier'?this.captureDependencies297(world,this.pendingDependencies297??this.state?.dependencies):undefined;
   // The pile baseline only feeds comparisons (capturePiles297): a pile equal
   // to its copy in the current baseline keeps that frozen copy instead of
   // being copied again (as the dependency capture keeps an equal old copy).
-  const priorPiles=this.pileBaseline297;
-  const piles=actorMode297==='frontier'?new Map(world.piles.map(p=>{const old=priorPiles?.get(p.id);return [p.id,old!==undefined&&equalDependencyValue297(old,p)?old:frozenDataCopy297(p) as Readonly<MaterialPile>];})):undefined;
+  const pilePreparation=actorMode297==='frontier'?this.prepareFullPileBaseline297(world,this.pileBaseline297):undefined;
   // Runtime invokes this AFTER its actual snapshots.encode completed. The
   // closed codec alone enrolls tiles. A read-only peek can never repair them.
   const capturedTerrain=actorMode297==='frontier'?peekTerrainJournalCursor(world.tiles):undefined,terrainCursor=capturedTerrain&&Object.freeze(capturedTerrain);
@@ -263,23 +302,27 @@ export class CorePhasePublisher297 {
   // (stagger/stun arrays may be aliased: those are compared by value).
   const committed=this.state?.tracks;
   for(const track of tracks){
-   const prior=committed?.get(track.id),current=track.segments,values:PresentationSegment[]=new Array(current.length);
+   const prior=committed?.get(track.id),current=track.segments;
+   if(prior?.sources===current&&isSealedMotionHistory(current)){nextTracks.set(track.id,prior);continue;}
+   const values:PresentationSegment[]=new Array(current.length);
    const offset=prior&&current.length?prior.sources.indexOf(current[0]!):-1;
    for(let i=0;i<current.length;i++){
     const piece=current[i]!,at=offset<0?-1:offset+i,held=at>=0&&at<prior!.sources.length&&prior!.sources[at]===piece?prior!.values[at]:undefined;
-    values[i]=held!==undefined&&!((own(piece,'stagger')||own(piece,'stuns'))&&!sameCoreValue297(held,piece))?held:frozenDataCopy297(piece);
+    values[i]=held!==undefined&&!((own(piece,'stagger')||own(piece,'stuns'))&&!sameCoreValue297(held,piece))?held:ownedMotionPiece297(piece)??frozenDataCopy297(piece);
    }
-   nextTracks.set(track.id,{sources:current.slice(),values});
+   nextTracks.set(track.id,{sources:isSealedMotionHistory(current)?current:current.slice(),values});
   }
-  return{metadata,anchor,core,generation,tracks:nextTracks,retained,actorMode297,dependencies,terrainCursor,piles};
+  return{metadata,anchor,core,generation,tracks:nextTracks,trackSource:tracks,retained,actorMode297,dependencies,terrainCursor,piles:pilePreparation?.baseline,pilePreparation};
  }
  commitFull(prepared:ReturnType<CorePhasePublisher297['prepareFull']>,sentAt:number):void {
   if(prepared.generation!==this.sourceGeneration||!Number.isFinite(sentAt))throw Error('Full Core publication raced a new phase');
-  this.state={anchor:prepared.anchor,core:prepared.core,seq:0,nextId:prepared.anchor.nextId,tracks:prepared.tracks,...prepared.actorMode297?{actorMode297:prepared.actorMode297,dependencies:prepared.dependencies,terrainCursor:prepared.terrainCursor}:{}};this.lastSentAt=sentAt;
+  this.state={anchor:prepared.anchor,core:prepared.core,seq:0,nextId:prepared.anchor.nextId,tracks:prepared.tracks,...prepared.actorMode297?{actorMode297:prepared.actorMode297,dependencies:prepared.dependencies,terrainCursor:prepared.terrainCursor}:{}};this.committedTrackSource=prepared.trackSource;this.lastSentAt=sentAt;
   this.retained.clear();for(const[id,t]of prepared.retained)this.retained.set(id,t);
   this.slots.clear();for(const kind of ['human','animal','mechanical'] as const)prepared.anchor.layout[kind].forEach((id,index)=>this.slots.set(id,{kind,index}));
   this.dirtyActors.clear();this.fxUpserted.clear();this.fxRemoved.clear();this.pendingCore=undefined;this.fullPending=false;this.quietFullPending=false;this.macroActorProofPending297=false;this.quietObservedAt=undefined;this.sourceGeneration++;
   this.poseDirty297.clear();this.pendingDependencies297=undefined;this.doorDirty297.clear();this.sentRows297.clear();this.sentPathCells297.clear();
-  this.pileBaseline297=prepared.piles;this.pileDirty297=false;
+  this.pileBaseline297=prepared.piles;
+  if(this.pileBaseline297&&prepared.pilePreparation?.updates)applyPileUpdates297(this.pileBaseline297,prepared.pilePreparation.updates);
+  prepared.pilePreparation?.commit?.();this.pileDirty297=false;
  }
 }

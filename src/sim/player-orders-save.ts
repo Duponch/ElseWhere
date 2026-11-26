@@ -4,6 +4,8 @@ import { validForcedConsumePawnShape } from './consume-save.ts';
 import { MAX_QUEUED_ORDERS } from './player-orders.ts';
 import type { World } from './types.ts';
 import { CARRY_CAPACITY } from './definitions.ts';
+import {carryQuantityBound379} from './carry-quantity-379.ts';
+import {validConstructionBatchShape379} from './construction-batch-379.ts';
 import { queuedHaulReason } from './player-hauling.ts';
 import { isCookingOrder } from './order-types.ts';
 import { validCookingOrder } from './player-cooking-save.ts';
@@ -44,8 +46,9 @@ export function validatePlayerOrders(world:World,version:number,shapesOnly=false
 function validQueuedHaul(value:unknown,version:number,world:World):boolean {
   if(!value||typeof value!=='object'||Array.isArray(value))return false;
   const t=value as Record<string,unknown>,d=t.destination as Record<string,unknown>;
+  if(Object.hasOwn(t,'constructionBatch379'))return validConstructionBatchShape379(t,version)&&t.phase==='pickup'&&t.carryPileId===null;
   const id=(x:unknown)=>typeof x==='number'&&Number.isSafeInteger(x)&&x>0;
-  if(Object.keys(t).some(k=>!['sourcePileId','quantity','phase','destination','carryPileId',...(version>=26?['whole']:[])].includes(k))||!id(t.sourcePileId)||!id(t.quantity)||(t.quantity as number)>CARRY_CAPACITY||t.phase!=='pickup'||t.carryPileId!==null||!d||typeof d!=='object'||Array.isArray(d))return false;
+  if(Object.keys(t).some(k=>!['sourcePileId','quantity','phase','destination','carryPileId',...(version>=26?['whole']:[])].includes(k))||!id(t.sourcePileId)||!id(t.quantity)||(t.quantity as number)>(t.whole===true?1:carryQuantityBound379({schemaVersion:version},world.piles.find(p=>p.id===t.sourcePileId)?.item))||t.phase!=='pickup'||t.carryPileId!==null||!d||typeof d!=='object'||Array.isArray(d))return false;
   if(!validCraftingFuelDestination269(d,version)||Object.hasOwn(d,'forCrafting')&&!world.structures.some(s=>s.id===d.structureId&&s.kind==='fueled-smithy'))return false;
   if(t.whole!==undefined&&(version<26||t.whole!==true||t.quantity!==1||!['stockpile','aside'].includes(String(d.type))))return false;
   if(version>=217&&d.type==='hopper')return id(d.structureId)&&Object.keys(d).every(k=>['type','structureId'].includes(k));

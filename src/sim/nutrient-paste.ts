@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {pileById,appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import { allowedAreaServicesAllowed } from './allowed-area-services.ts';
 import { allowedAreaAllows } from './allowed-area-state.ts';
 import { footprintCells } from './definitions.ts';
@@ -113,11 +115,11 @@ export function dispensePasteAtContact(world:World,pawn:Pawn,request:PasteReques
     ||pawn.moveCooldown>0||(pawn.motion?.end??0)>world.tick||(pawn.stun?.untilCore??0)>world.tick*10
     ||world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id)
     ||world.packed.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id)||!Number.isSafeInteger(world.nextId+1))return;
-  const removed=request.ingredients!.filter(i=>world.piles.find(p=>p.id===i.pileId)!.quantity===i.quantity).length;
+  const removed=request.ingredients!.filter(i=>pileById(world,i.pileId)!.quantity===i.quantity).length;
   if(world.piles.length-removed+1>32768)return;
   const pile:MaterialPile={id:world.nextId,kind:'food',item:'nutrient-paste-meal',quantity:1,owner:{type:'pawn',pawnId:pawn.id},...freshRot('nutrient-paste-meal',world.tick)};
-  for(const i of request.ingredients!){const p=world.piles.find(p=>p.id===i.pileId)!;p.quantity-=i.quantity;}
-  world.piles=world.piles.filter(p=>p.quantity>0);world.nextId++;world.piles.push(pile);
+  for(const i of request.ingredients!){const p=pileById(world,i.pileId)!;markPileContentWrite379(p).quantity-=i.quantity;}
+  world.piles=filterPileEntries(world.piles,p=>p.quantity>0);world.nextId++;appendPileEntries(world.piles,pile);
   delete request.ingredients;request.producedAt=world.tick;refreshStock(world);return pile;
 }
 

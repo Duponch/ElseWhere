@@ -18,7 +18,7 @@ type Primitive = number|string|null;
 // change or conservative fallback, never on stable eligible MAIN captures.
 function historicalSignature(world:World):string {
   return JSON.stringify([
-    world.jobs.map(j=>[j.id,j.kind,j.x,j.z,j.orientation,j.footprint,j.construction,...j.wallDoor296?[j.wallDoor296.manual,j.wallDoor296.plan?.id,j.wallDoor296.plan?.kind,j.wallDoor296.plan?.material]:[]]),
+    world.jobs.map(j=>[j.id,j.kind,j.x,j.z,j.orientation,j.footprint,j.construction,...j.wallDoor296?[j.wallDoor296.manual,j.wallDoor296.plan?.id,j.wallDoor296.plan?.kind,j.wallDoor296.plan?.material]:[],...Number(world.schemaVersion)>=379&&j.forbidden379===true?['forbidden379']:[],...Number(world.schemaVersion)>=379&&j.wallDoor296?.plan?.forbidden379===true?['door-plan-forbidden379']:[]]),
     world.growingZones.map(zone=>[zone.id,zone.cells,zone.plant]),
     world.stockpiles.map(cell=>[cell.id,cell.zoneId,cell.x,cell.z]),world.home,world.roofing?.build,world.roofing?.remove,
     world.piles.filter(p=>p.kind==='chunk'&&p.haulRequested).map(p=>[p.id,p.owner]),
@@ -103,6 +103,7 @@ class MainMapIntentReader implements ClosedMainMapIntentReader {
         this.put(future.manual?1:0);
         if(!this.optionalNumber(future.plan?.id)||!this.optionalString(future.plan?.kind)||!this.optionalString(future.plan?.material))return false;
       }
+      if(Number(world.schemaVersion)>=379){if(job.forbidden379===true)this.put('forbidden379');if(future?.plan?.forbidden379===true)this.put('door-plan-forbidden379');}
     }
     this.captureGroup='growing';
     if(!Array.isArray(world.growingZones))return false;

@@ -8,6 +8,7 @@ import {BoxMesh} from '../src/render/BoxMesh';
 import type {World} from '../src/sim/types';
 import {fixture,harness} from './resident-presentation-fixtures-v427';
 import {SnapshotChangeJournal} from '../src/bridge/snapshots';
+import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
 
 vi.mock('../src/render/pile-parts',async importOriginal=>{
  const original=await importOriginal<typeof import('../src/render/pile-parts')>();
@@ -48,6 +49,10 @@ test('current frame identity fences stale/foreign reads and output mutation cann
  const h=camp(),owner=new ScenePilePresentation(),a=read(owner,h.send()),change=a.changedChunks[0]!;
  const expected=pileParts(change.bundles),parts=owner.placements(a,change);parts[0]!.x=12345;
  expect(owner.placements(a,change)).toEqual(expected);
+ const owned=owner.ownedPlacements(a,change);expect(owned).toEqual(expected);
+ expect(owner.ownedPlacements(a,change)[0]).toBe(owned[0]);
+ expect(()=>{owned[0]!.x=12345;}).toThrow(TypeError);
+ expect(owner.placements(a,change)[0]).not.toBe(owned[0]);
  const inspect=owner.inspect();inspect[0]!.bundles[0]!.quantity=345;inspect[0]!.bundles[0]!.x=999;
  expect(owner.placements(a,change)).toEqual(expected);
  expect(()=>owner.placements({...a},change)).toThrow('Stale or foreign');
@@ -61,6 +66,25 @@ test('same World cargo release is immediate and preserves exact hidden quantitie
  const a=read(owner,w,new Map([[id,4]]));for(const chunk of a.changedChunks)expect(owner.placements(a,chunk)).toEqual(pileParts(chunk.bundles));owner.acknowledge(a);
  const b=read(owner,w,new Map());expect(b.changedChunks.length).toBeGreaterThan(0);
  for(const chunk of b.changedChunks)expect(owner.placements(b,chunk)).toEqual(pileParts(chunk.bundles));
+});
+
+test('the immutable admitted Full applies a same-World cargo overlay without scanning untouched pile rows',()=>{
+ const h=camp(),closed=new ScenePilePresentation(),literal=new ScenePilePresentation(),w=h.send(),id=w.piles[0]!.id;
+ // Both owners see the same admitted content. Only the closed renderer's
+ // immutable playback mandate authorizes the same-object dirty overlay.
+ ownActorPlaybackWorld435(w,true);
+ try{
+  for(let i=0;i<5;i++){
+   const hidden=i%2?new Map<number,number>():new Map([[id,4]]),before=closed.residentMetrics379().visits;
+   const a=read(closed,w,hidden);
+   ownActorPlaybackWorld435(w,false);const b=read(literal,w,hidden);ownActorPlaybackWorld435(w,true);
+   expect(closed.inspect()).toEqual(literal.inspect());
+   expect(a.changedChunks).toEqual(b.changedChunks);
+   for(const change of a.changedChunks)expect(closed.placements(a,change)).toEqual(pileParts(change.bundles));
+   if(i>0)expect(closed.residentMetrics379().visits-before).toBe(1);
+   closed.acknowledge(a);literal.acknowledge(b);
+  }
+ }finally{ownActorPlaybackWorld435(w,false);}
 });
 
 test('published bundle body rejects before/after cache mutation without freezing source aliases',()=>{

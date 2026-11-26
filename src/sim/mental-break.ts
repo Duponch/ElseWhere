@@ -28,6 +28,7 @@ import {crisisCanEndEarly350,crisisKeptAsleep350,drawFirstInsultTarget350,isMood
 import {fireSpreeJobEnded368,isPyromaniac368,newFireSpreeCrisis368,processFireStartingSpree368,pyromaniacRandomSpreeDue368} from './fire-spree-368.ts';
 import type { SearchBudget } from './work-planner.ts';
 import type { Pawn,World } from './types.ts';
+import {markHumanMentalThreat379} from './human-threat-candidates-379.ts';
 
 /** Schema 347 tutorial (TutorSystem.TutorialMode): MentalBreakWorker.
  * BreakCanOccur and MentalStateHandler.TryStartMentalState refuse every
@@ -50,6 +51,7 @@ function commitBreak(world:World,pawn:Pawn,crisis:MentalCrisis,rng=world.rng,tra
   delete pawn.draft;cancelShooting(pawn);cancelMelee(pawn);delete pawn.flee;
   interruptDraftWork(world,pawn);
   mentalState(pawn).crisis=crisis;
+  markHumanMentalThreat379(world,pawn);
   pawn.needCooldown=0;pawn.planCooldown=0;
   world.events.push({tick:world.tick,type:'need',message:`${pawn.name} commence ${crisis.kind==='food-binge'?'une frénésie alimentaire':crisis.kind==='sad-wander'?'une errance triste':`une ${mentalCrisisLabel(crisis.kind).toLowerCase()}`}.${reason?` Dernière cause : ${reason}.`:''}`});
   if(world.events.length>80)world.events.splice(0,world.events.length-80);

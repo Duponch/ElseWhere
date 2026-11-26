@@ -1,4 +1,5 @@
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
+import {markHumanCarrierCandidatesDirty} from './rescue-state.ts';
 import {isShipCasket277,SHIP_CASKET_ENTER_CORE_277,type ShipCasket277,type ShipCasketCommand277,type ShipCasketTask277,type ShipCasketOccupant277} from './ship-casket-state-277.ts';
 import {shipCasketInteraction277} from './ship-casket-geometry-277.ts';
 import {shipCasketIntent277,validShipCasketCommand277,shipCasketActorCapable277,shipCasketLiving277,shipCasketClaim277,shipCasketPatientReason277} from './ship-casket-intent-277.ts';
@@ -58,6 +59,7 @@ export function applyShipCasket277(w:World,c:ShipCasketCommand277):CommandResult
  clearQueuedOrders(w,p);delete p.priorityWork;cancelShooting(p);cancelMelee(p);
  if(p.draft){p.draft.target=null;p.draft.queue=[];p.draft.lastActiveTick=w.tick;}
  p.shipCasketTask277={casketId:intent.casket.id,action:c.type==='order-enter-ship-casket'?'enter':'carry',phase:'approach',...c.type==='order-carry-ship-casket'?{patient:{...c.patient}}:{},progressCore:0,lastWorkedAt:w.tick};
+ markHumanCarrierCandidatesDirty();
  p.path=intent.path;p.state=p.path.length?'moving':'working';p.planCooldown=0;return {ok:true};
 }
 /** Before drafting, on a real settled tick. Physiology continues until the

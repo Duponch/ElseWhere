@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isIedTrapKind357} from './ied-traps-357.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {initializeFirefoamPopper290} from './firefoam-290.ts';
@@ -106,7 +107,7 @@ export function advanceFurniture(world:World,pawn:Pawn,job:Job,move:(target:Cell
     Object.assign(pack.building,{x:job.x,z:job.z,orientation:job.orientation});resumeGlowPod256(world,pack.building);
     if(pack.building.kind==='spike-trap'||isIedTrapKind357(pack.building.kind))pack.building.spikeTrap=initialSpikeTrapState(world,pack.building);
     if(pack.building.kind==='firefoam-popper')initializeFirefoamPopper290(world,pack.building);
-    world.packed=world.packed.filter(p=>p!==pack);world.structures.push(pack.building);clearSnowForStructure(world,pack.building);normalizeBillWorkersAtInstall283(world,pack.building);
+    world.packed=world.packed.filter(p=>p!==pack);appendStructureEntries(world,pack.building);clearSnowForStructure(world,pack.building);normalizeBillWorkersAtInstall283(world,pack.building);
     bedOwnership?.commit();
   } else {release();return false;}
   world.jobs=world.jobs.filter(j=>j!==job);pawn.jobId=null;pawn.path=[];pawn.state='idle';pawn.planCooldown=0;

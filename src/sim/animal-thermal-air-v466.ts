@@ -3,6 +3,7 @@ import {animalThermalProfile466,type AnimalThermalOpportunity466} from './animal
 import {animalCarrier} from './animal-rest-state.ts';
 import {groupPawnInterval256} from './group-core-cadence-256.ts';
 import {outdoorTemperature,type ThermalRegion} from './temperature.ts';
+import {thermalCellOwners379} from './thermal-cell-owners-379.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {Cell,World} from './types.ts';
 
@@ -19,9 +20,11 @@ const airScratch={build:0,stamp:new Uint32Array(0),slot:new Int32Array(0)};
  * Index room references only on the first due proven actor. Temperatures stay
  * live; an explosion's replacement of the actual regions rebuilds the index.
  * This phase's geometry mutations replace regions through reconciliation. */
-export function createAnimalAirReader466(world:World):AnimalAirReader466 {
+export function createAnimalAirReader466(world:World,readCarrier?:(id:number)=>ReturnType<typeof animalCarrier>):AnimalAirReader466 {
   let regions:ThermalRegion[]|undefined,built=false,build=0,owners:ThermalRegion[]=[],fallback:Map<number,ThermalRegion>|undefined,outside:number|undefined;
   const atCell=(cell:Cell)=>{
+    const resident=thermalCellOwners379(world);
+    if(resident){const key=cell.z*world.width+cell.x,slot=resident.slots[key];return (slot?resident.regions[slot-1]?.temperature:undefined)??(outside??=outdoorTemperature(world));}
     const current=world.thermal?.regions;
     // The shared scratch may have been refilled by another reader since.
     if(!built||current!==regions||!fallback&&airScratch.build!==build){
@@ -40,7 +43,7 @@ export function createAnimalAirReader466(world:World):AnimalAirReader466 {
     return region?.temperature??(outside??=outdoorTemperature(world));
   };
   return {atCell,atAnimal:animal=>{
-    const carrier=animalCarrier(world,animal.id),owner=carrier??animal;
+    const carrier=readCarrier?readCarrier(animal.id):animalCarrier(world,animal.id),owner=carrier??animal;
     // Logical destinations are anticipated for travel. Actual room exposure
     // changes only when the captured physical edge is complete.
     const cell=owner.motion&&owner.motion.end>world.tick?owner.motion.from:owner;

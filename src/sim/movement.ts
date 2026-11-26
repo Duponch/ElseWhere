@@ -1,4 +1,5 @@
 import {roperSpeedFactor377} from './animal-leading-377.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {crisisWalks350} from './mood-pool-memories-350.ts';
 import {movementClamor350} from './sleep-disturbed-350.ts';
 import {doorToDoorSurcharge303,isDoorToDoorSchema303,withDoorToDoorDelay303} from './door-to-door-303.ts';
@@ -66,7 +67,7 @@ export function startTravel(world:World,pawn:Pawn,next:Cell,getLight?:LightReade
   pawn.motion=motion;
   pawn.x=next.x; pawn.z=next.z; pawn.moveCooldown=Math.max(0,pawn.motion.end-now);
   approachAutodoor(world,pawn,next);
-  finishSnowStep(world,pawn);syncPatient(world,pawn);syncGroupHumanPassenger257(world,pawn);return true;
+  finishSnowStep(world,pawn);markActorMotionSource297(pawn.motion);syncPatient(world,pawn);syncGroupHumanPassenger257(world,pawn);return true;
 }
 
 /** A real pather interruption returns to the still committed source cell.

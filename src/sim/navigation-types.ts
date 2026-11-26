@@ -25,5 +25,7 @@ export interface CandidateAccess {
   readonly visited: number;
   readonly connectivityVisited: number;
   readonly unreachedGroups: number;
+  /** Internal owner may end a synchronous candidate pass after its last route. */
+  dispose?():void;
 }
 export type Reachability = DistanceField | CandidateAccess;

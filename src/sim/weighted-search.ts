@@ -1,7 +1,9 @@
 import { PathFrontier } from './PathFrontier.ts';
 import { CARDINAL_COST, DIAGONAL_COST } from './movement.ts';
 import type { DistanceField } from './navigation-types.ts';
-import { EMPTY_NAVIGATION_COSTS,type NavigationCostLookup } from './navigation-costs.ts';
+import { EMPTY_NAVIGATION_COSTS,searchNavigationCostColumns,type NavigationCostLookup } from './navigation-costs.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
+import {ownedNavigationGrid379,type OwnedNavigationGrid379} from './owned-navigation-grid-379.ts';
 
 /* The eight steps in relaxation order [[0,-1],[1,0],[0,1],[-1,0],[1,-1],
  * [1,1],[-1,1],[-1,-1]]: four cardinal steps, then the four diagonals. */
@@ -80,16 +82,19 @@ export class WeightedSearch {
     const {parents,costs,start}=this.field,size=parents.length,blocked=this.unavailable,scratch=this.scratch;
     let goalCost=Infinity,remaining=0;
     if(goals)for(const index of goals)if(this.settled[index])goalCost=Math.min(goalCost,costs[index]!);
-    const membership=new Map<number,number[]>(),reached=new Set<number>();
-    const free=(i:number)=>i===start||!blocked[i];
-    const hasEntry=(i:number)=>i===start||i>=this.width&&free(i-this.width)||i+this.width<size&&free(i+this.width)||i%this.width>0&&free(i-1)||i%this.width+1<this.width&&free(i+1);
-    if(allGroups)for(let group=0;group<allGroups.length;group++) {
-      let viable=false,known=false;
-      for(const index of allGroups[group]!)if(index>=0&&index<size&&free(index)&&hasEntry(index)) {
-        const members=membership.get(index);if(members)members.push(group);else membership.set(index,[group]);viable=true;
-        if(this.settled[index])known=true;
+    let membership:Map<number,number[]>|undefined,reached:Set<number>|undefined;
+    if(allGroups){
+      membership=new Map();reached=new Set();
+      const free=(i:number)=>i===start||!blocked[i];
+      const hasEntry=(i:number)=>i===start||i>=this.width&&free(i-this.width)||i+this.width<size&&free(i+this.width)||i%this.width>0&&free(i-1)||i%this.width+1<this.width&&free(i+1);
+      for(let group=0;group<allGroups.length;group++) {
+        let viable=false,known=false;
+        for(const index of allGroups[group]!)if(index>=0&&index<size&&free(index)&&hasEntry(index)) {
+          const members=membership.get(index);if(members)members.push(group);else membership.set(index,[group]);viable=true;
+          if(this.settled[index])known=true;
+        }
+        if(known)reached.add(group);else if(viable)remaining++;
       }
-      if(known)reached.add(group);else if(viable)remaining++;
     }
     if(allGroups&&!remaining)goalCost=0;
     // The loop below reads the same lookups in the same order as a plain
@@ -97,24 +102,62 @@ export class WeightedSearch {
     // locals (every lookup is a pure function of its index during a search).
     const settled=this.settled,width=this.width,height=this.height,frontier=this.frontier,field=this.field;
     const corners=this.corners,repeaters=this.repeaters,floors=this.floors,extraCosts=this.extraCosts,additiveCosts=this.additiveCosts;
+    const extraColumns=verifyTerrainWriteCaches?undefined:searchNavigationCostColumns(extraCosts),floorColumns=verifyTerrainWriteCaches?undefined:searchNavigationCostColumns(floors);
     const cardinal=this.cardinal,diagonal=this.diagonal;
+    let topology:OwnedNavigationGrid379|undefined,compiledAttempted=false;
     let pending=this.pending;
     while(pending!==undefined&&costs[pending]!<=goalCost) {
       const index=pending;settled[index]=1;field.visited++;
       if(goals?.has(index))goalCost=costs[index]!;
       if(isGoal?.(index)){goalCost=costs[index]!;field.goalIndex=Math.min(field.goalIndex??Infinity,index);}
-      if(allGroups){for(const group of membership.get(index)??[])if(!reached.has(group)){reached.add(group);remaining--;}if(!remaining)goalCost=costs[index]!;}
-      const x=index%width,z=Math.floor(index/width),base=costs[index]!;
+      if(allGroups){for(const group of membership!.get(index)??[])if(!reached!.has(group)){reached!.add(group);remaining--;}if(!remaining)goalCost=costs[index]!;}
+      const base=costs[index]!;
       // repeaters.has(index) is asked once, and only when a neighbour is
       // relaxed, as the expression it replaces (it short-circuits on it).
       let repeat=-1;
+      // Near routes often visit only a handful of cells. Do not even admit
+      // a sparse overlay until traversal justifies it. Long/resumed routes
+      // compile only their touched base cells and share those across actors.
+      if(!compiledAttempted&&field.visited>=128){compiledAttempted=true;topology=ownedNavigationGrid379(blocked,width,height,corners);}
+      if(topology){
+        // A byte describes the exact original eight-direction admission of
+        // this immutable base plus sparse door/actor writes. Least-significant
+        // bits retain the historical relaxation and equal-cost queue order.
+        const word=topology.patchWords[index>>>8]?.[index&255]||topology.words[index]!;
+        let mask=word?word&255:topology.readBase(index);
+        while(mask){
+          const bit=mask&-mask,k=31-Math.clz32(bit),next=index+topology.offsets[k]!;mask&=mask-1;
+          if(settled[next])continue;
+          if(repeat<0)repeat=repeaters.has(index)?1:0;
+          let extra:number;
+          if(repeat===1&&repeaters.has(next)){
+            if(floorColumns){const page=floorColumns.pages[next>>>8],offset=next&255,state=page?.states[offset];extra=state===2?page!.values[offset]!:state===1?0:floorColumns.read(next)??0;}
+            else extra=floors.get(next)??0;
+          }else{
+            if(extraColumns){const page=extraColumns.pages[next>>>8],offset=next&255,state=page?.states[offset];extra=state===2?page!.values[offset]!:state===1?0:extraColumns.read(next)??0;}
+            else extra=extraCosts?.get(next)??0;
+          }
+          const cost=base+(k>=4?diagonal:cardinal)+extra+(additiveCosts?.get(next)??0);
+          if(cost<costs[next]!){if(scratch!==undefined&&costs[next]===Infinity)scratch.touch(next);costs[next]=cost;parents[next]=index;frontier.push(next);}
+        }
+      }else{
+      const x=index%width,z=Math.floor(index/width);
       for(let k=0;k<8;k++) {
         const dx=DX[k]!,dz=DZ[k]!,nx=x+dx,nz=z+dz,next=nz*width+nx;
         if(nx<0||nz<0||nx>=width||nz>=height||blocked[next]||settled[next])continue;
         if(k>=4&&(blocked[index+dx]||blocked[index+dz*width]||corners.has(index+dx)||corners.has(index+dz*width)))continue;
         if(repeat<0)repeat=repeaters.has(index)?1:0;
-        const cost=base+(k>=4?diagonal:cardinal)+(repeat===1&&repeaters.has(next)?floors.get(next)??0:extraCosts?.get(next)??0)+(additiveCosts?.get(next)??0);
+        let extra:number;
+        if(repeat===1&&repeaters.has(next)){
+          if(floorColumns){const page=floorColumns.pages[next>>>8],offset=next&255,state=page?.states[offset];extra=state===2?page!.values[offset]!:state===1?0:floorColumns.read(next)??0;}
+          else extra=floors.get(next)??0;
+        }else{
+          if(extraColumns){const page=extraColumns.pages[next>>>8],offset=next&255,state=page?.states[offset];extra=state===2?page!.values[offset]!:state===1?0:extraColumns.read(next)??0;}
+          else extra=extraCosts?.get(next)??0;
+        }
+        const cost=base+(k>=4?diagonal:cardinal)+extra+(additiveCosts?.get(next)??0);
         if(cost<costs[next]!) {if(scratch!==undefined&&costs[next]===Infinity)scratch.touch(next);costs[next]=cost;parents[next]=index;frontier.push(next);}
+      }
       }
       pending=this.pending=frontier.pop();
     }
@@ -128,8 +171,13 @@ export class WeightedSearch {
     // discovered cells left unsettled are the pending node and the queued ones.
     if(this.pending!==undefined){
       const {parents,costs}=field,reset=(i:number)=>{parents[i]=-2;costs[i]=Infinity;};
-      reset(this.pending);this.frontier.forEachQueued(reset);
+      reset(this.pending);this.frontier.release(reset);
     }
+    else this.frontier.release();
     delete field.settled;this.finished=true;return field;
   }
+  /** An internal read-only candidate pass has ended. Keep its numeric field
+   * intact, but retire the queue so its exclusive owner may reuse the links.
+   * No future resolve/advance is permitted on a disposed candidate frontier. */
+  dispose():void {if(!this.finished){this.frontier.release();this.finished=true;}}
 }

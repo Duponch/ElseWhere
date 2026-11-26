@@ -1,3 +1,4 @@
+import {revokeActorRecordSource297} from './actor-record-source-297.ts';
 import {isSchema286OrLater} from './schema-compatibility-257.ts';
 import {captureLinkedStorageOwners286,type LinkedStorageOwner286,type LinkedStorageOwners286} from './linked-storage-owners-286.ts';
 import {validLinkedStorageWorld286,validLinkedStorageRegistryShape286} from './linked-storage-save-286.ts';
@@ -56,7 +57,7 @@ function prepare(input:CampaignState,owners:LinkedStorageOwners286,change:(draft
  let consumed=false;
  const current=()=>{try{return !consumed&&registeredCampaign(input)===root&&isSchema286OrLater(root.schemaVersion)&&registryCurrent()&&owners.current()&&authority()&&seal(0)&&writesCurrent()&&removalWritesMutable259(writes);}catch{return false;}};
  if(!current())return refused('Les étagères ont changé pendant la préparation.');
- return {ok:true,writes,changedCellIds,noop:writes.length===0,current,commit(){if(!current())return false;consumed=true;for(const w of writes){if(w.present){if(Object.hasOwn(w.object,w.key))Reflect.set(w.object,w.key,w.value);else Object.defineProperty(w.object,w.key,{value:w.value,writable:true,enumerable:true,configurable:true});}else Reflect.deleteProperty(w.object,w.key);}return true;}};
+ return {ok:true,writes,changedCellIds,noop:writes.length===0,current,commit(){if(!current())return false;consumed=true;for(const w of writes){revokeActorRecordSource297(w.object);if(w.present){if(Object.hasOwn(w.object,w.key))Reflect.set(w.object,w.key,w.value);else Object.defineProperty(w.object,w.key,{value:w.value,writable:true,enumerable:true,configurable:true});}else Reflect.deleteProperty(w.object,w.key);}return true;}};
 }
 class Draft {
  readonly changedCells=new Set<number>();

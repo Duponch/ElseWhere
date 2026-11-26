@@ -1,4 +1,5 @@
 import {SCHEMA_VERSION} from './types.ts';
+import {validConstructionMarkers379} from './construction-state-379.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {validConstructionMaterial} from './construction-materials.ts';
 import type {World} from './types.ts';
@@ -50,7 +51,7 @@ export function validWallDoorJob296(value:unknown,version:number):boolean {
   if(value.footprint!=='standard'||value.construction!==undefined||value.clearance!==undefined||value.growingZoneId!==undefined||value.material!==undefined||!record(value.escrow)||Object.values(value.escrow).some(n=>n!==0))return false;
   if('plan'in state){
    const plan=state.plan;
-   if(!keys(plan,['revision','id','kind','material'])||plan.revision!==1||!integer(plan.id,1)||plan.id===value.id||plan.id===value.deconstruction.structureId||(plan.kind!=='door'&&plan.kind!=='autodoor')||!validConstructionMaterial(plan.kind,plan.material,296))return false;
+   if(!keys(plan,['revision','id','kind','material'],version>=379?['forbidden379']:[])||!validConstructionMarkers379(plan,version)||plan.revision!==1||!integer(plan.id,1)||plan.id===value.id||plan.id===value.deconstruction.structureId||(plan.kind!=='door'&&plan.kind!=='autodoor')||!validConstructionMaterial(plan.kind,plan.material,296))return false;
   }
   if(!state.manual&&!('plan'in state)&&state.fromBlueprint!==true)return false;
   return true;

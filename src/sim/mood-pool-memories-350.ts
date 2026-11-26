@@ -18,7 +18,7 @@ export const isMoodPool350=(version:unknown):boolean=>Number(version)>=MOOD_POOL
  * - BondedAnimalDied / BondedAnimalLost: -8, 20 days, stack 5, one per animal.
  * A memory of the last three kinds names its other pawn (otherId); Core puts
  * each other pawn in its own mood group, so they add up at full value. */
-export type MoodPoolMemoryKind350='sleep-disturbed'|'nuzzled'|'released-prisoner'|'bonded-animal-died'|'bonded-animal-lost'|'bonded-animal-released';
+export type MoodPoolMemoryKind350='sleep-disturbed'|'nuzzled'|'released-prisoner'|'bonded-animal-died'|'bonded-animal-lost'|'bonded-animal-released'|'colonist-banished'|'colonist-banished-to-die';
 interface MoodPoolMemoryDef350 {readonly label:string;readonly offset:number;readonly duration:number;readonly stack:number;readonly multiplier:number;readonly perOther:boolean;readonly description:string}
 export const MOOD_POOL_MEMORIES_350:Readonly<Record<MoodPoolMemoryKind350,MoodPoolMemoryDef350>>=Object.freeze({
  'sleep-disturbed':Object.freeze({label:'Sommeil perturbé',offset:-1,duration:6000,stack:3,multiplier:1,perOther:false,description:'Quelqu’un est passé tout près pendant le sommeil. Une chambre individuelle l’éviterait. Un jour, trois au plus.'}),
@@ -28,11 +28,15 @@ export const MOOD_POOL_MEMORIES_350:Readonly<Record<MoodPoolMemoryKind350,MoodPo
  'bonded-animal-lost':Object.freeze({label:'Compagnon lié perdu',offset:-8,duration:120000,stack:5,multiplier:1,perOther:true,description:'Un animal lié à ce colon a été perdu. Vingt jours.'}),
  // Schema 364: BondedAnimalReleased (Thoughts_Memory_Lost.xml), -5, 15 days, stack 5, one per animal.
  'bonded-animal-released':Object.freeze({label:'Compagnon lié relâché',offset:-5,duration:90000,stack:5,multiplier:1,perOther:true,description:'Un animal lié à ce colon a été relâché dans la nature. Quinze jours.'}),
+ // Schema 378: Core Thoughts_Memory_Lost, Thought_Banished. Each other Pawn
+ // has its own group and a single memory; these are discarded on rejoining.
+ 'colonist-banished':Object.freeze({label:'Colon banni',offset:-3,duration:36000,stack:5,multiplier:1,perOther:true,description:'Un colon a été banni. Six jours ; ce souvenir cesse si cette personne rejoint la colonie.'}),
+ 'colonist-banished-to-die':Object.freeze({label:'Colon banni vers une mort probable',offset:-6,duration:36000,stack:5,multiplier:1,perOther:true,description:'Un colon a été banni malgré un danger mortel. Six jours ; ce souvenir cesse si cette personne rejoint la colonie.'}),
 });
 const KINDS=Object.keys(MOOD_POOL_MEMORIES_350) as MoodPoolMemoryKind350[];
 export const isMoodPoolMemory350=(kind:unknown):kind is MoodPoolMemoryKind350=>typeof kind==='string'&&(KINDS as string[]).includes(kind);
 /** A pool kind added after 350 is refused in an older save. */
-export const moodPoolKindInVersion=(kind:MoodPoolMemoryKind350,version:number):boolean=>kind!=='bonded-animal-released'||version>=364;
+export const moodPoolKindInVersion=(kind:MoodPoolMemoryKind350,version:number):boolean=>kind==='colonist-banished'||kind==='colonist-banished-to-die'?version>=378:kind!=='bonded-animal-released'||version>=364;
 
 /** MemoryThoughtHandler.TryGainMemory: a full stack renews its oldest entry
  * (Thought_Memory.TryMergeWithExistingMemory); a per-other memory replaces

@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bestGroupNegotiator,tradeImprovement} from './trade-negotiator.ts';
@@ -72,7 +73,7 @@ export function prepareMeetingTrade261(root:CampaignState,record:WorldGroupRecor
  const current=()=>!used&&root.worldGroups===registry&&registry.groups===recordsBefore&&recordsBefore[recordSlotBefore]===record&&recipients()&&root.tick===tick&&root.nextId===allocator&&record.state===g&&record.pending261===p&&sameOriginals(g.items,playerBefore)&&sameOriginals(p.items,foreignBefore)&&sameOriginals(g.members,membersBefore)&&sameOriginals(p.people,peopleBefore)&&JSON.stringify(record)===before&&quoteMeetingTrade261(root,record,lines).ok;
  // Schema 338: Core Faction.Notify_PlayerTraded on the met caravan's faction.
  const sold=soldSilver338(lines.filter(l=>l.quantity<0).map(l=>({count:-l.quantity,unitPrice:q.goods.find(good=>good.id===l.pileId)!.unitPrice!})));
- return {ok:true,current,commit(){if(!current())throw Error('Stale real meeting trade');used=true;for(const [i,next]of updates){i.quantity=next.quantity;assignPileOwner(i,next.owner);}g.items=player;g.reorganization=history;p.items=foreign;root.nextId=nextId;root.worldGroups!.events.push({tick,type:'command',message:`Échange de rencontre conclu : ${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}${q.forgone?', '+q.forgone+' argent abandonné explicitement':''}.`});
+ return {ok:true,current,commit(){if(!current())throw Error('Stale real meeting trade');used=true;for(const [i,next]of updates){markPileContentWrite379(i).quantity=next.quantity;assignPileOwner(i,next.owner);}g.items=player;g.reorganization=history;p.items=foreign;root.nextId=nextId;root.worldGroups!.events.push({tick,type:'command',message:`Échange de rencontre conclu : ${q.paid>=0?q.paid+' argent payé':-q.paid+' argent reçu'}${q.forgone?', '+q.forgone+' argent abandonné explicitement':''}.`});
   const goodwill=planTradeGoodwill338(root.worldFactions,p.factionId,sold,Number(root.schemaVersion));if(goodwill)root.worldGroups!.events.push({tick,type:'command',message:applyTradeGoodwill338(goodwill)});
   if(root.worldGroups!.events.length>80)root.worldGroups!.events.splice(0,root.worldGroups!.events.length-80);}};
 }

@@ -1,3 +1,4 @@
+import {splicePileEntries} from './pile-identity-directory.ts';
 import {isStrip351} from './strip-state-351.ts';
 import { storageAt,storageCellAccepts } from './shelf-storage.ts';
 import { isColonist } from './affiliation.ts';
@@ -52,7 +53,7 @@ export function advanceWorldApparelWear(world:World):void {
   for(const change of result.changes){const pile=world.piles.find(p=>p.id===change.id&&p.owner.type==='apparel'&&p.apparel);if(!pile)continue;
     pile.apparel!.hitPoints=change.remaining;if(!change.destroyed)continue;
     const wearer=world.pawns.find(p=>pile.owner.type==='apparel'&&p.id===pile.owner.pawnId);if(wearer?.equipmentTask?.itemId===pile.id)releaseAssignments(world,wearer);
-    world.piles.splice(world.piles.indexOf(pile),1);if(wearer)report(world,`${wearer.name} a usé un vêtement jusqu’à sa destruction.`);
+    splicePileEntries(world.piles,world.piles.indexOf(pile),1);if(wearer)report(world,`${wearer.name} a usé un vêtement jusqu’à sa destruction.`);
   }
 }
 

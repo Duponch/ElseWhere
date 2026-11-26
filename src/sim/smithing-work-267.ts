@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {allowedAreaAllows,allowedAreaWorkAllowed} from './allowed-area-state.ts';
 import {ingredientPlaceFree} from './cooking-bills.ts';
 import {groundCapacity,planGroundPlacement} from './ground-placement.ts';
@@ -45,7 +46,7 @@ export function cancelSmithingWork267(w:World,id:number):CommandResult {
  const shadow={...w,piles:w.piles.filter(q=>q!==pile)},placements=planGroundPlacement(shadow,quantity,pile.owner,u.material);
  if(!placements||shadow.piles.length+placements.length>32768||!Number.isSafeInteger(w.nextId+placements.length))return {ok:false,code:'occupied',reason:'Aucune place pour conserver les matériaux récupérés.'};
  for(const p of w.pawns){if(p.cooking?.ingredients.some(i=>i.pileId===id)||p.haul?.sourcePileId===id)releaseAssignments(w,p);p.orders.queue=p.orders.queue.filter(o=>typeof o==='number'||(isCookingOrder(o)?!o.cooking.ingredients.some(i=>i.pileId===id):o.sourcePileId!==id));}
- w.piles=w.piles.filter(q=>q!==pile);for(const placement of placements)addMaterial(w,u.material,placement.quantity,{type:'ground',...placement.cell},u.material);w.rng=random.rng;refreshStock(w);return {ok:true};
+ w.piles=filterPileEntries(w.piles,q=>q!==pile);for(const placement of placements)addMaterial(w,u.material,placement.quantity,{type:'ground',...placement.cell},u.material);w.rng=random.rng;refreshStock(w);return {ok:true};
 }
 export function detachMissingSmithingBills267(w:World):void {
  if(!w.piles.some(q=>q.smithingWork?.billId))return;

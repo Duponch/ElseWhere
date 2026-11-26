@@ -76,15 +76,15 @@ function same(before:unknown,value:unknown):boolean {
 interface Items {readonly header:Data;readonly values:readonly Row[];readonly slots:ReadonlyMap<number,number>}
 interface Held {readonly presence:Presence;readonly items?:Items;readonly rootToken:object;readonly itemsToken:object}
 const index=(values:readonly Row[])=>new Map(values.map((row,ordinal)=>[row.id,ordinal]));
-function split(value:unknown,nextId:number):value is Data&{items:Row[]} {
- if(!record(value)||!own(value,'items')||!dense(value.items))return false;
+function split(value:unknown,nextId:number):{value:Data&{items:Row[]};ids:Set<number>}|undefined {
+ if(!record(value)||!own(value,'items')||!dense(value.items))return;
  const seen=new Set<number>();
  // Only inspect identity here. same/copy below checks each row's complete own
  // data once; a second recursive validation of all 4173 rows buys no coverage.
  for(const row of value.items){
-  if(!row||typeof row!=='object'||Array.isArray(row)||Object.getPrototypeOf(row)!==Object.prototype)return false;
-  const id=Object.getOwnPropertyDescriptor(row,'id');if(!id?.enumerable||!own(id,'value')||!integer(id.value,1,nextId-1)||seen.has(id.value))return false;seen.add(id.value);
- }return true;
+  if(!row||typeof row!=='object'||Array.isArray(row)||Object.getPrototypeOf(row)!==Object.prototype)return;
+  const id=Object.getOwnPropertyDescriptor(row,'id');if(!id?.enumerable||!own(id,'value')||!integer(id.value,1,nextId-1)||seen.has(id.value))return;seen.add(id.value);
+ }return {value:value as Data&{items:Row[]},ids:seen};
 }
 function heldItems(header:Data,values:readonly Row[],slots:ReadonlyMap<number,number>,old?:Held):Held {
  const keepValues=!!old?.items&&old.items.values===values;
@@ -100,25 +100,27 @@ export class ResidentFilthEncoder {
   const checkpoint=packet.kind==='checkpoint';
   if(!integer(packet.epoch,1)||!integer(packet.revision,1)||!integer(packet.world.tick)||!integer(packet.world.nextId,1)
    ||!checkpoint&&(packet.epoch!==this.epoch||packet.baseRevision!==this.revision||packet.revision!==this.revision+1||packet.world.tick<this.tick))throw Error('Missing filth producer predecessor');
-  const source=packet.world as unknown as Data,old=checkpoint?undefined:this.previous;
+  const source=packet.world as unknown as Data,old=checkpoint?undefined:this.previous,
+   list=own(source,'filth')?split(source.filth,packet.world.nextId):undefined;
   let section:Section,next:Held;
   if(!own(source,'filth')){section={mode:'absent'};next=old&&!old.presence.present?old:{presence:{present:false},rootToken:{},itemsToken:{}};}
-  else if(!split(source.filth,packet.world.nextId)){
+  else if(!list){
    const value=old?.presence.present&&same(old.presence.value,source.filth)?old.presence.value:copy(source.filth);
    section={mode:'literal',value};next=old?.presence.present&&Object.is(old.presence.value,value)?old:{presence:{present:true,value},rootToken:{},itemsToken:{}};
   }else{
-   const filth=source.filth,previous=old?.items,reset=!previous;
-   const header=copy({...filth,items:0}) as Data,removed:number[]=[],upserted:Row[]=[],seen=new Set<number>();
+   const filth=list.value,previous=old?.items,reset=!previous;
+   const header=copy({...filth,items:0}) as Data,removed:number[]=[],upserted:Row[]=[],seen=list.ids;
    let unchangedOrder=!!previous&&previous.values.length===filth.items.length,values:Row[]|undefined;
    for(let ordinal=0;ordinal<filth.items.length;ordinal++){
-    const row=filth.items[ordinal]!,before=previous?.values[previous.slots.get(row.id)??-1];seen.add(row.id);
-    if(previous?.values[ordinal]?.id!==row.id)unchangedOrder=false;
+    const row=filth.items[ordinal]!,ordered=previous?.values[ordinal],sameSlot=ordered?.id===row.id,
+     before=sameSlot?ordered:previous?.values[previous.slots.get(row.id)??-1];
+    if(!sameSlot)unchangedOrder=false;
     const value=before&&same(before,row)?before:copy(row) as Row;
     if(value!==before)upserted.push(value);
     if(values)values.push(value);
     else if(value!==previous?.values[ordinal])values=[...(previous?.values.slice(0,ordinal)??[]),value];
    }
-   for(const row of previous?.values??[])if(!seen.has(row.id))removed.push(row.id);
+   if(!unchangedOrder)for(const row of previous?.values??[])if(!seen.has(row.id))removed.push(row.id);
    let nextValues:readonly Row[]=values??previous?.values??[];
    // Shrinking a prefix needs no write during the forward loop.
    if(nextValues.length!==filth.items.length)nextValues=nextValues.slice(0,filth.items.length);

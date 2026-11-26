@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {effectiveCore297,effectiveLocal297} from './core-phase-297.ts';
 import { EMP_ADAPTATION_CORE_TICKS,empStunDuration } from './emp-rules.ts';
 import { empStructureActive,empStructureSupported,empAdaptedUntilCore277,empStunUntilCore277 } from './emp-state.ts';
@@ -29,7 +30,7 @@ export function applyEmpEffect(world:World,target:Structure|LivingTarget,damage:
     }
     mech.emp={lastAtCore:core,adaptedUntilCore:core+EMP_ADAPTATION_CORE_TICKS,stunUntilCore:until};
     if(recovery&&recovery.untilCore>core)recovery.empPause={ticks:recovery.empPause?.ticks??0,lastAtCore:core};
-    if(slowed){mech.motion=slowed;mech.moveCooldown=Math.max(0,slowed.end-(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick));mech.state='moving';}
+    if(slowed){mech.motion=slowed;markActorMotionSource297(slowed);mech.moveCooldown=Math.max(0,slowed.end-(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveLocal297(world):world.tick));mech.state='moving';}
     return true;
   }
   if(!('kind' in target))return false;
@@ -69,5 +70,5 @@ export function stopMechanoidEmpStun(mech:Mechanoid,core:number,tick=core/10):vo
   const at=core/10,spans=motion.stuns.flatMap(span=>span.end<=at?[span]:span.start<at?[{start:span.start,end:at}]:[]);
   if(mech.stun&&mech.stun.untilCore>core)spans.push({start:Math.max(motion.start,at),end:mech.stun.untilCore/10});
   if(spans.length)motion.stuns=mergeSlowIntervals(spans);else delete motion.stuns;
-  motion.end=travelEnd(motion);mech.moveCooldown=Math.max(0,motion.end-tick);
+  motion.end=travelEnd(motion);markActorMotionSource297(motion);mech.moveCooldown=Math.max(0,motion.end-tick);
 }

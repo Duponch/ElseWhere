@@ -1,3 +1,6 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
+import {markActorRecordSource297} from './actor-record-source-297.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {recordShipCasketFilthMovement277} from './filth.ts';
 import {shipCasketCarrierOf277,syncShipCasketPassenger277} from './ship-casket-carry-277.ts';
 import {mechanicalDuty256,mechanicalOrder256,sleepingTempleMech256} from './temple-mech-duty-256.ts';
@@ -102,10 +105,11 @@ function travel(w:World,m:Mechanoid,next:Cell,getLight:LightReader,blocked:Uint8
   if(m.stagger&&m.stagger.untilCore/10>start)motion.stagger=mergeSlowIntervals([{start:Math.max(start,m.stagger.sinceCore/10),end:m.stagger.untilCore/10}]);
   if(m.stun&&m.stun.untilCore/10>start)motion.stuns=mergeSlowIntervals([{start:Math.max(start,m.stun.sinceCore/10),end:m.stun.untilCore/10}]);
   motion.end=travelEnd(motion);m.heading=Math.atan2(next.x-m.x,next.z-m.z);m.motion=motion;m.x=next.x;m.z=next.z;
-  m.moveCooldown=Math.max(0,motion.end-w.tick);m.path.shift();m.state='moving';return true;
+  m.moveCooldown=Math.max(0,motion.end-w.tick);shiftActorPath297(m.path);m.state='moving';markActorMotionSource297(motion);return true;
 }
 /** Physical decisions share the caller's terrain/light and acquisition capture. */
 export function processMechanoidCombat(w:World,m:Mechanoid,getBlocked:NavigationGrid,budget:SearchBudget,getLight:LightReader,batch=mechanoidCombatBatch(w,getBlocked)):void {
+  markActorRecordSource297('mechanical',m);
   const casketCarrier=shipCasketCarrierOf277(w,{kind:'mechanical',id:m.id});if(casketCarrier){syncShipCasketPassenger277(w,casketCarrier);return;}
   if(m.filthFeet&&m.motion&&m.motion.end>w.tick-1&&m.motion.end<=w.tick)recordShipCasketFilthMovement277(w,m);
   if(sleepingTempleMech256(m))return;

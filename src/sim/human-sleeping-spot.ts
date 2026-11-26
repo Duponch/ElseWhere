@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isFurnitureCSchema363} from './furniture-c-363.ts';
 import {isGroundSleepingSpotKind} from './bed-kinds.ts';
 import {isWetTerrain} from './shallow-water.ts';
@@ -30,7 +31,7 @@ export function canPlaceHumanSleepingSpot(world:World,c:DesignateCommand):Comman
 }
 export function placeHumanSleepingSpot(world:World,c:DesignateCommand):CommandResult {
   const result=canPlaceHumanSleepingSpot(world,c);if(!result.ok)return result;
-  world.structures.push({id:world.nextId++,kind:c.kind==='double-sleeping-spot'?'double-sleeping-spot':'sleeping-spot',x:c.x,z:c.z,orientation:c.orientation??0,footprint:'standard'});
+  appendStructureEntries(world,{id:world.nextId++,kind:c.kind==='double-sleeping-spot'?'double-sleeping-spot':'sleeping-spot',x:c.x,z:c.z,orientation:c.orientation??0,footprint:'standard'});
   for(const p of world.pawns)p.planCooldown=0;
   return {ok:true};
 }

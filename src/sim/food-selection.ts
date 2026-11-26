@@ -5,11 +5,13 @@ import { planPasteRequest,type PasteRequest } from './nutrient-paste.ts';
 import { ITEM_DEFINITIONS, type ItemId } from './items.ts';
 import { ticksUntilRot } from './food-preservation.ts';
 import { allowedFood, type FoodItemId } from './food-policy.ts';
-import { selfAllowedFood,selfFoodAccessible,assistedFoodAccessible } from './prison-food.ts';
-import { capturePrisonTopology } from './prison-space.ts';
+import { selfAllowedFood,createSelfFoodAccessibilityQuery379,createAssistedFoodAccessibilityQuery379 } from './prison-food.ts';
+import { capturePrisonTopology,hasPrisonBedMark379 } from './prison-space.ts';
+import {structureFamily379} from './structure-family-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 import type { RoomTopology } from './room-topology.ts';
 import { TICKS_PER_DAY } from './types.ts';
-import type { Cell, MaterialPile, Pawn, World } from './types.ts';
+import type { Cell, MaterialPile, Pawn, Structure,World } from './types.ts';
 
 /** Neutral adult. Reference mood curve maps raw-food -7 to
  * -82 optimality; survival packs have a -5 definition offset. The +12 bonus
@@ -26,9 +28,15 @@ export function foodScore(item: ItemId, distance: number): number {
 export function pileFoodScore(world: World, pile: MaterialPile, distance: number): number {
   return foodScore(pile.item, distance) + (ticksUntilRot(pile, world.tick) < TICKS_PER_DAY / 2 ? 12 : 0);
 }
+/** Preserve the original source order and every live request check; only the
+ * immutable dispenser kind is preselected by the private owner. */
+export function pasteDispenserCandidates379(world:World):readonly Structure[] {
+  return terrainJournalReadOwner()?structureFamily379(world,'food-paste-dispenser',kind=>kind==='nutrient-paste-dispenser'):world.structures;
+}
 export function foodSearchGoals(world: World, pawn: Pawn, sources: readonly MaterialPile[], topology?:RoomTopology,ignoreForbidden=false): Set<number> {
-  if(!topology&&(pawn.prisoner||world.structures.some(s=>s.prisoner)))topology=capturePrisonTopology(world);
-  const allowed = selfAllowedFood(world, pawn); sources = sources.filter(p => allowed.includes(p.item as FoodItemId)&&selfFoodAccessible(world,pawn,p,topology,ignoreForbidden));
+  if(!topology&&(pawn.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
+  const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden);
+  const allowed = selfAllowedFood(world, pawn); sources = sources.filter(p => allowed.includes(p.item as FoodItemId)&&accessible(p));
   if (world.foodRules === 'legacy') return interactionGoals(world, sources.flatMap(p => p.owner.type === 'ground' ? [p.owner] : []));
   let best: MaterialPile | undefined, score = -Infinity;
   for (const pile of sources) {
@@ -42,11 +50,12 @@ export function foodSearchGoals(world: World, pawn: Pawn, sources: readonly Mate
 }
 export function selectFood(world: World, pawn: Pawn, sources: readonly MaterialPile[], reachable: Reachability, eater: Pawn = pawn, topology?:RoomTopology,ignoreForbidden=false): { id: number; path: Cell[]; score: number } | undefined {
   const allowed = eater===pawn?selfAllowedFood(world,pawn):allowedFood(world,eater);
-  if(!topology&&(pawn.prisoner||eater.prisoner||world.structures.some(s=>s.prisoner)))topology=capturePrisonTopology(world);
+  if(!topology&&(pawn.prisoner||eater.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
+  const accessible=eater===pawn?createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden):createAssistedFoodAccessibilityQuery379(world,pawn,eater,topology);
   let best: { id: number; path: Cell[]; score: number } | undefined;
   for (const pile of sources) {
     if (pile.owner.type !== 'ground' || !ITEM_DEFINITIONS[pile.item].nutrition || !allowed.includes(pile.item as FoodItemId)) continue;
-    if(!(eater===pawn?selfFoodAccessible(world,pawn,pile,topology,ignoreForbidden):assistedFoodAccessible(world,pawn,eater,pile,topology)))continue;
+    if(!accessible(pile))continue;
     // Reference map search uses Manhattan distance for ranking, independently
     // of the Euclidean travel duration and actual reachability of the item.
     const distance = Math.abs(pawn.x - pile.owner.x) + Math.abs(pawn.z - pile.owner.z);
@@ -67,7 +76,7 @@ export type FoodSourceSelection={kind:'pile';id:number;path:Cell[];score:number}
 export function selectFoodSource(world:World,pawn:Pawn,sources:readonly MaterialPile[],reachable:Reachability,eater:Pawn=pawn,topology?:RoomTopology,ignoreForbidden=false):FoodSourceSelection|undefined {
   const pile=selectFood(world,pawn,sources,reachable,eater,topology,ignoreForbidden);
   let best:FoodSourceSelection|undefined=pile?{kind:'pile',...pile}:undefined;
-  for(const dispenser of world.structures){
+  for(const dispenser of pasteDispenserCandidates379(world)){
     if(dispenser.kind!=='nutrient-paste-dispenser')continue;
     const request=planPasteRequest(world,pawn,dispenser,eater,topology);if(!request)continue;
     const score=foodScore('nutrient-paste-meal',Math.abs(pawn.x-dispenser.x)+Math.abs(pawn.z-dispenser.z));
@@ -82,15 +91,16 @@ export function selectFoodSource(world:World,pawn:Pawn,sources:readonly Material
 /** The partial flood targets the best ranked source, including its exact
  * machine interaction cell. An unreachable winner exhausts the component. */
 export function foodSourceSearchGoals(world:World,pawn:Pawn,sources:readonly MaterialPile[],topology?:RoomTopology,ignoreForbidden=false):Set<number> {
-  if(!topology&&(pawn.prisoner||world.structures.some(s=>s.prisoner)))topology=capturePrisonTopology(world);
+  if(!topology&&(pawn.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
   const goals=foodSearchGoals(world,pawn,sources,topology,ignoreForbidden),allowed=selfAllowedFood(world,pawn);
+  const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden);
   let bestScore=-Infinity,bestId=Infinity;
   if(world.foodRules!=='legacy')for(const p of sources){
-    if(p.owner.type!=='ground'||!allowed.includes(p.item as FoodItemId)||!selfFoodAccessible(world,pawn,p,topology,ignoreForbidden))continue;
+    if(p.owner.type!=='ground'||!allowed.includes(p.item as FoodItemId)||!accessible(p))continue;
     const score=pileFoodScore(world,p,Math.abs(pawn.x-p.owner.x)+Math.abs(pawn.z-p.owner.z));
     if(score>bestScore||score===bestScore&&p.id<bestId){bestScore=score;bestId=p.id;}
   }
-  for(const dispenser of world.structures){
+  for(const dispenser of pasteDispenserCandidates379(world)){
     if(dispenser.kind!=='nutrient-paste-dispenser')continue;
     const request=planPasteRequest(world,pawn,dispenser,pawn,topology);if(!request)continue;
     const index=request.spot.z*world.width+request.spot.x;

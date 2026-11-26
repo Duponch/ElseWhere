@@ -6,7 +6,7 @@ export type VisualAnimal=Pick<WildAnimal,'id'|'species'|'state'|'x'|'z'|'sex'|'a
 /** Snapshot membership only. Preserve source order within each species: live
  * actors first, then physical corpses, including ground handoffs. No World
  * object or owner is changed to prepare the resident presentation batches. */
-export function wildlifePresentationGroups(world:World,transferCarrier?:(pileId:number)=>number|undefined):Map<string,VisualAnimal[]> {
+export function wildlifePresentationGroups(world:World,transferCarrier?:(pileId:number)=>number|undefined,corpses:readonly MaterialPile[]=world.piles):Map<string,VisualAnimal[]> {
   const groups=new Map<string,VisualAnimal[]>(),rescues=new Map<number,number>();
   for(const pawn of world.pawns){
     const rescue=pawn.animalRescue;
@@ -21,7 +21,7 @@ export function wildlifePresentationGroups(world:World,transferCarrier?:(pileId:
     const carrierId=rescues.get(animal.id);
     append(carrierId===undefined?animal:{...animal,carrierId});
   }
-  for(const pile of world.piles){
+  for(const pile of corpses){
     const corpse=pile.corpse;
     if(!corpse||pile.owner.type==='job')continue;
     append({id:corpse.animalId,species:corpse.species,state:'dead',

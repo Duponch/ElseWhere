@@ -4,6 +4,7 @@ import {createSourceOwnedRenderHook435} from './SourceOwnedRenderHooks435';
 import {StaticGeometryArena435,staticArenaBlockReserve435} from './StaticGeometryArena435';
 import type {StaticArenaAllocation435} from './StaticGeometryArena435';
 import {markResidentAttributeRange} from './resident-attribute-range';
+import {SpatialInstanceRanges379,type SpatialInstanceRange379} from './SpatialInstanceRanges379';
 
 type SourceTag={key:string;quadrant:0|1|2|3;partitions:2|4};
 const sourceTags=new WeakMap<THREE.Mesh,SourceTag>();
@@ -21,7 +22,7 @@ type CopyRun={sourceStart:number;count:number;slotStart:number};
 type Mapping={remap:Int32Array;vertexCount:number;sourceRuns:CopyRun[];slotRuns:CopyRun[]};
 type Block=Mapping&{key:string;attributes:THREE.BufferAttribute[];names:string[];versions:number[];allocation:StaticArenaAllocation435};
 type CachedSource={signature:string;stamp:string;block:Block;offset:number;indices:Uint32Array};
-type Page={key:string;root:THREE.Object3D;mesh:THREE.Mesh;arena:StaticGeometryArena435;choices:Choice[];blocks:Map<string,Block>;sources:Map<string,CachedSource>;indices:number;indexOrder:string;quadrant:number|undefined};
+type Page={key:string;root:THREE.Object3D;mesh:THREE.Mesh;arena:StaticGeometryArena435;choices:Choice[];blocks:Map<string,Block>;sources:Map<string,CachedSource>;indices:number;indexOrder:string;quadrant:number|undefined;spatial?:SpatialInstanceRanges379;boundsDirty?:boolean};
 const identity=new THREE.Matrix4();
 function identityChain(object:THREE.Object3D):boolean{for(let at:THREE.Object3D|null=object;at;at=at.parent)if(!at.matrix.equals(identity)||!at.matrixWorld.equals(identity))return false;return true;}
 function visibleBelow(object:THREE.Object3D,root:THREE.Object3D):boolean{for(let at:THREE.Object3D|null=object;at&&at!==root;at=at.parent)if(!at.visible)return false;return true;}
@@ -68,7 +69,7 @@ export class StaticSceneCompiler435 {
   return{source,root,material,key,sourceKey:tag?`owned:${tag.key}`:`object:${this.id(source)}`,signature,names,attributes,index,start,count,layers,quadrant:tag?.quadrant,partitions:tag?.partitions};
  }
  private restoreSources():void{for(const[source,layers]of this.hidden){if(source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.hidden.clear();}
- private release(page:Page):void{this.ownedProducer435?.forget(page.mesh);page.mesh.removeFromParent();page.arena.dispose();}
+ private release(page:Page):void{this.ownedProducer435?.forget(page.mesh);page.spatial?.dispose();page.mesh.removeFromParent();page.arena.dispose();}
  private container(root:THREE.Object3D):THREE.Group{
   let group=this.containers.get(root);if(!group){group=new THREE.Group();group.name='compiled-static-world435';group.matrixAutoUpdate=false;this.scene.add(group);this.containers.set(root,group);}return group;
  }
@@ -104,7 +105,22 @@ export class StaticSceneCompiler435 {
   mesh.onBeforeRender=createSourceOwnedRenderHook435<THREE.Mesh,Parameters<THREE.Mesh['onBeforeRender']>,void>((_renderer,_scene,camera)=>{const previous=this.offered.get(camera)??{entries:0,triangles:0};previous.entries++;previous.triangles+=page.indices/3;this.offered.set(camera,previous);});
   this.container(first.root).add(mesh);this.writeIndices(page,choices);this.bounds(page);this.ownedProducer435?.register(mesh,[first.material],[],{beforeRender:mesh.onBeforeRender});this.stats.rebuilds++;return page;
  }
- private bounds(page:Page):void{const sphere=new THREE.Sphere();for(const c of page.choices)if(c.count)sphere.union(c.source.geometry.boundingSphere!);page.arena.geometry.boundingSphere=sphere;}
+ private bounds(page:Page):void{
+  const sphere=new THREE.Sphere();
+  const ranges:SpatialInstanceRange379[]=[];
+  // These are the original, producer-padded chunk spheres (including tree
+  // sway). The index arena concatenates these chunks in exactly this order.
+  const spatial=page.indices>=98304&&page.quadrant!==undefined&&page.choices.length>=4;
+  let first=0;
+  for(const choice of page.choices){
+   const local=choice.source.geometry.boundingSphere!;sphere.union(local);
+   if(spatial)ranges.push({first,count:choice.count,bounds:local.getBoundingBox(new THREE.Box3())});
+   first+=choice.count;
+  }
+  page.arena.geometry.boundingSphere=sphere;page.boundsDirty=false;
+  if(spatial){page.spatial??=new SpatialInstanceRanges379(page.mesh,'indices',this.ownedProducer435);page.spatial.setRanges(ranges);}
+  else if(page.spatial){page.spatial.dispose();page.spatial=undefined;}
+ }
  private mark(attribute:THREE.BufferAttribute,start:number,end:number):void{const previous=attribute.updateRanges[0];if(previous){const priorEnd=previous.start+previous.count;previous.start=Math.min(previous.start,start);previous.count=Math.max(priorEnd,end)-previous.start;attribute.updateRanges.splice(1);}else attribute.addUpdateRange(start,end-start);attribute.needsUpdate=true;}
  /** Locate only intersecting runs. Source and slot directories have the same
   * immutable run records, ordered independently for their lookup coordinate. */
@@ -134,7 +150,7 @@ export class StaticSceneCompiler435 {
   }
   if(copied){this.mark(target,low,high);this.stats.copiedBytes+=copied;this.stats.attributePatches++;}
  }
- patchAttribute(attribute:THREE.BufferAttribute,start:number,count:number):void{const dirty=new Set<THREE.Mesh>();for(const link of this.links.get(attribute)??[]){this.copyRange(link.page,link.block,link.attribute,start,count);dirty.add(link.page.mesh);}for(const mesh of dirty)this.ownedProducer435?.dirty(mesh);}
+ patchAttribute(attribute:THREE.BufferAttribute,start:number,count:number):void{const dirty=new Set<THREE.Mesh>();for(const link of this.links.get(attribute)??[]){this.copyRange(link.page,link.block,link.attribute,start,count);if(link.block.names[link.attribute]==='position')link.page.boundsDirty=true;dirty.add(link.page.mesh);}for(const mesh of dirty)this.ownedProducer435?.dirty(mesh);}
  private completeVersions(page:Page,block:Block):void{
   for(let a=0;a<block.attributes.length;a++){const source=block.attributes[a]!;if(source.version===block.versions[a])continue;
    const version=this.retainedVersion(source);if(source.updateRanges.length)for(const range of source.updateRanges)this.copyRange(page,block,a,range.start,range.count);else this.copyVertices(page,block,a,0,block.vertexCount);block.versions[a]=version;}
@@ -148,7 +164,7 @@ export class StaticSceneCompiler435 {
    if(indicesChanged){const before=block.vertexCount;this.appendReferences(block,rows);if(block.vertexCount>before){const prior=block.allocation,next=page.arena.allocate(block.vertexCount,prior);block.allocation=next;const relocated=next!==prior;if(relocated)this.stats.blockRelocations++;for(let a=0;a<block.attributes.length;a++)this.copyVertices(page,block,a,relocated?0:before,block.vertexCount);}}
    this.completeVersions(page,block);
   }
-  this.writeIndices(page,choices);this.bounds(page);page.mesh.geometry=page.arena.geometry;this.ownedProducer435?.dirty(page.mesh);
+  this.writeIndices(page,choices);page.mesh.geometry=page.arena.geometry;this.bounds(page);this.ownedProducer435?.dirty(page.mesh);
   if(oldGeometry!==page.arena.geometry)this.stats.rebuilds++;this.stats.copiedBytes+=page.arena.stats.growthCopiedBytes-growthBytes;
  }
  /** Recompute only changed source sequences; assemble active page indices with
@@ -193,7 +209,7 @@ export class StaticSceneCompiler435 {
    this.stats.sourceObjects=this.hidden.size;this.stats.unmergedNativeObjects=this.stats.eligibleObjects-this.hidden.size;this.stats.pageObjects=this.pages.size;this.stats.sourceActiveTriangles=[...this.pages.values()].reduce((n,p)=>n+p.choices.reduce((m,c)=>m+c.count/3,0),0);this.stats.compiledActiveTriangles=[...this.pages.values()].reduce((n,p)=>n+p.indices/3,0);this.syncVisibility();
   }catch(error){this.clear();this.stats.fallbacks++;throw error;}
  }
- syncVisibility():void{for(const[root,group]of this.containers){const valid=identityChain(root);if(!valid&&!this.blockedRoots.has(root)){this.blockedRoots.add(root);for(const page of this.pages.values())if(page.root===root)for(const{source}of page.choices){const layers=this.hidden.get(source);if(layers!==undefined&&source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.stats.fallbacks++;}group.visible=valid&&!this.blockedRoots.has(root)&&visibleChain(root);}}
+ syncVisibility():void{for(const page of this.pages.values())if(page.boundsDirty)this.bounds(page);for(const[root,group]of this.containers){const valid=identityChain(root);if(!valid&&!this.blockedRoots.has(root)){this.blockedRoots.add(root);for(const page of this.pages.values())if(page.root===root)for(const{source}of page.choices){const layers=this.hidden.get(source);if(layers!==undefined&&source.layers.mask===0)source.layers.mask=layers;hiddenSourceLayers.delete(source);}this.stats.fallbacks++;}group.visible=valid&&!this.blockedRoots.has(root)&&visibleChain(root);}}
  meshes():readonly THREE.Mesh[]{return[...this.pages.values()].map(p=>p.mesh);}
  snapshot(){return{...this.stats,offeredToNativeOnly:true,cameras:[...this.offered].map(([camera,data])=>({uuid:camera.uuid,type:camera.type,...data})),pages:[...this.pages.values()].map(p=>({mesh:p.mesh.uuid,material:(p.mesh.material as THREE.Material).uuid,root:p.root.name||p.root.type,quadrant:p.quadrant,sources:p.choices.length,vertices:[...p.blocks.values()].reduce((n,b)=>n+b.vertexCount,0),indexCount:p.indices,vertexCapacity:p.arena.vertexCapacity,indexCapacity:p.arena.indexCapacity,bufferBytes:Object.values(p.arena.geometry.attributes).reduce((n,a)=>n+a.array.byteLength,0)+p.arena.geometry.index!.array.byteLength,uniqueAttributeBlocks:p.blocks.size,sourceAttributeVertices:p.choices.reduce((n,c)=>n+c.attributes[0]!.count,0),arena:{...p.arena.stats},blocks:[...p.blocks.values()].map(b=>({key:b.key,offset:b.allocation.offset,capacity:b.allocation.capacity,vertices:b.vertexCount,runs:b.sourceRuns.length})),bounds:p.arena.geometry.boundingSphere?{center:p.arena.geometry.boundingSphere.center.toArray(),radius:p.arena.geometry.boundingSphere.radius}:null}))};}
  clear():void{this.restoreSources();for(const page of this.pages.values())this.release(page);this.pages.clear();this.links.clear();this.blockedRoots.clear();for(const group of this.containers.values())group.removeFromParent();this.containers.clear();this.offered.clear();this.stats.eligibleObjects=this.stats.candidateFamilies=this.stats.unmergedNativeObjects=this.stats.sourceObjects=this.stats.pageObjects=this.stats.sourceActiveTriangles=this.stats.compiledActiveTriangles=0;}

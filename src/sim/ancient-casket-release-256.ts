@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema271OrLater} from './schema-compatibility-257.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -98,7 +99,7 @@ export function planAncientCasketRelease256(w:World,target:AncientCasket256,rele
   // move exactly once. Failed Near Things remain owned by the same holder.
   for(const p of parts){if(!p.clock.commit())throw Error('Casket clock changed inside synchronous commit');}
   for(const a of actors){a.actor.x=a.cell.x;a.actor.z=a.cell.z;if(a.human)w.pawns.push(a.actor as Pawn);else w.wildlife!.animals.push(a.actor as WildAnimal);}
-  for(const i of items){if(i.cell)assignPileOwner(i.pile,{type:'ground',...i.cell});w.piles.push(i.pile as MaterialPile);}
+  for(const i of items){if(i.cell)assignPileOwner(i.pile,{type:'ground',...i.cell});appendPileEntries(w.piles,i.pile as MaterialPile);}
   const random=()=>healthRandom(w),clinicalRandom=ancientCasketEjectionRandom256(w);
   for(let index=0;index<parts.length;index++){
    const part=parts[index]!,s=part.c.casket,moved=new Set(part.actors.map(p=>p.actor));

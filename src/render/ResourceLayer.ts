@@ -16,6 +16,7 @@ import { mergedInstances,noise,resourceBrushData,type ResourceBrushData,type Res
 import type { NaturalPresentationChange } from './NaturalResourcePresentation';
 import type {NaturalAppearanceReader} from './natural-appearance-pass';
 import {readSceneResourceFrame,type SceneResourceFrame} from './scene-resource-index';
+import {readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
 import {ResourceTargetTint} from './resource-target-tint';
 import {ResourceRangeBounds} from './resource-range-bounds';
 import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
@@ -35,6 +36,7 @@ import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {LEGACY_TREE_PAINT_TABLE} from './origami/baked/trees/palette';
 import {ResourcePreparedAtlas} from './surfaces/ResourcePreparedAtlas';
+import {worldCoordinateChild} from './WorldCoordinateGroup';
 
 const resourceIdentity=(world:World,resource:World['resources'][number]):string=>{
   const support=hydroponicFloraHeight(world,resource);
@@ -48,7 +50,11 @@ const EXTRA_CHUNK='+';
 const spatialChunkKey=(key:string):string=>key.endsWith(EXTRA_CHUNK)?key.slice(0,-EXTRA_CHUNK.length):key;
 const CHOP_RECOIL_SECONDS = .55;
 type ResourceObject=THREE.Mesh|THREE.LineSegments;
+type Resource=World['resources'][number];
+type ResourceRead={resource:Resource;identity:string;size:number;ripe:boolean;leafless:boolean};
+type ResourceLookup=Pick<ReadonlyMap<number,Resource>,'get'>;
 type TreePart = { mesh:ResourceObject; range:ResourceRange; positions:Float32Array; normals:Float32Array; expansions?:Float32Array; brush?:ResourceBrushData;upload:{start:number;count:number} };
+type MutableTreeBase={positions:Float32Array;expansions?:Float32Array;brush?:ResourceBrushData};
 type TreeHit = { at:number; x:number; z:number; axisX:number; axisZ:number; angle:number; sample?:AnimationSampleHandle; pendingPose?:boolean };
 export interface TreeSurfaceSource {readonly pastelTexture:THREE.DataTexture;readonly configure:(material:THREE.NodeMaterial)=>void}
 function disposeTreeResources(resources:readonly{dispose():void}[],message:string):void{const errors:unknown[]=[];for(const resource of resources)try{resource.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,message);}
@@ -114,7 +120,7 @@ function retainResources(group: THREE.Group, alive: Set<number>): void {
 
 /** Reapply a resource's visible size from the immutable merged positions.
  * This avoids cumulative float drift and keeps index-mask ranges stable. */
-function resizeResources(world:World,group:THREE.Group,resources:ReadonlyMap<number,World['resources'][number]>,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>,graphics?:GraphicsStyleContext):void {
+function resizeResources(world:World,group:THREE.Group,resources:ResourceLookup,originalSizes:Map<number,number>,currentSizes:Map<number,number>,nextSizes:Map<number,number>,bounds:WeakMap<THREE.BufferGeometry,ResourceRangeBounds>,graphics?:GraphicsStyleContext):void {
   const changed=new Set<number>();
   for(const [id,size] of nextSizes)if(currentSizes.get(id)!==size&&originalSizes.has(id))changed.add(id);
   if(!changed.size)return;
@@ -196,6 +202,10 @@ export class ResourceLayer {
   private readonly chunks=new Map<string,{signature:string;group:THREE.Group;identities:Map<number,string>;originalSizes:Map<number,number>;currentSizes:Map<number,number>;visibleKeys:Set<number>;treeIds:number[];treeModels:readonly TreeModel[];treeCount:number;anonymousTreeCount:number}>();
   private readonly resourceChunks=new Map<number,string>();
   private readonly treeParts=new Map<number,TreePart[]>();
+  /** Born on the first growth of a chunk. Immutable merged originals remain
+   * the resize reference; the private recoil base receives only actual changed
+   * ranges thereafter. Mesh retirement releases the copy with the geometry. */
+  private readonly mutableTreeBases=new WeakMap<ResourceObject,MutableTreeBase>();
   private readonly treeHits=new Map<number,TreeHit>();
   private readonly treeCells=new Map<number,number>();
   private treeCellsPending:World|undefined;
@@ -329,14 +339,17 @@ export class ResourceLayer {
       this.wearPlain=context.createWearMaterial(position,uv());this.wearWind=context.createWearMaterial(this.makeWindPosition(position),uv());
       this.wearPlain.userData.rendererOwned=this.wearWind.userData.rendererOwned=true;
       const world=this.cachedTreeUpdate?.world;
-      if(world){let byId:Map<number,World['resources'][number]>|undefined;const resourcesById=()=>byId??=new Map(world.resources.map(r=>[r.id,r]));
+      if(world){let byId:ResourceLookup|undefined;let literal:Map<number,Resource>|undefined;const directory=readResidentCollectionDirectory379(world,'resources');
+        const fallback=()=>literal??=new Map(world.resources.map(r=>[r.id,r]));
+        const resourcesById=()=>byId??=(directory?{get(id:number){if(literal)return literal.get(id);const at=directory.source(id);return at!==undefined?world.resources[at]:directory.capturedSource(id)!==undefined?fallback().get(id):undefined;}}:fallback());
         for(const chunk of this.chunks.values())this.appendOptionalWear(chunk.group,world,chunk.originalSizes,chunk.currentSizes,chunk.currentSizes,true,resourcesById);}
     }
     this.refreshTreeCensus();this.compiledMaterialsChanged435?.();
   }
-  /** `resourcesById` is the same complete id map for this World; callers that
-   * rebuild many chunks in one pass share it instead of re-indexing every chunk. */
-  private appendOptionalWear(group:THREE.Group,world:World,initialSizes:Map<number,number>,_currentSizes:Map<number,number>,targetSizes:Map<number,number>,registerTrees=true,resourcesById?:()=>ReadonlyMap<number,World['resources'][number]>):void{
+  /** Lookup needs only this chunk's range owners. Confirmed unique IDs can
+   * use the same local roster as body geometry, or the accepted source directory
+   * on a style change. Unmarked Worlds still use their historical last-ID map. */
+  private appendOptionalWear(group:THREE.Group,world:World,initialSizes:Map<number,number>,_currentSizes:Map<number,number>,targetSizes:Map<number,number>,registerTrees=true,resourcesById?:()=>ResourceLookup):void{
     if(!this.wearPlain||!this.graphicsStyle)return;
     const staging=new THREE.Group(),resources=resourcesById?.()??new Map(world.resources.map(r=>[r.id,r]));
     const templates:{geometry:THREE.BufferGeometry;items:Placement[];canopy:boolean}[]=[],treeParts=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[];canopy:boolean}>(),flora=this.wearFlora!.createBatch();
@@ -594,15 +607,21 @@ export class ResourceLayer {
     hit.angle=angle;
   }
 
-  private refreshTreeBases(ids:readonly number[]):void {
-    const copies=new Map<ResourceObject,Float32Array>(),expansions=new Map<ResourceObject,Float32Array>(),brushes=new Map<ResourceObject,ResourceBrushData>();
+  private refreshTreeBases(ids:readonly number[],changed:ReadonlySet<number>):void {
     for(const id of ids)for(const part of this.treeParts.get(id)??[]){
-      let positions=copies.get(part.mesh);
-      if(!positions){positions=new Float32Array((part.mesh.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array);copies.set(part.mesh,positions);}
-      part.positions=positions;
-      const expand=part.mesh.geometry.getAttribute('origamiWearExpand');
-      if(expand){let copy=expansions.get(part.mesh);if(!copy){copy=new Float32Array(expand.array as Float32Array);expansions.set(part.mesh,copy);}part.expansions=copy;}
-      const brush=resourceBrushData(part.mesh.geometry);if(brush){let copy=brushes.get(part.mesh);if(!copy){copy={base:brush.base.slice(),width:brush.width.slice(),rough:brush.rough.slice()};brushes.set(part.mesh,copy);}part.brush=copy;}
+      const mesh=part.mesh;let base=this.mutableTreeBases.get(mesh);
+      if(base&&part.positions===base.positions&&!changed.has(id))continue;
+      const positions=mesh.geometry.getAttribute('position').array as Float32Array,expand=mesh.geometry.getAttribute('origamiWearExpand')?.array as Float32Array|undefined,brush=resourceBrushData(mesh.geometry);
+      if(!base){
+        base={positions:positions.slice(),expansions:expand?.slice(),brush:brush?{base:brush.base.slice(),width:brush.width.slice(),rough:brush.rough.slice()}:undefined};
+        this.mutableTreeBases.set(mesh,base);
+      }else if(changed.has(id)){
+        const start=part.range.vertexStart*3,end=start+part.range.vertexCount*3;
+        base.positions.set(positions.subarray(start,end),start);
+        if(base.expansions&&expand)base.expansions.set(expand.subarray(start,end),start);
+        if(base.brush&&brush){base.brush.base.set(brush.base.subarray(start,end),start);base.brush.width.set(brush.width.subarray(start,end),start);base.brush.rough.set(brush.rough.subarray(start,end),start);}
+      }
+      part.positions=base.positions;part.expansions=base.expansions;part.brush=base.brush;
     }
   }
   update(world: World, newMap: boolean, changes?: ReadonlyMap<number,NaturalPresentationChange>,frame?:SceneResourceFrame,appearance?:NaturalAppearanceReader): void {
@@ -634,12 +653,15 @@ export class ResourceLayer {
     if(this.disposed)throw new Error('Resource layer disposed');this.cachedTreeUpdate={world,appearance};this.treeCatalog?.assertCurrent();
     const size=(r:World['resources'][number])=>appearance?.read(r).size??floraSize(world,r);
     const ripe=(r:World['resources'][number])=>appearance?appearance.harvestable(r):harvestable(world,r);
-    const leafless=(r:World['resources'][number])=>appearance?.read(r).leafless??plantLeafless(world,r);
-    const identity=(r:World['resources'][number])=>resourceIdentity(world,r)+(r.kind==='tree'?`:tree-shape:${treeModelVariant(world)}:blight:${r.blight?1:0}`:'');
-    // One complete id index per application, shared by every rebuilt chunk's
-    // optional wear (previously rebuilt from all World resources per chunk).
-    let resourceIndex:Map<number,World['resources'][number]>|undefined;
-    const resourcesById=()=>resourceIndex??=new Map(world.resources.map(r=>[r.id,r]));
+    const variant=treeModelVariant(world),identity=(r:Resource)=>resourceIdentity(world,r)+(r.kind==='tree'?`:tree-shape:${variant}:blight:${r.blight?1:0}`:'');
+    // Pure finite catalogue lookup, once per species in this synchronous apply.
+    const treeModels=new Map<Resource['species'],TreeModel>(),treeModel=(r:Resource)=>{
+      let model=treeModels.get(r.species);if(model)return model;
+      if(r.species!==undefined&&!isTreeSpecies(r.species))throw Error('Unsupported actual tree model species');
+      model=this.treeModels.get(r.species,variant);treeModels.set(r.species,model);return model;
+    };
+    let resourceIndex:Map<number,Resource>|undefined;
+    const rawResourcesById=()=>resourceIndex??=new Map(world.resources.map(r=>[r.id,r]));
     // ColonyRenderer configures the shared materials after constructing this
     // layer. Copy its lighting node before the first tree shader is compiled.
     const plainOutput=this.staticMaterial.outputNode;
@@ -724,40 +746,55 @@ export class ResourceLayer {
     // resizes or hides. A companion beyond RESOURCE_CHUNK_ADDITIONS members, an
     // identity change or a complete update rebuilds the chunk with all members
     // and empties its companion.
-    const work=new Map<string,readonly World['resources'][number][]>(),extrasToClear=new Set<string>();
+    const work=new Map<string,readonly ResourceRead[]>(),extrasToClear=new Set<string>();
     for(const [key,list] of chunks){
       const previous=this.chunks.get(key),extraKey=key+EXTRA_CHUNK,extra=this.chunks.get(extraKey),extraActive=!!extra&&extra.signature!=='';
-      let base:World['resources'][number][]|undefined;const more:World['resources'][number][]=[];
+      // The input for partitioning is also the next chunk's body identity.
+      // Carry it forward rather than recomputing the whole key for its signature,
+      // compatibility check, and the published identity map.
+      const rows=list.map(resource=>{
+        const observation=appearance?.read(resource);
+        return{resource,identity:identity(resource),size:observation?.size??floraSize(world,resource),ripe:resource.kind==='berries'&&ripe(resource),leafless:observation?.leafless??plantLeafless(world,resource)};
+      });
+      let base:ResourceRead[]|undefined;const more:ResourceRead[]=[];
       if(partial&&previous&&previous.signature!==''){
         base=[];
-        for(const r of list){
-          const now=identity(r),old=previous.identities.get(r.id);
-          if(old!==undefined){if(old===now){base.push(r);continue;}base=undefined;break;}
+        for(const row of rows){
+          const r=row.resource,now=row.identity,old=previous.identities.get(r.id);
+          if(old!==undefined){if(old===now){base.push(row);continue;}base=undefined;break;}
           const added=extraActive?extra!.identities.get(r.id):undefined;
           if(added!==undefined&&added!==now){base=undefined;break;}
-          more.push(r);
+          more.push(row);
         }
         if(base&&more.length>RESOURCE_CHUNK_ADDITIONS)base=undefined;
       }
       if(base){work.set(key,base);if(more.length)work.set(extraKey,more);else if(extraActive)extrasToClear.add(extraKey);}
-      else work.set(key,list);
+      else work.set(key,rows);
     }
     if(partial)for(const key of affected)if(!chunks.has(key)&&this.chunks.get(key+EXTRA_CHUNK)?.signature)extrasToClear.add(key+EXTRA_CHUNK);
     for (const [key, previous] of this.chunks) if (((!partial||affected.has(key))&&!work.has(key)||extrasToClear.has(key)) && previous.signature !== '') this.clearResourceChunk(key,previous);
     const rebuildStarted=performance.now();let rebuilt=0;
-    for (const [key, chunk] of work) {
+    for (const [key, rows] of work) {
       const previous = this.chunks.get(key);
       const models=new Map<string,TreeModel>();let treeCount=0,anonymousTreeCount=0;
-      const signature=chunk.map(resource=>{if(resource.kind==='tree'){treeCount++;if(resource.species===undefined)anonymousTreeCount++;if(resource.species!==undefined){if(!isTreeSpecies(resource.species))throw Error('Unsupported actual tree model species');const model=this.treeModels.get(resource.species,treeModelVariant(world));models.set(model.key,model);}}return`${resource.id}:${identity(resource)}:${size(resource)}:${resource.kind==='berries'&&ripe(resource)?1:0}:${leafless(resource)}`;}).join('|');
+      const signature=rows.map(row=>{
+        const r=row.resource;if(r.kind==='tree'){treeCount++;if(r.species===undefined)anonymousTreeCount++;else{const model=treeModel(r);models.set(model.key,model);}}
+        return`${r.id}:${row.identity}:${row.size}:${row.ripe?1:0}:${row.leafless}`;
+      }).join('|');
       if(previous?.signature===signature){this.deferredChunks.delete(key);continue;}
       this.graphicsComparisonRevision++;
-      const sizes=new Map(chunk.map(resource=>[resource.id,size(resource)]));
-      const visibleKeys=new Set(chunk.flatMap(r=>visibleResourceKeys(world,r,appearance)));
-      if (previous&&chunk.every(r => previous.identities.get(r.id) === identity(r))) {
-        const treeSizeChanged=previous.treeIds.some(id=>previous.currentSizes.get(id)!==sizes.get(id));
-        if(treeSizeChanged)this.clearChopRecoil();
-        resizeResources(world,previous.group,new Map(chunk.map(resource=>[resource.id,resource])),previous.originalSizes,previous.currentSizes,sizes,this.rangeBounds,this.graphicsStyle);
-        if(treeSizeChanged)this.refreshTreeBases(previous.treeIds);
+      const sizes=new Map(rows.map(row=>[row.resource.id,row.size])),visibleKeys=new Set<number>();
+      for(const row of rows){const r=row.resource;visibleKeys.add(r.id);if(r.kind==='berries'||r.species||isMedicinalPlant(r)){if(!row.leafless)visibleKeys.add(-r.id*2);if(r.kind==='berries'?row.ripe:ripe(r))visibleKeys.add(-r.id*2-1);}}
+      let resourceLookup:Map<number,Resource>|undefined;
+      const chunkResourcesById=()=>resourceLookup??=new Map(rows.map(row=>[row.resource.id,row.resource]));
+      if (previous&&rows.every(row => previous.identities.get(row.resource.id) === row.identity)) {
+        const changedTrees=previous.treeIds.filter(id=>previous.currentSizes.get(id)!==sizes.get(id));
+        // Resetting recoil is itself a position writer. Include those exact
+        // ranges as well, before refreshing the resting base for this chunk.
+        const refreshTrees=changedTrees.length?new Set([...changedTrees,...this.treeHits.keys()]):undefined;
+        if(refreshTrees)this.clearChopRecoil();
+        resizeResources(world,previous.group,chunkResourcesById(),previous.originalSizes,previous.currentSizes,sizes,this.rangeBounds,this.graphicsStyle);
+        if(refreshTrees)this.refreshTreeBases(previous.treeIds,refreshTrees);
         // Growth changes vertex positions, not the selected original ranges.
         // Keep their index version stable until actual membership changes;
         // otherwise the static compiler remaps/uploads the same triangles.
@@ -772,7 +809,7 @@ export class ResourceLayer {
       // A chunk rebuilt with all its members absorbs its companion's additions.
       if(!key.endsWith(EXTRA_CHUNK)){const extra=this.chunks.get(key+EXTRA_CHUNK);if(extra&&extra.signature!=='')this.clearResourceChunk(key+EXTRA_CHUNK,extra);}
       if(previous)for(const id of previous.treeIds)this.treeParts.delete(id);
-      const group = previous?.group ?? new THREE.Group();
+      const group = previous?.group ?? worldCoordinateChild(this.group);
       if (previous) {this.preparedResources?.forgetContribution(key);this.targetTint.restore(group);clearGroup(group);} else this.group.add(group);
       group.name = `Resources ${key}`;
       const trunks: Placement[] = [], crowns: Placement[] = [], upperCrowns: Placement[] = [];
@@ -783,25 +820,25 @@ export class ResourceLayer {
       const treeBodies=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[]}>(),treeCanopies=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[]}>();
       const continuousBodies=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[]}>(),continuousCanopies=new Map<THREE.BufferGeometry,{geometry:THREE.BufferGeometry;items:Placement[]}>();
       try{
-      for (const resource of chunk) {
+      for (const row of rows) {
+        const resource=row.resource;
         const { x, z } = resource;
         const parts = [trunks, crowns, upperCrowns, rocks, bushes, berries];
         const lengths = parts.map(items => items.length);
         const n = noise(x, z, 77), turn = n * Math.PI * 2;
         if(resource.kind==='tree'){
-          if(resource.species!==undefined&&!isTreeSpecies(resource.species))throw Error('Unsupported actual tree model species');
-          const model=this.treeModels.get(resource.species,treeModelVariant(world)),placed=model.place(resource,turn,size(resource));
+          const model=treeModel(resource),placed=model.place(resource,turn,row.size);
           if(!placed?.length)throw Error('Shared tree model has no actual placements');
           for(const {part,item}of placed){
             const target=model.species===undefined?(part.canopy?continuousCanopies:continuousBodies):(part.canopy?treeCanopies:treeBodies);let batch=target.get(part.geometry);
             if(!batch){const geometry=this.surfaceModels.map(part.geometry).clone();if(model.species===undefined)geometry.deleteAttribute('bakedUv');treeClones.add(geometry);geometry.addEventListener('dispose',()=>treeClones.delete(geometry));batch={geometry,items:[]};target.set(part.geometry,batch);}
-            const role=part.primitiveKind==='cactus'?'cactus':part.canopy?'canopy':'trunk',profile=resource.species===undefined?0:LEGACY_TREE_PAINT_TABLE[resource.species].roles[role]??0;
+            const role=part.primitiveKind==='cactus'?'cactus':part.canopy?'canopy':'trunk',profile=model.species===undefined?0:LEGACY_TREE_PAINT_TABLE[model.species].roles[role]??0;
             batch.items.push({...item,referenceColor:part.canonicalPlacement.color,profile});
           }
           sharedTreeIds.add(resource.id);continue;
         }
-        if(origamiParts?.append(world,resource,turn,size(resource)))continue;
-        if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,size(resource));continue;}
+        if(origamiParts?.append(world,resource,turn,row.size))continue;
+        if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,row.size);continue;}
         if (resource.kind === 'rock') {
           rocks.push({ x: x - 0.1, y: 0.3, z, sx: 0.46 + n * 0.14, sy: 0.35 + n * 0.15, sz: 0.43, ry: turn, color: resource.stone ? stoneColor(resource.stone) : 0x92998d, pigment:'stone' });
           rocks.push({ x: x + 0.3, y: 0.15, z: z + 0.2, sx: 0.25, sy: 0.24, sz: 0.25, ry: -turn, color: resource.stone ? stoneColor(resource.stone) : 0xa8ad9c, pigment:'stone' });
@@ -838,9 +875,9 @@ export class ResourceLayer {
         if(!mesh)continue;this.sharedTreeMeshes.add(mesh);
         if(isCanopy){this.sharedTreeCanopies.add(mesh);mesh.name='tree-canopy';mesh.visible=this.foliageVisible;}
       }
-      this.appendOptionalWear(group,world,new Map(sizes),new Map(sizes),new Map(sizes),false,resourcesById);
+      this.appendOptionalWear(group,world,sizes,sizes,sizes,false,indexedChunks?chunkResourcesById:rawResourcesById);
       retainResources(group,visibleKeys);
-      const trees=new Map(chunk.filter(r=>r.kind==='tree').map(r=>[r.id,r] as const));
+      const trees=new Map(rows.flatMap(({resource:r})=>r.kind==='tree'?[[r.id,r] as const]:[]));
       const treeIds=[...trees.keys()],treeSet=new Set(treeIds);
       for(const object of group.children){
         const mesh=object as ResourceObject,source=mesh.userData.resourceRanges as ResourceRangeData|undefined;
@@ -890,8 +927,8 @@ export class ResourceLayer {
       // Every new actual resident geometry needs address publication, even
       // when its canonical variant set reuses an existing admitted texture.
       this.preparedResources?.setResidents(key,group.children.flatMap(object=>object instanceof THREE.Mesh&&!object.userData.referenceCompanion?[object.geometry]:[]));
-      this.chunks.set(key,{signature,group,identities:new Map(chunk.map(r=>[r.id,identity(r)])),originalSizes:new Map(sizes),currentSizes:new Map(sizes),visibleKeys,treeIds,treeModels:[...models.values()],treeCount,anonymousTreeCount});
-      if(this.targetPreviewIds.size&&chunk.some(r=>this.targetPreviewIds.has(r.id)))this.targetTint.apply(group,this.targetPreviewIds);
+      this.chunks.set(key,{signature,group,identities:new Map(rows.map(row=>[row.resource.id,row.identity])),originalSizes:new Map(sizes),currentSizes:new Map(sizes),visibleKeys,treeIds,treeModels:[...models.values()],treeCount,anonymousTreeCount});
+      if(this.targetPreviewIds.size&&rows.some(row=>this.targetPreviewIds.has(row.resource.id)))this.targetTint.apply(group,this.targetPreviewIds);
       }finally{disposeTreeResources([...treeClones],'Unconsumed prepared tree template cleanup failed');}
     }
     this.refreshTreeCensus();

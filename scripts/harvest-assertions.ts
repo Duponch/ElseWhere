@@ -119,6 +119,24 @@ export function presentationStarvations<T extends PresentedFrame>(frames:readonl
   return stalls;
 }
 
+/** Diagnostic companion to the displayed-tick check. Even when every RAF
+ * advances the CPU timeline, a run without an actual scene submission leaves
+ * the last image on screen. Keep that wall-time interval, including skipped
+ * calls and an outage still in progress at the end of a recording. Running
+ * speed changes cannot reset its age; an authoritative pause can. */
+export function presentationSubmissionStalls<T extends PresentedFrame&{submitted:boolean}>(frames:readonly T[]):{previous:T;current:T}[] {
+  const stalls:{previous:T;current:T}[]=[];let anchor:T|undefined,prior:T|undefined,reported=false;
+  for(const frame of frames){
+    if(!anchor||frame.speed<=0||prior!.speed<=0){anchor=frame;reported=false;}
+    else {
+      if(!reported&&frame.at-anchor.at>1000){stalls.push({previous:anchor,current:frame});reported=true;}
+      if(frame.submitted){anchor=frame;reported=false;}
+    }
+    prior=frame;
+  }
+  return stalls;
+}
+
 /** A frame straddling confirmation already visibly changes speed. Requiring a
  * whole interval at the final rate measures settling one frame later instead.
  * A freeze, overshoot, unchanged rate or non-finite sample is never a response. */

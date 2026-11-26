@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {footprintCells} from './definitions.ts';
 import {captureGeographicGenerationReachability256} from './geographic-generation-reachability-256.ts';
@@ -28,7 +29,7 @@ function clear(w:World,s:Structure,unroofed=false):boolean {
  const support=buildingSupportNeed256(s);if(!support)return false;
  const cells=footprintCells(s);return cells.every(c=>c.x>=0&&c.z>=0&&c.x<w.width&&c.z<w.height&&terrainSupportsAffordance256(w.tiles[c.z*w.width+c.x]!,support,w)&&!w.tiles[c.z*w.width+c.x]!.mineable&&(!unroofed||!isRoofed(w,c.z*w.width+c.x))&&!w.structures.some(b=>footprintCells(b).some(p=>p.x===c.x&&p.z===c.z))&&!w.resources.some(r=>r.x===c.x&&r.z===c.z)&&!w.piles.some(p=>p.owner.type==='ground'&&p.owner.x===c.x&&p.owner.z===c.z)&&!w.pawns.some(p=>p.x===c.x&&p.z===c.z));
 }
-function append(w:World,s:Structure):void {if(!Number.isSafeInteger(w.nextId+1))throw Error('Site mechanical building namespace exhausted');w.structures.push(s);w.nextId++;}
+function append(w:World,s:Structure):void {if(!Number.isSafeInteger(w.nextId+1))throw Error('Site mechanical building namespace exhausted');appendStructureEntries(w,s);w.nextId++;}
 /** Actual edgeDefence subset: current mini-turrets, whole original guns with
  * their normal finite240 ammunition quanta. No mortar/lighting substitute.
  * Caller retains the returned references for its real401/421 power phase. */

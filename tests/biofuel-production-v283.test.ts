@@ -17,6 +17,8 @@ import {releaseWork} from '../src/sim/work-release.ts';
 import type {CookingOrder} from '../src/sim/order-types.ts';
 import type {World} from '../src/sim/types.ts';
 import {biofuelCamp} from './helpers/biofuel-v283.ts';
+import {asOldSchema} from './scenarios/old-schema.ts';
+import {validateCampaignSchema378} from '../src/sim/serialization.ts';
 import {controlledInjury} from './scenarios/health.ts';
 
 const count=(w:World,item:string)=>w.piles.reduce((sum,p)=>sum+(p.item===item?p.quantity:0),0);
@@ -86,16 +88,16 @@ test('research and schema gate creation atomically without a crafting skill requ
   expect(queryCookingBillStatus(w,station,newCookingBill(1,'chemfuel-from-wood')).code).toBe('research-required');
 });
 
-test('a proposal reserves seven physical ten-unit trips without mutation or shared stock credit',()=>{
-  const {world:w,refineryId}=camp(),p=w.pawns[0]!,before=serializeWorld(w);
+test.each([[378,7,10],[379,1,70]])('schema %i proposal reserves %i physical trips of %i units without mutation or shared stock credit',(version,trips,units)=>{
+  const scene=camp(),w=version===378?JSON.parse(asOldSchema(serializeWorld(scene.world),version)) as World:scene.world,{refineryId}=scene,p=w.pawns[0]!,before=JSON.stringify(w);
   const proposal=planCookingOrder(w,p,refineryId),order=proposal.order as CookingOrder;
-  expect(proposal.label).toBe('Raffiner du biocarburant');expect(order.cooking.ingredients).toHaveLength(7);
+  expect(proposal.label).toBe('Raffiner du biocarburant');expect(order.cooking.ingredients).toHaveLength(trips);
   expect(new Set(order.cooking.ingredients.map(i=>i.pileId)).size).toBe(1);
-  expect(order.cooking.ingredients.every(i=>i.stage==='source'&&i.quantity===10)).toBe(true);
-  expect(validCookingOrder(order,w)).toBe(true);expect(serializeWorld(w)).toBe(before);
+  expect(order.cooking.ingredients.every(i=>i.stage==='source'&&i.quantity===units)).toBe(true);
+  expect(validCookingOrder(order,w)).toBe(true);expect(JSON.stringify(w)).toBe(before);
   p.orders.queue.push(order);expect(reservedSource(w,order.cooking.ingredients[0]!.pileId)).toBe(70);
   w.pawns[1]!.priorities.craft=1;expect(planCookingOrder(w,w.pawns[1]!,refineryId).order).toBeUndefined();
-  expect(validBiofuelProductionTransport(w,218)).toBe(true);expect(validateWorld(w)).toEqual([]);
+  expect(validBiofuelProductionTransport(w,version)).toBe(true);expect(version===378?validateCampaignSchema378(w):validateWorld(w)).toEqual([]);
 });
 
 test('foreign ownership is not a refinery source and animal products require explicit filters',()=>{
@@ -135,14 +137,14 @@ for(const recipe of ['chemfuel-from-wood','chemfuel-from-organics'] as const)tes
   expect(p.skills).toEqual(skills);expect(w.rng).toBe(rng);expect(refinery.bills![0]!.target).toBe(0);expect(validateWorld(w)).toEqual([]);
 });
 
-test('the real collection and drop loop conserves unrelated food and counts seven trips',()=>{
-  const {world:w}=camp(),p=w.pawns[0]!,carried=new Set<number>();
+test.each([[378,7],[379,1]])('schema %i real collection and drop loop conserves unrelated food and counts %i trips',(version,trips)=>{
+  const scene=camp(),w=version===378?JSON.parse(asOldSchema(serializeWorld(scene.world),version)) as World:scene.world,p=w.pawns[0]!,carried=new Set<number>();
   addGroundMaterial(w,'food',10,{x:9,z:11},'rice');const skills=structuredClone(p.skills);
   for(let i=0;i<2400&&!(count(w,'chemfuel')===35&&p.cooking===null);i++){
     stepWorld(w);for(const entry of p.cooking?.ingredients??[])if(entry.stage==='held')carried.add(entry.pileId);
   }
-  expect(carried.size).toBe(7);expect(count(w,'wood')).toBe(0);expect(count(w,'chemfuel')).toBe(35);
-  expect(count(w,'rice')).toBe(10);expect(p.cooking).toBeNull();expect(p.skills).toEqual(skills);expect(validateWorld(w)).toEqual([]);
+  expect(carried.size).toBe(trips);expect(count(w,'wood')).toBe(0);expect(count(w,'chemfuel')).toBe(35);
+  expect(count(w,'rice')).toBe(10);expect(p.cooking).toBeNull();expect(p.skills).toEqual(skills);expect(version===378?validateCampaignSchema378(w):validateWorld(w)).toEqual([]);
 });
 
 test('held, working and output recipes resume with identical physical continuation',()=>{

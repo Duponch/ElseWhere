@@ -1,6 +1,6 @@
 /** Exact shared paint residency and coverage-only repaint; full authored raster retained. */
 import * as THREE from 'three/webgpu';
-import {uniform,texture,uv,vec2,vec3,vec4,ivec2,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
+import {uniform,renderGroup,texture,uv,vec2,vec3,vec4,ivec2,float,Fn,If,varying,mix,smoothstep,workingToColorSpace,colorSpaceToWorking} from 'three/tsl';
 import {metadataTexel} from './surfaces/MetadataTexel';
 import {SharedSurfacePreparationRegistry,SurfacePreparationSuperseded} from './surfaces/SharedSurfacePreparation';
 import {PreparedFaceStrokes} from './surfaces/PreparedFaceStrokes';
@@ -47,24 +47,28 @@ export class GraphicsStyleContext {
  pipelineKey:GraphicsStylePipelineKey;
  reliefEnabled:boolean;
  reliefLod:GlobalReliefLod|undefined;
- readonly impasto=uniform(1);readonly edges=uniform(.65);readonly wear=uniform(.75);readonly contour=uniform(.60);
+ // All these settings have one renderer-wide owner, written before the real
+ // draw/preparation transaction. The same native render-group buffer can be
+ // reused by every object of a compiled material; no per-object UBO capture
+ // is required for identical physical settings.
+ readonly impasto=uniform(1).setGroup(renderGroup);readonly edges=uniform(.65).setGroup(renderGroup);readonly wear=uniform(.75).setGroup(renderGroup);readonly contour=uniform(.60).setGroup(renderGroup);
  /** Image encoding is data shared by every surface. It never selects models,
   * renderer instances or a second family of material/lighting programs. */
- readonly surfaceEncoding=uniform(0);
- readonly contourSpan=uniform(.6675);readonly lineOpacity=uniform(.45475625);readonly wearOpacity=uniform(.560625);
+ readonly surfaceEncoding=uniform(0).setGroup(renderGroup);
+ readonly contourSpan=uniform(.6675).setGroup(renderGroup);readonly lineOpacity=uniform(.45475625).setGroup(renderGroup);readonly wearOpacity=uniform(.560625).setGroup(renderGroup);
  /** Both edge looks share one geometry and draw. Black takes precedence at
   * equal intensity; reducing it progressively reveals the original kraft. */
- readonly blackEdges=uniform(.45475625);readonly lineColor=uniform(new THREE.Color(0));
- readonly edgeWidth=uniform(1);
- readonly strokeImperfection=uniform(.45);
- readonly brushColor=uniform(new THREE.Color(0x241c18));
+ readonly blackEdges=uniform(.45475625).setGroup(renderGroup);readonly lineColor=uniform(new THREE.Color(0)).setGroup(renderGroup);
+ readonly edgeWidth=uniform(1).setGroup(renderGroup);
+ readonly strokeImperfection=uniform(.45).setGroup(renderGroup);
+ readonly brushColor=uniform(new THREE.Color(0x241c18)).setGroup(renderGroup);
  edgeVisuals:ReferenceEdgeVisuals=referenceEdgeVisuals();
  private colorArray?:THREE.DataArrayTexture;private readonly banks:THREE.DataArrayTexture[]=[];
  private paperArray?:THREE.DataArrayTexture;private coverageArray?:THREE.DataArrayTexture;
  private paperHeightArray?:THREE.DataArrayTexture;
  private faceProfilesTexture?:THREE.DataTexture;
  private readonly paintPool:VirtualPaintPool;
- private readonly activeBankCount=uniform(0);private readonly genericFaceLayer=uniform(0);
+ private readonly activeBankCount=uniform(0).setGroup(renderGroup);private readonly genericFaceLayer=uniform(0).setGroup(renderGroup);
  private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
  private atlasPaintEpoch=0;
  private protectedDemandDeclared=false;

@@ -1,3 +1,4 @@
+import {pileById,appendPileEntries} from './pile-identity-directory.ts';
 import {planAnimalBodyRetirement256} from './animal-body-retirement-256.ts';
 import { butcherStationEfficiency } from './food-workstations.ts';
 import { corpseFresh,corpseProducts } from './corpses.ts';
@@ -16,7 +17,7 @@ import { structureById } from './structure-navigation.ts';
 /** Products are decided together; the secondary output is placed in physical
  * reach, while the first output uses the existing single-cargo delivery task. */
 export function finishButchery(world:World,pawn:Pawn,bill:CookingBill,context:ProductionContext):boolean {
-  const task=pawn.cooking!,corpse=world.piles.find(p=>p.id===task.ingredients[0]?.pileId);
+  const task=pawn.cooking!,corpse=pileById(world,task.ingredients[0]?.pileId);
   if(!corpse||!corpseFresh(corpse,world.tick)||corpse.owner.type!=='ground')return false;
   const skill=completedCookingSkill(pawn,task.workTicks??0),worker={...pawn,skills:{...pawn.skills,cooking:skill}};
   const station=structureById(world,task.stationId);if(!station)return false;
@@ -47,7 +48,7 @@ export function finishButchery(world:World,pawn:Pawn,bill:CookingBill,context:Pr
   }
   if(primaryQuantity){
     const id=world.nextId++;
-    world.piles.push({id,item:meatItem,kind:ITEM_DEFINITIONS[meatItem].kind,quantity:primaryQuantity,owner:{type:'pawn',pawnId:pawn.id},...freshRot(meatItem,world.tick)});
+    appendPileEntries(world.piles,{id,item:meatItem,kind:ITEM_DEFINITIONS[meatItem].kind,quantity:primaryQuantity,owner:{type:'pawn',pawnId:pawn.id},...freshRot(meatItem,world.tick)});
     task.ingredients=[];task.productId=id;task.phase='output';task.progress=0;delete task.workTicks;task.storageId=null;delete task.storageQuantity;
   }else {pawn.cooking=null;if(pawn.orders.active==='cook')pawn.orders.active=null;pawn.state='idle';}
   pawn.path=[];pawn.planCooldown=0;

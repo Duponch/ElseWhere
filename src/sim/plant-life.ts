@@ -11,6 +11,9 @@ import { outdoorTemperature } from './temperature.ts';
 import { damageResource } from './thing-damage.ts';
 import type { LightEnvironment,LightReader } from './light-environment.ts';
 import { structuresOfKind } from './structure-navigation.ts';
+import { terrainJournalReadOwner } from './terrain-read-scope.ts';
+import { verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
+import {markResourceChanged,captureResourceJournal,readResourceJournal,resourceMembershipUnchanged,type ResourceJournalCursor} from './resource-mutation-journal.ts';
 
 /** since starts observation. bornAt exists only when actual sowing is known. */
 export interface PlantLife {
@@ -48,23 +51,58 @@ export function applyPlantFrost(world:World,plant:Resource,usesOutside:boolean,t
     if(!plant.species&&plant.kind!=='berries'&&plant.kind!=='healroot')return damageResource(world,plant,100000,'frost');
     if(plant.species&&!FLORA_DEFINITIONS[plant.species].coldLeafless)return false;
     if(isCavePlant256(plant.species,world.schemaVersion)&&CAVE_PLANT_FACTS_256[plant.species].dieIfLeafless)return damageResource(world,plant,100000,'frost');
-    life.leaflessAt=world.tick;recordResumedTreeFrost(plant);
-  } else if(life.leaflessAt!==undefined&&world.tick-life.leaflessAt>=6000){delete life.leaflessAt;clearResumedTreeLeafless(plant);}
+    life.leaflessAt=world.tick;recordResumedTreeFrost(plant);markResourceChanged(world,plant);
+  } else if(life.leaflessAt!==undefined&&world.tick-life.leaflessAt>=6000){delete life.leaflessAt;clearResumedTreeLeafless(plant);markResourceChanged(world,plant);}
   return false;
 }
 
-interface LifeIndex {source:Resource[];buckets:Resource[][]}
+interface LifeIndex {source:Resource[];cursor?:ResourceJournalCursor;buckets:Resource[][];owner:object|undefined}
 const indices=new WeakMap<World,LifeIndex>();
+function lifeBuckets(resources:readonly Resource[]):Resource[][] {
+  const buckets=Array.from({length:PLANT_LIFE_INTERVAL},()=>[] as Resource[]);
+  for(const p of resources)if(isPlant(p)&&p.plantLife)buckets[p.plantLife.nextCheck%PLANT_LIFE_INTERVAL]!.push(p);
+  return buckets;
+}
+/** Only the exclusively owned SIM maps can carry phase membership across
+ * calls: an on-map life clock advances by exactly200 here. Adoption happens
+ * before the first index; sowing/renewal append new resources. Tree extraction
+ * removes its resource, and replantation resumes its clock before appending
+ * it (tree-transfer-atomic). No producer changes an on-map plant's phase or
+ * eligibility. Public callers keep the complete rebuild on array replacement.
+ * An unknown membership transaction rebuilds from the complete source. */
+function deriveLifeIndex(previous:LifeIndex,resources:Resource[],owner:object):LifeIndex|undefined {
+  if(previous.owner!==owner||!previous.cursor)return;
+  const delta=readResourceJournal(resources,previous.cursor);if(!delta?.membershipEdits)return;
+  const buckets=previous.buckets;
+  for(const edit of delta.membershipEdits){
+   for(const plant of edit.removed)if(isPlant(plant)&&plant.plantLife){
+    const bucket=buckets[plant.plantLife.nextCheck%PLANT_LIFE_INTERVAL];if(!bucket)return;
+    const at=bucket.indexOf(plant);if(at<0)return;bucket.splice(at,1);
+    if(bucket.indexOf(plant,at)>=0)return; // repeated object: rebuild
+   }
+   for(const plant of edit.appended){if(isPlant(plant)&&plant.plantLife)buckets[plant.plantLife.nextCheck%PLANT_LIFE_INTERVAL]!.push(plant);}
+  }
+  return {source:resources,cursor:delta.cursor,buckets,owner};
+}
 
 /** One stable phase per plant. No map scan or persistent topology capture per
  * query; root supplies the currently reconciled thermal layout once per tick. */
 export function advancePlantLife(world:World,layout:ThermalLayout,providedLight?:LightEnvironment|LightReader):void {
   if(!world.climate)return;
-  let index=indices.get(world);
-  if(!index||index.source!==world.resources) {
-    const buckets=Array.from({length:PLANT_LIFE_INTERVAL},()=>[] as Resource[]);
-    for(const p of world.resources)if(isPlant(p)&&p.plantLife)buckets[p.plantLife.nextCheck%PLANT_LIFE_INTERVAL]!.push(p);
-    index={source:world.resources,buckets};indices.set(world,index);
+  const owner=terrainJournalReadOwner();let index=indices.get(world);
+  if(!index||index.source!==world.resources||index.owner!==owner||owner&&index.cursor&&!resourceMembershipUnchanged(world.resources,index.cursor)) {
+    index=owner&&index?deriveLifeIndex(index,world.resources,owner):undefined;
+    index??={source:world.resources,cursor:owner?captureResourceJournal(world.resources):undefined,buckets:lifeBuckets(world.resources),owner};
+    indices.set(world,index);
+  }
+  // Keep this simulation reader's membership cursor current in O(1). Value
+  // writers do not force a new membership scan or consume publication events.
+  if(owner)index.cursor=captureResourceJournal(world.resources);
+  // The Worker replay switch checks every slot, reference and source order
+  // against the exhaustive capture, even on ticks without due plants.
+  if(owner&&verifyTerrainWriteCaches){
+    const fresh=lifeBuckets(world.resources);
+    if(fresh.some((bucket,i)=>bucket.length!==index.buckets[i]!.length||bucket.some((plant,j)=>plant!==index.buckets[i]![j])))throw Error('Incremental plant life schedule differs from a complete capture');
   }
   const due=index.buckets[world.tick%PLANT_LIFE_INTERVAL]!;
   if(!due.length)return;
@@ -78,6 +116,7 @@ export function advancePlantLife(world:World,layout:ThermalLayout,providedLight?
     if(life.nextCheck!==world.tick||!isPlant(plant))continue;
     const elapsed=resumedTreeElapsed(plant,world.tick)??world.tick-Math.max(life.since,life.nextCheck-PLANT_LIFE_INTERVAL);
     life.nextCheck+=PLANT_LIFE_INTERVAL;life.age+=elapsed;recordResumedTreeCheck(plant,world.tick);
+    markResourceChanged(world,plant);
     const cell=plant.z*world.width+plant.x,outdoors=layout.indices[cell]!<0;
     if(applyPlantFrost(world,plant,outdoors,outside))continue;
     if(needsArtificial&&!environment)environment=typeof providedLight==='function'?providedLight():providedLight;

@@ -1,4 +1,5 @@
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl} from './native-contract';
+import {liveNativePage} from './native-page-refresh';
 import type {World,Pawn,Command,MaterialPile} from '../sim/types';
 import {TICKS_PER_DAY} from '../sim/types';
 import {BIOME_LABELS,HILLINESS_LABELS} from '../sim/site';
@@ -70,6 +71,13 @@ function show(page:NativePage):void {
  if(activeWorldTrade&&!activeWorldTrade.owns(page)){activeWorldTrade.dispose();activeWorldTrade=undefined;}
  if(activeDelivery&&!activeDelivery.owns(page)){activeDelivery.dispose();activeDelivery=undefined;}
  shownWorldPage=page;actions?.showPage(page);
+}
+function liveWorldPage(page:NativePage,next:NativeUiState,callbacks:NativeUiActions,build:NonNullable<NativePage['refreshFromState']>):NativePage {
+ return liveNativePage(page,next,(fresh,host)=>{
+  update(fresh,host);const replacement=build(fresh,host);
+  if(shownWorldPage===page)shownWorldPage=replacement??undefined;
+  return replacement;
+ });
 }
 const worldPageCurrent=(page:NativePage)=>shownWorldPage===page&&(actions?.isCurrentPage?.(page)??true);
 function rootPage():void {if(state&&actions)show(buildNativeWorld(state,actions));}
@@ -228,7 +236,9 @@ function deliveryIdentity(openedScope:string,record:CampaignGroupSummary,request
  const g=record.state;
  return JSON.stringify([openedScope,record.id,record.originMapId,record.localMapId,g.startedAt,'departedAt'in g?g.departedAt:null,'tile'in g?g.tile:null,request.id,request.settlementId,request.factionId,request.homeMapId,request.offeredAtCore,request.acceptedAtCore,request.selectedOptionId]);
 }
-function groupDetail(id:number):void {
+function groupDetail(id:number):void {const page=groupDetailPage(id);if(page)show(page);}
+function groupDetailPage(id:number):NativePage|null {
+ if(!campaignUIFacts(source())?.groups.some(group=>group.id===id))return null;
  const s=snapshot(id),g=s.group;if(!g)throw Error('Cette caravane n’existe plus.');const f=facts(s),row=groupRow(id),people=groupPeople(s),animals=travelAnimals256(s),owners=new Set([...people.map(p=>p.id),...animals.map(a=>a.id)]);
  const parentScope=JSON.stringify([state?.epoch,scope]);let parent:NativePage;
  const goods='items'in g?g.items:s.world.piles.filter(p=>'pawnId'in p.owner&&owners.has(p.owner.pawnId)),packs=travelPacks256(s,owners);
@@ -262,7 +272,7 @@ function groupDetail(id:number):void {
   for(const mode of ['visit','camp','settle'] as const){const permission=s.entryActions?.[mode];if(permission?.ok)controls.push(b(`group-enter-${mode}`,{visit:'Entrer sur la carte',camp:'Former un camp temporaire',settle:'S’installer'}[mode],()=>enterGroup(id,mode)));}
   if(['at-site','stationary','awaiting-entry'].includes(g.phase))for(const choice of worldTargetChoices263(s.world,g.tile))controls.push(b(`target-${choice.key}`,choice.label,()=>targetOrder(id,g.tile,choice.key),{disabled:!choice.ok,hint:choice.reason}));
  }
- parent=page(`group-${id}`,'Caravane',rows,controls);show(parent);
+ parent=page(`group-${id}`,'Caravane',rows,controls);return liveWorldPage(parent,state!,actions!,()=>groupDetailPage(id));
 }
 function arrivalLabel(action:RetainedArrival261):string {if(!action)return 'S’arrêter sur la tuile';switch(action.kind){case 'enter':return `Entrer sur la carte ${action.mapId}`;case 'trade':return `Commercer à l’établissement ${action.settlementId}`;case 'attack-settlement':return `Attaquer l’établissement ${action.settlementId}`;case 'visit-site':return `Visiter le site ${action.siteId}`;case 'peace-talks':return `Participer aux pourparlers ${action.siteId}`;}}
 function arrivalChoices(s:GroupPanelSnapshot,tile:number):{id:string;label:string;action:RetainedArrival261;disabled?:boolean;reason?:string;confirmAttack?:boolean}[]{
@@ -526,6 +536,9 @@ export function focusNativeCaravanTrade(next:NativeUiState,callbacks:NativeUiAct
 /** Globe selection and tile-list selection share the same native draft value. */
 export function nativeWorldChooseTile(tile:number):void {const planet=source().planet;if(!planet||!planetTile(planet,tile))throw Error('Cette case géographique n’existe pas.');selectedTile=tile;rootPage();}
 export function buildNativeWorld(next:NativeUiState,callbacks:NativeUiActions):NativePage {
+ return liveWorldPage(buildNativeWorldPage(next,callbacks),next,callbacks,buildNativeWorld);
+}
+function buildNativeWorldPage(next:NativeUiState,callbacks:NativeUiActions):NativePage {
  update(next,callbacks);if(!next.world&&!next.campaign)return {id:'world',title:'Monde',rows:[r('world-no-game','Aucune partie active.')],onClose:()=>void callbacks.panel(null)};
  const controls:NativeControl[]=(['maps','groups','individual','factions'] as const).map(id=>b(`world-tab-${id}`,{maps:'Cartes et globe',groups:'Caravanes',individual:'Voyages individuels',factions:'Factions'}[id],()=>changeTab(id),{active:tab===id}));
  const rows:NativeRow[]=[{...r('world-tabs','',undefined,undefined,controls),region:'navigation',controlStyle:'tab'}];
@@ -609,8 +622,10 @@ function factionNaturalGoodwill(registry:NativeFactionRegistry,faction:NativeFac
  return faction.id===registry.playerFactionId||WORLD_FACTION_DEFINITIONS_256[faction.def].permanentEnemy?undefined:worldNaturalGoodwill274(faction);
 }
 const factionSigned=(value:number|undefined)=>value===undefined?'—':(value>0?'+':'')+value;
-function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):void {
- const registry=(next.world??next.campaign)?.worldFactions,faction=registry?.factions.find(value=>value.id===id&&!value.hidden);if(!registry||!faction)return;
+function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):void {const page=factionDossierPage(next,callbacks,id);if(page)show(page);}
+function factionDossierPage(next:NativeUiState,callbacks:NativeUiActions,id:number):NativePage|null {
+ update(next,callbacks);
+ const registry=(next.world??next.campaign)?.worldFactions,faction=registry?.factions.find(value=>value.id===id&&!value.hidden);if(!registry||!faction)return null;
  const relation=factionRelationFact(registry,faction),leader=registry.leaders.find(value=>value.factionId===id),settlements=registry.settlements.filter(value=>value.factionId===id);
  const back=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));
  const rows:NativeRow[]=[
@@ -631,9 +646,12 @@ function factionDossier(next:NativeUiState,callbacks:NativeUiActions,id:number):
   }))]),presentation:'plain',compact:true});
  }
  if(!settlements.length)rows.push({id:'faction-detail-no-settlements',label:'Aucun établissement enregistré.',presentation:'plain',compact:true});
- show({id:'faction-detail-'+id,title:faction.name,layout:'dialog',modal:true,width:820,rows,actions:[b('faction-detail-back','Retour aux factions',back)],onClose:back});
+ return liveWorldPage({id:'faction-detail-'+id,title:faction.name,layout:'dialog',modal:true,width:820,rows,actions:[b('faction-detail-back','Retour aux factions',back)],onClose:back},next,callbacks,(fresh,host)=>factionDossierPage(fresh,host,id));
 }
 export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions):NativePage {
+ return liveWorldPage(buildNativeFactionsPage(next,callbacks),next,callbacks,buildNativeFactions);
+}
+function buildNativeFactionsPage(next:NativeUiState,callbacks:NativeUiActions):NativePage {
  update(next,callbacks);const identity=factionBrowserIdentity(next);if(factionBrowser.identity!==identity){factionBrowser.identity=identity;factionBrowser.search='';factionBrowser.sort='name';}
  const input=next.world??next.campaign,registry=input?.worldFactions;
  const close=factionBrowserGuard(next,callbacks,()=>callbacks.panel(null));

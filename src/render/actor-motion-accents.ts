@@ -35,6 +35,8 @@ export class MeleeRecoilTracker {
   private readonly lifeCore=Math.ceil(MELEE_HIT_RECOIL/JITTER_DROP_PER_TICK)+1;
   clear():void {this.seen.clear();this.byVictim.clear();}
   get size():number {return this.byVictim.size;}
+  /** A Full may contain a confirmed hit ahead of the buffered playhead. */
+  hasPending(victimId:number,core:number):boolean {const recoil=this.byVictim.get(victimId);return!!recoil&&core<recoil.atCore;}
   /** `victim` is resolved by the caller only for a strike not seen yet. */
   observe(attackerId:number,strike:Strike,ax:number,az:number,victim:(id:number)=>{x:number;z:number}|undefined):number|undefined {
     if(!strike||strike.outcome!=='hit'||strike.targetId===null||strike.structure!==undefined)return;

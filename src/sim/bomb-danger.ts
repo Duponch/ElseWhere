@@ -1,3 +1,4 @@
+import {structureFamily379} from './structure-family-379.ts';
 import type {NumericMembershipLookup} from './numeric-membership.ts';
 import { BOMB_RADIUS } from './bomb-state.ts';
 import {actualBombWick256,actualBombSourceRadius256} from './ancient-casket-explosive-state-256.ts';
@@ -19,7 +20,7 @@ import { structureById } from './structure-navigation.ts';
 
 const distance=(a:Cell,b:Cell)=>(a.x-b.x)**2+(a.z-b.z)**2;
 /** Capture once after combat, then borrow through the actor pass. */
-export const captureBombDangerSources=(w:World):readonly Structure[]=>w.schemaVersion>=193?w.structures.filter(s=>actualBombWick256(s)):[];
+export const captureBombDangerSources=(w:World):readonly Structure[]=>w.schemaVersion>=193?structureFamily379(w,'bomb-capable-buildings',kind=>kind==='mini-turret'||kind==='ancient-cryptosleep-casket'||kind==='cryptosleep-casket'||kind==='ship-cryptosleep-casket').filter(s=>actualBombWick256(s)):[];
 export function validBombRefugeShape(v:unknown,version=193):v is BombRefuge {
   if(version<193||!v||typeof v!=='object'||Array.isArray(v))return false;
   const r=v as Record<string,unknown>,t=r.target as Record<string,unknown>|undefined;

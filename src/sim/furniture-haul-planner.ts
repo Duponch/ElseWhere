@@ -1,4 +1,5 @@
 import { workPriority } from './work-types.ts';
+import {captureOrderedWorkClaims378,orderedJobClaimed378,type OrderedWorkClaims378} from './ordered-work-claims-378.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
 import { asBuilder, constructionHaulPriority, containsCell, isConstruction } from './construction-rules.ts';
 import { furnitureAsideAllowed, furnitureSlot } from './furniture-haul-rules.ts';
@@ -30,9 +31,9 @@ export function mayImproveFurnitureStorage(world:World):boolean {
   });
 }
 
-export function planFurnitureTransport(world:World,pawn:Pawn,pack:PackedFurniture,blocked:Uint8Array,reach:Reachability,budget:{pairs:number},parent?:Job,storageAccess=new Map<number,boolean>()):FurnitureHaulCandidate|undefined {
+export function planFurnitureTransport(world:World,pawn:Pawn,pack:PackedFurniture,blocked:Uint8Array,reach:Reachability,budget:{pairs:number},parent?:Job,storageAccess=new Map<number,boolean>(),claims:OrderedWorkClaims378=captureOrderedWorkClaims378(world,pawn.id)):FurnitureHaulCandidate|undefined {
   const policy=captureAllowedArea(world,pawn),allows=(cell:Cell)=>!policy||allowedAreaAllows(world,pawn,cell,policy);
-  if(pack.owner.type!=='ground'||!allows(pack.owner)||parent&&!allows(parent)||reservedSource(world,pack.building.id)>0||world.jobs.some(j=>j.furniture?.structureId===pack.building.id))return;
+  if(pack.owner.type!=='ground'||!allows(pack.owner)||parent&&(!allows(parent)||orderedJobClaimed378(claims,parent))||claims.structures?.has(pack.building.id)||reservedSource(world,pack.building.id)>0||world.jobs.some(j=>j.furniture?.structureId===pack.building.id))return;
   const work=parent?parent.kind==='sow'?workPriority(pawn,'grow')||Infinity:constructionHaulPriority(pawn):workPriority(pawn,'haul')||Infinity;
   if(!Number.isFinite(work)||parent?.reservedBy!==undefined&&parent.reservedBy!==null||!canReach(world,pack.owner,reach,true))return;
   const origin=pack.owner,current=world.stockpiles.find(z=>z.x===origin.x&&z.z===origin.z),priority=parent?0:current?.filters.furniture&&storageConditionAccepts(current,pack.building)?current.priority:0;
@@ -70,7 +71,7 @@ export function planFurnitureTransport(world:World,pawn:Pawn,pack:PackedFurnitur
   if(!destination)return;
   return {whole:true,priority:work,rank:parent?1:2+(5-best!.priority)/10,distance:distance(pawn,origin)+(best?.cost??0),id:pack.building.id,sourceId:pack.building.id,quantity:1,target:origin,destination};
 }
-export function furnitureStorageCandidates(world:World,pawn:Pawn,blocked:Uint8Array,reach:Reachability,budget:{pairs:number}):FurnitureHaulCandidate[] {
+export function furnitureStorageCandidates(world:World,pawn:Pawn,blocked:Uint8Array,reach:Reachability,budget:{pairs:number},claims:OrderedWorkClaims378=captureOrderedWorkClaims378(world,pawn.id)):FurnitureHaulCandidate[] {
   const policy=captureAllowedArea(world,pawn);
   const result:FurnitureHaulCandidate[]=[];
   const storageAccess=new Map<number,boolean>();
@@ -80,7 +81,7 @@ export function furnitureStorageCandidates(world:World,pawn:Pawn,blocked:Uint8Ar
     if(pack.owner.type!=='ground')continue;
     const owner=pack.owner,parent=world.jobs.find(j=>j.kind==='sow'&&j.x===owner.x&&j.z===owner.z);
     if(!parent&&world.jobs.some(j=>isConstruction(j)&&containsCell(j,owner)))continue;
-    const proposal=planFurnitureTransport(world,pawn,pack,blocked,reach,budget,parent,storageAccess);if(proposal)result.push(proposal);
+    const proposal=planFurnitureTransport(world,pawn,pack,blocked,reach,budget,parent,storageAccess,claims);if(proposal)result.push(proposal);
   }
   return result;
 }

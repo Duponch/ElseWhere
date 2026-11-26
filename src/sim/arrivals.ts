@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import { enableAndInitializeWork, initializesWorkLikeCore302 } from './work-initialization.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {bindBornHumanFaction259} from './world-affiliation-259.ts';
@@ -76,7 +77,7 @@ export function applyArrival(world:World,command:ArrivalCommand):CommandResult {
   const shirt={id:world.nextId+1,kind:'apparel' as const,item:'cloth-shirt' as const,quantity:1,owner:{type:'apparel' as const,pawnId:pawn.id},apparel:newApparelState('cloth-shirt',undefined,world.schemaVersion)};
   const relationships=prepareRelationshipAdmission(world,pawn,o.relationship);
   if(relationships===null)return refuse('Le lien familial annoncé ne peut plus être engagé. La demande reste ouverte.');
-  world.nextId+=2;world.pawns.push(pawn);world.piles.push(shirt);
+  world.nextId+=2;world.pawns.push(pawn);appendPileEntries(world.piles,shirt);
   if(relationships!==undefined)world.relationships=relationships;
   s!.accepted++;delete s!.pending;
   log(world,`${pawn.name} rejoint la colonie par le bord de la carte avec sa chemise. Prévoyez un couchage et ses affectations.`);

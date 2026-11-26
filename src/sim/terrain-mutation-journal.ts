@@ -1,10 +1,11 @@
 import type {Tile} from './types.ts';
 
 /** Derived transport bookkeeping only. No World, Tile object, value witness,
- * simulation clock, RNG or save field is owned here. Only the closed Worker
- * encoder enrolls an actual physical Tile[] after a complete codec capture. */
+ * simulation clock, RNG or save field is owned here. The closed Worker encoder
+ * enrolls transport after a complete codec capture; a checked navigation reader
+ * may also retain the marked-cell history without enrolling transport. */
 export const TERRAIN_JOURNAL_CAPACITY=8192;
-interface Journal {readonly length:number;readonly cells:Uint32Array;version:number;fullVersion:number;poisoned:boolean}
+interface Journal {readonly length:number;readonly cells:Uint32Array;version:number;fullVersion:number;poisoned:boolean;transport:boolean}
 const journals=new WeakMap<readonly Tile[],Journal>();
 declare const cursorBrand:unique symbol;
 export interface TerrainJournalCursor {readonly [cursorBrand]:true;readonly journal:Journal;readonly version:number}
@@ -28,7 +29,7 @@ const countWrite=(tiles:readonly Tile[])=>{writeCounts.set(tiles,(writeCounts.ge
  * on any difference, which exposes a writer that forgot its mark. */
 export let verifyTerrainWriteCaches=false;
 export function setTerrainWriteCacheVerification(on:boolean):void {verifyTerrainWriteCaches=on;}
-/** Writers do nothing until a closed encoder owns a complete initial capture.
+/** History writers do nothing until a closed reader owns an initial capture.
  * A mark is independent of tick and never consumes another reader's changes. */
 export function markTerrainCellChanged(tiles:readonly Tile[],index:number):void {
  countWrite(tiles);
@@ -42,12 +43,22 @@ export function invalidateTerrainJournal(tiles:readonly Tile[]):void {
  countWrite(tiles);
  const journal=journals.get(tiles);if(journal&&advance(journal))journal.fullVersion=journal.version;
 }
+function captureCursor(tiles:readonly Tile[],transport:boolean):TerrainJournalCursor {
+ let journal=journals.get(tiles);
+ if(!journal||journal.length!==tiles.length||journal.poisoned){journal={length:tiles.length,cells:new Uint32Array(TERRAIN_JOURNAL_CAPACITY),version:0,fullVersion:0,poisoned:false,transport};journals.set(tiles,journal);}
+ if(transport)journal.transport=true;
+ return cursor(journal);
+}
 /** @internal Closed encoder boundary. Capture this BEFORE the full codec pass;
  * commit the returned cursor only after that pass succeeds. */
-export function captureTerrainJournal(tiles:readonly Tile[]):TerrainJournalCursor {
- let journal=journals.get(tiles);
- if(!journal||journal.length!==tiles.length||journal.poisoned){journal={length:tiles.length,cells:new Uint32Array(TERRAIN_JOURNAL_CAPACITY),version:0,fullVersion:0,poisoned:false};journals.set(tiles,journal);}
- return cursor(journal);
+export function captureTerrainJournal(tiles:readonly Tile[]):TerrainJournalCursor {return captureCursor(tiles,true);}
+/** A navigation reader may observe the same bounded write history after a
+ * complete Tile identity scan. This conveys no codec baseline: publication
+ * still captures its own cursor before its full codec pass. Navigation uses
+ * it only after the closed call's initial identity scan, and falls back to a
+ * complete scan on any history gap or bulk invalidation. */
+export function captureTerrainReadCursor(tiles:readonly Tile[]):TerrainJournalCursor {
+ return captureCursor(tiles,false);
 }
 /** Missing owner, replacement, bulk invalidation and bounded history overflow
  * all require a full value diff. No partial stamp is accepted on a gap. */
@@ -66,6 +77,6 @@ export function readTerrainJournal(tiles:readonly Tile[],before:TerrainJournalCu
  * A cursor conveys no simulation, Native or renderer capability. */
 export function peekTerrainJournalCursor(tiles:readonly Tile[]):TerrainJournalCursor|undefined {
  const journal=journals.get(tiles);
- if(!journal||journal.poisoned||journal.length!==tiles.length)return;
+ if(!journal||!journal.transport||journal.poisoned||journal.length!==tiles.length)return;
  return cursor(journal);
 }

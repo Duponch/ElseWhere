@@ -1,4 +1,5 @@
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
+import {orderedTargetClaimed378} from './order-types.ts';
 import {isShipCasket277,type ShipCasket277,type ShipCasketCommand277,type ShipCasketPatient277,type ShipCasketOccupant277} from './ship-casket-state-277.ts';
 import {shipCasketInteraction277} from './ship-casket-geometry-277.ts';
 import {shipCasketSubject277,shipCasketPatientClaimed277,shipCasketCarrierOf277} from './ship-casket-carry-277.ts';
@@ -52,7 +53,7 @@ export function shipCasketIntent277(w:World,c:Exclude<ShipCasketCommand277,{type
  if(!p||!shipCasketActorCapable277(w,p,c.type==='order-carry-ship-casket'))return fail('Un colon contrôlable et capable est requis.');
  if(!box?.shipCryptosleep277||box.shipCryptosleep277.occupant)return fail('Un véritable caisson spatial vide est requis.');
  const trip=cryptosleepTravelRefusal271(w,p);if(trip)return fail(trip);
- if(shipCasketClaim277(w,box.id,p.id)||deconstructionReserved(w,box.id,p.id))return fail('Ce caisson est déjà réservé.');
+ if(shipCasketClaim277(w,box.id,p.id)||deconstructionReserved(w,box.id,p.id)||orderedTargetClaimed378(w,'structure',box.id,p.id))return fail('Ce caisson est déjà réservé.');
  const cell=shipCasketInteraction277(box,box.orientation),area=allowedAreaReason(w,p,cell);if(area)return fail(area);
  const reserved=reservedServiceCells(w,p.id);if(reserved.has(cell.z*w.width+cell.x))return fail('La case du caisson est déjà réservée.');
  const reach=reachableCells(w,p,blockedCells(w),reserved),path=canStopAt(w,cell,reach)?routeToCell(w,cell,reach):null;

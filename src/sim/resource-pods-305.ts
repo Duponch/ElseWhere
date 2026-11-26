@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {schemaAtLeast} from './schema-range.ts';
 import {journalLetter352,cell352} from './letter-producers-352.ts';
 import {TRADE_CATALOGUE} from './trade-catalogue.ts';
@@ -93,7 +94,7 @@ export function advanceResourcePod305(world:World):void {
       if(groundPile(draft,cell))continue;
       const room=Math.min(quantity,groundCapacity(draft,cell,subject));if(room<=0)continue;
       const pile:MaterialPile={id:nextId++,kind:ITEM_DEFINITIONS[subject].kind,item:subject,quantity:room,owner:{type:'ground',x:cell.x,z:cell.z},...freshRot(subject,world.tick)} as MaterialPile;
-      draft.piles.push(pile);made.push(pile);quantity-=room;
+      appendPileEntries(draft.piles,pile);made.push(pile);quantity-=room;
       if(!quantity)return true;
     }
     return false;

@@ -1,3 +1,4 @@
+import {pileById,appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {isLongswordItem270,longswordMaterial270,longswordUnits270} from './longsword-content-270.ts';
 import {isSpearItem272,spearMaterial272,spearUnits272} from './spear-content-272.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
@@ -25,7 +26,7 @@ export function finishSmelting(world:World,pawn:Pawn,bill:CookingBill,context:Pr
   if(world.schemaVersion<222||!task||task.recipe==='smelt-apparel'&&world.schemaVersion<267||task.recipe==='smelt-slag'&&!isSchema256Or257(world.schemaVersion)||!isSmeltingRecipe(task.recipe)||task.phase!=='work'||task.progress!==productionWorkTotal(task.recipe)
     ||!validSmeltingIngredients(task.ingredients,task.recipe)||task.ingredients[0]!.stage!=='placed'||(pawn.motion?.end??0)>world.tick||pawn.stun||pawn.draft
     ||pawn.state==='dead'||pawn.state==='downed'||pawnBody(pawn).capacities.manipulation<=0||backgroundWorkRefusal(pawn,'craft'))return false;
-  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,weapon=world.piles.find(p=>p.id===ingredient.pileId);
+  const station=structureById(world,task.stationId),ingredient=task.ingredients[0]!,weapon=pileById(world,ingredient.pileId);
   if(!station||station.kind!=='electric-smelter'||!productionStationUsable(station)||!station.bills?.includes(bill)
     ||bill.id!==task.billId||bill.recipe!==task.recipe||!isSmeltingRecipe(bill.recipe)||bill.suspended||!(task.recipe==='smelt-slag'?['times','until','forever']:['times','forever']).includes(bill.mode)
     ||!Number.isSafeInteger(bill.target)||bill.target<0||bill.target>9999||bill.mode==='times'&&bill.target<=0
@@ -42,8 +43,8 @@ export function finishSmelting(world:World,pawn:Pawn,bill:CookingBill,context:Pr
   if(!Number.isSafeInteger(maximum)||maximum<1||maximum>ITEM_DEFINITIONS[item].stackLimit)return false;
   const random={rng:world.rng},quantity=task.recipe==='smelt-slag'?15:smeltingYield(weapon.item as WeaponItem|SmithingApparel267,()=>healthRandom(random));
   // Consuming this whole input frees the single output slot, including at the pile limit.
-  world.piles=world.piles.filter(p=>p!==weapon);
-  const id=world.nextId++;world.piles.push({id,item,kind:item,quantity,owner:{type:'pawn',pawnId:pawn.id}});
+  world.piles=filterPileEntries(world.piles,p=>p!==weapon);
+  const id=world.nextId++;appendPileEntries(world.piles,{id,item,kind:item,quantity,owner:{type:'pawn',pawnId:pawn.id}});
   world.rng=random.rng;task.ingredients=[];task.productId=id;task.phase='output';task.progress=0;task.storageId=null;
   delete task.workTicks;delete task.storageQuantity;
   pawn.path=[];pawn.planCooldown=0;

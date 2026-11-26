@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import { allowedAreaAllows,allowedAreaWorkAllowed } from './allowed-area-state.ts';
 import { isApparelMaterial,APPAREL_MATERIAL_DEFINITIONS } from './apparel-rules.ts';
@@ -55,7 +56,7 @@ export function beginUnfinished(world:World,pawn:Pawn):MaterialPile|null {
   world.piles=[...piles,pile];task.ingredients=[{pileId:pile.id,item,quantity:1,stage:'placed',cell:{...cell}}];refreshStock(world);return pile;
 }
 export function cancelUnfinished(world:World,itemId:number):CommandResult {
-  const pile=world.piles.find(p=>p.id===itemId);
+  const pile=pileById(world,itemId);
   if(!pile?.unfinished||pile.owner.type!=='ground')return {ok:false,code:'missing-target',reason:'Ouvrage inachevé introuvable au sol.'};
   const material=unfinishedMaterial(pile.unfinished),units=unfinishedUnits(pile.unfinished),random={rng:world.rng};let refund=0;
   for(const n of pile.unfinished.parts){const raw=n*.75,whole=Math.floor(raw);refund+=whole+(raw>whole&&healthRandom(random)<raw-whole?1:0);}

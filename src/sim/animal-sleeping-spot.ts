@@ -1,3 +1,4 @@
+import {appendStructureEntries} from './structure-navigation.ts';
 import {claimLocalActorBed256} from './actor-bed-local-256.ts';
 import {isWetTerrain} from './shallow-water.ts';
 import { footprintCells } from './definitions.ts';
@@ -26,7 +27,7 @@ export function canPlaceAnimalSpot(world:World,c:DesignateCommand):CommandResult
 }
 export function placeAnimalSpot(world:World,c:DesignateCommand):CommandResult {
   const result=canPlaceAnimalSpot(world,c);if(!result.ok)return result;
-  world.structures.push({id:world.nextId++,kind:'animal-sleeping-spot',x:c.x,z:c.z,orientation:0,footprint:'standard'});
+  appendStructureEntries(world,{id:world.nextId++,kind:'animal-sleeping-spot',x:c.x,z:c.z,orientation:0,footprint:'standard'});
   for(const p of world.pawns)p.planCooldown=0;
   return {ok:true};
 }

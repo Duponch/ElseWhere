@@ -1,4 +1,5 @@
 import {memoryExpiry271,validSuspendedMemory271} from './suspended-memory-271.ts';
+import {carryQuantityBound379,carryShapeBound379} from './carry-quantity-379.ts';
 import type { PowerParentReader } from './power-parent-validation.ts';
 import { captureHumanOwners } from './human-owners.ts';
 import { hopperAccepts,hopperCapacity,pasteHoppers,pasteSpot,type PasteRequest } from './nutrient-paste.ts';
@@ -95,12 +96,12 @@ export function validNutrientPasteTransport(w:World,version:number,powerTopology
       if(h?.destination.type==='hopper'){
         if(!keys(h.destination as unknown as Record<string,unknown>,['type','structureId'])||h.whole||h.serviceProgress!==undefined||!int(h.destination.structureId,1,w.nextId-1))return false;
         const id=h.destination.structureId,pile=w.piles.find(p=>p.id===(h.phase==='pickup'?h.sourcePileId:h.carryPileId)),target=w.structures.find(s=>s.id===id&&s.kind==='hopper');
-        if(!int(h.quantity,1,10)||!['pickup','deliver'].includes(h.phase)||!int(h.sourcePileId,1,w.nextId-1)||!pile||!target||!hopperAccepts(pile.item)||hopperCapacity(w,target.id,pile.item,pawn.id)<h.quantity||pile.owner.type==='ground'&&pile.owner.x===target.x&&pile.owner.z===target.z)return false;
+        if(!int(h.quantity,1,carryQuantityBound379(w,pile?.item))||!['pickup','deliver'].includes(h.phase)||!int(h.sourcePileId,1,w.nextId-1)||!pile||!target||!hopperAccepts(pile.item)||hopperCapacity(w,target.id,pile.item,pawn.id)<h.quantity||pile.owner.type==='ground'&&pile.owner.x===target.x&&pile.owner.z===target.z)return false;
         if(h.phase==='pickup'?(h.carryPileId!==null||pile.owner.type!=='ground'||reservedSource(w,pile.id)>pile.quantity):(pile.owner.type!=='pawn'||pile.owner.pawnId!==pawn.id||pile.quantity!==h.quantity))return false;
       }
       for(const queued of pawn.orders.queue)if(obj(queued)&&obj(queued.destination)&&queued.destination.type==='hopper'){
         const destination=queued.destination;
-        if(!keys(destination,['type','structureId'])||!int(destination.structureId,1,w.nextId-1)||queued.phase!=='pickup'||queued.carryPileId!==null||!int(queued.sourcePileId,1,w.nextId-1)||!int(queued.quantity,1,10)||Object.hasOwn(queued,'whole')||Object.hasOwn(queued,'serviceProgress'))return false;
+        if(!keys(destination,['type','structureId'])||!int(destination.structureId,1,w.nextId-1)||queued.phase!=='pickup'||queued.carryPileId!==null||!int(queued.sourcePileId,1,w.nextId-1)||!int(queued.quantity,1,carryShapeBound379(w.schemaVersion))||Object.hasOwn(queued,'whole')||Object.hasOwn(queued,'serviceProgress'))return false;
         const target=w.structures.find(s=>s.id===destination.structureId&&s.kind==='hopper'),pile=w.piles.find(p=>p.id===queued.sourcePileId);
         if(!target||!pile||pile.owner.type!=='ground'||!hopperAccepts(pile.item)||pile.owner.x===target.x&&pile.owner.z===target.z)return false;
       }

@@ -6,9 +6,10 @@ import { newShelfStorage } from '../src/sim/shelf-storage';
 import { structureMaxHp } from '../src/sim/thing-damage-rules';
 import { addMaterial } from '../src/sim/materials';
 import { deconstructionCamp,fixtureBuilding } from './scenarios/deconstruction';
-import type { BedSlot,Job,World } from '../src/sim/types';
-import { bedSlotClaimed,bedSlotsCount } from '../src/sim/bed-slots';
-import { captureActorBeds256 } from '../src/sim/actor-bed-local-256';
+import type { BedSlot,Job,Structure,World } from '../src/sim/types';
+import { bedSlotCell,bedSlotClaimed,bedSlotsCount,captureBedSlotClaimReader,civilBedShareAllowed,pawnBedSlot } from '../src/sim/bed-slots';
+import { actualBedOwners256,captureActorBeds256 } from '../src/sim/actor-bed-local-256';
+import { isDoubleBedKind } from '../src/sim/bed-kinds';
 import { registeredCampaign } from '../src/sim/world-map-context';
 
 const camp=()=>{const w=deconstructionCamp(3);w.stockpiles=[];w.growingZones=[];return w;};
@@ -204,4 +205,45 @@ test('a shared bed capture answers every place exactly as one capture per questi
   }
   expect(captures).toBeGreaterThan(0);
   expect(row(w,'beds').detail).toBe('2 place(s) civile(s) compatibles pour 3 colon(s).');
+});
+
+test('one slot witness preserves every historical exception, including mixed durable, sleep, rescue and global claims',()=>{
+  const w=camp(),single=fixtureBuilding(w,'bed',7,7),double=fixtureBuilding(w,'double-bed',9,7),medical=fixtureBuilding(w,'bed',12,7),[a,b,c]=w.pawns;
+  Object.assign(medical,{medical:true});
+  const reference=(bed:Structure,slot:BedSlot,except?:number)=>{
+    const head=bedSlotCell(bed,slot);if(!head)return true;
+    for(const p of w.pawns){
+      if(p.id!==except&&p.state!=='dead'){
+        if(!bed.medical&&pawnBedSlot(p,bed)===slot)return true;
+        if(p.need?.kind==='sleep'&&p.need.bedId===bed.id&&p.need.target.x===head.x&&p.need.target.z===head.z)return true;
+      }
+      if(p.rescue&&p.rescue.patientId!==except&&p.rescue.bedId===bed.id&&(isDoubleBedKind(bed.kind)?p.rescue.bedSlot===slot:slot===0))return true;
+    }
+    return w.schemaVersion>=256&&!bed.medical&&actualBedOwners256(captureActorBeds256(registeredCampaign(w)),bed.id,isDoubleBedKind(bed.kind)?slot:undefined).some(p=>p.id!==except&&p.state!=='dead'&&!p.health?.death);
+  };
+  const compare=()=>{
+    let captured:ReturnType<typeof captureActorBeds256>|undefined;
+    const beds=()=>captured??=captureActorBeds256(registeredCampaign(w));
+    for(const bed of [single,double,medical])for(const slot of [0,1] as const){
+      const read=captureBedSlotClaimReader(w,bed,slot,beds);
+      for(const id of [undefined,a!.id,b!.id,c!.id,99999,a!.id])expect(read(id)).toBe(reference(bed,slot,id));
+    }
+    for(const p of w.pawns)expect(civilBedShareAllowed(w,double,p,beds)).toBe(civilBedShareAllowed(w,double,p));
+  };
+  compare();
+  a!.bedId=double.id;a!.bedSlot=1;b!.bedId=single.id;c!.bedId=medical.id;compare();
+  c!.rescue={patientId:b!.id,bedId:double.id,bedSlot:1,phase:'approach'};compare();
+  a!.need={kind:'sleep',phase:'sleep',bedId:medical.id,target:bedSlotCell(medical,0)!};compare();
+  a!.state='dead';compare();
+});
+
+test('guide matching still finds the same maximum after taking a free compatible slot first',()=>{
+  const w=camp(),[a,b,c]=w.pawns; c!.faction='outlanders';
+  fixtureBuilding(w,'bed',7,7);const assigned=fixtureBuilding(w,'bed',9,7);
+  a!.bedId=assigned.id;
+  // A can use either bed, B only the first. The maximum requires an
+  // alternating path if A initially takes the free place.
+  expect(row(w,'beds').detail).toBe('2 place(s) civile(s) compatibles pour 2 colon(s).');
+  b!.need={kind:'sleep',phase:'sleep',bedId:assigned.id,target:bedSlotCell(assigned,0)!};
+  expect(row(w,'beds').detail).toBe('1 place(s) civile(s) compatibles pour 2 colon(s).');
 });

@@ -17,7 +17,7 @@ import {wantsRescue} from '../sim/rescue';
 import {carrierOf} from '../sim/rescue-state';
 import {temperatureAt} from '../sim/temperature';
 import {workPriority} from '../sim/work-types';
-import type {Pawn,World} from '../sim/types';
+import type {Pawn,Resource,World} from '../sim/types';
 import {coreDaysPassed,isPlayerHomeMap} from './alert-priority';
 import {knownBuilding256,knownPile256,knownPosition256} from './exploration-readers-256';
 import {actorNotificationTarget,cellNotificationTarget,objectNotificationTarget,personNotificationTarget,type NotificationTarget} from './notification-focus';
@@ -59,8 +59,8 @@ export function readFireInHomeArea(world:World):StatusAlert|undefined {
 
 /** Elsewhere projection of the Core blight letter (NegativeEvent), restored in
  * the native list after the old jump button disappeared with the DOM HUD. */
-export function readCropBlight(world:World):StatusAlert|undefined {
-  const blighted=world.resources.filter(r=>!!r.blight&&knownPosition256(world,r));
+export function readCropBlight(world:World,knownBlighted?:()=>readonly Resource[]):StatusAlert|undefined {
+  const blighted=knownBlighted?.()??world.resources.filter(r=>!!r.blight&&knownPosition256(world,r));
   if(!blighted.length)return;
   const text=`Fléau des cultures · ${blighted.length} plant${blighted.length>1?'s':''}`;
   return {key:'blight',text,targets:blighted.map(r=>objectNotificationTarget('resource',r.id,r)),context:{panel:'architect',category:'orders'},

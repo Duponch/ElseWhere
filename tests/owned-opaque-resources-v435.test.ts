@@ -1,6 +1,8 @@
 import{expect,test}from'vitest';
 import{DepthTexture,DirectionalLight,Mesh,NodeMaterialObserver,PerspectiveCamera,RenderObjectRefreshType,RenderTarget,Scene}from'three/webgpu';
-import{OwnedOpaqueRevisions435}from'../src/render/OwnedOpaqueRevisions435';
+import{canRetainOpaqueWorld435,OwnedOpaqueRevisions435}from'../src/render/OwnedOpaqueRevisions435';
+import{createWorld}from'../src/sim/engine';
+import type{CorePhaseAnchor297}from'../src/bridge/core-phase-projection-297';
 import{nativeCompiledFixture435}from'./helpers/owned-opaque-native-fixture-v435';
 
 function ownedFixture(){
@@ -57,4 +59,23 @@ test('same native observer/builder remains FULL for public consumers and returni
   expect(f.draw()).toBe(RenderObjectRefreshType.FULL);expect(f.draw()).toBe(RenderObjectRefreshType.SHARED);
   f.owner.setEnabled(false);expect(f.decide()).toBe(RenderObjectRefreshType.FULL);f.owner.setEnabled(true);f.owner.preflight(f.camera,f.shadow);expect(f.draw()).toBe(RenderObjectRefreshType.FULL);
  }finally{publicMesh.removeFromParent();f.dispose();}
+});
+
+test('an advancing same-map authentic Full keeps the global resource generation; real writes and reset still force FULL',()=>{
+ const before=createWorld(35,8,8),next={...before,tick:before.tick+1},anchor:CorePhaseAnchor297={epoch:1,mapId:1,revision:1,core:before.tick*10,width:before.width,height:before.height,nextId:before.nextId,layout:{human:[],animal:[],mechanical:[]}},advanced={...anchor,revision:2,core:next.tick*10};
+ expect(canRetainOpaqueWorld435(before,next,anchor,advanced,true,false)).toBe(true);
+ expect(canRetainOpaqueWorld435(before,next,anchor,advanced,false,false)).toBe(false);
+ expect(canRetainOpaqueWorld435(before,next,anchor,advanced,true,true)).toBe(false);
+ expect(canRetainOpaqueWorld435(before,next,anchor,{...advanced,epoch:2},true,false)).toBe(false);
+ expect(canRetainOpaqueWorld435(before,next,anchor,{...advanced,mapId:2},true,false)).toBe(false);
+ expect(canRetainOpaqueWorld435(next,before,advanced,anchor,true,false)).toBe(false);
+ expect(canRetainOpaqueWorld435(before,{...next,seed:36},anchor,advanced,true,false)).toBe(false);
+ expect(canRetainOpaqueWorld435(before,next,undefined,advanced,true,false)).toBe(false);
+ const f=ownedFixture();try{
+  expect(f.draw()).toBe(RenderObjectRefreshType.FULL);expect(f.draw()).toBe(RenderObjectRefreshType.SHARED);
+  const epoch=f.owner.metrics().resourceEpoch;f.owner.adoptWorldContinuity435(true);f.owner.preflight(f.camera,f.shadow);expect(f.owner.metrics().resourceEpoch).toBe(epoch);expect(f.draw()).toBe(RenderObjectRefreshType.SHARED);
+  f.producer.dirty(f.h.mesh);expect(f.draw()).toBe(RenderObjectRefreshType.FULL);expect(f.draw()).toBe(RenderObjectRefreshType.SHARED);
+  f.h.map.needsUpdate=true;f.owner.preflight(f.camera,f.shadow);expect(f.draw()).toBe(RenderObjectRefreshType.FULL);expect(f.draw()).toBe(RenderObjectRefreshType.SHARED);
+  f.owner.adoptWorldContinuity435(false);expect(f.draw()).toBe(RenderObjectRefreshType.FULL);expect(f.owner.metrics().retainedWorlds).toBe(1);
+ }finally{f.dispose();}
 });

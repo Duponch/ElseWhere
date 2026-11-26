@@ -1,6 +1,7 @@
 import { isCrop,plantGrowth } from './plants.ts';
 import { cancelResourceHarvests,damageResource } from './thing-damage.ts';
 import type { Resource,World } from './types.ts';
+import {markResourceChanged} from './resource-mutation-journal.ts';
 
 export interface CropBlightState {
   since:number;
@@ -45,6 +46,7 @@ export function infectCrop(world:World,plant:Resource,seed:number):boolean {
   plant.growth=plantGrowth(world,plant);plant.growthTick=world.tick;
   plant.blight={since:world.tick,severity:.2,lastHarmTick:world.tick,
     nextCheck:world.tick+(plant.id-world.tick%CROP_BLIGHT_INTERVAL+CROP_BLIGHT_INTERVAL)%CROP_BLIGHT_INTERVAL+1,rng:seed};
+  markResourceChanged(world,plant);
   cancelResourceHarvests(world,plant);
   const index=indices.get(world);
   if(index?.source===world.resources)index.buckets[plant.blight.nextCheck%CROP_BLIGHT_INTERVAL]!.push(plant);
@@ -83,6 +85,7 @@ export function advanceCropBlight(world:World):void {
   for(const plant of due){
     const state=plant.blight;if(!state||state.nextCheck!==world.tick)continue;
     state.nextCheck+=CROP_BLIGHT_INTERVAL;
+    markResourceChanged(world,plant);
     if(world.tick-state.lastHarmTick>=CROP_BLIGHT_HARM_INTERVAL){
       state.lastHarmTick=world.tick;
       damageResource(world,plant,5,'blight');

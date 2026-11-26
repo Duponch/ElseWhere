@@ -1,3 +1,4 @@
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {journalLetter352} from './letter-producers-352.ts';
 import {useInspiration360} from './inspirations-360.ts';
@@ -34,7 +35,7 @@ export function createOrbitalShip(w:World,kind:OrbitalKind):OrbitalShip|undefine
   const draft={...w,nextId:w.nextId+1},rng={rng:state.rng},ship:OrbitalShip={id:w.nextId,kind,name:kind==='bulk'?'Marchand orbital de gros':'Marchand orbital exotique',arrivedAt:w.tick,departAt:w.tick+ORBITAL_LIFETIME,announced:w.structures.some(s=>s.kind==='comms-console'&&isPowerActive(s))};
   const piles=orbitalStock(draft,ship,rng);
   if(w.piles.length+piles.length>32768||!Number.isSafeInteger(draft.nextId))return;
-  w.nextId=draft.nextId;state.rng=rng.rng;state.ships.push(ship);w.piles.push(...piles);
+  w.nextId=draft.nextId;state.rng=rng.rng;state.ships.push(ship);appendPileEntries(w.piles,...piles);
   if(ship.announced){emit(w,`${ship.name} est en orbite pour 4000 ticks.`);journalLetter352(w,'positive','Vaisseau marchand');}return ship;
 }
 function stop(w:World,p:Pawn):void {if(!releaseWork(w,p))interruptWork(w,p);delete p.orbitalTrade;p.path=[];p.planCooldown=0;if(!['dead','downed','sleeping'].includes(p.state))p.state=(p.motion?.end??0)>w.tick?'moving':'idle';}
@@ -50,19 +51,21 @@ export function processOrbitalTrade(w:World,p:Pawn,ctx:NeedContext):boolean {
   if(p.x!==task.spot.x||p.z!==task.spot.z){task.phase='approach';ctx.move(task.spot,true);return true;}
   task.phase='ready';p.path=[];p.state='idle';return true;
 }
-export function orderOrbitalTrade(w:World,pawnId:number,shipId:number,consoleId:number):CommandResult {
+export function orderOrbitalTrade(w:World,pawnId:number,shipId:number,consoleId:number,preview=false):CommandResult {
   const fail=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason}),p=w.pawns.find(p=>p.id===pawnId),ship=w.orbital?.ships.find(s=>s.id===shipId),console=structureById(w,consoleId);
   if(!p||!ship||!console)return fail('Négociateur, vaisseau ou console introuvable.');
   const reason=orbitalTradeReason(w,p,ship,console);if(reason)return fail(reason);
   const spot=orbitalConsoleSpot(console),path=routeToCell(w,spot,reachableCells(w,p,blockedCells(w),new Set()));if(!path)return fail('Console inaccessible.');
-  const drops=planCommandDrops(w,{type:'order-orbital-trade',pawnId,shipId,consoleId});if(!drops||!releaseWork(w,p,drops))return fail('Pas de place pour déposer la cargaison.');
+  const drops=planCommandDrops(w,{type:'order-orbital-trade',pawnId,shipId,consoleId});if(!drops)return fail('Pas de place pour déposer la cargaison.');
+  if(preview)return {ok:true};
+  if(!releaseWork(w,p,drops))return fail('Pas de place pour déposer la cargaison.');
   clearQueuedOrders(w,p);delete p.priorityWork;releaseDraftForTrade338(w,p);p.orbitalTrade={shipId,consoleId,spot,phase:'approach',startedAt:w.tick};p.path=path;p.state='moving';p.planCooldown=0;return {ok:true};
 }
 export function advanceOrbital(w:World):void {
   const state=w.orbital;if(!state)return;
   const leaving=new Set(state.ships.filter(s=>w.tick>=s.departAt).map(s=>s.id));
   if(leaving.size){for(const ship of state.ships)if(leaving.has(ship.id)&&ship.announced)emit(w,`${ship.name} quitte définitivement l’orbite.`);
-    state.ships=state.ships.filter(s=>!leaving.has(s.id));w.piles=w.piles.filter(p=>p.owner.type!=='orbital-ship'||!leaving.has(p.owner.shipId));
+    state.ships=state.ships.filter(s=>!leaving.has(s.id));w.piles=filterPileEntries(w.piles,p=>p.owner.type!=='orbital-ship'||!leaving.has(p.owner.shipId));
     for(const p of w.pawns)if(p.orbitalTrade&&leaving.has(p.orbitalTrade.shipId))stop(w,p);}
   if(filteredStructures(w,'comms-consoles',s=>s.kind==='comms-console').some(s=>isPowerActive(s)))for(const ship of state.ships)if(!ship.announced){ship.announced=true;emit(w,`${ship.name} est détecté en orbite.`);journalLetter352(w,'positive','Vaisseau marchand');}
   for(const delivery of [...state.pending])if(w.tick>=delivery.openAt){

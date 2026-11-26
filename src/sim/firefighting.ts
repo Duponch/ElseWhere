@@ -37,7 +37,7 @@ function allowed(w:World,p:Pawn,f:FireRecord,forced:boolean,policy=captureAllowe
   if(f.attachedPawnId!==undefined){const target=w.pawns.find(q=>q.id===f.attachedPawnId);return !!target&&target!==p&&isPlayerPatient(target)&&(forced||distance(p,target)<=15);}
   return forced||inHome(w,f.z*w.width+f.x);
 }
-export function applyExtinguish(w:World,command:{pawnId:number;fireId:number}):string|null {
+export function applyExtinguish(w:World,command:{pawnId:number;fireId:number},preview=false):string|null {
   const p=w.pawns.find(p=>p.id===command.pawnId),f=w.fires?.items.find(f=>f.id===command.fireId);
   if(!p||!isColonist(p)||p.prisoner)return 'Seul un colon libre peut recevoir cet ordre.';
   const refusal=backgroundWorkRefusal(p,'firefight')??medicalWorkRefusal(p);if(refusal)return refusal;
@@ -45,6 +45,7 @@ export function applyExtinguish(w:World,command:{pawnId:number;fireId:number}):s
   const target=f&&firePosition(w,f),areaReason=target?allowedAreaReason(w,p,target):undefined;if(areaReason)return areaReason;
   if(!f||!allowed(w,p,f,true))return 'Le feu visé ne peut pas être éteint par ce colon.';
   const drops=planCommandDrops(w,{type:'order-extinguish',...command});if(!drops)return 'La cargaison doit être déposée avant cet ordre.';
+  if(preview)return null;
   clearQueuedOrders(w,p);delete p.priorityWork;releaseWork(w,p,drops);
   p.firefighting={fireId:f.id,forced:true,phase:'approach',cooldownCore:0,spentCore:0};p.path=[];p.planCooldown=0;return null;
 }

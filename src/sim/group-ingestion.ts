@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {groupIngestionCore299,commitHumanIngestion299} from './human-ingestion-clock299.ts';
 import {mixedGroupProvisions,groupPemmicanCounter,setGroupPemmicanCounter} from './group-provisions.ts';
 import {foodScore} from './food-selection.ts';
@@ -41,7 +42,7 @@ export function advanceGroupIngestion(group:ActiveGroup,c:GroupIngestionContext)
     if((!mixed&&quantity!==1)||!Number.isSafeInteger(quantity)||quantity<1||quantity>pile.quantity||!Number.isSafeInteger(consumed)||consumed<0)throw Error('Invalid food consumption counter');
     const ingestedAt299=groupIngestionCore299(group,person,c.schemaVersion,c.tick,c.coreAt299);
     const cause=c.schemaVersion>=89?ingestionFoodPoison(pile,true,c.foodPoisonFactor,c.random):undefined;
-    if(pile.quantity===quantity)group.items.splice(index,1);else pile.quantity-=quantity;
+    if(pile.quantity===quantity)group.items.splice(index,1);else markPileContentWrite379(pile).quantity-=quantity;
     person.hunger=Math.min(100,person.hunger+ITEM_DEFINITIONS[pile.item].nutrition*quantity);
     commitHumanIngestion299(person,ingestedAt299);
     // No dining-room observation or missing-table thought without that job.

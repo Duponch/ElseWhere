@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import { freshRot } from './food-preservation.ts';
 import { ITEM_DEFINITIONS, type ItemId } from './items.ts';
@@ -101,7 +102,7 @@ export function generateVisitorStock(seed:number,pawnId:number,nextId:number,tic
     if(quantity<=0)return;
     if(!Number.isSafeInteger(nextId+1))throw new RangeError('Visitor stock identity overflow.');
     const kind=ITEM_DEFINITIONS[item].kind,pile:MaterialPile={id:nextId++,kind,item,quantity,owner:{type:'inventory',pawnId},...freshRot(item,tick)};
-    if(quality){const condition={quality,hitPoints:tradeCatalogueEntry(item)!.maxHitPoints};if(kind==='weapon')pile.weapon=condition;else pile.apparel={...condition,...isSchema279OrLater(version)?{material:APPAREL[item as keyof typeof APPAREL].material}:{},...isSchema284OrLater(version)?{corpseWear284:false}:{}};}
+    if(quality){const condition={quality,hitPoints:tradeCatalogueEntry(item)!.maxHitPoints};if(kind==='weapon')markPileContentWrite379(pile).weapon=condition;else markPileContentWrite379(pile).apparel={...condition,...isSchema279OrLater(version)?{material:APPAREL[item as keyof typeof APPAREL].material}:{},...isSchema284OrLater(version)?{corpseWear284:false}:{}};}
     piles.push(pile);
   };
   add('silver',integer(state,50,250));

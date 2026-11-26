@@ -6,6 +6,9 @@ import { prisonBreakActive } from './prison-break-state.ts';
 import { doorOpenness,isRoomDoor } from './door-rules.ts';
 import { routeCost,routeToCell,type Reachability } from './pathfinding.ts';
 import { RoomTopologyCache,type RoomSpace,type RoomTopology } from './room-topology.ts';
+import {structureFamily379} from './structure-family-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
 
 interface PrisonTopology {
@@ -48,10 +51,22 @@ export function prisonDoorPassable(world:World,door:Structure):boolean {
     ||world.piles.some(p=>p.owner.type==='ground'&&same(p.owner,door))
     ||world.packed.some(p=>p.owner.type==='ground'&&same(p.owner,door));
 }
+/** Only the closed, validated simulation source can narrow the candidates:
+ * a prisoner mark on the serialized structure is legal only on a bed. Kind
+ * membership has its own geometry witness; the mutable role is always live.
+ * Public readers still see every row, including malformed non-bed marks. */
+function prisonBedCandidates379(world:World):readonly Structure[] {
+  return terrainJournalReadOwner()?structureFamily379(world,'prison-bed-kind',isBedKind):world.structures;
+}
+export function hasPrisonBedMark379(world:World):boolean {
+  const rows=prisonBedCandidates379(world),marked=rows.some(s=>s.prisoner);
+  if(verifyTerrainWriteCaches&&rows!==world.structures&&marked!==world.structures.some(s=>s.prisoner))throw Error('Closed prison bed mark differs from exhaustive structure read');
+  return marked;
+}
 function markedRoom(world:World,cell:Cell,topology:RoomTopology):RoomSpace|undefined {
   const room=topology.at(cell.x,cell.z);
   if(room?.kind!=='space'||room.touchesMapEdge)return;
-  return world.structures.some(s=>isBedKind(s.kind)&&s.prisoner&&topology.at(s.x,s.z)===room)?room:undefined;
+  return prisonBedCandidates379(world).some(s=>isBedKind(s.kind)&&s.prisoner&&topology.at(s.x,s.z)===room)?room:undefined;
 }
 /** No roof requirement. Core's huge-region classification is not replaced by
  * an invented cell-count limit in our different room representation. */

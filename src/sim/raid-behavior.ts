@@ -1,3 +1,4 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import {raidStaging330} from './raid-state.ts';
 import {raidStagePoint333} from './raid-arrival-333.ts';
 import {raidGroup261} from './temp-map-raids-261.ts';
@@ -74,5 +75,5 @@ export function processRaider(w:World,p:Pawn,getBlocked:NavigationGrid,budget:Se
   }
   const next=p.path[0];if(!next){p.state='idle';return;}
   if(!canStep(w,p,next,getBlocked(),EMPTY)){p.path=[];r.goal=null;p.planCooldown=0;p.state='idle';return;}
-  p.state='moving';if(startTravel(w,p,next,getLight))p.path.shift();
+  p.state='moving';if(startTravel(w,p,next,getLight))shiftActorPath297(p.path);
 }

@@ -1,13 +1,15 @@
 import {materialAllowedForPlayer256} from './material-permission-256.ts';
+import {captureOrderedWorkClaims378,orderedJobClaimed378,type OrderedWorkClaims378} from './ordered-work-claims-378.ts';
 import { workPriority } from './work-types.ts';
 import {plantExecutionReserved} from './construction-plants.ts';
 import { allowedAreaAllows,captureAllowedArea } from './allowed-area-state.ts';
 import { FLOOR_DEFINITIONS } from './flooring.ts';
 import { planFurnitureTransport } from './furniture-haul-planner.ts';
-import { constructionSkillRequired,constructionSupplied } from './construction-materials.ts';
+import { constructionRecipe,constructionSkillRequired } from './construction-materials.ts';
 import { furnitureReady, furnitureWorkTarget } from './furniture-rules.ts';
-import { CARRY_CAPACITY } from './definitions.ts';
-import { constructionSiteFree, constructionHaulPriority, asBuilder, isConstruction, type ConstructionObstruction } from './construction-rules.ts';
+import {carryStackLimit379} from './carry-quantity-379.ts';
+import {constructionJobAllowed379} from './construction-state-379.ts';
+import { ConstructionOccupancy, constructionSiteFree, constructionHaulPriority, asBuilder, isConstruction, type ConstructionObstruction } from './construction-rules.ts';
 import { reservedSource } from './materials.ts';
 import { findAsideDestination } from './haul-aside.ts';
 import { canReach, type SearchBudget } from './work-planner.ts';
@@ -21,12 +23,22 @@ export interface ConstructionCandidate {
 }
 /** One intent owns clearing and building. Hauling reserves the obstruction and
  * its destination quantitatively; a plant stays alive until real cutting ends. */
-export function constructionCandidates(world:World,pawn:Pawn,blocked:Uint8Array,reach:Reachability,budget:SearchBudget,obstacles:ReadonlyMap<number,ConstructionObstruction>,jobs:readonly Job[]=world.jobs):ConstructionCandidate[] {
+export function constructionCandidates(world:World,pawn:Pawn,blocked:Uint8Array,reach:Reachability,budget:SearchBudget,obstacles:ReadonlyMap<number,ConstructionObstruction>,jobs:readonly Job[]=world.jobs,claims:OrderedWorkClaims378=captureOrderedWorkClaims378(world,pawn.id)):ConstructionCandidate[] {
   const result:ConstructionCandidate[]=[];
   const policy=captureAllowedArea(world,pawn),allows=(cell:Cell)=>!policy||allowedAreaAllows(world,pawn,cell,policy);
   if(!Number.isFinite(constructionHaulPriority(pawn)))return result;
+  // This proposal scan commits no movement or service changes. Capture the
+  // same live occupancy once, only if a supplied frame reaches that check.
+  let occupancy:ConstructionOccupancy|undefined;
+  // Quantities stay live between calls, including direct fixture writes. In
+  // this read-only scan, sum delivered piles once rather than per frame/cost.
+  let delivered:Map<string,number>|undefined;
+  const supplied=(job:Job):boolean=>constructionRecipe(job).ingredients.every(cost=>{
+    if(!delivered){delivered=new Map();for(const pile of world.piles)if(pile.owner.type==='job'){const key=`${pile.owner.jobId}:${pile.item}`;delivered.set(key,(delivered.get(key)??0)+pile.quantity);}}
+    return (delivered.get(`${job.id}:${cost.item}`)??0)===cost.quantity;
+  });
   for(const job of jobs) {
-    if(!allows(job)||!isConstruction(job)||job.reservedBy!==null)continue;
+    if(!constructionJobAllowed379(job)||!allows(job)||!isConstruction(job)||job.reservedBy!==null||orderedJobClaimed378(claims,job))continue;
     const obstacle=obstacles.get(job.id)!;const {plant,pile}=obstacle;
     const base={id:job.id,rank:1,distance:Math.abs(job.x-pawn.x)+Math.abs(job.z-pawn.z)};
     if(plant) {
@@ -36,13 +48,14 @@ export function constructionCandidates(world:World,pawn:Pawn,blocked:Uint8Array,
       if(allows(target)&&(workPriority(pawn,'build')>0||job.kind==='install'&&workPriority(pawn,'haul')>0)&&plant.kind!=='rock'&&canReach(world,target,reach,false))result.push({...base,priority:job.kind==='install'?constructionHaulPriority(pawn):workPriority(pawn,'build'),target,job,clearance:{resourceId:plant.id,progress:0}});
     } else if(pile?.owner.type==='ground') {
       if(!materialAllowedForPlayer256(pile)||!allows(pile.owner)||reservedSource(world,pile.id)>0||!canReach(world,pile.owner,reach,true))continue;
-      const quantity=Math.min(CARRY_CAPACITY,pile.quantity),destination=findAsideDestination(world,pile.owner,pile,quantity,blocked,budget,pawn);
+      const quantity=Math.min(carryStackLimit379(world,pawn,pile.item),pile.quantity);if(quantity<=0)continue;
+      const destination=findAsideDestination(world,pile.owner,pile,quantity,blocked,budget,pawn);
       if(destination)result.push({...base,priority:constructionHaulPriority(pawn),target:pile.owner,sourceId:pile.id,quantity,destination:{...destination,constructionId:job.id,forConstruction:asBuilder(pawn)}});
     } else if(obstacle.pack) {
-      const candidate=planFurnitureTransport(world,pawn,obstacle.pack,blocked,reach,budget,job);if(candidate)result.push(candidate);
+      const candidate=planFurnitureTransport(world,pawn,obstacle.pack,blocked,reach,budget,job,undefined,claims);if(candidate)result.push(candidate);
     } else if(job.kind==='install'&&Number.isFinite(constructionHaulPriority(pawn))&&furnitureReady(world,job,pawn)&&allows(furnitureWorkTarget(world,job))&&canReach(world,job,reach,false)&&canReach(world,furnitureWorkTarget(world,job),reach,false)) {
       result.push({...base,priority:constructionHaulPriority(pawn),target:furnitureWorkTarget(world,job),job});
-    } else if(job.construction==='frame'&&pawn.skills.construction.level>=(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind,world.schemaVersion))&&workPriority(pawn,'build')>0&&constructionSupplied(world,job)&&constructionSiteFree(world,job,pawn.id,obstacle)&&canReach(world,job,reach,false)) {
+    } else if(job.construction==='frame'&&pawn.skills.construction.level>=(job.kind==='lay-floor'&&job.floor?FLOOR_DEFINITIONS[job.floor].skill:constructionSkillRequired(job.kind,world.schemaVersion))&&workPriority(pawn,'build')>0&&supplied(job)&&constructionSiteFree(world,job,pawn.id,obstacle,occupancy??=new ConstructionOccupancy(world))&&canReach(world,job,reach,false)) {
       result.push({...base,priority:workPriority(pawn,'build'),target:job,job});
     }
   }

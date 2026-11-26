@@ -12,6 +12,7 @@ import type { StagingGeometryReader } from './staging-validation.ts';
 import { structureById } from './structure-navigation.ts';
 
 /** Connected nearby cells, deterministic breadth first order. Never spill across a wall. */
+const GROUND_NEIGHBOURS:readonly (readonly [number,number])[]=[[0,-1],[1,0],[0,1],[-1,0]];
 export function nearbyGround(world: World, origin: Cell, radius = 12): Cell[] {
   if (!inBounds(world, origin.x, origin.z)) return [];
   const blocked = blockedCells(world), seen = new Set<number>([cellIndex(world, origin.x, origin.z)]);
@@ -19,8 +20,8 @@ export function nearbyGround(world: World, origin: Cell, radius = 12): Cell[] {
   for (let i = 0; i < queue.length; i++) {
     const c = queue[i]!;
     if (!blocked[cellIndex(world, c.x, c.z)]) result.push(c);
-    for (const [dx,dz] of [[0,-1],[1,0],[0,1],[-1,0]]) {
-      const x = c.x + dx!, z = c.z + dz!, key = cellIndex(world,x,z);
+    for (const [dx,dz] of GROUND_NEIGHBOURS) {
+      const x = c.x + dx, z = c.z + dz, key = cellIndex(world,x,z);
       if (inBounds(world,x,z) && Math.abs(x-origin.x)+Math.abs(z-origin.z)<=radius && !seen.has(key) && !blocked[key]) { seen.add(key); queue.push({x,z}); }
     }
   }

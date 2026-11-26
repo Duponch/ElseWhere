@@ -4,7 +4,7 @@ import {medicalWorkRefusal} from './health-rules.ts';
 import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
 import {workPriority} from './work-types.ts';
 import {allowedAreaAllows,captureAllowedArea} from './allowed-area-state.ts';
-import {routeToCell,routeCost,canStopAt,workNeighbours,type Reachability} from './pathfinding.ts';
+import {routeToBestCellByCostAndLength,canStopAt,workNeighbours,type Reachability} from './pathfinding.ts';
 import {fireTouch} from './firefighting.ts';
 import {biofuelProductionSpeed} from './machining.ts';
 import {snowDepthAt,setSnowDepth} from './snow-surface.ts';
@@ -30,8 +30,8 @@ export function snowClearingWanted(w:World,p:Pawn):boolean {
  return w.snowClearArea.some(i=>eligible(w,p,i,policy,reserved));
 }
 function route(w:World,target:Cell,reach:Reachability):Cell[]|null {
- const paths=[target,...workNeighbours(target,'mine')].filter(c=>fireTouch(w,c,target)&&canStopAt(w,c,reach)).map(c=>routeToCell(w,c,reach)).filter((v):v is Cell[]=>v!==null);
- paths.sort((a,b)=>routeCost(w,a,reach)-routeCost(w,b,reach)||a.length-b.length);return paths[0]??null;
+ const cells=[target,...workNeighbours(target,'mine')].filter(c=>fireTouch(w,c,target)&&canStopAt(w,c,reach));
+ return routeToBestCellByCostAndLength(w,cells,reach);
 }
 /** Snow is the last Cleaning supplier, using the same actor activity/release. */
 export function snowClearingProposal(w:World,p:Pawn,reach:Reachability):CleaningProposal|undefined {

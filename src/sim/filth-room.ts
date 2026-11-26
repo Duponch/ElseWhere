@@ -9,6 +9,7 @@ import { isRoofed,roofIdentity,sameRoofIdentity,type RoofIdentity } from './roof
 import { terrainWriteCount } from './terrain-mutation-journal.ts';
 import type { Cell,MaterialPile,World } from './types.ts';
 import { filteredStructures } from './structure-navigation.ts';
+import {filthInRoom379} from './filth-directory-379.ts';
 
 const caches=new WeakMap<World,RoomTopologyCache>();
 const neighbors=(c:Cell):Cell[]=>[{x:c.x-1,z:c.z},{x:c.x+1,z:c.z},{x:c.x,z:c.z-1},{x:c.x,z:c.z+1}];
@@ -102,7 +103,9 @@ export class CleanlinessCapture {
     // label read first spares the two set lookups for every other cell.
     const topology=this.topology,contains=(i:number)=>{const label=topology.labelAt(i);return label===id&&cells.has(i)||label===-2&&adjacent.has(i);};
     const items=w.filth?.items??[];
-    for(const f of items)if(contains(f.z*w.width+f.x))total+=FILTH_DEFINITIONS[f.kind].cleanliness;
+    // The closed owner lists only this room and its cardinal doorways, still
+    // in the original item order. Public/custom captures keep the full scan.
+    for(const f of filthInRoom379(w,topology,id)??items)if(contains(f.z*w.width+f.x))total+=FILTH_DEFINITIONS[f.kind].cleanliness;
     this.progress.set(id,{start:index,epoch:this.epoch,contains,afterFilth:total,filth:items.length});
     total=this.sourcesTotal(total,contains,cells);
     const result={id,cells,adjacent,covered,cleanliness:total/cells.size,doorway};this.rooms.set(id,result);return result;

@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import type {ForeignRoster261} from './caravan-foreign-roster-261.ts';
 import {civilianAdmissionFits} from './civilian-away.ts';
@@ -19,7 +20,7 @@ export function populateWorldTargetDefenders263(w:World,source:WorldTargetDefenc
  if(!isSchema263OrLater(Number(w.schemaVersion))||w.worldDefence263||w.pawns.length||!cells.length)throw Error('Actual unpublished263 map defender frontier required');
  if(cells.length<roster.people.length||!civilianAdmissionFits(w,roster.people.length,roster.items.length)||w.nextId<roster.nextId||!roster.people.every(p=>p.worldAffiliation259?.factionId===factionId))throw Error('Actual existing foreign producer cannot populate this base');
  for(let i=0;i<roster.people.length;i++){const p=roster.people[i]!,cell=cells[i]!;p.x=cell%w.width;p.z=Math.floor(cell/w.width);p.path=[];p.moveCooldown=0;p.planCooldown=0;if(p.state!=='downed')p.state='idle';delete p.raid;}
- w.pawns.push(...roster.people);w.piles.push(...roster.items);
+ w.pawns.push(...roster.people);appendPileEntries(w.piles,...roster.items);
  w.worldDefence263={revision:1,bornAtCore:w.tick*10,factionId,memberIds:roster.people.map(p=>p.id),defendSpot:{...defendSpot},radius:28,source:{...source}};
 }
 /** Capturing/recruiting an original ends only its old defence mandate. The

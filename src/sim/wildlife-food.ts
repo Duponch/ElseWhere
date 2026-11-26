@@ -1,7 +1,11 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {planAnimalBodyRetirement256} from './animal-body-retirement-256.ts';
+import {markResourceChanged,markResourceArrayChanged,closedResourceIdentityLookup} from './resource-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 import {animalPlantDiet256,animalItemDiet256,legacyAnimalFungus256} from './animal-diet-v256.ts';
 import {isAnimalSpecies256} from './animal-core-v256.ts';
 import type { Cell,Resource,World } from './types.ts';
+import {splicePileEntries,pileById} from './pile-identity-directory.ts';
 import { ingestFoodRisk } from './food-hygiene.ts';
 import type { WildAnimal } from './wildlife-state.ts';
 import { createPlantGrowthReader,harvestable,isPlant,plantGrowth } from './plants.ts';
@@ -26,6 +30,14 @@ export function grazingPen(world:World,a:WildAnimal):ReadonlySet<number>|undefin
 }
 
 export interface AnimalFood extends Cell { id:number;kind:'plant'|'pile';quantity:number;preference?:number }
+/** The closed producer journal already owns exact live identity membership.
+ * A malformed/unenrolled/public collection retains the original ordered find.
+ * Never keep the resolver across a resource commit: unknown transactions may
+ * revoke it, whereas ordinary marked partial grazing keeps the same record. */
+function mealResource(world:World,id:number):Resource|undefined {
+ const owner=terrainJournalReadOwner(),read=owner?closedResourceIdentityLookup(world.resources,owner):undefined;
+ return read?read(id):world.resources.find(r=>r.id===id);
+}
 /** Core animal food bonuses; older content retains its historical ranking. */
 export const animalFoodPreference=(item:ItemId):number=>item==='kibble'?100:item==='hay'?7:0;
 // Herbivory is an explicit content profile. New nutritious items do not silently
@@ -117,29 +129,29 @@ export function animalMealTarget(world:World,a:WildAnimal,resourcesById?:Readonl
   const pen=grazingPen(world,a),policy=readArea(a),inside=(c:Cell)=>!policy||policy.has(c.z*world.width+c.x);
   if(meal.kind==='plant') {
     if(!(animalPlantDiet256(a)??!animalSpecies(a.species).predator))return;
-    const r=resourcesById?resourcesById.get(meal.id):world.resources.find(r=>r.id===meal.id);
+    const r=resourcesById?resourcesById.get(meal.id):mealResource(world,meal.id);
     if(!r||animalPlantDiet256(a,r.kind==='tree')===false||r.kind==='haygrass'&&world.schemaVersion<227||!isPlant(r)||plantLeafless(world,r))return;
     const growth=plantGrowth(world,r);
     return inside(r)&&grazeablePlant(r,growth,world)&&unclaimedPlant(world,r,a.id,workCells)&&(!pen||pen.has(r.z*world.width+r.x))?r:undefined;
   }
-  const p=world.piles.find(p=>p.id===meal.id);
+  const p=pileById(world,meal.id);
   return p&&animalPileFood(world,a,p)&&p.owner.type==='ground'&&inside(p.owner)&&p.quantity-reservedSource(world,p.id,a.id)>=meal.quantity&&(!animalFoodPreference(p.item)||meal.quantity<=ITEM_DEFINITIONS[p.item].maxIngest)&&(!p.corpse||meal.quantity===1)&&(!pen||pen.has(p.owner.z*world.width+p.owner.x))?p.owner:undefined;
 }
 /** Called only after physical contact and the complete ingestion interval. */
 export function finishAnimalMeal(world:World,a:WildAnimal,readArea?:(a:WildAnimal)=>AnimalAreaPolicy287|undefined):void {
   const target=animalMealTarget(world,a,undefined,undefined,readArea);
   if(!target||(a.motion?.end??0)>world.tick||Math.abs(a.x-target.x)+Math.abs(a.z-target.z)>1)return;
-  const s=world.wildlife!,m=a.meal!,ingested=m.kind==='pile'?world.piles.find(p=>p.id===m.id):undefined;let nutrition=0;
+  const s=world.wildlife!,m=a.meal!,ingested=m.kind==='pile'?pileById(world,m.id):undefined;let nutrition=0;
   const capacity=animalNutritionMax(a);
   if(m.kind==='plant') {
-    const r=world.resources.find(r=>r.id===m.id)!;if(!isPlant(r))return;
+    const r=mealResource(world,m.id)!;if(!isPlant(r))return;
     const growth=plantGrowth(world,r),result=grazingResult(r,growth,capacity-a.food);nutrition=result.nutrition;
     if(result.removes){
-      world.resources=world.resources.filter(p=>p!==r);s.eatenPlants++;
+      const beforeResources=world.resources;world.resources=world.resources.filter(p=>p!==r);markResourceArrayChanged(world,beforeResources,[],[r]);s.eatenPlants++;
       invalidatePlantWork(world,r,true);
-    } else {r.growth=growth-result.growthConsumed;r.growthTick=world.tick;invalidatePlantWork(world,r);}
+    } else {r.growth=growth-result.growthConsumed;r.growthTick=world.tick;markResourceChanged(world,r);invalidatePlantWork(world,r);}
   } else {
-    const p=world.piles.find(p=>p.id===m.id)!;
+    const p=pileById(world,m.id)!;
     if(p.corpse){
       const part=selectCorpsePart(p.corpse,capacity-a.food),projection=part&&projectCorpseConsumption(p.corpse,part.part,world.tick);
       if(!part||!projection)return;
@@ -151,7 +163,7 @@ export function finishAnimalMeal(world:World,a:WildAnimal,readArea?:(a:WildAnima
         ||projection.consumesWhole&&!Number.isSafeInteger(s.eatenItems+1))return;
       if(projection.consumesWhole){
         if(world.schemaVersion>=256){const contents=planAnimalBodyRetirement256(world,p.id,false);if(!contents||!contents.commit())return;}
-        world.piles.splice(world.piles.indexOf(p),1);s.eatenItems++;
+        splicePileEntries(world.piles,world.piles.indexOf(p),1);s.eatenItems++;
         for(const hunter of s.animals)if(hunter.predation?.targetId===p.id){
           delete hunter.predation;hunter.path=[];hunter.nextDecision=world.tick;
           if((hunter.motion?.end??0)<=world.tick)hunter.state='idle';
@@ -163,7 +175,7 @@ export function finishAnimalMeal(world:World,a:WildAnimal,readArea?:(a:WildAnima
       delete a.meal;a.state='idle';a.nextDecision=world.tick;return;
     }
     nutrition=ITEM_DEFINITIONS[p.item].nutrition*m.quantity/100;
-    p.quantity-=m.quantity;s.eatenItems+=m.quantity;if(!p.quantity)world.piles.splice(world.piles.indexOf(p),1);
+    markPileContentWrite379(p).quantity-=m.quantity;s.eatenItems+=m.quantity;if(!p.quantity)splicePileEntries(world.piles,world.piles.indexOf(p),1);
   }
   a.food=Math.min(capacity,a.food+nutrition);s.eatenNutrition+=nutrition;
   delete a.meal;a.state='idle';a.nextDecision=world.tick;

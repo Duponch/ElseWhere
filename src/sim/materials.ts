@@ -1,4 +1,10 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {sourceReservationCandidates379} from './source-reservation-candidates-379.ts';
 import {assignPileOwner} from './pile-index.ts';
+import {orderedHumanCandidates379} from './human-roster-379.ts';
+import {terrainJournalReadOwner,terrainReadScope} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
+import {pileById,appendPileEntries} from './pile-identity-directory.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {validAiCorePile298} from './victory-content-save-298.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
@@ -24,7 +30,7 @@ import { freshRot, mergeRot, rotAge } from './food-preservation.ts';
 import { ITEM_DEFINITIONS, legacyItem } from './items.ts';
 import type { ItemId } from './items.ts';
 import { MAX_STACK } from './definitions.ts';
-import { isCookingOrder } from './order-types.ts';
+import { isCookingOrder,orderedTargets378 } from './order-types.ts';
 import { haulReservations } from './haul-reservations.ts';
 import type { Cell, HaulDestination, MaterialKind, MaterialOwner, MaterialPile, Stock, World } from './types.ts';
 
@@ -116,23 +122,30 @@ export function addMaterial(world: World, kind: MaterialKind, quantity: number, 
     if (pile.item !== item || !sameOwner(pile.owner, owner)||!canMergeEggPile256(pile,condition)) continue;
     const moved = Math.min(limit - pile.quantity, quantity);
     mergePileEgg256(pile,moved,condition.egg);mergePileContamination(pile,moved);mergeThingDamage(pile,moved,0,pileMaxHp(pile,world.schemaVersion));mergeRot(pile, moved, 0, world.tick);
-    pile.quantity += moved; quantity -= moved;
+    markPileContentWrite379(pile).quantity += moved; quantity -= moved;
   }
   while (quantity > 0) {
     const moved = Math.min(limit, quantity);
-    world.piles.push({ id: world.nextId++, kind, item, quantity: moved, owner: { ...owner },...copyPileCondition(condition), ...freshRot(item, world.tick),...kind==='weapon'&&isWeaponItem(item)?{weapon:newWeaponState(item)}:kind==='apparel'&&isApparelItem(item)?{apparel:newApparelState(item,undefined,world.schemaVersion)}:{}});
+    appendPileEntries(world.piles,{ id: world.nextId++, kind, item, quantity: moved, owner: { ...owner },...copyPileCondition(condition), ...freshRot(item, world.tick),...kind==='weapon'&&isWeaponItem(item)?{weapon:newWeaponState(item)}:kind==='apparel'&&isApparelItem(item)?{apparel:newApparelState(item,undefined,world.schemaVersion)}:{}});
     quantity -= moved;
   }
   refreshStock(world);
 }
 export function addGroundMaterial(world: World, kind: MaterialKind, quantity: number, cell: Cell, item: ItemId = legacyItem(kind),condition:Pick<MaterialPile,'egg'|'eggForbidden'>={}): void {
+  if(!tryAddGroundMaterial(world,kind,quantity,cell,item,condition))throw new Error('No room for ground material.');
+}
+/** Synchronous preflight and commit, retaining the ordinary argument errors.
+ * A capacity/identity refusal changes nothing and returns false, so producers
+ * need not calculate and discard the same placement before adding it. */
+export function tryAddGroundMaterial(world: World, kind: MaterialKind, quantity: number, cell: Cell, item: ItemId = legacyItem(kind),condition:Pick<MaterialPile,'egg'|'eggForbidden'>={}): boolean {
   if(kind==='book'||item==='novel')throw new Error('A Novel requires an original generated book.');
   if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > MAX_STACK * 32768) throw new Error('Invalid ground quantity.');
   if (!Object.hasOwn(ITEM_DEFINITIONS,item) || ITEM_DEFINITIONS[item].kind!==kind) throw new Error('Invalid ground item.');
   const plan = planGroundPlacement(world, quantity, cell, item);
   const needed=plan?.reduce((n,p)=>n+materialIdentityCount(world,p.quantity,{type:'ground',...p.cell},item,condition),0)??0;
-  if (!plan || world.piles.length + needed > 32768 || !Number.isSafeInteger(world.nextId + needed)) throw new Error('No room for ground material.');
+  if (!plan || world.piles.length + needed > 32768 || !Number.isSafeInteger(world.nextId + needed)) return false;
   for (const part of plan) addMaterial(world, kind, part.quantity, { type:'ground', ...part.cell }, item,condition);
+  return true;
 }
 /** Move the existing stack, merging only when possible. No allocation or identity budget needed. */
 export function transferPile(world:World,pile:MaterialPile,owner:MaterialOwner):boolean {
@@ -149,13 +162,13 @@ export function transferPile(world:World,pile:MaterialPile,owner:MaterialOwner):
     let remaining=pile.quantity;
     for(const target of world.piles)if(target!==pile&&target.item===pile.item&&sameOwner(target.owner,owner)&&canMergeEggPile256(target,pile)){
       const moved=Math.min(remaining,ITEM_DEFINITIONS[pile.item].stackLimit-target.quantity);if(moved<=0)continue;
-      mergePileEgg256(target,moved,pile.egg);mergePileContamination(target,moved,pile.foodPoison);mergeThingDamage(target,moved,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,moved,rotAge(pile,world.tick),world.tick);target.quantity+=moved;remaining-=moved;if(!remaining)break;
+      mergePileEgg256(target,moved,pile.egg);mergePileContamination(target,moved,pile.foodPoison);mergeThingDamage(target,moved,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,moved,rotAge(pile,world.tick),world.tick);markPileContentWrite379(target).quantity+=moved;remaining-=moved;if(!remaining)break;
     }
-    if(remaining){pile.quantity=remaining;assignPileOwner(pile,{...owner});}else removeIdentity(world.piles,pile);
+    if(remaining){markPileContentWrite379(pile).quantity=remaining;assignPileOwner(pile,{...owner});}else removeIdentity(world.piles,pile);
     refreshStock(world);return true;
   }
   const target=world.piles.find(p=>p!==pile&&p.item===pile.item&&sameOwner(p.owner,owner)&&canMergeEggPile256(p,pile)&&p.quantity+pile.quantity<=ITEM_DEFINITIONS[pile.item].stackLimit);
-  if(target){mergePileEgg256(target,pile.quantity,pile.egg);mergePileContamination(target,pile.quantity,pile.foodPoison);mergeThingDamage(target,pile.quantity,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,pile.quantity,rotAge(pile,world.tick),world.tick);target.quantity+=pile.quantity;removeIdentity(world.piles,pile);}else assignPileOwner(pile,{...owner});
+  if(target){mergePileEgg256(target,pile.quantity,pile.egg);mergePileContamination(target,pile.quantity,pile.foodPoison);mergeThingDamage(target,pile.quantity,pile.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,pile.quantity,rotAge(pile,world.tick),world.tick);markPileContentWrite379(target).quantity+=pile.quantity;removeIdentity(world.piles,pile);}else assignPileOwner(pile,{...owner});
   refreshStock(world);return true;
 }
 /** Split only the delivered fraction. The held source identity and its states survive. */
@@ -168,19 +181,20 @@ export function depositMaterialPart(world:World,source:MaterialPile,cell:Cell,qu
   const residual=targets.reduce((n,p)=>n+ITEM_DEFINITIONS[source.item].stackLimit-p.quantity,0),needed=Math.ceil(Math.max(0,quantity-residual)/ITEM_DEFINITIONS[source.item].stackLimit);
   if(world.piles.length+needed>32768||!Number.isSafeInteger(world.nextId+needed))return false;
   let remaining=quantity;
-  for(const target of targets){const moved=Math.min(remaining,ITEM_DEFINITIONS[source.item].stackLimit-target.quantity);mergePileEgg256(target,moved,source.egg);mergePileContamination(target,moved,source.foodPoison);mergeThingDamage(target,moved,source.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,moved,rotAge(source,world.tick),world.tick);target.quantity+=moved;remaining-=moved;if(!remaining)break;}
-  while(remaining){const moved=Math.min(remaining,ITEM_DEFINITIONS[source.item].stackLimit);world.piles.push({...source,...copyPileCondition(source),id:world.nextId++,quantity:moved,owner:{type:'ground',x:cell.x,z:cell.z}});remaining-=moved;}
-  source.quantity-=quantity;refreshStock(world);return true;
+  for(const target of targets){const moved=Math.min(remaining,ITEM_DEFINITIONS[source.item].stackLimit-target.quantity);mergePileEgg256(target,moved,source.egg);mergePileContamination(target,moved,source.foodPoison);mergeThingDamage(target,moved,source.damage,pileMaxHp(target,world.schemaVersion));mergeRot(target,moved,rotAge(source,world.tick),world.tick);markPileContentWrite379(target).quantity+=moved;remaining-=moved;if(!remaining)break;}
+  while(remaining){const moved=Math.min(remaining,ITEM_DEFINITIONS[source.item].stackLimit);appendPileEntries(world.piles,{...source,...copyPileCondition(source),id:world.nextId++,quantity:moved,owner:{type:'ground',x:cell.x,z:cell.z}});remaining-=moved;}
+  markPileContentWrite379(source).quantity-=quantity;refreshStock(world);return true;
 }
-export function reservedSource(world: World, pileId: number, exceptPawn?: number, exceptTreeJob?:number,exceptPawns?:ReadonlySet<number>): number {
+function physicalReservedSource(world: World, pileId: number, exceptPawn?: number, exceptTreeJob?:number,exceptPawns?:ReadonlySet<number>): number {
+  const candidates=sourceReservationCandidates379(world);
   let quantity = commercialReservedQuantity(world,pileId,exceptPawn)+groupReservedQuantity(world,pileId);
-  for(const j of world.jobs)if(j.id!==exceptTreeJob&&j.tree?.kind==='replant'&&j.tree.phase==='pickup'&&j.tree.sourcePileId===pileId&&j.reservedBy!==exceptPawn&&!exceptPawns?.has(j.reservedBy??-1))quantity++;
+  for(const j of candidates?.trees??world.jobs)if(j.id!==exceptTreeJob&&j.tree?.kind==='replant'&&j.tree.phase==='pickup'&&j.tree.sourcePileId===pileId&&j.reservedBy!==exceptPawn&&!exceptPawns?.has(j.reservedBy??-1))quantity++;
   if(world.scout?.phase==='loading'&&world.scout.pawnId!==exceptPawn&&world.scout.sourcePileId===pileId)quantity+=world.scout.quantity;
-  for(const a of world.wildlife?.animals??[])if(a.id!==exceptPawn&&!exceptPawns?.has(a.id)){
+  for(const a of candidates?.animals??world.wildlife?.animals??[])if(a.id!==exceptPawn&&!exceptPawns?.has(a.id)){
     if(a.meal?.kind==='pile'&&a.meal.id===pileId)quantity+=a.meal.quantity;
     if(a.haul?.phase==='pickup'&&a.haul.sourcePileId===pileId)quantity+=a.haul.quantity;
   }
-  for (const pawn of world.pawns) {
+  for (const pawn of candidates?.people??world.pawns) {
     if (pawn.id !== exceptPawn&&!exceptPawns?.has(pawn.id)) {
       if(pawn.recreation.task?.activity==='read'&&pawn.recreation.task.stage==='pickup'&&pawn.recreation.task.bookId===pileId)quantity++;
       if(pawn.burial?.phase==='pickup'&&pawn.burial.corpseId===pileId)quantity++;
@@ -197,34 +211,155 @@ export function reservedSource(world: World, pileId: number, exceptPawn?: number
       if(pawn.feed?.phase==='pickup'&&pawn.feed.sourcePileId===pileId)quantity+=pawn.feed.quantity;
       if(pawn.animalFeed?.phase==='pickup'&&pawn.animalFeed.sourcePileId===pileId)quantity+=pawn.animalFeed.quantity;
       if(pawn.ward?.kind==='food'&&pawn.ward.phase==='pickup'&&pawn.ward.sourcePileId===pileId)quantity+=pawn.ward.quantity;
-      if(pawn.haul?.phase==='pickup'&&pawn.haul.sourcePileId===pileId)quantity+=pawn.haul.quantity;
+      if(pawn.haul?.constructionBatch379){for(const source of pawn.haul.constructionBatch379.sources)if(source.pileId===pileId)quantity+=source.quantity;}
+      else if(pawn.haul?.phase==='pickup'&&pawn.haul.sourcePileId===pileId)quantity+=pawn.haul.haulOpportunity379?.quantity??pawn.haul.quantity;
       if (pawn.need?.kind === 'eat' && pawn.need.phase === 'pickup' && pawn.need.sourcePileId === pileId) quantity += pawn.need.quantity ?? 1;
     }
     const queue=exceptPawns?.has(pawn.id)?undefined:pawn.orders?.queue;
     if(queue?.length)for(const task of queue)if(typeof task!=='number') {
       if(isCookingOrder(task)){for(const i of task.cooking.ingredients)if(i.pileId===pileId)quantity+=i.quantity;}
-      else if(task.sourcePileId===pileId)quantity+=task.quantity;
+      else if(task.constructionBatch379){for(const source of task.constructionBatch379.sources)if(source.pileId===pileId)quantity+=source.quantity;}
+      else if(task.sourcePileId===pileId)quantity+=task.haulOpportunity379?.quantity??task.quantity;
     }
   }
   return quantity;
+}
+/** A generalized future order retains the chosen Thing but not a guessed
+ * ingredient or destination. Its exclusive target claim protects the
+ * currently unallocated portion, without confiscating quantities physically
+ * acquired by already-running jobs. The actual provider determines its amount
+ * when it starts. In particular a corpse's retained pawn/animal identity is
+ * the same target as the physical ground pile. */
+function queuedPileIds378(world:World,exceptPawn?:number,exceptPawns?:ReadonlySet<number>):Set<number>|undefined {
+ if(Number(world.schemaVersion)<378)return;
+ let ids:Set<number>|undefined;
+ for(const p of orderedHumanCandidates379(world.pawns)){
+  if(p.id===exceptPawn||exceptPawns?.has(p.id)||!p.orderedQueue378?.length)continue;
+  for(const order of p.orderedQueue378)for(const t of orderedTargets378(order)){
+   if(t.kind==='pile')(ids??=new Set()).add(t.id);
+   if(t.kind==='pawn'||t.kind==='animal')for(const pile of world.piles)if(t.kind==='pawn'?pile.humanCorpse?.pawnId===t.id:pile.corpse?.animalId===t.id)(ids??=new Set()).add(pile.id);
+  }
+ }
+ return ids;
+}
+/** A single-source query needs only membership, not every queued pile id.
+ * Resolve a corpse's retained identity at most once, only if a queued order
+ * targets a person or animal. Read afresh on every call, including while paused. */
+function queuedPileClaimed378(world:World,pileId:number,exceptPawn?:number,exceptPawns?:ReadonlySet<number>):boolean {
+ if(Number(world.schemaVersion)<378)return false;
+ let pile:MaterialPile|undefined,readPile=false;
+ for(const pawn of orderedHumanCandidates379(world.pawns)){
+  if(pawn.id===exceptPawn||exceptPawns?.has(pawn.id)||!pawn.orderedQueue378?.length)continue;
+  for(const order of pawn.orderedQueue378)for(const target of orderedTargets378(order)){
+   if(target.kind==='pile'&&target.id===pileId)return true;
+   if(target.kind!=='pawn'&&target.kind!=='animal')continue;
+   if(!readPile){pile=pileById(world,pileId);readPile=true;}
+   if(target.kind==='pawn'?pile?.humanCorpse?.pawnId===target.id:pile?.corpse?.animalId===target.id)return true;
+  }
+ }
+ return false;
+}
+export function reservedSource(world: World, pileId: number, exceptPawn?: number, exceptTreeJob?:number,exceptPawns?:ReadonlySet<number>): number {
+ const physical=physicalReservedSource(world,pileId,exceptPawn,exceptTreeJob,exceptPawns);
+ if(!queuedPileClaimed378(world,pileId,exceptPawn,exceptPawns))return physical;
+ const pile=world.piles.find(p=>p.id===pileId&&p.owner.type==='ground');if(!pile)return physical;
+ const all=exceptPawn===undefined&&exceptTreeJob===undefined&&!exceptPawns?physical:physicalReservedSource(world,pileId);
+ return physical+Math.max(0,pile.quantity-all);
+}
+/** One immutable, synchronous MULTI-SOURCE proposal. The caller discards this
+ * reader before installing/releasing a task, consuming a pile or invoking a
+ * movement/commit callback. Each next proposal gets a fresh reader, even in
+ * the same tick. Public callers retain the exact live scalar function.
+ *
+ * Optional IDs restrict compilation to this proposal's sources. Contributions
+ * follow physicalReservedSource literally: commercial + group first, tree
+ * jobs, scout, animals, then every pawn's active fields followed by its queue.
+ * This order also preserves IEEE addition for non-integral synthetic inputs.
+ * Own waiting orders remain reserved; exceptPawns excludes both active and
+ * queued work, while scout/commercial keep their original exception rules. */
+export function createSourceReservationRead379(world:World,pileIds?:readonly number[],exceptPawn?:number,exceptTreeJob?:number,exceptPawns?:ReadonlySet<number>):(pileId:number)=>number {
+ const owner=terrainJournalReadOwner(),scope=terrainReadScope();
+ let physical:Map<number,number>|undefined,answers:Map<number,number>|undefined;
+ const ids=pileIds?new Set(pileIds):undefined;
+ const scalar=(id:number)=>reservedSource(world,id,exceptPawn,exceptTreeJob,exceptPawns);
+ const initial=(id:number)=>commercialReservedQuantity(world,id,exceptPawn)+groupReservedQuantity(world,id);
+ const capture=()=>{
+  const candidates=sourceReservationCandidates379(world);
+  const result=new Map<number,number>();
+  const add=(id:number|null|undefined,n:number)=>{
+   if(typeof id!=='number'||!Number.isSafeInteger(id)||ids&&!ids.has(id))return;
+   result.set(id,(result.has(id)?result.get(id)!:initial(id))+n);
+  };
+  for(const j of candidates?.trees??world.jobs)if(j.id!==exceptTreeJob&&j.tree?.kind==='replant'&&j.tree.phase==='pickup'&&j.reservedBy!==exceptPawn&&!exceptPawns?.has(j.reservedBy??-1))add(j.tree.sourcePileId,1);
+  if(world.scout?.phase==='loading'&&world.scout.pawnId!==exceptPawn)add(world.scout.sourcePileId,world.scout.quantity);
+  for(const a of candidates?.animals??world.wildlife?.animals??[])if(a.id!==exceptPawn&&!exceptPawns?.has(a.id)){
+   if(a.meal?.kind==='pile')add(a.meal.id,a.meal.quantity);
+   if(a.haul?.phase==='pickup')add(a.haul.sourcePileId,a.haul.quantity);
+  }
+  for(const p of candidates?.people??world.pawns){
+   if(p.id!==exceptPawn&&!exceptPawns?.has(p.id)){
+    if(p.recreation.task?.activity==='read'&&p.recreation.task.stage==='pickup')add(p.recreation.task.bookId,1);
+    if(p.burial?.phase==='pickup')add(p.burial.corpseId!,1);
+    if(p.hunting)add(p.hunting.animalId,1);
+    if(p.equipmentTask?.action==='equip'||p.equipmentTask?.action==='wear')add(p.equipmentTask.itemId,1);
+    for(const i of p.cooking?.ingredients??[])if(i.stage!=='held')add(i.pileId,i.quantity);
+    if(p.animalHandling?.phase==='pickup')add(p.animalHandling.sourcePileId,p.animalHandling.quantity);
+    if(p.animalCare?.phase==='pickup'&&p.animalCare.medicine)add(p.animalCare.medicine.sourcePileId,p.animalCare.medicine.quantity);
+    if(p.surgery?.phase==='pickup'&&p.surgery.medicine)add(p.surgery.medicine.sourcePileId,p.surgery.medicine.quantity);
+    for(const i of p.surgery?.ingredients??[])if(i.stage!=='held')add(i.pileId,i.quantity);
+    if(p.tend?.phase==='pickup'&&p.tend.medicine)add(p.tend.medicine.sourcePileId,p.tend.medicine.quantity);
+    if(p.need?.kind==='eat'&&p.need.phase==='pickup')for(const i of p.need.paste?.ingredients??[])add(i.pileId,i.quantity);
+    if(p.feed?.phase==='pickup')for(const i of p.feed.paste?.ingredients??[])add(i.pileId,i.quantity);
+    if(p.feed?.phase==='pickup')add(p.feed.sourcePileId!,p.feed.quantity);
+    if(p.animalFeed?.phase==='pickup')add(p.animalFeed.sourcePileId,p.animalFeed.quantity);
+    if(p.ward?.kind==='food'&&p.ward.phase==='pickup')add(p.ward.sourcePileId,p.ward.quantity);
+    if(p.haul?.constructionBatch379){for(const source of p.haul.constructionBatch379.sources)add(source.pileId,source.quantity);}
+    else if(p.haul?.phase==='pickup')add(p.haul.sourcePileId,p.haul.haulOpportunity379?.quantity??p.haul.quantity);
+    if(p.need?.kind==='eat'&&p.need.phase==='pickup')add(p.need.sourcePileId!,p.need.quantity??1);
+   }
+   if(!exceptPawns?.has(p.id))for(const task of p.orders?.queue??[])if(typeof task!=='number'){
+    if(isCookingOrder(task)){for(const i of task.cooking.ingredients)add(i.pileId,i.quantity);}
+    else if(task.constructionBatch379){for(const source of task.constructionBatch379.sources)add(source.pileId,source.quantity);}
+    else add(task.sourcePileId,task.haulOpportunity379?.quantity??task.quantity);
+   }
+  }
+  return result;
+ };
+ return id=>{
+  if(!owner||owner!==terrainJournalReadOwner()||scope!==terrainReadScope()||!Number.isSafeInteger(id)||ids&&!ids.has(id))return scalar(id);
+  if(!physical){physical=capture();answers=new Map();}
+  let quantity:number;
+  if(answers!.has(id))quantity=answers!.get(id)!;
+  else{
+   quantity=physical.has(id)?physical.get(id)!:initial(id);
+   if(queuedPileClaimed378(world,id,exceptPawn,exceptPawns)){
+    const pile=world.piles.find(p=>p.id===id&&p.owner.type==='ground');
+    if(pile){const all=exceptPawn===undefined&&exceptTreeJob===undefined&&!exceptPawns?quantity:physicalReservedSource(world,id);quantity+=Math.max(0,pile.quantity-all);}
+   }
+   answers!.set(id,quantity);
+  }
+  if(verifyTerrainWriteCaches&&!Object.is(quantity,scalar(id)))throw Error('Source reservation reader crossed a mutation inside its immutable proposal');
+  return quantity;
+ };
 }
 /** Batch form of reservedSource for a single read-only decision over many piles.
  * Active work by exceptPawn is excluded, but its queued orders still reserve.
  * The map is discarded before the next world mutation. */
 export function reservedSourcesByPile(world: World, exceptPawn?: number): ReadonlyMap<number, number> {
+  const candidates=sourceReservationCandidates379(world);
   const quantities = new Map<number, number>();
   const add = (pileId: number, quantity: number): void => {
     quantities.set(pileId, (quantities.get(pileId) ?? 0) + quantity);
   };
   if(world.scout?.phase==='loading'&&world.scout.pawnId!==exceptPawn)add(world.scout.sourcePileId,world.scout.quantity);
-  for(const j of world.jobs)if(j.tree?.kind==='replant'&&j.tree.phase==='pickup'&&j.reservedBy!==exceptPawn)add(j.tree.sourcePileId,1);
+  for(const j of candidates?.trees??world.jobs)if(j.tree?.kind==='replant'&&j.tree.phase==='pickup'&&j.reservedBy!==exceptPawn)add(j.tree.sourcePileId,1);
   for(const [id,quantity] of commercialReservedSources(world,exceptPawn))add(id,quantity);
   for(const [id,quantity] of groupReservedQuantities(world))add(id,quantity);
-  for (const animal of world.wildlife?.animals ?? [])if (animal.id !== exceptPawn){
+  for (const animal of candidates?.animals??world.wildlife?.animals??[])if (animal.id !== exceptPawn){
     if(animal.meal?.kind==='pile')add(animal.meal.id, animal.meal.quantity);
     if(animal.haul?.phase==='pickup')add(animal.haul.sourcePileId,animal.haul.quantity);
   }
-  for (const pawn of world.pawns) {
+  for (const pawn of candidates?.people??world.pawns) {
     if (pawn.id !== exceptPawn) {
       if(pawn.recreation.task?.activity==='read'&&pawn.recreation.task.stage==='pickup')add(pawn.recreation.task.bookId,1);
       if (pawn.burial?.phase === 'pickup' && pawn.burial.corpseId !== undefined) add(pawn.burial.corpseId, 1);
@@ -242,14 +377,21 @@ export function reservedSourcesByPile(world: World, exceptPawn?: number): Readon
       if (pawn.feed?.phase === 'pickup'&&pawn.feed.sourcePileId!==null) add(pawn.feed.sourcePileId, pawn.feed.quantity);
       if (pawn.animalFeed?.phase === 'pickup') add(pawn.animalFeed.sourcePileId, pawn.animalFeed.quantity);
       if (pawn.ward?.kind === 'food' && pawn.ward.phase === 'pickup') add(pawn.ward.sourcePileId, pawn.ward.quantity);
-      if (pawn.haul?.phase === 'pickup') add(pawn.haul.sourcePileId, pawn.haul.quantity);
+      if(pawn.haul?.constructionBatch379){for(const source of pawn.haul.constructionBatch379.sources)add(source.pileId,source.quantity);}
+      else if (pawn.haul?.phase === 'pickup') add(pawn.haul.sourcePileId, pawn.haul.haulOpportunity379?.quantity??pawn.haul.quantity);
       if (pawn.need?.kind === 'eat' && pawn.need.phase === 'pickup'&&pawn.need.sourcePileId!==null) add(pawn.need.sourcePileId, pawn.need.quantity ?? 1);
     }
     for (const task of pawn.orders?.queue ?? []) if (typeof task !== 'number') {
       if (isCookingOrder(task)) for (const ingredient of task.cooking.ingredients) add(ingredient.pileId, ingredient.quantity);
-      else add(task.sourcePileId, task.quantity);
+      else if(task.constructionBatch379){for(const source of task.constructionBatch379.sources)add(source.pileId,source.quantity);}
+      else add(task.sourcePileId, task.haulOpportunity379?.quantity??task.quantity);
     }
   }
+ for(const pileId of queuedPileIds378(world,exceptPawn)??[]){
+  const pile=world.piles.find(p=>p.id===pileId&&p.owner.type==='ground');if(!pile)continue;
+  const physical=exceptPawn===undefined?quantities.get(pileId)??0:physicalReservedSource(world,pileId);
+  add(pileId,Math.max(0,pile.quantity-physical));
+ }
   return quantities;
 }
 export function sameDestination(a: HaulDestination, b: HaulDestination): boolean {
@@ -263,8 +405,12 @@ export function sameDestination(a: HaulDestination, b: HaulDestination): boolean
 }
 export function reservedDestination(world: World, destination: HaulDestination, exceptPawn?: number, item?:ItemId): number {
   let quantity = 0;
-  for(const task of haulReservations(world,exceptPawn))if(sameDestination(task.destination,destination)
-    &&(item===undefined||!task.whole&&world.piles.find(p=>p.id===(task.phase==='pickup'?task.sourcePileId:task.carryPileId))?.item===item))quantity+=task.quantity;
+  for(const task of haulReservations(world,exceptPawn)){
+    if(task.constructionBatch379){
+      if(destination.type==='job'&&(item===undefined||task.constructionBatch379.item===item))for(const target of task.constructionBatch379.destinations)if(target.jobId===destination.jobId)quantity+=target.quantity;
+    }else if(sameDestination(task.destination,destination)
+      &&(item===undefined||!task.whole&&pileById(world,task.phase==='pickup'?task.sourcePileId:task.carryPileId)?.item===item))quantity+=task.quantity;
+  }
   return quantity;
 }
 export function groundQuantity(world: World, cell: Cell): number {

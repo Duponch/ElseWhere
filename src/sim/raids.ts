@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {drawBigThreat328} from './big-threats-328.ts';
 import {isConcurrentRaids341,raidSlotTaken341} from './concurrent-raids-341.ts';
@@ -179,7 +180,7 @@ export function exitRaider(w:World,p:Pawn):boolean {
   const items=w.piles.filter(i=>(i.owner.type==='apparel'||i.owner.type==='equipment')&&i.owner.pawnId===p.id);
   if(w.piles.some(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id)||p.interruptedCargo||p.equipmentDropPending)return false;
   const released=p.prisoner?.releasedAt!==undefined?{reason:'released' as const,capturedAt:p.prisoner.capturedAt,releasedAt:p.prisoner.releasedAt}:{};
-  w.raids!.departed.push({group:p.raid.group,pawnId:p.id,name:p.name,cell:{x:p.x,z:p.z},tick:w.tick,items,...released});w.piles=w.piles.filter(i=>!items.includes(i));w.pawns=w.pawns.filter(q=>q!==p);
+  w.raids!.departed.push({group:p.raid.group,pawnId:p.id,name:p.name,cell:{x:p.x,z:p.z},tick:w.tick,items,...released});w.piles=filterPileEntries(w.piles,i=>!items.includes(i));w.pawns=w.pawns.filter(q=>q!==p);
   for(const q of w.pawns)if(q.shooting?.order?.targetId===p.id||q.melee?.order?.targetId===p.id||q.tactics?.targetId===p.id){stopRaidEngagement(q);if((q.motion?.end??0)<=w.tick&&q.state==='moving')q.state='idle';}
   log(w,p.prisoner?.releasedAt!==undefined?`${p.name} quitte librement la carte après sa libération, avec ses objets portés.`:p.prisoner?`${p.name} s'est échappé au bord de la carte avec ses objets portés.`:`${p.name} quitte la carte avec son équipement porté.`);return true;
 }

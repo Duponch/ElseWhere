@@ -35,7 +35,14 @@ export function animalFeedingPatientReady(w:World,a:WildAnimal,doctor?:Pawn):boo
 }
 export function animalFeedingReason(w:World,doctor:Pawn,a:WildAnimal|undefined,accepted=false):string|undefined {
   if(!animalFeedingDoctorReady(w,doctor))return 'Un colon libre et apte doit avoir Médecin activé.';
-  if(!a||!w.wildlife?.animals.includes(a)||!animalFeedingPatientReady(w,a,doctor))return 'L’animal possédé doit être couché pour un besoin médical, sans danger ni autre service.';
+  if(!a||!w.wildlife?.animals.includes(a))return 'L’animal possédé doit être couché pour un besoin médical, sans danger ni autre service.';
+  return knownAnimalFeedingReason379(w,doctor,a,accepted);
+}
+/** A read-only candidate pass has already admitted the doctor and enumerates
+ * the actual local animal roster. Keep the patient, area and hunger predicates
+ * shared with the public order/ongoing-task reader. */
+export function knownAnimalFeedingReason379(w:World,doctor:Pawn,a:WildAnimal,accepted=false):string|undefined {
+  if(!animalFeedingPatientReady(w,a,doctor))return 'L’animal possédé doit être couché pour un besoin médical, sans danger ni autre service.';
   if(!accepted){const reason=allowedAreaReason(w,doctor,a);if(reason)return reason;}
   if(!accepted&&a.food>animalNutritionMax(a)*ANIMAL_FEED_HUNGER)return 'Cet animal n’a pas encore besoin d’être nourri.';
   return undefined;

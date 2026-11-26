@@ -21,6 +21,8 @@ import { createGroundCapacityReader,storageCapacity } from './ground-placement.t
 import { reservedSource } from './materials.ts';
 import { pawnBody,medicallyStopped } from './health-rules.ts';
 import { isColonist } from './affiliation.ts';
+import {animalClaimed} from './animal-rest-state.ts';
+import {backgroundWorkRefusal} from './colonist-backgrounds.ts';
 import { animalCorpseItem,pickUpRetainedCorpse } from './corpses.ts';
 import type { NeedContext } from './needs.ts';
 import type { WildAnimal } from './wildlife-state.ts';
@@ -37,9 +39,9 @@ export function designateHunt(w:World,c:HuntingCommand):CommandResult {
   s.targets.sort((a,b)=>a-b);for(const p of w.pawns)p.planCooldown=0;
   return {ok:true};
 }
-export function huntingWanted(w:World,p:Pawn):boolean {
+export function huntingWanted(w:World,p:Pawn,animalId?:number):boolean {
   return isColonist(p)&&workPriority(p,'hunt')>0&&!p.draft&&!medicallyStopped(p)&&pawnBody(p).capacities.manipulation>0
-    &&equippedWeapon(w,p)?.item!=='emp-launcher'&&isRangedWeaponItem(equippedWeapon(w,p)?.item)&&!!w.hunting?.targets.some(id=>w.wildlife?.animals.some(a=>a.id===id&&allowedAreaAllows(w,p,a)&&!a.domestic&&a.state!=='dead')&&!w.pawns.some(o=>o!==p&&o.hunting?.animalId===id));
+    &&equippedWeapon(w,p)?.item!=='emp-launcher'&&isRangedWeaponItem(equippedWeapon(w,p)?.item)&&!!w.hunting?.targets.some(id=>(animalId===undefined||id===animalId)&&w.wildlife?.animals.some(a=>a.id===id&&allowedAreaAllows(w,p,a)&&!a.domestic&&a.state!=='dead')&&!w.pawns.some(o=>o.id!==p.id&&o.hunting?.animalId===id)&&(Number(w.schemaVersion)<378||!animalClaimed(w,id,p.id)));
 }
 /** Hunting seeks an unobstructed shot within 95% of weapon range, without
  * tactical cover scoring. All candidates share one bounded decision capture. */
@@ -61,9 +63,9 @@ function huntingPosition(w:World,p:Pawn,a:WildAnimal,reach:Reachability):{cell:C
   candidates.sort((a,b)=>(a.x-p.x)**2+(a.z-p.z)**2-((b.x-p.x)**2+(b.z-p.z)**2)||a.z-b.z||a.x-b.x);
   for(const cell of candidates){if(!canShoot(cell))continue;const path=routeToCell(w,cell,reach);if(path)return {cell,path,grid};}
 }
-export function huntingProposal(w:World,p:Pawn,reach:Reachability):{task:HuntingTask;path:Cell[];target:Cell}|undefined {
-  if(!huntingWanted(w,p))return;
-  const targets=w.wildlife?.animals.filter(a=>allowedAreaAllows(w,p,a)&&!a.domestic&&a.state!=='dead'&&w.hunting!.targets.includes(a.id)&&!w.pawns.some(o=>o!==p&&o.hunting?.animalId===a.id))??[];
+export function huntingProposal(w:World,p:Pawn,reach:Reachability,animalId?:number):{task:HuntingTask;path:Cell[];target:Cell}|undefined {
+  if(!huntingWanted(w,p,animalId))return;
+  const targets=w.wildlife?.animals.filter(a=>(animalId===undefined||a.id===animalId)&&allowedAreaAllows(w,p,a)&&!a.domestic&&a.state!=='dead'&&w.hunting!.targets.includes(a.id)&&!w.pawns.some(o=>o.id!==p.id&&o.hunting?.animalId===a.id)&&(Number(w.schemaVersion)<378||!animalClaimed(w,a.id,p.id)))??[];
   targets.sort((a,b)=>(a.x-p.x)**2+(a.z-p.z)**2-((b.x-p.x)**2+(b.z-p.z)**2)||a.id-b.id);
   for(const a of targets){const plan=huntingPosition(w,p,a,reach);if(plan)return {task:{animalId:a.id,startedAt:w.tick,phase:'stalk',progress:0},path:plan.path,target:plan.cell};}
 }
@@ -101,18 +103,20 @@ function collect(w:World,p:Pawn,ctx:HuntContext):void {
   if(retained){
     if(path!.length){p.path=path!;p.state='moving';p.planCooldown=20;ctx.move(sourceCell,true);if(!p.path.length)p.planCooldown=0;return;}
     const picked=pickUpRetainedCorpse(w,p,retained.id);if(!picked){stop(p);return;}
-    cancelHunting(p);p.haul={sourcePileId:picked.id,quantity:1,phase:'deliver',destination:{type:'stockpile',stockpileId:zone.id,forHunting:true},carryPileId:picked.id,pickupCell:{x:retained.x,z:retained.z}};
+    const forced=task.forced378===true;cancelHunting(p);p.haul={sourcePileId:picked.id,quantity:1,phase:'deliver',destination:{type:'stockpile',stockpileId:zone.id,forHunting:true},carryPileId:picked.id,pickupCell:{x:retained.x,z:retained.z}};
+    if(forced)p.orders.active='haul';
     p.path=[];p.state='working';p.planCooldown=0;return;
   }
-  cancelHunting(p);p.haul={sourcePileId:body!.id,quantity:1,phase:'pickup',destination:{type:'stockpile',stockpileId:zone.id,forHunting:true},carryPileId:null};
+  const forced=task.forced378===true;cancelHunting(p);p.haul={sourcePileId:body!.id,quantity:1,phase:'pickup',destination:{type:'stockpile',stockpileId:zone.id,forHunting:true},carryPileId:null};
+  if(forced)p.orders.active='haul';
   p.path=path!;p.state=p.path.length?'moving':'working';p.planCooldown=0;
 }
 export function processHunting(w:World,p:Pawn,ctx:HuntContext):void {
   if(!allowedAreaServicesAllowed(w,p)){stop(p);return;}
   const task=p.hunting!;
-  if(p.draft||workPriority(p,'hunt')===0||!equippedWeapon(w,p)||equippedWeapon(w,p)?.item==='emp-launcher'||medicallyStopped(p)||pawnBody(p).capacities.manipulation===0){stop(p);return;}
+  if(p.draft||workPriority(p,'hunt')===0&&!(task.forced378===true&&!backgroundWorkRefusal(p,'hunt'))||!equippedWeapon(w,p)||equippedWeapon(w,p)?.item==='emp-launcher'||medicallyStopped(p)||pawnBody(p).capacities.manipulation===0){stop(p);return;}
   const a=w.wildlife?.animals.find(a=>a.id===task.animalId),corpse=w.piles.some(i=>i.id===task.animalId&&i.kind==='corpse');
-  if(a?.domestic){stop(p);return;}
+  if(a?.domestic||Number(w.schemaVersion)>=378&&animalClaimed(w,task.animalId,p.id)){stop(p);return;}
   if(task.phase!=='collect'&&(a?.state==='dead'||corpse)){
     cancelShooting(p);task.phase='collect';task.progress=0;p.path=[];p.state='idle';
     if(w.hunting){w.hunting.targets=w.hunting.targets.filter(id=>id!==task.animalId);w.hunting.completed=Math.min(Number.MAX_SAFE_INTEGER,w.hunting.completed+1);}

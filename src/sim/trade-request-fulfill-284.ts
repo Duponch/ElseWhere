@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema284OrLater} from './schema-compatibility-257.ts';
 import {registeredCampaign,boundWorldGroup} from './world-map-context.ts';
@@ -120,10 +121,10 @@ export function prepareTradeRequestFulfill284(w:World,requestId:number,groupId:n
   if(!current())return no('Un véritable destinataire de la remise n’est pas modifiable.');
   return {ok:true,current,commit(){
    if(!current())throw Error('Stale actual trade request fulfillment');used=true;
-   for(const [p,n] of d.changes)if(n<p.quantity)p.quantity-=n;
+   for(const [p,n] of d.changes)if(n<p.quantity)markPileContentWrite379(p).quantity-=n;
    for(const p of d.placements){assignPileOwner(p.pile,p.owner);if(p.rot)p.pile.rot=p.rot;}
    g.items=finalItems;g.reorganization=history;chosen.items=[];
-   relation.goodwill=d.reward.goodwillAfter;relation.kind=d.reward.kindAfter;
+   relation.goodwill=d.reward.goodwillAfter;markPileContentWrite379(relation).kind=d.reward.kindAfter;
    request.fulfillment=receipt;request.closed={atCore:c.core,reason:'fulfilled'};request.status='succeeded';root.nextId=d.nextId;root.rng=d.rng;
   }};
  }catch{return no('Cette remise ne peut pas être préparée sans modifier les originaux.');}

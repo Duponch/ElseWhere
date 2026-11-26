@@ -33,3 +33,30 @@ test.each(['.', '..', '../escape', 'C:\\outside'])('invalid run name %s cannot r
     else process.env.LISIERE_TEST_RUN = previous;
   }
 });
+
+test('opt-in campaign checkpoints are scoped to the run, but already scoped paths are unchanged', () => {
+  const previousRun = process.env.LISIERE_TEST_RUN;
+  const previousScope = process.env.LISIERE_TEST_SCOPE_TMP;
+  const checkpoint = path.join('tmp', '__checkpoint-scope-probe__.json');
+  const output = path.resolve('tmp', 'test-runs', 'checkpoint-scope-probe', checkpoint);
+  try {
+    process.env.LISIERE_TEST_RUN = 'checkpoint-scope-probe';
+    process.env.LISIERE_TEST_SCOPE_TMP = '1';
+    expect(testOutputPath(checkpoint)).toBe(output);
+    expect(testOutputPath(path.resolve(checkpoint))).toBe(output);
+    expect(testOutputPath(pathToFileURL(path.resolve(checkpoint)))).toBe(output);
+    expect(testOutputPath(output)).toBe(output);
+    writeTestFileSync(checkpoint, 'new campaign output');
+    expect(readFileSync(output, 'utf8')).toBe('new campaign output');
+    expect(existsSync(checkpoint)).toBe(false);
+    process.env.LISIERE_TEST_RUN = '../escape';
+    expect(() => testOutputPath(checkpoint)).toThrow('Invalid LISIERE_TEST_RUN');
+    delete process.env.LISIERE_TEST_SCOPE_TMP;
+    expect(testOutputPath(checkpoint)).toBe(checkpoint);
+  } finally {
+    if (previousRun === undefined) delete process.env.LISIERE_TEST_RUN;
+    else process.env.LISIERE_TEST_RUN = previousRun;
+    if (previousScope === undefined) delete process.env.LISIERE_TEST_SCOPE_TMP;
+    else process.env.LISIERE_TEST_SCOPE_TMP = previousScope;
+  }
+});

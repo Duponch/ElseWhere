@@ -12,8 +12,18 @@ class MetadataTextureNode extends THREE.TextureNode {
  setupUV(_builder:THREE.NodeBuilder,coordinates:THREE.Node):THREE.Node{return coordinates;}
 }
 
+const exactTable=(map:THREE.DataTexture)=>!map.flipY&&map.colorSpace===THREE.NoColorSpace&&map.type===THREE.FloatType&&map.minFilter===THREE.NearestFilter&&map.magFilter===THREE.NearestFilter&&!map.generateMipmaps;
+
+/** The only non-native TextureNode shape admitted for these actual Source
+ * tables. The private class changes compile-time coordinate generation only;
+ * runtime texture references/writers remain Three's native implementations.
+ * The compiled-owner checker must also prove the exact declared texture. */
+export function isExactMetadataTextureNode435(node:unknown):node is THREE.TextureNode{
+ return node instanceof THREE.TextureNode&&Object.getPrototypeOf(node)===MetadataTextureNode.prototype&&Reflect.get(node,'setupUV')===MetadataTextureNode.prototype.setupUV&&node.update===THREE.TextureNode.prototype.update&&node.updateReference===THREE.TextureNode.prototype.updateReference&&node.sampler===false&&node.updateMatrix===false&&node.updateType==='none'&&node.updateBeforeType==='none'&&node.updateAfterType==='none'&&node.value instanceof THREE.DataTexture&&exactTable(node.value);
+}
+
 export function metadataTexel(map:THREE.DataTexture,coordinates:THREE.Node<'ivec2'>):THREE.Node<'vec4'>{
- if(map.flipY||map.colorSpace!==THREE.NoColorSpace||map.type!==THREE.FloatType||map.minFilter!==THREE.NearestFilter||map.magFilter!==THREE.NearestFilter||map.generateMipmaps)throw Error('Exact unflipped nearest float metadata required');
+ if(!exactTable(map))throw Error('Exact unflipped nearest float metadata required');
  const read=new MetadataTextureNode(map,coordinates,int(0));read.sampler=false;
  return nodeObject(read).context({forceUVContext:false}) as THREE.Node<'vec4'>;
 }

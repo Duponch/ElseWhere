@@ -1,8 +1,11 @@
 import { footprintCells } from './definitions.ts';
-import { CONNECTION_RANGE } from './power-rules.ts';
-import { allowsWireConnection, isPowerConnector, transmitsPowerNow } from './power-grid.ts';
+import { CONNECTION_RANGE,isPowerTrader } from './power-rules.ts';
+import { allowsWireConnection, isPowerConnector,isPowerTransmitter, transmitsPowerNow } from './power-grid.ts';
 import type { Cell, Structure, World } from './types.ts';
 import { filteredStructures,structureMembershipToken } from './structure-navigation.ts';
+import {structureFamily379} from './structure-family-379.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 interface PowerFootprint { readonly minX:number;readonly maxX:number;readonly minZ:number;readonly maxZ:number }
 
@@ -27,17 +30,25 @@ export class PowerTopologyCache {
    * means the same structures in the same order. The only live input is each
    * switch's switchOn, so the same token, size and switch states imply the
    * same key, and therefore the same cached topology. */
-  private fast?:{token:object;width:number;height:number;switches:readonly Structure[];on:boolean[]};
+  private fast?:{token:object;width:number;height:number;switches:readonly Structure[];on:boolean[];owner?:object;transmitters?:readonly Structure[]};
   rebuilds=0;
   read(world:World):PowerTopology {
     const token=structureMembershipToken(world),switches=filteredStructures(world,'power-switches',isPowerSwitch),fast=this.fast;
-    if(this.topology&&fast&&fast.token===token&&fast.width===world.width&&fast.height===world.height&&fast.switches===switches&&switches.every((s,i)=>(s.power?.switchOn!==false)===fast.on[i]))return this.topology;
-    const topology=this.readKeyed(world);
-    this.fast={token,width:world.width,height:world.height,switches,on:switches.map(s=>s.power?.switchOn!==false)};
+    const owner=terrainJournalReadOwner(),family=owner?structureFamily379(world,'nominal-power-transmitters',isPowerTransmitter):undefined;
+    const transmitters=family===world.structures?undefined:family;
+    // Passive construction cannot change the electrical topology. The resident
+    // nominal transmitter family keeps the exact original member/order proof
+    // even across unrelated structure appends; the live switches remain read.
+    if(this.topology&&fast&&(fast.token===token||owner!==undefined&&transmitters!==undefined&&fast.owner===owner&&fast.transmitters===transmitters)&&fast.width===world.width&&fast.height===world.height&&fast.switches===switches&&switches.every((s,i)=>(s.power?.switchOn!==false)===fast.on[i])){
+      if(fast.token!==token&&verifyTerrainWriteCaches){const retained=this.topology;if(this.readKeyed(world)!==retained)throw Error('Passive append changed a retained electrical topology');}
+      fast.token=token;fast.owner=owner;fast.transmitters=transmitters;return this.topology;
+    }
+    const topology=this.readKeyed(world,transmitters);
+    this.fast={token,width:world.width,height:world.height,switches,on:switches.map(s=>s.power?.switchOn!==false),owner,transmitters};
     return topology;
   }
-  private readKeyed(world:World):PowerTopology {
-    const transmitters=world.structures.filter(transmitsPowerNow);
+  private readKeyed(world:World,nominal?:readonly Structure[]):PowerTopology {
+    const transmitters=(nominal??world.structures).filter(transmitsPowerNow);
     const key=`${world.width}:${world.height}|`+transmitters.map(s=>`${s.id}:${s.kind}:${s.x}:${s.z}:${s.orientation}:${s.footprint}`).join('|');
     if(this.topology&&key===this.key)return this.topology;
     const cells=new Map<number,number>(),sources=new Map<number,Cell>(),adjacent=new Map<number,Set<number>>();
@@ -100,4 +111,61 @@ export function connectedPowerGroups(world:World,topology:PowerTopology):Structu
     const net=topology.netOf.get(s.power.parentId);if(net!==undefined)groups.get(net)!.push(s);
   }
   return [...groups.values()];
+}
+
+/** Private dispatch projection. The immutable grid still contains every
+ * transmitter, including the thousands of conduits, switches and ship parts
+ * that carry the actual connectivity. The ten Core dispatch substeps never
+ * change those passive owners: no watts, startup, storage or EMP component.
+ * Their absence cannot change the group selection, sums, RNG order or the
+ * order of either startup/shedding or battery transfers. Those nominal
+ * component contracts are enforced by save admission and the real producers.
+ *
+ * The base transmitters were sorted by id in topology.groups, while connected
+ * consumers were appended in original structure order. Preserve both orders
+ * without copying or traversing the passive wire members at every local tick.
+ * Public readers and their malformed fixtures retain the full group path.
+ */
+export const isPowerDispatchKind=(kind:Structure['kind']):boolean=>kind==='battery'||isPowerTrader(kind);
+interface DispatchMembership {
+  readonly source:readonly Structure[];readonly base:readonly Structure[][];readonly consumers:readonly Structure[];readonly slots:ReadonlyMap<number,number>;
+}
+const dispatchMemberships=new WeakMap<PowerTopology,DispatchMembership>();
+export function connectedPowerDispatchGroups(world:World,topology:PowerTopology):Structure[][] {
+  if(!terrainJournalReadOwner())return connectedPowerGroups(world,topology);
+  const source=structureFamily379(world,'power-dispatch-owners',isPowerDispatchKind);
+  let membership=source===world.structures?undefined:dispatchMemberships.get(topology);
+  if(!membership||membership.source!==source){
+    const slots=new Map(topology.groups.map((ids,k)=>[ids[0]!,k]));
+    const base:Structure[][]=topology.groups.map(()=>[]),consumers:Structure[]=[];
+    for(const s of source){
+      // A projected/unknown family may return the original collection. Keep
+      // the nominal predicate live just as the ordinary filters do.
+      if(!isPowerDispatchKind(s.kind))continue;
+      if(isPowerTransmitter(s.kind)){
+        const slot=slots.get(topology.netOf.get(s.id)!);
+        if(slot!==undefined)base[slot]!.push(s);
+      }else if(isPowerConnector(s.kind))consumers.push(s);
+    }
+    for(const parts of base)parts.sort((a,b)=>a.id-b.id);
+    membership={source,base,consumers,slots};
+    if(source!==world.structures)dispatchMemberships.set(topology,membership);
+  }
+  const result=membership.base.map(parts=>parts.slice());
+  // Parent connectivity is live: reparenting and flicks are not immutable
+  // membership. Only the passive transmitter projection/base order is held.
+  for(const s of membership.consumers)if(s.power?.parentId!=null){
+    const slot=membership.slots.get(topology.netOf.get(s.power.parentId)!);
+    if(slot!==undefined)result[slot]!.push(s);
+  }
+  if(verifyTerrainWriteCaches){
+    const exhaustive=connectedPowerGroups(world,topology);
+    for(let i=0;i<exhaustive.length;i++){
+      const parts=exhaustive[i]!,actual=result[i]!;
+      if(parts.some(s=>!isPowerDispatchKind(s.kind)&&(s.battery!==undefined||s.emp!==undefined||s.power?.on)))throw Error('Passive power owner escaped its nominal component contract');
+      const expected=parts.filter(s=>isPowerDispatchKind(s.kind));
+      if(expected.length!==actual.length||expected.some((s,j)=>s!==actual[j]))throw Error('Resident power dispatch groups differ from the exhaustive grid');
+    }
+  }
+  return result;
 }

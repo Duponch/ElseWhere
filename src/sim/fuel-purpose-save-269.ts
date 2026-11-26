@@ -1,4 +1,5 @@
 import {isSchema269OrLater} from './schema-compatibility-257.ts';
+import {carryQuantityBound379} from './carry-quantity-379.ts';
 import {fuelCapacity,REFUEL_WORK_TICKS} from './fuel.ts';
 import {reservedSource} from './materials.ts';
 import {withoutQueuedOrder} from './haul-reservations.ts';
@@ -26,7 +27,7 @@ export function validCraftingFuelTransport269(w:World,version:number):boolean {
    const target=w.structures.find(s=>s.id===d.structureId),pile=w.piles.find(p=>p.id===(raw.phase==='pickup'?raw.sourcePileId:raw.carryPileId));
    if(target?.kind!=='fueled-smithy'||!target.fuel||!pile||pile.item!=='wood'
     ||Object.keys(raw).some(k=>!['sourcePileId','quantity','phase','destination','carryPileId',...queued?[]:['pickupCell','serviceProgress']].includes(k))
-    ||!int(raw.sourcePileId,1,w.nextId-1)||!int(raw.quantity,1,10)||!['pickup','deliver'].includes(String(raw.phase))
+    ||!int(raw.sourcePileId,1,w.nextId-1)||!int(raw.quantity,1,carryQuantityBound379({schemaVersion:version},pile.item))||!['pickup','deliver'].includes(String(raw.phase))
     ||queued&&(raw.phase!=='pickup'||d.forced!==true)
     ||!queued&&(d.forced===true?pawn.orders.active!=='haul':pawn.orders.active!==null)
     ||Object.hasOwn(raw,'pickupCell')&&!cell(raw.pickupCell)

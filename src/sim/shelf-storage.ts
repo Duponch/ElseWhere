@@ -1,6 +1,6 @@
+import {structureFamily379} from './structure-family-379.ts';
 import {isIedSchema357} from './ied-traps-357.ts';
 import {isPenoxycyline337} from './penoxycyline-337.ts';
-import {filteredStructures} from './structure-navigation.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
@@ -33,7 +33,7 @@ export function shelfFixedAccepts(subject:ItemId|MaterialPile):boolean {
   return Object.values(ANIMAL_SPECIES).some(s=>s.corpseItem===item&&s.bodySize<.75);
 }
 export function shelfAt(world:Pick<World,'structures'>,cell:Cell):Structure|undefined {
-  return world.structures.find(s=>isShelfKind(s.kind)&&s.shelf&&footprintContains(s,cell));
+  return structureFamily379(world,'shelves',isShelfKind).find(s=>isShelfKind(s.kind)&&s.shelf&&footprintContains(s,cell));
 }
 export function groundMaxStacks(world:Pick<World,'structures'>,cell:Cell):number {return shelfAt(world,cell)?3:1;}
 export function shelfStorageCells(s:Structure):StorageCell[] {
@@ -44,12 +44,12 @@ export function shelfStorageCells(s:Structure):StorageCell[] {
 export function storageCells(world:Pick<World,'stockpiles'|'structures'>&Partial<Pick<World,'schemaVersion'|'worldFactions'>>):StorageCell[] {
   // shelfStorageCells is empty but for shelf kinds: on a full World, the shared
   // per-kind list visits the same shelves in the same order.
-  const structures='width' in world&&'tiles' in world?filteredStructures(world as World,'shelf-kinds',s=>isShelfKind(s.kind)):world.structures;
+  const structures=structureFamily379(world,'shelves',isShelfKind);
   return [...world.stockpiles,...structures.filter(s=>targetBuildingPlayerUse263(world,s)).flatMap(shelfStorageCells)];
 }
 export function storageCellById(world:Pick<World,'stockpiles'|'structures'>&Partial<Pick<World,'schemaVersion'|'worldFactions'>>,id:number):StorageCell|undefined {
   const zone=world.stockpiles.find(z=>z.id===id);if(zone)return zone;
-  for(const s of world.structures)if(targetBuildingPlayerUse263(world,s)&&isShelfKind(s.kind)&&s.shelf?.cells.includes(id))return shelfStorageCells(s).find(c=>c.id===id);
+  for(const s of structureFamily379(world,'shelves',isShelfKind))if(targetBuildingPlayerUse263(world,s)&&isShelfKind(s.kind)&&s.shelf?.cells.includes(id))return shelfStorageCells(s).find(c=>c.id===id);
 }
 export function storageAt(world:Pick<World,'stockpiles'|'structures'>&Partial<Pick<World,'schemaVersion'|'worldFactions'>>,cell:Cell):StorageCell|undefined {
   const s=shelfAt(world,cell);if(s&&!targetBuildingPlayerUse263(world,s))return;return s?shelfStorageCells(s).find(c=>c.x===cell.x&&c.z===cell.z):world.stockpiles.find(z=>z.x===cell.x&&z.z===cell.z);

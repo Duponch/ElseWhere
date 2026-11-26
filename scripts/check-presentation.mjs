@@ -8,7 +8,8 @@ const targetUrl=process.env.HARVEST_URL??'http://127.0.0.1:5173/';
 const ready=async()=>{try{return (await fetch(targetUrl,{signal:AbortSignal.timeout(1000)})).ok;}catch{return false;}};
 let server;
 try {
-  if(!await ready()) {
+  if(process.env.HARVEST_LOCAL_BUILD&&process.env.HARVEST_PREINSTRUMENTED!=='1')throw Error('Offline presentation requires a compiled probe');
+  if(!process.env.HARVEST_LOCAL_BUILD&&!await ready()) {
     if(process.env.HARVEST_URL)throw Error('Configured presentation URL is not ready');
     server=spawn(process.execPath,[resolve('node_modules/vite/bin/vite.js'),'--host','127.0.0.1','--strictPort'],{stdio:'ignore',windowsHide:true});
     const until=Date.now()+20000;while(!await ready()){if(Date.now()>until||server.exitCode!==null)throw Error('Vite did not become ready');await sleep(250);}

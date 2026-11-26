@@ -172,6 +172,24 @@ describe('automatic pause (Prefs.AutomaticPauseMode, a player preference)',()=>{
   }
  });
 
+ it('fixed modern owner reads the exact producer letter ledger without the obsolete episode census',()=>{
+  for(const mode of ['never','major','any-threat','any-letter'] as const){
+   const w=colony(360),strict=new UrgentThreatObserver(),fixed=new UrgentThreatObserver(true);
+   strict.bootstrap(w);fixed.bootstrap(w);
+   for(const cls of Object.keys(LETTER_CLASSES_352) as LetterClass352[]){
+    send(w,cls);
+    strict.prepareMaps(w);fixed.prepareMaps(w);
+    expect(fixed.lettersChanged(w)).toBe(strict.lettersChanged(w));
+    expect(fixed.capture(w,mode)).toBe(strict.capture(w,mode));
+    expect(fixed.snapshot()).toEqual(strict.snapshot());
+    expect(fixed.capture(w,mode)).toBe(strict.capture(w,mode));
+   }
+   fixed.bootstrap(w);strict.bootstrap(w);
+   expect(fixed.capture(w,mode)).toBe(strict.capture(w,mode));
+   expect(fixed.snapshot()).toEqual(strict.snapshot());
+  }
+ });
+
  it('through a real tick: a death letter pauses only on "any letter"; a load adopts the stack silently',()=>{
   for(const mode of ['never','major','any-threat','any-letter'] as const){
    const w=v181(),observer=new UrgentThreatObserver();observer.bootstrap(w);

@@ -1,3 +1,4 @@
+import {pileById} from './pile-identity-directory.ts';
 import {isPlayerCasket271,cryptosleepInteraction271} from './cryptosleep-state-271.ts';
 import {isAncientCasket256,ancientCasketInteraction256} from './ancient-casket-state-256.ts';
 import { storageCellById } from './shelf-storage.ts';
@@ -53,7 +54,7 @@ export function navigationAllowedArea(world:World,start:Cell):AllowedAreaPolicy|
 export function allowedAreaWorkAllowed(world:World,pawn:Pawn):boolean {
   const policy=captureAllowedArea(world,pawn);if(!policy)return true;
   const allows=(cell:Cell|undefined|null)=>!cell||allowedAreaAllows(world,pawn,cell,policy);
-  const ground=(id:number|null|undefined)=>{const pile=world.piles.find(p=>p.id===id);return pile?.owner.type!=='ground'||allows(pile.owner);};
+  const ground=(id:number|null|undefined)=>{const pile=pileById(world,id);return pile?.owner.type!=='ground'||allows(pile.owner);};
   if(pawn.cryptosleepTask){const c=structureById(world,pawn.cryptosleepTask!.casketId);if(!c||!isPlayerCasket271(c)||!allows(cryptosleepInteraction271(c)))return false;}
   if(pawn.openCasket){const c=structureById(world,pawn.openCasket!.casketId);if(!c||!isAncientCasket256(c)||!allows(ancientCasketInteraction256(c)))return false;}
   if(pawn.priorityWork&&!allows(pawn.priorityWork.cell))return false;

@@ -52,10 +52,12 @@ describe('intrinsic native matrices preserve legibility and both scroll axes',()
   expect(stage.regionGroup('navigation')).toBe(stage.regionGroups.navigation);expect(stage.regionGroup()).toBe(stage.regionGroups.details);expect(stage.regionGroup('catalogue')).toBe(stage.pageContent);
  });
  it('creates distinct horizontal and vertical controls inside the unchanged clipping region',()=>{
-  const box=layoutNativePage(workPage(40).page,{width:480,height:400},false,measure),stage=stageAccess(box),pieces=new Map<string,{userData:Record<string,unknown>}>();
-  stage.pagePiece=id=>{expect(pieces.has(id)).toBe(false);const piece={userData:{}};pieces.set(id,piece);return piece;};stage.pageGroup={add:()=>{}};stage.drawScrollbars(box);
+  const box=layoutNativePage(workPage(40).page,{width:480,height:400},false,measure),stage=stageAccess(box),pieces=new Map<string,{userData:Record<string,unknown>}>(),dimensions=new Map<string,{w:number;h:number}>();
+  stage.pagePiece=((id:string,spec:{w:number;h:number})=>{expect(pieces.has(id)).toBe(false);const piece={userData:{}};pieces.set(id,piece);dimensions.set(id,spec);return piece;}) as typeof stage.pagePiece;stage.pageGroup={add:()=>{}};stage.drawScrollbars(box);
   expect([...pieces.keys()]).toEqual(['native-scrollbar','native-scroll-thumb','native-scroll:catalogue:x:track','native-scroll:catalogue:x:thumb']);
   expect([...pieces.values()].map(piece=>(piece.userData.nativeScroll as {axis:string}).axis)).toEqual(['y','y','x','x']);
+  expect(dimensions.get('native-scrollbar')!.w).toBe(.16);expect(dimensions.get('native-scroll-thumb')!.w).toBe(.16);
+  expect(dimensions.get('native-scroll:catalogue:x:track')!.h).toBe(.16);expect(dimensions.get('native-scroll:catalogue:x:thumb')!.h).toBe(.16);
   expect((pieces.get('native-scroll:catalogue:x:track')!.userData.nativeScroll as {start:number}).start).toBe(box.x+box.regions.catalogue!.x);
   expect(box.footer).toBeGreaterThanOrEqual(22);expect(box.body.height).toBeGreaterThan(0);expect(box.body.y+box.body.height+8).toBeLessThanOrEqual(box.height);
  });

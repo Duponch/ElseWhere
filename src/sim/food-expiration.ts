@@ -1,22 +1,24 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {interruptWork} from './interrupted-cargo.ts';
 import { ANIMAL_MEAT_ITEMS } from './biome-items.ts';
 import { emptySpoilage, isPerishable, ticksUntilRot } from './food-preservation.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { releaseWork } from './work-release.ts';
 import type { World } from './types.ts';
+import {thermalPileOwners379} from './perishable-pile-owners-379.ts';
 
 /** Expire before actions: a last-tick ingredient cannot be ingested or cooked.
  * Only an expiry allocates a set or reconciles tasks; normal checks leave ages intact. */
 export function expireFood(world: World): void {
   let expired: Set<number> | undefined;
   let losses: ReturnType<typeof emptySpoilage> | undefined;
-  for (const pile of world.piles) if (pile.kind!=='corpse' && isPerishable(pile.item) && ticksUntilRot(pile, world.tick) <= 0) {
+  for (const pile of thermalPileOwners379(world)) if (pile.kind!=='corpse' && isPerishable(pile.item) && ticksUntilRot(pile, world.tick) <= 0) {
     (expired ??= new Set()).add(pile.id);
     losses??=emptySpoilage();losses[pile.item]=(losses[pile.item]??0)+pile.quantity;
   }
   if (!expired) return;
   const expiredCarriers=new Set(world.piles.filter(p=>expired.has(p.id)&&p.owner.type==='pawn').map(p=>p.owner.type==='pawn'?p.owner.pawnId:-1));
-  world.piles = world.piles.filter(pile => !expired.has(pile.id));
+  world.piles = filterPileEntries(world.piles,pile => !expired.has(pile.id));
   for (const pawn of world.pawns) {
     // A retained payload still ages normally; its loss does not cancel sleep.
     if(pawn.interruptedCargo&&expiredCarriers.has(pawn.id)){delete pawn.interruptedCargo;pawn.planCooldown=0;}

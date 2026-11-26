@@ -19,6 +19,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
+import { serialize } from 'node:v8';
+import {expandCorePhaseWire379} from './expand-core-phase-wire-379';
+import {createFullRetainedCanonicalExpander379} from './expand-full-retained-379';
 
 const [savePath, outPath, ticksArg = '60', profile = 'mixed'] = process.argv.slice(2);
 if (!savePath || !outPath) throw Error('Usage: replay-record <save> <out.json> [macroTicks] [profile]');
@@ -45,8 +48,10 @@ const taskMs = (): number => {
   return r < .55 ? 0.5 : r < .8 ? 6 : r < .93 ? 25 : r < .98 ? 70 : 150;
 };
 
-interface Row { n: number; at: number; type: string; kind?: string; tick?: number; core?: number; bytes: number; sha: string }
+interface Row { n: number; at: number; type: string; kind?: string; tick?: number; core?: number; bytes: number; sha: string; wireBytes?:number; transferredBytes?:number }
 const rows: Row[] = [], replies = new Map<number, any>();
+const actorFrames: unknown[] = [];
+let verifyAdopt:undefined|((message:any)=>any),adoptedFulls=0,adoptedPhases=0;
 let lastTick = -1, firstTick = -1;
 const sha = (buffer: Uint8Array | string) => createHash('sha256').update(buffer).digest('hex');
 /** Canonical walk; returns the hash, the encoded size and, on request, the
@@ -80,6 +85,93 @@ function canonical(message: unknown, shared?: string[]): { sha: string; bytes: n
 // then hashes the complete rows, so a build that sends path patches and one
 // that sends every cell compare equal exactly when they present the same paths.
 const heldPaths = new Map<number, readonly unknown[]>();
+// Full actor columns: independent literal reconstruction, not the product
+// reader. No numerical quantisation or key/array reordering is permitted.
+const heldActorLists = new Map<string, any[]>();
+const expandFullRetained=createFullRetainedCanonicalExpander379();
+// Private resource columns are expanded directly from the wire format here.
+// This deliberately imports neither the product row decoder nor its ownership
+// facts: the preceding C9 message hashes remain the literal-value oracle.
+function expandResourceColumns(message:any):any {
+  if(message?.type!=='resident-publication'||message.publication?.type!=='snapshot'||!message.auxiliary?.resources)return message;
+  const packet=message.publication,section=message.auxiliary.resources;
+  if(section.checkpoint!==(packet.kind==='checkpoint'))throw Error('Resource column checkpoint mismatch');
+  const scalarNumbers=new Set(['id','x','z','amount','growth','growthTick','growthThermalFactor','damage']);
+  const scalarStrings=new Set(['kind','species','growthLight','stone']);
+  const define=(record:any,key:string,value:unknown)=>Object.defineProperty(record,key,{value,writable:true,enumerable:true,configurable:true});
+  let rows:any[]|undefined;
+  if(section.rows!==null){
+    const source=section.rows,objects:any[]=[];let at=0;
+    for(const layout of source.objectLayouts){
+      const keys=source.objectShapes[layout];if(!Array.isArray(keys))throw Error('Unknown nested resource layout');const record:any={};
+      for(const key of keys){if(at>=source.objectNumbers.length)throw Error('Truncated nested resource columns');const n=source.objectNumbers[at++];define(record,key,Number.isNaN(n)?undefined:n);}
+      objects.push(record);
+    }
+    if(at!==source.objectNumbers.length)throw Error('Trailing nested resource columns');
+    rows=[];at=0;
+    for(const layout of source.layouts){
+      const keys=source.shapes[layout];if(!Array.isArray(keys))throw Error('Unknown resource layout');const record:any={};
+      for(const key of keys){
+        if(at>=source.numbers.length)throw Error('Truncated resource columns');const n=source.numbers[at++];let value:unknown;
+        if(Number.isNaN(n))value=undefined;
+        else if(scalarNumbers.has(key))value=n;
+        else if(scalarStrings.has(key)){if(!Number.isSafeInteger(n)||n<0||n>=source.strings.length)throw Error('Unknown resource string');value=source.strings[n];}
+        else if(key==='sown291'){if(n!==0&&n!==1)throw Error('Invalid resource boolean');value=n===1;}
+        else if(key==='plantLife'||key==='blight'){if(!Number.isSafeInteger(n)||n<0||n>=objects.length)throw Error('Unknown resource nested object');value=objects[n];}
+        else throw Error('Unknown resource column field '+key);
+        define(record,key,value);
+      }
+      rows.push(record);
+    }
+    if(at!==source.numbers.length)throw Error('Trailing resource columns');
+  }
+  let publication:any;
+  if(packet.kind==='checkpoint'){
+    if(packet.world.resources!==0||!rows)throw Error('Resource checkpoint marker mismatch');publication={...packet,world:{...packet.world,resources:rows}};
+  }else if(packet.resources){
+    if(packet.resources.upserted!==0||!rows)throw Error('Resource upsert marker mismatch');publication={...packet,resources:{...packet.resources,upserted:rows}};
+  }else {if(rows)throw Error('Resource rows without patch');publication=packet;}
+  const {resources:_resources,...auxiliary}=message.auxiliary;return {...message,publication,auxiliary};
+}
+// Structure ownership leaves its literal wire values untouched. The new
+// negotiation header carries no value and is removed from canonical messages.
+function expandStructureOwnership(message:any):any {
+  if(message?.type!=='resident-publication'||message.publication?.type!=='snapshot'||!message.auxiliary?.structures)return message;
+  const packet=message.publication,section=message.auxiliary.structures;
+  if(section.epoch!==packet.epoch||section.revision!==packet.revision||section.checkpoint!==(packet.kind==='checkpoint')||packet.kind==='delta'&&section.baseRevision!==packet.baseRevision)throw Error('Structure ownership header mismatch');
+  const {structures:_structures,...auxiliary}=message.auxiliary;return {...message,auxiliary};
+}
+function expandActors(message: any): any {
+  if (message?.type === 'resident-publication' && message.publication?.type === 'campaign-only') { heldActorLists.clear(); return message; }
+  if (message?.type !== 'resident-publication' || message.publication?.type !== 'snapshot') return message;
+  const packet = message.publication, section = message.auxiliary?.actors;
+  if (packet.kind === 'checkpoint') heldActorLists.clear();
+  if (!section) { heldActorLists.clear(); return message; }
+  const world = { ...packet.world };
+  for (const key of ['pawns', 'animals']) {
+    const list = section[key], root = key === 'pawns' ? world : world.wildlife;
+    if (list.mode === 'literal') { heldActorLists.delete(key); continue; }
+    const old = list.reset ? [] : heldActorLists.get(key);
+    if (!old || root?.[key] !== 0) throw Error('Actor column without literal predecessor: ' + key);
+    const byId = new Map<number, any>(old.map(row => [row.id, structuredClone(row)]));
+    for (const id of list.removed) if (!byId.delete(id)) throw Error('Removed actor absent');
+    for (const row of list.full) byId.set(row.id, row);
+    const target = (id: number, index: number): [any, string] => {
+      const row = byId.get(id), name = row && Object.keys(row)[index];
+      if (name === undefined || name === 'id') throw Error('Invalid actor column');
+      return [row, name];
+    };
+    for (let i = 0; i < list.numbers.length; i += 3) { const [r,k] = target(list.numbers[i], list.numbers[i+1]); r[k] = list.numbers[i+2]; }
+    for (const [id,index,value] of list.values) { const [r,k] = target(id,index); r[k] = value; }
+    for (let i = 0; i < list.tails.length; i += 3) { const [r,k] = target(list.tails[i],list.tails[i+1]); r[k] = r[k].slice(list.tails[i+2]); }
+    const rows = list.order ? list.order.map((id: number) => byId.get(id)) : [...byId.values()];
+    if (rows.length !== list.count || rows.some((r: any) => !r)) throw Error('Actor column extent');
+    heldActorLists.set(key, structuredClone(rows));
+    if (key === 'pawns') world.pawns = rows; else world.wildlife = { ...world.wildlife, animals: rows };
+  }
+  const { actors: _actors, ...auxiliary } = message.auxiliary;
+  return { ...message, publication: { ...packet, world }, auxiliary };
+}
 function expandPaths(message: any): any {
   if (message?.type === 'resident-publication' && message.publication?.type === 'snapshot') {
     const world = message.publication.world; heldPaths.clear();
@@ -105,14 +197,17 @@ function expandPaths(message: any): any {
 // compare equal exactly when the record rebuilt from the tuple (from the record
 // held since the previous publication) is the record the other build sent.
 const heldResources = new Map<number, any>();
+let heldResourceOrder:number[]=[];
 function expandResources(message: any): any {
   if (message?.type !== 'resident-publication' || message.publication?.type !== 'snapshot') return message;
   const publication = message.publication;
-  if (publication.kind === 'checkpoint') { heldResources.clear(); for (const resource of publication.world.resources ?? []) heldResources.set(resource.id, structuredClone(resource)); return message; }
+  if (publication.kind === 'checkpoint') { heldResources.clear();heldResourceOrder=[]; for (const resource of publication.world.resources ?? []){heldResources.set(resource.id, structuredClone(resource));heldResourceOrder.push(resource.id);} return message; }
   const changes = publication.resources; if (!changes) return message;
   const touched = new Map<number, any>();
   for (const id of changes.removed) heldResources.delete(id);
-  for (const resource of changes.upserted) touched.set(resource.id, structuredClone(resource));
+  if(changes.removed.length){const gone=new Set(changes.removed);heldResourceOrder=heldResourceOrder.filter(id=>!gone.has(id));}
+  for (const resource of changes.upserted){if(!heldResources.has(resource.id))heldResourceOrder.push(resource.id);touched.set(resource.id, structuredClone(resource));}
+  if(changes.order)heldResourceOrder=[...changes.order];
   const growth: Float64Array | undefined = changes.growth, life: Float64Array | undefined = changes.life;
   for (let i = 0; growth && i < growth.length; i += 4) {
     const id = growth[i]!, old = heldResources.get(id); if (!old || touched.has(id)) throw Error(`Growth tuple without a held resource ${id}`);
@@ -156,19 +251,40 @@ function expandPiles(message: any): any {
 }
 const scope: any = {
   onmessage: null,
-  postMessage(message: any) {
+  postMessage(message: any,transfer?:ArrayBuffer[]) {
     if (message?.type === 'reply') replies.set(message.id, message);
     // BENCH=1: a fixed-workload timing bench. Each message pays the structured
     // clone a browser pays at postMessage; nothing is hashed or expanded.
     if (process.env.BENCH) {
-      structuredClone(message);
+      verifyAdopt?.(message);
+      structuredClone(message,transfer?.length?{transfer}:undefined);
       const t = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
       if (typeof t === 'number') { lastTick = Math.max(lastTick, t); if (firstTick < 0) firstTick = t; }
       rows.push({ n: rows.length, at: now, type: String(message?.type), ...message?.publication?.kind ? { kind: message.publication.kind } : {}, bytes: 0, sha: '' });
       return;
     }
-    // RAW=1 records the messages as sent (path patches not rebuilt), to inspect the wire.
-    if (!process.env.RAW) message = expandPiles(expandResources(expandPaths(message)));
+    // Retain the real wire extent, but compare its independently reconstructed
+    // literal graph with the historical packet hashes (including aliases).
+    const physicalPhase=message?.type==='actor-frontier-297'||message?.type==='actor-phase-297';
+    const wireBytes=physicalPhase?serialize(message).byteLength:undefined,transferredBytes=transfer?.reduce((sum,buffer)=>sum+buffer.byteLength,0);
+    if(transfer?.length)message=structuredClone(message,{transfer});
+    const adopted=verifyAdopt?.(message);
+    message=expandCorePhaseWire379(message);
+    // RAW=1 records the literal phase envelopes (without expanding frontier
+    // path patches or other prior-version columns). Graph transport itself is
+    // always reconstructed so its raw logical content remains comparable.
+    if (!process.env.RAW) message = expandPiles(expandResources(expandPaths(expandActors(expandResourceColumns(expandStructureOwnership(expandFullRetained(message)))))));
+    if(adopted&&message?.type==='resident-publication'&&message.publication?.type==='snapshot'){
+      const w=message.publication.world;
+      if(canonical(adopted.pawns).sha!==canonical(w.pawns).sha||canonical(adopted.wildlife?.animals).sha!==canonical(w.wildlife?.animals).sha)throw Error('Resident actor adoption differs from independent reconstruction');
+      if(canonical(adopted.resources).sha!==canonical(heldResourceOrder.map(id=>heldResources.get(id))).sha)throw Error('Resident resource adoption differs from independent reconstruction');
+      if(canonical(adopted.jobs).sha!==canonical(w.jobs).sha||canonical(adopted.thermal).sha!==canonical(w.thermal).sha)throw Error('Resident retained Full adoption differs from independent reconstruction');
+    }
+    if(process.env.ACTOR_FRAMES && message?.type==='resident-publication' && message.publication?.type==='snapshot'){
+      const p=message.publication, w=p.world;
+      actorFrames.push(structuredClone({type:p.type,kind:p.kind,epoch:p.epoch,revision:p.revision,baseRevision:p.baseRevision,stepMs:p.stepMs,speed:p.speed,
+        world:{nextId:w.nextId,tick:w.tick,pawns:w.pawns,...w.wildlife===undefined?{}:{wildlife:{animals:w.wildlife.animals}}}}));
+    }
     const tick = message?.publication?.world?.tick ?? message?.world?.tick ?? message?.summary?.tick;
     if (typeof tick === 'number') { lastTick = Math.max(lastTick, tick); if (firstTick < 0) firstTick = tick; }
     // A reply's save text is hashed apart; operation progress carries wall durations only in older builds.
@@ -177,12 +293,30 @@ const scope: any = {
     if (shared) writeFileSync(`${outPath}.msg${rows.length}.shared.txt`, shared.join(String.fromCharCode(10)));
     // DUMP=<n>: also write message n as readable JSON beside the record, to diff two builds.
     if (process.env.DUMP !== undefined && rows.length === Number(process.env.DUMP)) writeFileSync(`${outPath}.msg${rows.length}.json`, JSON.stringify(message, (_k, v) => v === undefined ? '__undefined__' : ArrayBuffer.isView(v) ? { typed: v.constructor.name, values: Array.from(v as any) } : Object.is(v, -0) ? '__-0__' : v, 1));
-    rows.push({ n: rows.length, at: now, type: String(message?.type), ...message?.publication?.kind ? { kind: message.publication.kind } : {}, ...typeof tick === 'number' ? { tick } : {}, ...typeof message?.toCore === 'number' ? { core: message.toCore } : {}, bytes: encoded.bytes, sha: encoded.sha });
+    rows.push({ n: rows.length, at: now, type: String(message?.type), ...message?.publication?.kind ? { kind: message.publication.kind } : {}, ...typeof tick === 'number' ? { tick } : {}, ...typeof message?.toCore === 'number' ? { core: message.toCore } : {}, bytes: encoded.bytes, sha: encoded.sha, ...wireBytes===undefined?{}:{wireBytes},...transferredBytes===undefined?{}:{transferredBytes} });
   },
 };
 (globalThis as any).self = scope;
 // VERIFY_NATURAL=1: every skipped plant appearance is recomputed and compared.
 if (process.env.VERIFY_NATURAL) (await import('../src/bridge/worker-natural-appearance.ts') as any).setNaturalAppearanceVerification?.(true);
+if(process.env.VERIFY_TERRAIN_CACHES)(await import('../src/sim/terrain-mutation-journal.ts')).setTerrainWriteCacheVerification(true);
+if(process.env.VERIFY_RESOURCE_JOURNAL)(await import('../src/sim/resource-mutation-journal.ts')).setResourceJournalVerification(true);
+if(process.env.VERIFY_PILE_INDEX)(await import('../src/sim/pile-index.ts')).setPileIndexVerification(true);
+if(process.env.VERIFY_HUMAN_CARRIERS)(await import('../src/sim/rescue-state.ts')).setHumanCarrierCacheVerification(true);
+if(process.env.VERIFY_ADOPTION){
+  const {ResidentVegetationAssembler}=await import('../src/bridge/resident-vegetation-assembler.ts'),{CorePhaseFrameOwner297}=await import('../src/bridge/core-phase-owner-297.ts'),{readResidentWorkerMessage}=await import('../src/bridge/resident-protocol.ts'),{captureNativeMessageForDeferred297}=await import('../src/bridge/native-message-capture.ts');
+  const reader=new ResidentVegetationAssembler(),owner=new CorePhaseFrameOwner297();
+  verifyAdopt=raw=>{
+    if(raw?.type==='actor-frontier-297'||raw?.type==='actor-phase-297'){const captured=Object.hasOwn(raw,'phaseWire379')?captureNativeMessageForDeferred297(raw):structuredClone(raw);owner.commit(owner.prepare(captured));adoptedPhases++;return;}
+    if(raw?.type!=='resident-publication')return;
+    const packet=readResidentWorkerMessage(structuredClone(raw));
+    if(packet.type==='campaign-only'){const result=reader.adoptCampaignOnly(packet);if(result.status!=='applied')throw Error('Campaign reader: '+JSON.stringify(result));owner.clear();return;}
+    if(packet.type!=='snapshot')throw Error('Expected resident snapshot');
+    const result=reader.adopt(packet);if(result.status!=='applied')throw Error('Resident reader: '+JSON.stringify(result));
+    if(packet.corePhase297)owner.adoptFull(result.world,packet.epoch,packet.revision,reader.readMotion(packet),packet.corePhase297,packet.speed as 0|1|3|6,packet.kind==='checkpoint');
+    adoptedFulls++;return result.world;
+  };
+}
 await import('../src/bridge/presentation.worker.ts');
 
 let id = 0;
@@ -195,6 +329,15 @@ const drain = () => { for (let guard = 0; tasks.length; guard++) { if (guard > 1
 const run = (macroTicks: number) => { const until = lastTick + macroTicks; for (let i = 0; lastTick < until; i++) { if (i > 200000) throw Error('Simulation does not advance'); now += 20; wake(); drain(); } };
 
 await request({ type: 'load', data: text, threatPauseMode: 'never' });
+// Optional sampling over the SAME fixed published workload, after load. The
+// clock stays virtual; enabling the profiler cannot change the schedule.
+const profileOutput=process.env.REPLAY_CPU_PROFILE;
+let profileSession:import('node:inspector').Session|undefined;
+if(process.env.BENCH&&profileOutput){
+  const {Session}=await import('node:inspector');profileSession=new Session();profileSession.connect();
+  const post=(method:string,params?:object)=>new Promise<any>((ok,fail)=>profileSession!.post(method,params??{},(error,result)=>error?fail(error):ok(result)));
+  await post('Profiler.enable');await post('Profiler.setSamplingInterval',{interval:250});await post('Profiler.start');
+}
 const benchCpu = process.cpuUsage(), benchWall = process.hrtime.bigint(), benchFrom = rows.length;
 const third = Math.max(1, Math.floor(wantedTicks / 3));
 await request({ type: 'speed', speed: 6 }); run(third);
@@ -204,6 +347,10 @@ await request({ type: 'speed', speed: 3 }); run(third);
 await request({ type: 'speed', speed: 0 });
 if (process.env.BENCH) {
   const cpu = process.cpuUsage(benchCpu), wall = Number(process.hrtime.bigint() - benchWall) / 1e6;
+  if(profileSession){
+    const {profile}=await new Promise<any>((ok,fail)=>profileSession!.post('Profiler.stop',(error,result)=>error?fail(error):ok(result)));
+    writeFileSync(profileOutput!,JSON.stringify(profile));profileSession.disconnect();
+  }
   const kinds = new Map<string, number>(); for (const row of rows.slice(benchFrom)) { const k = row.type + (row.kind ? ':' + row.kind : ''); kinds.set(k, (kinds.get(k) ?? 0) + 1); }
   console.log(JSON.stringify({ bench: true, save: savePath, profile, macroTicks: lastTick - firstTick, cpuMs: Math.round((cpu.user + cpu.system) / 1000), wallMs: Math.round(wall), kinds: Object.fromEntries(kinds) }));
   process.exit(0);
@@ -212,5 +359,7 @@ const saved = await request({ type: 'save' });
 const kinds = new Map<string, number>(); for (const row of rows) { const k = row.type + (row.kind ? ':' + row.kind : ''); kinds.set(k, (kinds.get(k) ?? 0) + 1); }
 const out = { save: savePath, profile, macroTicks: lastTick - firstTick, messages: rows.length, kinds: Object.fromEntries(kinds), totalBytes: rows.reduce((s, r) => s + r.bytes, 0), allSha: sha(rows.map(r => r.sha).join('\n')), saveSha: sha(String(saved.data)), rows };
 writeFileSync(outPath, JSON.stringify(out));
+if(process.env.ACTOR_FRAMES)writeFileSync(process.env.ACTOR_FRAMES,serialize(actorFrames));
+if(process.env.VERIFY_ADOPTION)console.error(JSON.stringify({adoptedFulls,adoptedPhases}));
 console.log(JSON.stringify({ ...out, rows: undefined }));
 process.exit(0);

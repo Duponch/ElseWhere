@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {giveBornTraits361} from './trait-generation-361.ts';
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {journalLetter352,actors352} from './letter-producers-352.ts';
@@ -131,7 +133,7 @@ function arrive(w:World,kind:VisitorKind,intro=false,exotic=false):boolean {
   }
   const durationCore=kind==='visitor'?8000+Math.floor(visitorRandom(random)*14000):0;
   if(!Number.isSafeInteger(nextId)||!civilianAdmissionFits(w,profiles.length,piles.length))return false;
-  w.nextId=nextId;w.pawns.push(...pawns);w.piles.push(...piles);if(!exotic)s.rng=random.rng;s.serial=id;
+  w.nextId=nextId;w.pawns.push(...pawns);appendPileEntries(w.piles,...piles);if(!exotic)s.rng=random.rng;s.serial=id;
   s.groups.push({id,kind,members:pawns.map(p=>p.id),entry:arrival.entry,spot:arrival.spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore,hostile:false});
   log(w,kind==='traveler'?`${pawns.length} passant(s) traverse(nt) la région.`:exotic?'Un négociant exotique approche de la colonie avec ses marchandises.':`${pawns.length} visiteur(s) approche(nt) de la colonie${merchant>=0?' ; un marchand porte quelques marchandises':''}.`);
   // Core: VisitorGroup and TravelerGroup are NeutralEvent letters.
@@ -223,7 +225,7 @@ export function arriveTraderCaravan332(w:World):boolean {
   }
   const durationCore=caravanStayCore332(draw);
   if(!Number.isSafeInteger(nextId)||!civilianAdmissionFits(w,count,piles.length))return false;
-  w.nextId=nextId;w.pawns.push(...pawns);w.piles.push(...piles);s.serial=id;
+  w.nextId=nextId;w.pawns.push(...pawns);appendPileEntries(w.piles,...piles);s.serial=id;
   const caravan={traderKind:kind,factionId:source.factionId};
   s.groups.push({id,kind:'visitor',members:pawns.map(p=>p.id),entry:arrival.entry,spot:arrival.spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore,hostile:false,caravan332:caravan});
   log(w,`Caravane commerciale : ${caravanLabel332(w,caravan)} approche avec ${count} personne(s). Elle vend ses marchandises et achète aussi.`);
@@ -247,7 +249,7 @@ function personalMeal(w:World,p:Pawn):void {
   let carry=source;
   if(quantity<source.quantity){
     if(w.piles.length>=32768||!Number.isSafeInteger(w.nextId+1))return;
-    carry={...source,id:w.nextId++,quantity,owner:{type:'pawn',pawnId:p.id},...copyPileCondition(source)};source.quantity-=quantity;w.piles.push(carry);p.visitor!.personalFoodIds.push(carry.id);
+    carry={...source,id:w.nextId++,quantity,owner:{type:'pawn',pawnId:p.id},...copyPileCondition(source)};markPileContentWrite379(source).quantity-=quantity;appendPileEntries(w.piles,carry);p.visitor!.personalFoodIds.push(carry.id);
   }else assignPileOwner(source,{type:'pawn',pawnId:p.id});
   p.need={kind:'eat',phase:'ingest',sourcePileId:source.id,carryPileId:carry.id,quantity,progress:0,dining:{target:{x:p.x,z:p.z},seatId:null,tableId:adjacentTable(w,p)?.id??null}};
   p.path=[];p.state='eating';
@@ -287,7 +289,7 @@ export function exitVisitor(w:World,p:Pawn):boolean {
   const packed=w.packed.filter(i=>i.owner.type==='inventory'&&i.owner.pawnId===p.id);
   releaseAllowedAreaReturn(p);p.path=[];p.state='idle';p.visitor!.goal=null;p.bedId=null;delete p.bedSlot;delete p.medicalSleep;delete p.flee;delete p.tactics;delete p.shooting;delete p.melee;delete p.motion;delete p.stagger;delete p.stun;
   w.visitors!.departed.push({group:v.group,tick:w.tick,pawn:structuredClone(p),items:structuredClone(items),...packed.length?{packed:structuredClone(packed)}:{}});
-  w.piles=w.piles.filter(i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));w.pawns=w.pawns.filter(q=>q!==p);
+  w.piles=filterPileEntries(w.piles,i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));w.pawns=w.pawns.filter(q=>q!==p);
   if(![...w.pawns,...shipCasketHumanReferences277(w)].some(q=>q.visitor?.group===v.group))w.visitors!.groups=w.visitors!.groups.filter(g=>g.id!==v.group);
   for(const q of w.pawns)if(q.trade?.traderId===p.id){delete q.trade;q.path=[];if(q.state==='moving'&&q.moveCooldown===0)q.state='idle';}
   log(w,`${p.name} quitte la carte avec ses possessions restantes.`);return true;

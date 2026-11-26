@@ -58,7 +58,8 @@ function validDomesticOwner(w:Pick<World,'tick'|'nextId'>&Partial<Pick<World,'st
 function validSlaughterTask(w:World,p:Pawn,version:number,targets?:ReadonlySet<number>):boolean {
   const raw:unknown=p.animalHandling;
   if(!obj(raw)||raw.kind!=='slaughter')return true;
-  if(version<220||!keys(raw,['animalId','kind','phase','sourcePileId','carryPileId','quantity','step','progress'])
+  if(version<220||!keys(raw,['animalId','kind','phase','sourcePileId','carryPileId','quantity','step','progress'],version>=378?['forced378']:[])
+    ||Object.hasOwn(raw,'forced378')&&(version<378||raw.forced378!==true)
     ||!int(raw.animalId,1,w.nextId-1)||!['approach','interact'].includes(String(raw.phase))
     ||raw.sourcePileId!==0||raw.carryPileId!==null||raw.quantity!==0||raw.step!==0
     ||!int(raw.progress,0,SLAUGHTER_WORK_TICKS-1)||raw.phase==='approach'&&raw.progress!==0)return false;
@@ -67,7 +68,7 @@ function validSlaughterTask(w:World,p:Pawn,version:number,targets?:ReadonlySet<n
   if(!slaughterHandlerAvailable(p)||p.prisoner||p.visitor||p.raid||p.podRescue||p.need||p.haul||p.cooking||p.hunting||p.research
     ||p.ward||p.feed||p.tend||p.surgery||p.rescue||p.animalRescue||p.equipmentTask||p.burial||p.cleaning||p.firefighting||p.jobId!==null
     ||p.melee||p.shooting?.order||p.tactics||p.trade||p.orbitalTrade||p.deepWork||p.recreation.task||p.animalCare||p.animalFeed
-    ||p.orders.active!==null||p.orders.queue.length||p.priorityWork||!['moving','working','idle'].includes(p.state)
+    ||p.orders.active!==null||p.orders.queue.length&&!(version>=378&&raw.forced378===true)||p.priorityWork||!['moving','working','idle'].includes(p.state)
     ||w.piles.some(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id)||w.packed.some(i=>i.owner.type==='pawn'&&i.owner.pawnId===p.id))return false;
   if(w.pawns.some(other=>other!==p&&(other.animalRescue?.animalId===animal.id||other.animalCare?.animalId===animal.id||other.animalFeed?.animalId===animal.id
     ||other.animalHandling&&leadingClaimIds(other.animalHandling).includes(animal.id))))return false;
@@ -182,7 +183,8 @@ export function validateDomesticAnimals(w:World,version:number):string[] {
       ?version>=120&&keys(h,['animalId','kind','sourcePileId','carryPileId','quantity','phase','step','progress'])&&base(h)
         &&['approach','interact'].includes(String(h.phase))&&h.sourcePileId===0&&h.carryPileId===null&&h.quantity===0&&h.step===0
         &&finite(h.progress,0,(animalProductDefinition(w.wildlife!.animals.find(a=>a.id===h.animalId)!)?.work??0))&&Number(h.progress)<(animalProductDefinition(w.wildlife!.animals.find(a=>a.id===h.animalId)!)?.work??0)
-      :obj(h)&&keys(h,['animalId','kind','sourcePileId','carryPileId','quantity','phase','step','progress'])&&base(h)
+      :obj(h)&&keys(h,['animalId','kind','sourcePileId','carryPileId','quantity','phase','step','progress'],version>=378?['forced378']:[])&&base(h)
+      &&(!Object.hasOwn(h,'forced378')||version>=378&&h.forced378===true&&h.kind==='tame')
       &&['tame','maintain'].includes(String(h.kind))&&['pickup','approach','interact'].includes(String(h.phase))
       &&int(h.sourcePileId,1,w.nextId-1)&&(h.carryPileId===null||int(h.carryPileId,1,w.nextId-1))&&int(h.quantity,0,12)
       &&int(h.step,0,5)&&int(h.progress,0,handlingStepDuration(h as unknown as import('./domestic-state.ts').AnimalHandlingTask,w.wildlife!.animals.find(a=>a.id===h.animalId)!.species)-1)
@@ -193,7 +195,7 @@ export function validateDomesticAnimals(w:World,version:number):string[] {
       if(claimed.has(id))errors.push('Animal is reserved twice.');claimed.add(id);
     }
     if(!isColonist(p)||p.prisoner||p.visitor||p.draft||p.mental?.crisis||p.interruptedCargo||p.need||p.haul||p.cooking||p.hunting||p.research||p.ward||p.feed||p.tend||p.rescue||p.animalRescue||p.equipmentTask||p.burial||p.cleaning||p.firefighting||p.jobId!==null||p.melee||p.flee||p.recreation.task||p.orders.active!==null||!['moving','working','idle'].includes(p.state)
-      ||p.animalFeed||h&&c||h&&p.priorities.handle===0||c&&p.priorities.doctor===0)errors.push('Animal work conflicts with another activity.');
+      ||p.animalFeed||h&&c||h&&p.priorities.handle===0&&!(version>=378&&p.animalHandling?.forced378===true)||c&&p.priorities.doctor===0)errors.push('Animal work conflicts with another activity.');
     const a=w.wildlife!.animals.find(a=>a.id===task.animalId)!;
     if(p.animalHandling){
       const t=p.animalHandling;

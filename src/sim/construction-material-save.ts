@@ -1,4 +1,5 @@
 import {isSchema277OrLater} from './schema-compatibility-257.ts';
+import {validConstructionMarkers379} from './construction-state-379.ts';
 import {isShipCasketKind277} from './ship-casket-content-277.ts';
 import {isSchema276OrLater} from './schema-compatibility-257.ts';
 import {isShipAddedKind276} from './ship-part-content-276.ts';
@@ -15,6 +16,7 @@ export function validateConstructionMaterials(world:World|Pick<World,'tick'>,ver
   const local='structures'in world?world:undefined;if(!packedRecords&&!local)return ['Material validation requires an actual map or explicit packed records.'];
   const errors:string[]=[];
   for(const entity of packedRecords?packedRecords.map(p=>p.building):[...local!.jobs,...local!.structures,...(local!.packed??[]).map(p=>p.building)]) {
+    if(!validConstructionMarkers379(entity,version))errors.push('Invalid or future construction permission/material provenance.');
     if(entity.kind==='torch-lamp'&&(version<249||entity.material!=='wood'||entity.orientation!==0||entity.footprint!=='standard'))errors.push('Torch lamp requires V249, wood and fixed orientation.');
     if(entity.kind==='egg-box'&&(version<374||entity.material!=='wood'&&entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Egg box requires V374, wood or steel and its standard footprint.');
     if(entity.kind==='tool-cabinet'&&(version<355||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Tool cabinet requires V355, steel and its standard footprint.');

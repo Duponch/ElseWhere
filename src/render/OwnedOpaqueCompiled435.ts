@@ -1,5 +1,6 @@
 import {BufferAttribute,HemisphereLight,HemisphereLightNode,InspectorBase,InspectorNode,LightShadow,MaterialReferenceNode,ModelNode,Node,NodeMaterial,PointLight,PointLightNode,ReferenceNode,ShadowNode,StorageBufferNode,Texture,TextureNode,UniformGroupNode,UniformNode,type Renderer}from'three/webgpu';
 import {frameGroup,objectGroup,renderGroup,screenSize,viewport}from'three/tsl';
+import {isExactMetadataTextureNode435}from'./surfaces/MetadataTexel';
 
 export interface OwnedOpaqueCompiledDeclaration435 {
  readonly materials:readonly NodeMaterial[];
@@ -11,8 +12,12 @@ export interface OwnedOpaqueCompiledDeclaration435 {
  readonly arrayTextures?:ReadonlySet<Texture>;
  readonly sharedGroups?:ReadonlySet<UniformGroupNode>;
  readonly renderer?:Renderer;
+ /** Command replay alone may retain pure data uniforms as LIVE inputs. It
+  * must run every native writer and upload the actual object UBO each draw.
+  * This never grants the observer's frozen-object SHARED policy. */
+ readonly liveObjectUniforms?:boolean;
 }
-export interface OwnedOpaqueCompiledResult435 {readonly accepted:boolean;readonly reason:string;readonly objectUniforms?:number;readonly textures?:number;readonly storage?:number;readonly sharedGroups?:number}
+export interface OwnedOpaqueCompiledResult435 {readonly accepted:boolean;readonly reason:string;readonly detail?:string;readonly objectUniforms?:number;readonly liveObjectUniforms?:number;readonly textures?:number;readonly storage?:number;readonly sharedGroups?:number}
 type Record435=Record<string,unknown>;
 const record=(value:unknown):value is Record435=>typeof value==='object'&&value!==null;
 const noLifecycle=(node:Node)=>node.updateBeforeType==='none'&&node.updateAfterType==='none';
@@ -31,14 +36,14 @@ const shadowProperties=new Set(['normalBias','bias','radius','mapSize','intensit
  * The owner must admit only its actual native state, never caller-supplied rows.
  */
 export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:OwnedOpaqueCompiledDeclaration435):OwnedOpaqueCompiledResult435 {
- const fail=(reason:string):OwnedOpaqueCompiledResult435=>({accepted:false,reason});
+ const fail=(reason:string,detail?:string):OwnedOpaqueCompiledResult435=>({accepted:false,reason,...detail?{detail}:{}});
  if(!record(state)||!Array.isArray(state.bindings)||!Array.isArray(state.updateNodes)||!Array.isArray(state.updateBeforeNodes)||!Array.isArray(state.updateAfterNodes))return fail('compiled-state-missing');
  if(!declaration.materials.length||declaration.materials.some(material=>!(material instanceof NodeMaterial)||material.transparent||material.opacity!==1))return fail('material-not-opaque-owned');
  const declaredGroup=(value:unknown):value is UniformGroupNode=>value instanceof UniformGroupNode&&declaration.sharedGroups?.has(value)===true&&Object.getPrototypeOf(value)===UniformGroupNode.prototype&&value.shared===true&&value.updateType===null&&value.update===UniformGroupNode.prototype.update&&noLifecycle(value);
  const permittedShared=(value:unknown)=>shared(value)||declaredGroup(value);
  const covered=new Set<Node>(),textureNodes=new Set<TextureNode>(),declaredTexture=(value:unknown):value is Texture=>value instanceof Texture&&declaration.textures.has(value)
   &&!['isVideoTexture','isStorageTexture','isCubeTexture','is3DTexture','isFramebufferTexture'].some(flag=>Reflect.get(value,flag)===true)&&(!(Reflect.get(value,'isDataArrayTexture')===true||Reflect.get(value,'isArrayTexture')===true)||declaration.arrayTextures?.has(value)===true);
- const textureNode=(node:unknown):node is TextureNode=>node instanceof TextureNode&&Object.getPrototypeOf(node)===TextureNode.prototype&&node.update===TextureNode.prototype.update&&node.updateReference===TextureNode.prototype.updateReference&&noLifecycle(node);
+ const textureNode=(node:unknown):node is TextureNode=>node instanceof TextureNode&&(Object.getPrototypeOf(node)===TextureNode.prototype||isExactMetadataTextureNode435(node))&&node.update===TextureNode.prototype.update&&node.updateReference===TextureNode.prototype.updateReference&&noLifecycle(node);
  // First identify every output written by a permitted native OBJECT writer.
  for(const raw of state.updateNodes){
   if(!(raw instanceof Node))return fail('non-native-update-node');
@@ -46,7 +51,7 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
    const property=Reflect.get(raw,'property'),bound=Reflect.get(raw,'material'),output=Reflect.get(raw,'node');
    if(Object.getPrototypeOf(raw)!==MaterialReferenceNode.prototype||raw.update!==ReferenceNode.prototype.update||raw.updateReference!==MaterialReferenceNode.prototype.updateReference||!noLifecycle(raw)
     ||typeof property!=='string'||!scalarProperties.has(property)&&property!=='map'||bound!==null&&!declaration.materials.includes(bound)||!(output instanceof Node))return fail('material-reference-not-declared');
-   if(property==='map'){if(!textureNode(output)||!declaredTexture(output.value))return fail('resource-not-declared');textureNodes.add(output);}
+   if(property==='map'){if(!textureNode(output))return fail('resource-not-declared','material-map-writer-shape');if(!declaredTexture(output.value))return fail('resource-not-declared','material-map-value');textureNodes.add(output);}
    else if(!(output instanceof UniformNode)||output.updateType!=='none'||output.groupNode!==objectGroup)return fail('material-object-output');
    covered.add(output);
   }else if(raw instanceof ModelNode){
@@ -54,7 +59,7 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
    if(Object.getPrototypeOf(raw)!==ModelNode.prototype||raw.update!==ModelNode.prototype.update||Reflect.get(raw,'scope')!=='worldMatrix'||!noLifecycle(raw)||!(output instanceof UniformNode)||output.groupNode!==objectGroup)return fail('model-writer-not-world-matrix');
    covered.add(output);
   }else if(raw instanceof TextureNode){
-   if(!textureNode(raw))return fail('texture-writer-not-native');if(!declaredTexture(raw.value))return fail('resource-not-declared');textureNodes.add(raw);
+   if(!textureNode(raw))return fail('texture-writer-not-native');if(!declaredTexture(raw.value))return fail('resource-not-declared','texture-writer-value');textureNodes.add(raw);
   }else if(raw instanceof UniformGroupNode){
    if(raw!==objectGroup&&!permittedShared(raw)||raw.update!==UniformGroupNode.prototype.update||!noLifecycle(raw))return fail('uniform-group-not-native');
   }else if(raw instanceof UniformNode){
@@ -81,8 +86,7 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
  for(const node of textureNodes)for(const field of['_matrixUniform','_flipYUniform']){const output=Reflect.get(node,field);if(output!=null){if(!(output instanceof UniformNode)||output.updateType!=='none'||output.groupNode!==objectGroup)return fail('texture-object-output');covered.add(output);}}
  for(const raw of state.updateBeforeNodes)if(!(raw instanceof ShadowNode)||Object.getPrototypeOf(raw)!==ShadowNode.prototype||raw.updateBefore!==ShadowNode.prototype.updateBefore||raw.updateBeforeType!=='render')return fail('before-callback-not-native-shadow');
  if(state.updateAfterNodes.length)return fail('after-callback-not-declared');
- let objectUniforms=0,textures=0,storage=0,sharedGroups=0;
- const checkTextureBinding=(binding:Record435):boolean=>textureNode(binding.textureNode)&&declaredTexture(binding.textureNode.value)&&binding.groupNode===objectGroup&&binding.store!==true;
+ let objectUniforms=0,liveObjectUniforms=0,textures=0,storage=0,sharedGroups=0;
  for(const group of state.bindings){
   if(!record(group)||!Array.isArray(group.bindings)||!group.bindings.length)return fail('binding-group-invalid');
   for(const raw of group.bindings){
@@ -91,15 +95,25 @@ export function compatibleOwnedOpaqueCompiled435(state:unknown,declaration:Owned
     if(!Array.isArray(raw.uniforms)||raw.groupNode!==objectGroup&&!permittedShared(raw.groupNode))return fail('binding-uniform-group-invalid');
     if(permittedShared(raw.groupNode)){sharedGroups++;for(const value of raw.uniforms){const output=record(value)&&record(value.nodeUniform)?value.nodeUniform.node:undefined;if(!(output instanceof UniformNode)||output.groupNode!==raw.groupNode)return fail('shared-uniform-output');}continue;}
     for(const value of raw.uniforms){const output=record(value)&&record(value.nodeUniform)?value.nodeUniform.node:undefined;objectUniforms++;
-     if(!(output instanceof UniformNode)||output.groupNode!==objectGroup||!covered.has(output)&&(!declaration.objectUniforms.has(output)||output.updateType!=='none'||!noLifecycle(output)))return fail('object-uniform-not-declared');
+     if(!(output instanceof UniformNode)||output.groupNode!==objectGroup)return fail('object-uniform-not-declared');
+     if(!covered.has(output)&&(!declaration.objectUniforms.has(output)||output.updateType!=='none'||!noLifecycle(output))){
+      // Data values are read afresh by the native object buffer. They are not
+      // frozen, inferred from equality, or added to producer ownership. Only
+      // an exact inert UniformNode can use this separate live-buffer policy;
+      // callbacks and all resource bindings retain the closed checks above.
+      if(declaration.liveObjectUniforms!==true||Object.getPrototypeOf(output)!==UniformNode.prototype||output.updateType!=='none'||!noLifecycle(output)||output.update!==UniformNode.prototype.update||output.updateReference!==UniformNode.prototype.updateReference)return fail('object-uniform-not-declared');
+      liveObjectUniforms++;
+     }
     }
    }else if(raw.isStorageBuffer===true){
     const node=raw.nodeUniform,attribute=raw.attribute;
-    if(!(node instanceof StorageBufferNode)||node.access!=='readOnly'||raw.access!=='readOnly'||!(attribute instanceof BufferAttribute)||!declaration.storage.has(attribute)||raw.groupNode!==objectGroup)return fail('resource-not-declared');storage++;
+    if(!(node instanceof StorageBufferNode)||node.access!=='readOnly'||raw.access!=='readOnly'||!(attribute instanceof BufferAttribute)||!declaration.storage.has(attribute)||raw.groupNode!==objectGroup)return fail('resource-not-declared','storage-binding');storage++;
    }else if(raw.isSampledTexture===true||raw.isSampler===true){
-    if(!checkTextureBinding(raw))return fail('resource-not-declared');textures++;
+    if(!textureNode(raw.textureNode))return fail('resource-not-declared','texture-binding-node-shape');
+    if(!declaredTexture(raw.textureNode.value))return fail('resource-not-declared','texture-binding-value');
+    if(raw.groupNode!==objectGroup||raw.store===true)return fail('resource-not-declared','texture-binding-group-or-access');textures++;
    }else return fail('binding-class-not-declared');
   }
  }
- return{accepted:true,reason:'owned-native-object-outputs',objectUniforms,textures,storage,sharedGroups};
+ return{accepted:true,reason:liveObjectUniforms?'native-live-object-inputs':'owned-native-object-outputs',objectUniforms,liveObjectUniforms,textures,storage,sharedGroups};
 }

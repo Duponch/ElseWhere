@@ -1,3 +1,5 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {captureStartingPlacePhysics256} from './starting-place-physics-256.ts';
@@ -30,16 +32,16 @@ export function captureStartingGeneratedPlacement256(world:World,arrival:CoreSta
    for(const op of plan.operations){
     if(op.kind==='absorb'){
      const target=targets.find(p=>p.id===op.targetId)!;
-     mergePileEgg256(target,op.quantity,source.egg);mergePileContamination(target,op.quantity,source.foodPoison);mergeThingDamage(target,op.quantity,source.damage,pileMaxHp(target,256));mergeRot(target,op.quantity,rotAge(source,0),0);target.quantity+=op.quantity;
+     mergePileEgg256(target,op.quantity,source.egg);mergePileContamination(target,op.quantity,source.foodPoison);mergeThingDamage(target,op.quantity,source.damage,pileMaxHp(target,256));mergeRot(target,op.quantity,rotAge(source,0),0);markPileContentWrite379(target).quantity+=op.quantity;
     }else {
      const next:MaterialPile=op.split?{...structuredClone(source),id:op.id,quantity:op.quantity,owner:{type:'ground',...cell}}:source;
-     next.quantity=op.quantity;assignPileOwner(next,{type:'ground',...cell});world.piles.push(next);const list=ground.get(key)??[];list.push(next);ground.set(key,list);
+     markPileContentWrite379(next).quantity=op.quantity;assignPileOwner(next,{type:'ground',...cell});appendPileEntries(world.piles,next);const list=ground.get(key)??[];list.push(next);ground.set(key,list);
     }
    }
    // The source is the last spawned original, or an unspawned remainder. An
    // entirely absorbed source retires; it never becomes a second map owner.
    if(plan.complete)return;
-   source.quantity=plan.remaining;if(source.quantity===before)throw Error('Starting scatter placement made no progress');
+   markPileContentWrite379(source).quantity=plan.remaining;if(source.quantity===before)throw Error('Starting scatter placement made no progress');
   }
  };
 }

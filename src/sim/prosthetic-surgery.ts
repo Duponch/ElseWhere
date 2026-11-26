@@ -1,3 +1,4 @@
+import {markPileMembershipChanged,appendPileEntries} from './pile-identity-directory.ts';
 import {isDoubleBedKind} from './bed-kinds.ts';
 import {markPileWrite} from './pile-index.ts';
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
@@ -126,7 +127,7 @@ export function planArtificialRestitution273(w:World,p:Pawn,part:import('./body-
   if(!cell)return null;
   const pile:MaterialPile={id:w.nextId+result.length,item,kind:item==='wood'?'wood':'prosthesis',quantity:1,owner:{type:'ground',...cell}};
   result.push(pile);const target=groundPile(shadow,cell);
-  if(target){const index=shadow.piles.indexOf(target);shadow.piles[index]={...target,quantity:target.quantity+1};markPileWrite();}else shadow.piles.push(pile);
+  if(target){const index=shadow.piles.indexOf(target);markPileMembershipChanged(shadow.piles)[index]={...target,quantity:target.quantity+1};markPileWrite();}else appendPileEntries(shadow.piles,pile);
   if(shadow.piles.length>32768)return null;
  }
  return result;
@@ -136,7 +137,7 @@ export function commitArtificialRestitution273(w:World,returns:readonly Material
  // A fresh Thing identity is allocated for every removed added root, even
  // when its new wood unit is immediately absorbed by an accessible stack.
  w.nextId+=returns.length;
- for(const pile of returns){const target=pile.owner.type==='ground'?groundPile(w,pile.owner):undefined;if(pile.item==='wood'&&target)addMaterial(w,'wood',1,pile.owner,'wood');else w.piles.push(pile);}
+ for(const pile of returns){const target=pile.owner.type==='ground'?groundPile(w,pile.owner):undefined;if(pile.item==='wood'&&target)addMaterial(w,'wood',1,pile.owner,'wood');else appendPileEntries(w.piles,pile);}
  refreshStock(w);
 }
 export function reportRestitutionBlocked273(w:World,p:Pawn,context:Pick<NeedContext,'event'>):void {

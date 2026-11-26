@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {mechRaidGroups261,multiRaid261} from './mechanical-raid-groups-261.ts';
 import {journalLetter352,actors352} from './letter-producers-352.ts';
 import {tempMapModern261,tempMapRecord261} from './temp-map-incidents-261.ts';
@@ -45,7 +46,7 @@ export function admitTempMapAssault261(w:World,points:number,random:{rng:number}
  const s=previous??{profile:'camp-raids-v1' as const,rng:root.rng,nextCheck:null,serial:0,completed:0,departed:[]};
  if(!s.extraActive261){s.extraActive261=[];s.extraResults261??=s.last?[structuredClone(s.last)]:[];}
  s.extraActive261.push(group);s.serial=id;w.raids=s;
- w.pawns.push(...roster.people);w.piles.push(...roster.items);root.nextId=roster.nextId;
+ w.pawns.push(...roster.people);appendPileEntries(w.piles,...roster.items);root.nextId=roster.nextId;
  w.events.push({tick:w.tick,type:'command',message:'Une nouvelle embuscade arrive au bord de cette carte.'});if(w.events.length>80)w.events.shift();journalLetter352(w,'threat-big','Embuscade',actors352(group.members));return true;
 }
 export function admitTempMapManhunters261(w:World,points:number,random:{rng:number}):boolean {

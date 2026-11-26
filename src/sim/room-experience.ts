@@ -101,7 +101,7 @@ export function validRoomExperience(p:Record<string,unknown>,version:number,tick
   if(version<103)return memories===undefined&&rest===undefined;
   if(memories!==undefined){
     const v343=isFirstDays343(version),v350=isMoodPool350(version);
-    if(!Array.isArray(memories)||!memories.length||memories.length>(v350?3+6+21+(version>=364?5:0):v343?3+6:3))return false;
+    if(!Array.isArray(memories)||!memories.length||memories.length>(v350?3+6+21+(version>=364?5:0)+(version>=378?10:0):v343?3+6:3))return false;
     const kinds=new Set<string>(),pool=new Map<string,number>(),others=new Set<string>();let bedroom=false;
     for(const m of memories){
       if(!record(m)||typeof m.kind!=='string')return false;

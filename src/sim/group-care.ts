@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {animalConditionTreatmentBatch256} from './animal-condition-care-256.ts';
 import {animalConditionStage256} from './animal-age-condition-data-256.ts';
 import {tendAnimalAgeCondition256} from './animal-age-condition-runtime-256.ts';
@@ -131,7 +132,7 @@ export function advanceGroupCare(group:ActiveGroup,c:GroupCareContext):ConsumedG
     if(item&&item!=='medicine')recordCaravanInventoryEffect256(group,item,-1);
     patient.health=record;
     if(medicine&&item){
-      if(medicine.quantity===1)group.items.splice(sourceIndex,1);else medicine.quantity--;
+      if(medicine.quantity===1)group.items.splice(sourceIndex,1);else markPileContentWrite379(medicine).quantity--;
       if(sourceOwner?.type!=='inventory'||grams===undefined)throw Error('Changed medicine ownership/profile');
       group.ledger.medicineUsed=medicineUsed;removed.push({pawnId:sourceOwner.pawnId,grams});
     }

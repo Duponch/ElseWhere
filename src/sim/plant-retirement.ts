@@ -1,4 +1,5 @@
 import {footprintCells} from './definitions.ts';
+import {markResourceArrayChanged} from './resource-mutation-journal.ts';
 import {constructionFinalWipesPlants,constructionFrameWipesPlants,isConstructionLightPlant,lightPlantKeyIn} from './construction-plants.ts';
 import {planSelectedDrops,releaseWork,type DropPlan} from './work-release.ts';
 import {refreshStock} from './materials.ts';
@@ -66,7 +67,7 @@ export function commitConstructionPlantRetirement(world:World,plan:PlantRetireme
     delete job.clearance;delete job.installationWork;job.reservedBy=null;job.status='pending';
   }
   if(plan.plants.length){
-    const ids=new Set(plan.plants.map(r=>r.id));world.resources=world.resources.filter(r=>!ids.has(r.id));
+    const ids=new Set(plan.plants.map(r=>r.id)),beforeResources=world.resources;world.resources=world.resources.filter(r=>!ids.has(r.id));markResourceArrayChanged(world,beforeResources,[],plan.plants);
     for(const animal of world.wildlife?.animals??[])if(animal.meal?.kind==='plant'&&ids.has(animal.meal.id)){
       delete animal.meal;animal.path=[];animal.nextDecision=world.tick;
     }

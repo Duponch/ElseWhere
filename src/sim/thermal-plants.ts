@@ -6,6 +6,9 @@ import type { ThermalLayout } from './thermal-topology.ts';
 import type { Resource, World } from './types.ts';
 import { schemaAtLeast } from './schema-range.ts';
 import { resourceArrayDelta,resourceSnapshot,sameResources } from './resource-array-delta.ts';
+import {markResourceChanged,captureResourceJournal,readResourceJournal,resourceMembershipUnchanged,type ResourceJournalCursor} from './resource-mutation-journal.ts';
+import {terrainJournalReadOwner} from './terrain-read-scope.ts';
+import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
 
 interface Group { plants:Resource[]; region:number; factor?:number }
 interface Binding { source:Resource[]; layout:ThermalLayout; groups:Group[] }
@@ -18,7 +21,7 @@ const PLANT_TICK_LONG_CORE=2000,CORE_PER_LOCAL=10,PLANT_TICK_LONG_LOCAL=PLANT_TI
 /** The current schema family samples temperature at each plant's TickLong;
  * historical schemas keep their immediate regional update. */
 const sampledAtTickLong=schemaAtLeast(301);
-interface Schedule { source:Resource[]; snapshot:readonly Resource[]; buckets:Resource[][] }
+interface Schedule { source:Resource[]; snapshot?:readonly Resource[]; buckets:Resource[][]; owner?:object; cursor?:ResourceJournalCursor }
 const schedules=new WeakMap<World,Schedule>(),sampledTicks=new WeakMap<World,number>();
 const plantTickLongSlot=(plant:Resource):number=>Math.floor(plant.id%PLANT_TICK_LONG_CORE/CORE_PER_LOCAL);
 const SCHEDULE_DELTA_LIMIT=256;
@@ -28,7 +31,7 @@ const SCHEDULE_DELTA_LIMIT=256;
  * bucket keeps its plants in array order, as a rebuild would. Undefined (the
  * caller rebuilds) on any other change. The previous schedule is consumed. */
 function derivedSchedule(old:Schedule,next:Resource[]):Schedule|undefined {
-  if(!sameResources(old.source,old.snapshot))return undefined;
+  if(!old.snapshot||!sameResources(old.source,old.snapshot))return undefined;
   const delta=resourceArrayDelta(old.source,next,SCHEDULE_DELTA_LIMIT);if(!delta)return undefined;
   const buckets=old.buckets;
   for(const r of delta.removed)if(isPlant(r)){
@@ -40,6 +43,31 @@ function derivedSchedule(old:Schedule,next:Resource[]):Schedule|undefined {
   return {source:next,snapshot:resourceSnapshot(next),buckets};
 }
 
+function plantBuckets(resources:readonly Resource[]):Resource[][] {
+  const buckets:Resource[][]=Array.from({length:PLANT_TICK_LONG_LOCAL},()=>[]);
+  for(const plant of resources)if(isPlant(plant))buckets[plantTickLongSlot(plant)]!.push(plant);
+  return buckets;
+}
+/** The closed SIM owner already records the real remove/append commits. An
+ * immutable id chooses the bucket, and survivors retain their order there.
+ * Public callers still validate the old array and discover its full delta. */
+function ownedSchedule(old:Schedule,next:Resource[],owner:object):Schedule|undefined {
+  if(old.owner!==owner||!old.cursor)return;
+  const delta=readResourceJournal(next,old.cursor);if(!delta?.membershipEdits)return;
+  const buckets=old.buckets;
+  for(const edit of delta.membershipEdits){
+    for(const plant of edit.removed)if(isPlant(plant)){
+      const bucket=buckets[plantTickLongSlot(plant)];if(!bucket)return;
+      const at=bucket.indexOf(plant);if(at<0)return;bucket.splice(at,1);
+      if(bucket.indexOf(plant,at)>=0)return;
+    }
+    for(const plant of edit.appended)if(isPlant(plant)){
+      const bucket=buckets[plantTickLongSlot(plant)];if(!bucket)return;bucket.push(plant);
+    }
+  }
+  return {source:next,buckets,owner,cursor:delta.cursor};
+}
+
 /** Each plant samples its temperature factor at its own TickLong only. A changed
  * factor settles the elapsed growth at the factor sampled before (the light
  * integral stays continuous, see docs) and governs growth until the next sample.
@@ -47,18 +75,28 @@ function derivedSchedule(old:Schedule,next:Resource[]):Schedule|undefined {
  * repeated call within one tick samples nothing more. Without a previous call
  * (new World object), only the current tick's plants are sampled. */
 function updatePlantTemperaturesAtTickLong(world:World,layout:ThermalLayout):void {
+  const owner=terrainJournalReadOwner(),now=world.tick,last=sampledTicks.get(world);
+  // Those subsequent closed reads at the same macro boundary never sample
+  // again. No bucket or cursor is used until a later sampling tick, where
+  // the membership journal catches up (or the complete rebuild runs).
+  // Public reads and checking mode keep the independent validation pass.
+  if(owner&&!verifyTerrainWriteCaches&&last!==undefined&&now<=last)return;
   let schedule=schedules.get(world);
-  if(!schedule||schedule.source!==world.resources){
-    const derived=schedule&&derivedSchedule(schedule,world.resources);
+  if(!schedule||schedule.source!==world.resources||schedule.owner!==owner||owner&&schedule.cursor&&!resourceMembershipUnchanged(world.resources,schedule.cursor)){
+    const derived=schedule&&(owner?ownedSchedule(schedule,world.resources,owner):!schedule.owner&&derivedSchedule(schedule,world.resources));
     if(derived)schedule=derived;
     else {
-      const buckets:Resource[][]=Array.from({length:PLANT_TICK_LONG_LOCAL},()=>[]);
-      for(const plant of world.resources)if(isPlant(plant))buckets[plantTickLongSlot(plant)]!.push(plant);
-      schedule={source:world.resources,snapshot:resourceSnapshot(world.resources),buckets};
+      schedule={source:world.resources,...owner?{owner,cursor:captureResourceJournal(world.resources)}:{snapshot:resourceSnapshot(world.resources)},buckets:plantBuckets(world.resources)};
     }
     schedules.set(world,schedule);
   }
-  const now=world.tick,last=sampledTicks.get(world);
+  if(owner){
+    schedule.cursor=captureResourceJournal(world.resources);
+    if(verifyTerrainWriteCaches){
+      const fresh=plantBuckets(world.resources);
+      if(fresh.some((bucket,i)=>bucket.length!==schedule.buckets[i]!.length||bucket.some((plant,j)=>plant!==schedule.buckets[i]![j])))throw Error('Incremental plant temperature schedule differs from a complete capture');
+    }
+  }
   if(last!==undefined&&now<=last)return;
   sampledTicks.set(world,now);
   const count=last===undefined?1:Math.min(PLANT_TICK_LONG_LOCAL,now-last);
@@ -72,6 +110,7 @@ function updatePlantTemperaturesAtTickLong(world:World,layout:ThermalLayout):voi
       readGrowth??=createPlantGrowthReader(world);
       plant.growth=readGrowth(plant);plant.growthTick=world.tick;
       if(factor===1)delete plant.growthThermalFactor;else plant.growthThermalFactor=factor;
+      markResourceChanged(world,plant);
     }
   }
 }
@@ -107,6 +146,7 @@ export function updatePlantTemperatures(world:World,layout:ThermalLayout):void {
       readGrowth??=createPlantGrowthReader(world);
       plant.growth=readGrowth(plant);plant.growthTick=world.tick;
       if(commonFactor===1)delete plant.growthThermalFactor;else plant.growthThermalFactor=commonFactor;
+      markResourceChanged(world,plant);
     }
     group.factor=commonFactor;
   }

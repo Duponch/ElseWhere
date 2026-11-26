@@ -1,5 +1,5 @@
-import { planGroundPlacement } from './ground-placement.ts';
-import { addGroundMaterial,materialIdentityCount } from './materials.ts';
+import { tryAddGroundMaterial } from './materials.ts';
+import {markResourceChanged,markResourceArrayChanged} from './resource-mutation-journal.ts';
 import { ITEM_DEFINITIONS } from './items.ts';
 import { cropProduct } from './crops.ts';
 import { FLORA_DEFINITIONS,PROSPECTIVE_PLANT_SPECIES_256 } from './biome-flora.ts';
@@ -23,16 +23,13 @@ export function gatherResource(world: World, resource: Resource, kind:'chop'|'ha
     const item=resource.species?FLORA_DEFINITIONS[resource.species].product:
       kind==='chop'||currentCut&&resource.kind==='tree'?'wood':isCrop(resource)?cropProduct(resource.kind):world.foodRules==='legacy'?'legacy-portion':'berries';
     if(!item)return null;
-    const placements=planGroundPlacement(world,roll.quantity,resource,item);
-    const identities=placements?.reduce((n,part)=>n+materialIdentityCount(world,part.quantity,{type:'ground',...part.cell},item),0)??0;
-    if(!placements||world.piles.length+identities>32768||!Number.isSafeInteger(world.nextId+identities))return null;
-    addGroundMaterial(world,ITEM_DEFINITIONS[item].kind,roll.quantity,resource,item);
+    if(!tryAddGroundMaterial(world,ITEM_DEFINITIONS[item].kind,roll.quantity,resource,item))return null;
   }
   if(kind==='cut'&&resource.blight)designateBlightedCrops(world,resource);
   world.rng=roll.rng;
   const removed=!(kind==='harvest'&&(resource.species?FLORA_DEFINITIONS[resource.species].persistent:resource.kind==='berries'));
-  if(!removed){resource.growth=AFTER_HARVEST_GROWTH;resource.growthTick=world.tick;}
-  else world.resources=world.resources.filter(r=>r.id!==resource.id);
+  if(!removed){resource.growth=AFTER_HARVEST_GROWTH;resource.growthTick=world.tick;markResourceChanged(world,resource);}
+  else {const beforeResources=world.resources;world.resources=world.resources.filter(r=>r.id!==resource.id);markResourceArrayChanged(world,beforeResources,[],[resource]);}
   // A roof or construction worker can finish clearing after a separate chop
   // was designated. Only the successful producer keeps the yield; its rivals
   // and their actor/queue claims must disappear with the consumed resource.

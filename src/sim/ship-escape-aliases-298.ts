@@ -1,4 +1,5 @@
 import {isShipCasket277,type ShipCasket277} from './ship-casket-state-277.ts';
+import {revokeActorRecordSource297} from './actor-record-source-297.ts';
 import {removalWritesMutable259,sealRemovalOriginal259,type MapRemovalWrite259} from './map-removal-writes-259.ts';
 import type {Structure} from './types.ts';
 import type {ShipEscapeAlias298,ShipEscapeAliasKey298} from './ship-escape-state-298.ts';
@@ -26,7 +27,7 @@ export function prepareShipEscapeAliases298(parts:readonly Structure[]) {
  let used=false;
  const current=()=>!used&&removalWritesMutable259(writes)&&seal(0);
  const admitted=writes.map(w=>({write:w,descriptor:Object.getOwnPropertyDescriptor(w.object,w.key)}));
- const commitPrepared=()=>{used=true;for(const {write:w,descriptor:d} of admitted){if(w.present)Object.defineProperty(w.object,w.key,d?{...d,value:w.value}:{value:w.value,writable:true,enumerable:true,configurable:true});else delete (w.object as Record<string,unknown>)[w.key];}};
+ const commitPrepared=()=>{used=true;for(const {write:w,descriptor:d} of admitted){revokeActorRecordSource297(w.object);if(w.present)Object.defineProperty(w.object,w.key,d?{...d,value:w.value}:{value:w.value,writable:true,enumerable:true,configurable:true});else delete (w.object as Record<string,unknown>)[w.key];}};
  return {writes,aliases,current,commitPrepared,commit(){if(!current())throw Error('Launch local-alias sources changed');commitPrepared();}};
 }
 /** Validation preview only. Actual commit keeps the original casket, occupant,

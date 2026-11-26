@@ -28,6 +28,10 @@ export interface NativeControl {
   glyph?:'expand'|'collapse'|'allow'|'forbid'|'mixed';
   color?:string;
   disabled?:boolean;
+  /** Core FloatMenuOption.Priority; disabled options always sort at zero. */
+  floatMenuPriority?:number;
+  /** Core FloatMenuOption.orderInPriority, descending within a priority. */
+  orderInPriority?:number;
   active?:boolean;
   hint?:string;
   caption?:string;
@@ -117,6 +121,11 @@ export interface NativeRow {
   gauges?:readonly {id:string;label:string;fill:number;color:string;hint:string;select?:NativeControl['select']}[];
 }
 export interface NativePage {
+  /** Live projection owned by its original page builder. Called only at the
+   * host's accepted-state/UI refresh cadence; drafts and confirmations omit
+   * it unless their owner explicitly preserves the session while rebuilding.
+   * Null retires a page whose selected owner/context no longer exists. */
+  refreshFromState?:(state:NativeUiState,actions:NativeUiActions)=>NativePage|null;
   textEntities?:readonly NativeTextEntity[];
   id:string;
   title:string;

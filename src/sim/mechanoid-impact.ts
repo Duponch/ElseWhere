@@ -1,4 +1,5 @@
 import {meleeStunCore318} from './stun.ts';
+import {markActorMotionSource297} from './actor-motion-source-297.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {effectiveCore297} from './core-phase-297.ts';
@@ -57,5 +58,5 @@ export function delayMechanoidImpact(w:World,m:Mechanoid,core:number,stun=false,
   const next={...motion};
   if(m.stagger)next.stagger=mergeSlowIntervals([...(motion.stagger??[]),{start:Math.max(motion.start,core/10),end:m.stagger.untilCore/10}]);
   if(m.stun)next.stuns=mergeSlowIntervals([...(motion.stuns??[]),{start:Math.max(motion.start,core/10),end:m.stun.untilCore/10}]);
-  next.end=travelEnd(next);m.motion=next;m.moveCooldown=Math.max(0,next.end-(isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveLocal297(w):w.tick));
+  next.end=travelEnd(next);m.motion=next;markActorMotionSource297(next);m.moveCooldown=Math.max(0,next.end-(isCorePhysicalSchema297(Number(w.schemaVersion))?effectiveLocal297(w):w.tick));
 }

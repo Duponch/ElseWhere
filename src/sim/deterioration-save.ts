@@ -13,7 +13,7 @@ const ownData=(v:object,key:string)=>{
 // Only these finite physical/archived owner domains can contain a forbidden
 // local calendar. Never traverse grids, resource populations or planet topology.
 const DOMAINS=['pawns','structures','jobs','packed','piles','wildlife','startingArrival','group','groupLosses',
- 'scout','commercialTrip','civilianPost','visitors','podRescues','raids','prisonDepartures','arrivals','quests','orbital'] as const;
+ 'scout','commercialTrip','civilianPost','visitors','podRescues','banishedDepartures378','raids','prisonDepartures','arrivals','quests','orbital'] as const;
 const SKIP=new Set(['tiles','resources','planet']);
 function noOwnedClock(value:unknown,active=new WeakSet<object>()):boolean {
  if(!value||typeof value!=='object')return true;

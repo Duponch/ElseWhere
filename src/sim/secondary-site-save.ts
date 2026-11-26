@@ -69,6 +69,7 @@ export function validExpeditionOrigin(value:unknown,w:Pick<World,'tick'|'planet'
 // Explicit map namespace: adding another World domain requires a conscious
 // partition decision. A future field is not accepted because World ignores it.
 export const LOCAL_FIELDS=new Set([
+ 'banishedDepartures378',
   'corePathBudget297',
   'strip351',
   'plans369',

@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {healthRandom} from './health.ts';
 import {refreshStock} from './materials.ts';
 import {removeIdentity} from './collection-remove.ts';
@@ -34,7 +35,7 @@ export function failWoodWallFrame301(w:World,p:Pawn,j:Job):{
  }
  removeIdentity(w.jobs,j);
  // The unrecovered material is destroyed with its real Frame owner.
- w.piles=w.piles.filter(s=>s.owner.type!=='job'||s.owner.jobId!==j.id);
+ w.piles=filterPileEntries(w.piles,s=>s.owner.type!=='job'||s.owner.jobId!==j.id);
  // Cells.InRandomOrder enumerates even the single occupied cell via Range.
  // The project has its own RNG; this preserves the demonstrated draw order,
  // not identity of Unity's underlying PRNG or indirect cosmetic hooks.

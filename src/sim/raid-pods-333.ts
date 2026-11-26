@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {civilianAdmissionFits} from './civilian-away.ts';
 import {effectiveCore297} from './core-phase-297.ts';
 import {canStandAt} from './furniture-travel.ts';
@@ -45,9 +46,9 @@ function openRaidPod333(w:World,group:RaidGroup,index:number,core:number):boolea
   const made=makeRaider(w,{groupId:group.id,index,pawnId:pod.pawnId,nextId:w.nextId,cell:{x:cell.x,z:cell.z},factionId:arrival.factionId,
     tribe:!!maker&&RAID_MAKERS_331[maker].family==='tribe',weapon:role?raidRoleWeapon(role,{world:w,pawnId:pod.pawnId}):group.id>1&&index===0?'revolver':undefined,exiting:group.phase==='withdraw',...role?{kind:role}:{}});
   if(!made)return false;
-  w.pawns.push(made.pawn);w.piles.push(...made.piles);w.nextId=made.nextId;pod.openedAtCore=core;
+  w.pawns.push(made.pawn);appendPileEntries(w.piles,...made.piles);w.nextId=made.nextId;pod.openedAtCore=core;
   busy.add(cell.z*w.width+cell.x);
   const slag=nearbyGround(w,pod.cell).find(c=>free(c)&&!groundPile(w,c));
-  if(slag){const pile:MaterialPile={id:w.nextId++,kind:'chunk',item:'slag-steel-chunk',quantity:1,owner:{type:'ground',x:slag.x,z:slag.z}};w.piles.push(pile);}
+  if(slag){const pile:MaterialPile={id:w.nextId++,kind:'chunk',item:'slag-steel-chunk',quantity:1,owner:{type:'ground',x:slag.x,z:slag.z}};appendPileEntries(w.piles,pile);}
   return true;
 }

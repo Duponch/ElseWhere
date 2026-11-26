@@ -6,6 +6,8 @@ import {advanceTemperature,outdoorTemperature,reconcileTemperature} from '../src
 import {ThermalTopologyCache,type ThermalLayout} from '../src/sim/thermal-topology.ts';
 import {updatePlantTemperatures} from '../src/sim/thermal-plants.ts';
 import type {Resource,World} from '../src/sim/types.ts';
+import {withTerrainBlockedReadScope} from '../src/sim/terrain-read-scope.ts';
+import {markTerrainCellChanged,setTerrainWriteCacheVerification} from '../src/sim/terrain-mutation-journal.ts';
 
 // Synthetic reader fixtures only: no claim of paid construction or valid save.
 // Full continuation is covered separately by the acquired 25 entire Worlds.
@@ -20,6 +22,21 @@ function room():World {
   constructed.push(4*w.width+2);constructed.sort((a,b)=>a-b);w.roofing={constructed,build:[],remove:[],cursor:0};return w;
 }
 function bits(value:number):number[]{const bytes=new ArrayBuffer(8);new DataView(bytes).setFloat64(0,value,true);return [...new Uint8Array(bytes)];}
+
+test('a fully revalidated unchanged thermal layout retains its resident dependency arrays after unrelated structural commits',()=>{
+  const world=room(),cache=new ThermalTopologyCache(),layout=cache.read(world);
+  const dependencies=()=> (cache as unknown as {fast:{cells:Int32Array;slots:Int32Array;tiles:unknown[];kinds:Uint8Array}}).fast;
+  const first=dependencies(),arrays=[first.cells,first.slots,first.tiles,first.kinds];
+  world.structures=[...world.structures,{id:world.nextId++,kind:'stool',x:11,z:11,orientation:0,footprint:'standard'}];
+  expect(cache.read(world)).toBe(layout);expect(cache.read(world)).toStrictEqual(new ThermalTopologyCache().read(world));
+  const after=dependencies();expect([after.cells,after.slots,after.tiles,after.kinds].every((array,i)=>array===arrays[i])).toBe(true);
+  // Equal coverage with new roof identities also keeps the same dependency
+  // set. A real doorway barrier edit must still renew the whole witness.
+  world.roofing!.constructed=world.roofing!.constructed.slice();expect(cache.read(world)).toBe(layout);
+  expect(dependencies().slots).toBe(first.slots);
+  const door=world.structures.find(s=>s.kind==='door')!;world.structures=[...world.structures,{id:world.nextId++,kind:'wall',x:door.x,z:door.z,orientation:0,footprint:'standard'}];
+  const changed=cache.read(world);expect(changed).not.toBe(layout);expect(changed).toStrictEqual(new ThermalTopologyCache().read(world));expect(dependencies().slots).not.toBe(first.slots);
+});
 
 test('one stable-environment growth reader rereads settled values, changed anchors and live thermal factors',()=>{
   const w=room(),plants:Resource[]=[
@@ -101,4 +118,61 @@ test('public topology recaptures source-order overlaps and same-tick vent edits 
   w.structures=w.structures.map(s=>s.id===vent.id?vent:s);const grass=w.tiles[72]!;w.tiles[72]={...grass,terrain:'rock'};expect(cache.read(w).vents).toEqual([]);
   w.tiles[72]=grass;expect(cache.read(w).vents).toEqual([{id:vent.id,structureIndex:w.structures.indexOf(vent),sides:[-1,0]}]);
   expect(first).toEqual(old);
+});
+
+test('thermal topology rereads replaced air and vent-face Tiles after equivalent replacements',()=>{
+  for(const geographic of [false,true]){
+    const w=room();
+    // Only the revision is consumed by this synthetic topology fixture.
+    if(geographic)w.site={revision:3} as World['site'];
+    const cache=new ThermalTopologyCache(),initial=cache.read(w),saved=structuredClone(initial),rng=w.rng;
+    const compare=()=>{const actual=cache.read(w);expect(actual).toEqual(new ThermalTopologyCache().read(w));return actual;};
+    for(const cell of [51,68,72]){
+      const original=w.tiles[cell]!,stable=cache.read(w);
+      // Neither a partial mining stroke nor a non-rock terrain replacement
+      // changes thermal air. Follow it immediately with a real barrier edit,
+      // without advancing time or notifying any terrain journal.
+      w.tiles[cell]={...original,miningDamage:12,snowDepth:.25,fogged:true};
+      expect(compare()).toBe(stable);
+      w.tiles[cell]={terrain:'gravel'};expect(compare()).toBe(stable);
+      w.tiles[cell]={terrain:'rock'};const blocked=compare();expect(blocked).not.toBe(stable);
+      if(cell===72)expect(blocked.vents).toEqual([]);
+      w.tiles[cell]=original;expect(compare()).toEqual(initial);
+    }
+    // Geographic topology additionally reads collapsed-rock presence. Its
+    // owning terrain is checked separately for vent faces.
+    const cell=51,original=w.tiles[cell]!;
+    w.tiles[cell]={...original,collapsedRock:{id:w.nextId++,terrain:'grass'}};
+    const collapsed=compare();expect(collapsed.rooms.some(r=>r.cells.includes(cell))).toBe(!geographic);
+    w.tiles[cell]=original;expect(compare()).toEqual(initial);
+    expect(initial).toEqual(saved);expect(w.rng).toBe(rng);
+  }
+});
+
+test('closed thermal reads validate each new scope and observe marked barriers within that scope',()=>{
+  const w=room(),cache=new ThermalTopologyCache(),initial=cache.read(w),cell=51,original=w.tiles[cell]!;
+  const compare=()=>{const actual=cache.read(w);expect(actual).toEqual(new ThermalTopologyCache().read(w));return actual;};
+  withTerrainBlockedReadScope(()=>{
+    expect(compare()).toBe(initial);expect(cache.read(w)).toBe(initial);
+    w.tiles[cell]={terrain:'rock'};markTerrainCellChanged(w.tiles,cell);
+    expect(compare()).not.toBe(initial);
+    w.tiles[cell]=original;markTerrainCellChanged(w.tiles,cell);expect(compare()).toEqual(initial);
+  });
+  // Public callers and the first read in every later scope keep seeing raw
+  // fixture replacements, including at the same tick and with no journal mark.
+  w.tiles[cell]={terrain:'rock'};withTerrainBlockedReadScope(()=>expect(compare()).not.toEqual(initial));
+  w.tiles[cell]=original;expect(compare()).toEqual(initial);
+  withTerrainBlockedReadScope(()=>{
+    compare();w.tiles=w.tiles.slice();w.tiles[cell]={terrain:'rock'};expect(compare()).not.toEqual(initial);
+  });
+});
+
+test('thermal terrain verification rejects an unmarked barrier inside a closed scope',()=>{
+  const w=room(),cache=new ThermalTopologyCache();setTerrainWriteCacheVerification(true);
+  try{
+    withTerrainBlockedReadScope(()=>{
+      cache.read(w);w.tiles[51]={terrain:'rock'};
+      expect(()=>cache.read(w)).toThrow('Unmarked thermal terrain edit');
+    });
+  }finally{setTerrainWriteCacheVerification(false);}
 });

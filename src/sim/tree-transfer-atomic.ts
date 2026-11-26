@@ -1,3 +1,4 @@
+import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 /** Atomic transactions bound to actual World arrays and owners. */
 import type {Cell,MaterialOwner,MaterialPile,Resource} from './types.ts';
 import type {PlantLife} from './plant-life.ts';
@@ -125,6 +126,6 @@ export function planPendingTreeExpiry(host:TreeHost,ref:TreePileRef):PendingExpi
 }
 export function commitPendingTreeExpiry(host:TreeHost,plan:PendingExpiryPlan):boolean {
   if(host.tick!==plan.tick||host.nextId!==plan.nextId||host.rng!==plan.beforeRng||host.pile(plan.ref.pile.id)?.pile!==plan.ref.pile||fingerprint(plan.ref.pile)!==plan.signature)return false;
-  plan.ref.pile.plantPack={...plan.ref.pile.plantPack,pendingExpiry:{quantity:plan.quantity,retryAt:plan.retryAt}};
+  markPileContentWrite379(plan.ref.pile).plantPack={...plan.ref.pile.plantPack,pendingExpiry:{quantity:plan.quantity,retryAt:plan.retryAt}};
   host.rng=plan.afterRng;host.removeTreeClaims(plan.ref.pile.innerResource.id,plan.ref.pile.id,undefined,true);return true;
 }

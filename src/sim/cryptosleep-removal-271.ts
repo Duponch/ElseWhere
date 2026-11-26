@@ -1,3 +1,4 @@
+import {structureDamageChanged379} from './structure-family-379.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {worldPawnsPhysicalCore297} from './world-pawn-physical-clock-297.ts';
@@ -215,5 +216,5 @@ export function damagePlayerCryptosleep271(w:World,s:Structure,amount:number,cau
  if(external?.detonate&&(!s.casketWick||s.casketWick.endCore>core))return false;
  const detonates=!!external?.detonate||(external?.rawAmount??amount)>=250-before;
  if(detonates||damage>=250){const instigatorKey=external?.detonate?s.casketWick?.instigatorKey:external?.instigatorKey,plan=planCryptosleepRemoval271(w,s,'kill-finalize',detonates?{core,...instigatorKey?{instigatorKey}:{}}:undefined,rng);return plan.ok&&plan.commit();}
- s.damage=damage;if(cause!=='fire')w.rng=rng;if(damage>=200&&!s.casketWick){const random={rng:w.rng},duration=140+Math.floor(healthRandom(random)*11);w.rng=random.rng;s.casketWick={startedAtCore:core,endCore:core+duration,...external?.instigatorKey?{instigatorKey:external.instigatorKey}:{}};}return true;
+ s.damage=damage;structureDamageChanged379(w,s);if(cause!=='fire')w.rng=rng;if(damage>=200&&!s.casketWick){const random={rng:w.rng},duration=140+Math.floor(healthRandom(random)*11);w.rng=random.rng;s.casketWick={startedAtCore:core,endCore:core+duration,...external?.instigatorKey?{instigatorKey:external.instigatorKey}:{}};}return true;
 }

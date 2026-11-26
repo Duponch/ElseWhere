@@ -13,6 +13,13 @@ export class PresentationQueue {
   private lastApplied=-Infinity;
   constructor(private readonly intentReader?:ClosedMainMapIntentReader,private readonly createPhases:()=>PresentationChanges=()=>new PresentationChanges()) {this.phases=this.createPhases();}
   clear():void {this.pending=[];this.phases=this.createPhases();this.inspected=undefined;this.intentSignature=undefined;this.lastApplied=-Infinity;this.intentReader?.clear();}
+  /** A completed surface transaction supersedes only this confirmed prefix.
+   * Later Fulls may already be admitted while their physical time is still
+   * ahead of the playhead. Keep their original frame gates and observer state. */
+  discardThrough(at:number):void {
+    if(!Number.isFinite(at))throw Error('Invalid presentation discard frontier');
+    this.pending=this.pending.filter(entry=>entry.at>at);
+  }
   get size():number {return this.pending.length;}
   push(world:World,at=world.tick,notBeforeFrame?:number):void {
     if(notBeforeFrame!==undefined&&(!Number.isSafeInteger(notBeforeFrame)||notBeforeFrame<0))throw Error('Invalid presentation frame gate');

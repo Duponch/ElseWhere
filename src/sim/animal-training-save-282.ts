@@ -1,4 +1,5 @@
 import {isSchema282OrLater} from './schema-compatibility-257.ts';
+import {carryShapeBound379} from './carry-quantity-379.ts';
 import {animalCore256,isAnimalSpecies256} from './animal-core-v256.ts';
 import {animalTrainingDecayPeriodCore282} from './animal-training-282.ts';
 import {ANIMAL_TRAINING_STEPS_282,type AnimalTrainingProgress282,type AnimalTrainingState282} from './animal-training-state-282.ts';
@@ -83,7 +84,7 @@ export function validAnimalHaulField282(value:unknown,version:number,tick:number
   if(!plain(training)||!core(training.sinceCore,0,tick*10)||!core(training.lastHaulCheckCore,training.sinceCore,tick*10))return false;
   if(raw.phase==='holding')return exact(raw,['phase','carryPileId','sinceCore'])&&integer(raw.carryPileId,1,nextId-1)&&raw.carryPileId!==own(value,'id')&&core(raw.sinceCore,training.lastHaulCheckCore,tick*10);
   if(!exact(raw,['sourcePileId','quantity','phase','destination','carryPileId','startedAtCore'],['pickupCell'])||!['pickup','deliver'].includes(String(raw.phase))
-   ||!integer(raw.sourcePileId,1,nextId-1)||raw.sourcePileId===own(value,'id')||!integer(raw.quantity,1,MAX_STACK)||!core(raw.startedAtCore,training.sinceCore,tick*10)||raw.startedAtCore!==training.lastHaulCheckCore
+   ||!integer(raw.sourcePileId,1,nextId-1)||raw.sourcePileId===own(value,'id')||!integer(raw.quantity,1,version>=379?carryShapeBound379(version):MAX_STACK)||!core(raw.startedAtCore,training.sinceCore,tick*10)||raw.startedAtCore!==training.lastHaulCheckCore
    ||!plain(raw.destination)||!exact(raw.destination,['type','stockpileId'])||raw.destination.type!=='stockpile'||!integer(raw.destination.stockpileId,1,nextId-1))return false;
   return raw.phase==='pickup'?raw.carryPileId===null&&!Object.hasOwn(raw,'pickupCell'):
    integer(raw.carryPileId,1,nextId-1)&&raw.carryPileId!==own(value,'id')&&cell(raw.pickupCell,width,height);

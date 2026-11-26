@@ -1,4 +1,5 @@
 import {isDoubleBedKind} from './bed-kinds.ts';
+import {isForcedPersonalAnimalOrder378} from './personal-animal-order-state-378.ts';
 import {isSchema300OrLater} from './schema-compatibility-257.ts';
 import {isSchema299OrLater} from './schema-compatibility-257.ts';
 import {foodBingeDue299,selfFoodPermission299} from './human-ingestion-clock299.ts';
@@ -16,7 +17,7 @@ import { reservedSource } from './materials.ts';
 import { mealQuantity } from './items.ts';
 import { TICKS_PER_DAY } from './types.ts';
 import { processEating } from './eating.ts';
-import { pileFoodScore, foodSourceSearchGoals, selectFoodSource } from './food-selection.ts';
+import { pileFoodScore, foodSourceSearchGoals, selectFoodSource,pasteDispenserCandidates379 } from './food-selection.ts';
 import { planPasteRequest,pasteRequestValid } from './nutrient-paste.ts';
 import { updateWellbeing,type FurnitureSight,wellbeingLocalTicks} from './wellbeing.ts';
 import { expireMealMemories } from './mood.ts';
@@ -24,8 +25,8 @@ import { processSleeping,offerSleeping300 } from './sleeping.ts';
 import { updateRecreation } from './recreation-rules.ts';
 import { updateRest } from './rest.ts';
 import { type FoodItemId } from './food-policy.ts';
-import { selfAllowedFood,selfFoodAccessible } from './prison-food.ts';
-import { capturePrisonTopology } from './prison-space.ts';
+import { selfAllowedFood,createSelfFoodAccessibilityQuery379 } from './prison-food.ts';
+import { capturePrisonTopology,hasPrisonBedMark379 } from './prison-space.ts';
 import type { Cell, Pawn, World } from './types.ts';
 import { structureById } from './structure-navigation.ts';
 /** A bed structure with this id, found through the shared id index. */
@@ -51,10 +52,11 @@ export interface NeedContext {
  * not evidence that ordinary food is unavailable, so it cannot fall through. */
 function tryFoodNeed(world:World,pawn:Pawn,context:NeedContext,foodBinge299=false):'admitted'|'unavailable'|'pending' {
  const allowed=selfAllowedFood(world,pawn);
- const topology=pawn.prisoner||world.structures.some(s=>s.prisoner)?capturePrisonTopology(world):undefined;
- const sources=world.piles.filter(pile=>pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId)&&selfFoodAccessible(world,pawn,pile,topology,foodBinge299)&&pile.quantity>reservedSource(world,pile.id,pawn.id));
+ const topology=pawn.prisoner||hasPrisonBedMark379(world)?capturePrisonTopology(world):undefined;
+ const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,foodBinge299);
+ const sources=world.piles.filter(pile=>pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId)&&accessible(pile)&&pile.quantity>reservedSource(world,pile.id,pawn.id));
  const held=world.piles.find(pile=>pile.owner.type==='pawn'&&pile.owner.pawnId===pawn.id&&pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId));
- const pasteAvailable=world.structures.some(s=>s.kind==='nutrient-paste-dispenser'&&planPasteRequest(world,pawn,s,pawn,topology));
+ const pasteAvailable=pasteDispenserCandidates379(world).some(s=>s.kind==='nutrient-paste-dispenser'&&planPasteRequest(world,pawn,s,pawn,topology));
  if(!sources.length&&!held&&!pasteAvailable)return 'unavailable';
  const reach=context.search(foodSourceSearchGoals(world,pawn,sources,topology,foodBinge299));
  if(!reach)return 'pending';
@@ -106,7 +108,7 @@ export function prepareNeeds300(world:World,pawn:Pawn,context:NeedContext):NeedP
   if(pawn.bedId===null)delete pawn.bedSlot;
   collapseFromExhaustion(world,pawn,context);
   if(pawn.interruptedCargo){retryInterruptedCargo(world,pawn);if(pawn.interruptedCargo){if(pawn.need?.kind==='sleep')return 'interrupted-sleep';pawn.state='idle';return 'interrupted-idle';}}
-  if(pawn.orders.active!==null)return 'direct-order';
+  if(pawn.orders.active!==null||isForcedPersonalAnimalOrder378(pawn))return 'direct-order';
   if(world.schemaVersion>=50&&urgentMedicalTask(pawn,world))return pawn.need?.kind==='sleep'?'urgent-sleep':'urgent-work';
   return 'open';
 }
@@ -114,7 +116,7 @@ export function prepareNeeds300(world:World,pawn:Pawn,context:NeedContext):NeedP
  * must run the real preparation at the intended point; no collapse/cargo
  * operation is repeated merely to ask whether a provider has an offer. */
 function needsOfferAllowed300(world:World,pawn:Pawn):boolean {
- return !pawn.interruptedCargo&&pawn.orders.active===null&&!(world.schemaVersion>=50&&urgentMedicalTask(pawn,world))
+ return !pawn.interruptedCargo&&pawn.orders.active===null&&!isForcedPersonalAnimalOrder378(pawn)&&!(world.schemaVersion>=50&&urgentMedicalTask(pawn,world))
   &&!((world.restRules==='legacy'?pawn.rest===0:pawn.collapsePending)&&pawn.need?.kind!=='sleep');
 }
 function offerFoodNeedResult300(world:World,pawn:Pawn,context:NeedContext,canPlan:boolean):NeedOffer300 {

@@ -1,3 +1,4 @@
+import {appendPileEntries} from './pile-identity-directory.ts';
 import {giveBornTraits361} from './trait-generation-361.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {mechRaidGroup261} from './mechanical-raid-groups-261.ts';
@@ -165,7 +166,7 @@ export function admitTempMapTraveler261(w:World,points:number,random:{rng:number
  const sites=spawnSites(w,arrival,pawns.length,draft);if(!sites)return false;
  for(let i=0;i<pawns.length;i++)Object.assign(pawns[i]!,sites[i]!);
  const owner:VisitorCalendar=old??{profile:'temp-travelers261-v1',adoptedAt:w.tick,rng:draft.rng,serial:0,groups:[],departed:[]};
- w.nextId=nextId;w.pawns.push(...pawns);w.piles.push(...piles);owner.serial=id;
+ w.nextId=nextId;w.pawns.push(...pawns);appendPileEntries(w.piles,...piles);owner.serial=id;
  owner.groups.push({id,kind:'traveler',members:pawns.map(p=>p.id),entry:arrival.entry,spot,phase:'arriving',startedAt:w.tick,arrivedAt:null,durationCore:0,hostile:false});
  if(owner.profile==='temp-travelers261-v1')owner.rng=draft.rng;
  w.visitors=owner;

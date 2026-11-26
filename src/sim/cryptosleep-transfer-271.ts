@@ -1,3 +1,4 @@
+import {filterPileEntries} from './pile-identity-directory.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,heldCore297,captureOccupiedHeldCore297,suspensionDeltas297,type SuspensionClock297} from './core-phase-297.ts';
 import {isSchema271OrLater} from './schema-compatibility-257.ts';
@@ -73,7 +74,7 @@ export function planCryptosleepEntry271(w:World,c:PlayerCasket271,p:Pawn):Crypto
   if(p.state!=='downed')p.state='idle';
   c.cryptosleep={revision:1,heldAt:tick,...isCorePhysicalSchema297(Number(w.schemaVersion))?captureOccupiedHeldCore297(w):{},human:p,items,packed};
   // Replace arrays: the engine's opening population is a stable borrowed view.
-  w.pawns=w.pawns.filter(q=>q!==p);w.piles=w.piles.filter(i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));refreshStock(w);return true;
+  w.pawns=w.pawns.filter(q=>q!==p);w.piles=filterPileEntries(w.piles,i=>!items.includes(i));w.packed=w.packed.filter(i=>!packed.includes(i));refreshStock(w);return true;
  }};
 }
 /** Opening needs a real local worker; destruction callers own their separate

@@ -64,7 +64,7 @@ function startAim(world:World,pawn:Pawn,core:number,queries:Queries):void {
     ...world.schemaVersion>=238&&(plan.line.from.x!==pawn.x||plan.line.from.z!==pawn.z)?{lean:{x:plan.line.from.x-pawn.x,z:plan.line.from.z-pawn.z}}:{}};
   pawn.state='idle';
 }
-export function applyShootingCommand(world:World,command:ShootingCommand):CommandResult {
+export function applyShootingCommand(world:World,command:ShootingCommand,preview=false):CommandResult {
   const reject=(reason:string):CommandResult=>({ok:false,code:'invalid-command',reason});
   if(!Array.isArray(command.pawnIds)||!command.pawnIds.length||command.pawnIds.some(id=>!Number.isSafeInteger(id))||new Set(command.pawnIds).size!==command.pawnIds.length||!Number.isSafeInteger(command.targetId))return reject('Ordre de tir invalide.');
   const queries=shootingQueries(world),plans=[];
@@ -74,6 +74,7 @@ export function applyShootingCommand(world:World,command:ShootingCommand):Comman
     plans.push({pawn,plan});
   }
   // Atomic group acceptance. Preserve the captured edge and every cooldown.
+  if(preview)return {ok:true};
   for(const {pawn,plan} of plans) {
     cancelMelee(pawn);const stance=pawn.shooting?.stance;
     pawn.shooting={order:{targetId:command.targetId,weaponId:plan.weapon.id,startedDowned:plan.target.state==='downed'},stance:stance?.phase==='cooldown'?stance:null};

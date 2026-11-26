@@ -17,7 +17,8 @@ import {NativeHoverPreview} from './native-hover-preview';
 import {NativeHighlightPass,type NativeHighlightCandidate,type NativeHighlightPiece} from './native-highlight';
 import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
-import {FLOAT_MENU,TOOLTIP_BOX,tooltipBoxSize,floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
+import {FLOAT_MENU,TOOLTIP_BOX,tooltipBoxSize,floatMenuOpacity,floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
+import {retainNativeOpacityMaterials,applyNativeOpacity,type NativeOpacityMaterial} from './native-piece-opacity';
 import {NATIVE_LINE,NATIVE_TEXT,NATIVE_INK,NATIVE_WINDOW,type NativeTextRole} from './native-ui-scale';
 import {NATIVE_RESEARCH} from './native-research-metrics';
 import {historyColumns,NATIVE_FACTIONS,NATIVE_HISTORY} from './native-main-tab-metrics';
@@ -36,7 +37,7 @@ const PANEL_IDS=['architect','work','schedule','assign','animals','wildlife','re
 type NativePanelId=typeof PANEL_IDS[number];
 type Hit={piece:CardboardPiece;control?:NativeControl;input?:NonNullable<NativeRow['input']>;region?:NativeRect};
 type PagePiece={piece:CardboardPiece;hit:Hit;geometry:string;paint:string};
-type FloatMenuView={page:NativePage;box?:NativePageBox;pieces:CardboardPiece[];controls:Hit[];scroll:number;focus?:string};
+type FloatMenuView={page:NativePage;box?:NativePageBox;pieces:CardboardPiece[];controls:Hit[];materials:NativeOpacityMaterial[];opacity:number;scroll:number;focus?:string};
 /** Parked page pieces: at most this many, and this many canvas pixels (each
  * pixel exists once on the CPU canvas and once in the GPU texture). Large
  * pieces (page sheets, repainted with their rows anyway) are not parked. */
@@ -296,7 +297,7 @@ export class NativeStage {
   diagnostics(){
     this.scene.updateMatrixWorld(true);
     return {...this.stats,mapToolHover:this.mapToolLabelOwner?{id:this.mapToolLabelOwner.userData.nativeId,title:this.mapToolLabelTitle,labelVisible:!!this.mapToolLabel?.visible,value:this.mapToolLabelOwner.userData.hoverVal,scale:this.mapToolLabelOwner.scale.x}:null,displayScale:this.displayScale,logicalViewport:{width:this.width,height:this.height},bottomDockHeight:this.bottomDockHeight,cache:this.overlayCache.stats,standby:this.standby.stats,activeAnimations:this.moving.size,uiObjects:this.art.interactiveMeshes.length,
-      mode:'native-meshes',highlight:this.highlight.diagnostics,page:this.floatMenu?.page.id??this.page?.id??null,basePage:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,floatMenu:this.floatMenu?.box?{id:this.floatMenu.page.id,x:this.floatMenu.box.x,y:this.floatMenu.box.y,width:this.floatMenu.box.width,height:this.floatMenu.box.height,scroll:this.floatMenu.scroll}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,frontBackdrop:this.frontBackdrop.diagnostics,globe:this.globeDiagnostics(),
+      mode:'native-meshes',highlight:this.highlight.diagnostics,page:this.floatMenu?.page.id??this.page?.id??null,basePage:this.page?.id??null,scroll:this.scroll,maxScroll:this.maxScroll,pageBounds:this.pageBox?{x:this.pageBox.x,y:this.pageBox.y,width:this.pageBox.width,height:this.pageBox.height}:null,floatMenu:this.floatMenu?.box?{id:this.floatMenu.page.id,x:this.floatMenu.box.x,y:this.floatMenu.box.y,width:this.floatMenu.box.width,height:this.floatMenu.box.height,scroll:this.floatMenu.scroll,opacity:this.floatMenu.opacity}:null,dropdown:this.dropdown?{owner:this.dropdown.controlId,...this.dropdown.box}:null,bottomDock:{autoHide:this.autoHideBottom,open:this.bottomOpen,offset:this.bottomOffset,page:this.managementPage,pages:this.managementPages},front:this.frontVisible,frontBackdrop:this.frontBackdrop.diagnostics,globe:this.globeDiagnostics(),
       readout:this.worldReadout?{visible:this.worldReadout.visible,paper:this.worldReadout.userData.paper,width:this.worldReadout.userData.w*100,height:this.worldReadout.userData.h*100,lines:this.worldReadoutLines,scroll:this.worldReadoutScroll,maxScroll:this.worldReadoutMaxScroll}:null,
       environmentStats:this.environmentStatsPiece?.visible&&this.environmentStatsLayout?{layout:this.environmentStatsLayout,room:this.environmentStats?.room?.title,stats:this.environmentStats?.room?.stats,beauty:this.environmentStats?.beauty?.average}:null,
       tooltip:this.hintPiece?{width:this.hintPiece.userData.w*100,height:this.hintPiece.userData.h*100}:null,
@@ -894,7 +895,11 @@ export class NativeStage {
       const drag=this.floatMenuDrag;if(drag.pointerId!==event.pointerId)return;
       this.setFloatMenuScroll(drag.offset+(this.lastPointer.y-drag.y)*drag.max/Math.max(1,drag.travel));this.swallow(event);return;
     }
-    if(this.floatMenu?.box&&floatMenuVanishes(this.floatMenu.box,this.lastPointer.x,this.lastPointer.y))this.closeFloatMenu();
+    const menu=this.floatMenu;
+    if(menu?.box){
+      if(floatMenuVanishes(menu.box,this.lastPointer.x,this.lastPointer.y))this.closeFloatMenu();
+      else this.setFloatMenuOpacity(floatMenuOpacity(menu.box,this.lastPointer.x,this.lastPointer.y));
+    }
     if(this.editor&&event.target===this.editor)return;
     if(this.regionDrag){const drag=this.regionDrag;if(drag.pointerId!==event.pointerId)return;const value=THREE.MathUtils.clamp(drag.offset+((drag.axis==='x'?event.clientX:event.clientY)/this.displayScale-drag.start)/Math.max(1,drag.travel)*drag.max,0,drag.max);if(drag.axis==='x')this.setHorizontalOffset(drag.region,value);else this.setRegionOffset(drag.region,value);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
     if(this.scrollbarDrag){const drag=this.scrollbarDrag;if(drag.pointerId!==event.pointerId)return;this.scroll=THREE.MathUtils.clamp(drag.scroll+(event.clientY/this.displayScale-drag.startY)/Math.max(1,drag.travel)*drag.max,0,drag.max);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
@@ -937,7 +942,12 @@ export class NativeStage {
     if(this.closed||!page.floatMenu||this.frontVisible)return;
     if(this.floatMenu?.page===page)return;
     this.hideFloatMenu();this.closeDropdown();this.hover(null);this.hoverPose=undefined;this.clearHint();
-    this.floatMenu={page,pieces:[],controls:[],scroll:0};this.rebuildFloatMenu();this.syncEnvironmentHover();
+    this.floatMenu={page,pieces:[],controls:[],materials:[],opacity:1,scroll:0};this.rebuildFloatMenu();this.syncEnvironmentHover();
+  }
+  private setFloatMenuOpacity(opacity:number):void{
+    const menu=this.floatMenu;if(!menu||menu.opacity===opacity)return;
+    menu.opacity=opacity;
+    if(applyNativeOpacity(menu.materials,opacity)){this.art.resourceRevision++;this.sceneRevision++;this.invalidate();}
   }
   private setFloatMenuScroll(offset:number):void{
     const menu=this.floatMenu,box=menu?.box;if(!menu||!box)return;
@@ -946,13 +956,20 @@ export class NativeStage {
   }
   private rebuildFloatMenu():void{
     const menu=this.floatMenu;if(!menu)return;
-    for(const piece of menu.pieces)this.unregister(piece);menu.pieces=[];menu.controls=[];
+    for(const piece of menu.pieces)this.unregister(piece);menu.pieces=[];menu.controls=[];menu.materials=[];
     const page=menu.page,anchor=page.floatMenu!;
     const box=layoutNativePage({...page,floatMenu:{x:anchor.x/this.displayScale,y:anchor.y/this.displayScale}},
       {width:this.width,height:this.height},false,this.measure);
     menu.box=box;
+    // An asynchronous option reply or a resize can replace the window while
+    // the pointer is stationary. Keep the same distance rule then, too.
+    if(floatMenuVanishes(box,this.lastPointer.x,this.lastPointer.y)){this.closeFloatMenu();return;}
+    menu.opacity=floatMenuOpacity(box,this.lastPointer.x,this.lastPointer.y);
     const max=Math.max(0,box.contentHeight-box.body.height);menu.scroll=THREE.MathUtils.clamp(menu.scroll,0,max);
+    const sharedMaterials=new Set([this.art.cardboardEdgeMat,this.art.shadowMat]);
     const place=(piece:CardboardPiece,x:number,y:number,z:number,control?:NativeControl)=>{
+      const materials=retainNativeOpacityMaterials(piece,sharedMaterials);
+      applyNativeOpacity(materials,menu.opacity);menu.materials.push(...materials);
       const factor=1-z/HUD_DISTANCE;piece.scale.setScalar(this.uiScale*factor);
       piece.setBaseTransform((x-this.width/2)*this.visH/this.height*factor,(this.height/2-y)*this.visH/this.height*factor,z);
       this.hudRoot.add(piece);menu.pieces.push(piece);const hit=this.register(piece,control);if(control)menu.controls.push(hit);
@@ -996,7 +1013,7 @@ export class NativeStage {
     const menu=this.floatMenu,menuBox=menu?.box;
     if(menu&&menuBox){
       const x=event.clientX/this.displayScale,y=event.clientY/this.displayScale;
-      this.clearHint();this.setPointerOverUi(true);this.gesture();this.swallow(event);
+      this.setPointerOverUi(true);this.gesture();this.swallow(event);
       const max=menuBox.contentHeight-menuBox.body.height;
       if(event.button===0&&max>0&&x>=menuBox.x+menuBox.width-FLOAT_MENU.scrollbar&&y>=menuBox.y+menuBox.header){
         const thumb=Math.min(menuBox.body.height,Math.max(12,menuBox.body.height*menuBox.body.height/menuBox.contentHeight)),travel=menuBox.body.height-thumb;
@@ -1005,6 +1022,7 @@ export class NativeStage {
         this.floatMenuDrag={pointerId:event.pointerId,y,offset:menu.scroll,travel,max};return;
       }
       const hit=this.hit(event.clientX,event.clientY);
+      this.updateHint(hit,event.clientX,event.clientY);
       if(event.button===0&&hit?.control&&!hit.control.disabled&&menu.pieces.includes(hit.piece)){
         this.down={piece:hit.piece,controlId:hit.control.id,pageId:this.page?.id,layout:this.pageBox,pose:new NativeHitPose(hit.piece.userData.interactiveMeshes??[]),pointerId:event.pointerId,x:event.clientX,y:event.clientY};
         hit.piece.userData.pressVal=1;this.moving.add(hit.piece);this.invalidate();
@@ -1014,11 +1032,12 @@ export class NativeStage {
     if((event.button===1||event.button===2)&&this.cameraWorldPoint(event.clientX,event.clientY)){
       this.clearHint();this.hover(null);this.setPointerOverUi(false);this.worldPress={pointerId:event.pointerId,button:event.button};setNativeCursor(document.documentElement,'grabbing');return;
     }
-    this.clearHint();
     if(event.button===0&&this.globeHit(event.clientX,event.clientY)!==null){
+      this.clearHint();
       this.gesture();setNativeCursor(document.documentElement,'grabbing');this.setPointerOverUi(true);this.globeDrag={pointerId:event.pointerId,x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY};this.swallow(event);return;
     }
     const hit=this.hit(event.clientX,event.clientY);
+    this.updateHint(hit,event.clientX,event.clientY);
     const box=this.pageBox,x=event.clientX/this.displayScale,y=event.clientY/this.displayScale,inside=this.pageContains(x,y);
     // Map tool palettes keep empty-world presses on the renderer's gesture path.
     // Actual UI hits and release-over-UI cancellation retain their ordinary rules.
@@ -1319,11 +1338,11 @@ export class NativeStage {
         const length=axis==='x'?rect.width:rect.height,content=axis==='x'?(rect.contentWidth??length):rect.contentHeight,max=Math.max(0,content-length);if(max<=0||length<=0)continue;
         const thumb=Math.min(length,Math.max(28,length*length/content)),travel=length-thumb,offset=axis==='x'?this.horizontalOffset(region):this.regionOffset(region),primaryId=axis==='y'&&(!region||region===primary);
         const base=primaryId?'native-scroll':'native-scroll:'+region+(axis==='x'?':x':''),trackId=primaryId?'native-scrollbar':base+':track',thumbId=primaryId?'native-scroll-thumb':base+':thumb';
-        const start=axis==='x'?rect.x:rect.y,cross=axis==='x'?rect.y+rect.height+4:rect.x+rect.width+4;
+        const thickness=NATIVE_WINDOW.scrollbar,start=axis==='x'?rect.x:rect.y,cross=(axis==='x'?rect.y+rect.height:rect.x+rect.width)+thickness/2;
         const place=(id:string,isThumb:boolean)=>{
           const size=isThumb?thumb:length,position=start+(isThumb?(max?travel*offset/max:0):0)+size/2;
           const cx=axis==='x'?position:cross,cy=axis==='x'?cross:position;
-          const piece=this.pagePiece(id,{w:(axis==='x'?size:8)*.01,h:(axis==='x'?8:size)*.01,paper:isThumb,uvPadding:1,textureWidth:axis==='x'?Math.ceil(size*2):16,textureHeight:axis==='x'?16:Math.ceil(size*2),depth:.012,bgColor:PALETTE.sageMountain,seed:411,interactive:true,drawFn:isThumb?()=>{}:(ctx,w,h)=>{ctx.fillStyle='rgba(68,50,29,.2)';ctx.fillRect(0,0,w,h);}},String(size),(cx-box.width/2)*.01,(box.height/2-cy)*.01,isThumb?0.12:0.1);
+          const piece=this.pagePiece(id,{w:(axis==='x'?size:thickness)*.01,h:(axis==='x'?thickness:size)*.01,paper:isThumb,uvPadding:1,textureWidth:axis==='x'?Math.ceil(size*2):thickness*2,textureHeight:axis==='x'?thickness*2:Math.ceil(size*2),depth:.012,bgColor:PALETTE.sageMountain,seed:411,interactive:true,drawFn:isThumb?()=>{}:(ctx,w,h)=>{ctx.fillStyle='rgba(68,50,29,.2)';ctx.fillRect(0,0,w,h);}},String(size),(cx-box.width/2)*.01,(box.height/2-cy)*.01,isThumb?0.12:0.1);
           piece.userData.nativeStatic=true;piece.userData.tooltip=axis==='x'?'Faire défiler horizontalement · Maj + molette':'Faire défiler · molette, cliquer ou glisser';
           piece.userData.nativeScroll={region,axis,start:(axis==='x'?box.x:box.y)+start,travel,max,thumb,isThumb};this.pageGroup.add(piece);
         };place(trackId,false);place(thumbId,true);
@@ -1349,7 +1368,7 @@ export class NativeStage {
       if(this.mapSearchInkPage!==page){this.mapSearchInkPage=page;this.mapSearchInkRevision=(this.mapSearchInkRevision??0)+1;}
       return JSON.stringify(['map-search',this.mapSearchInkRevision,this.textFontRevision,this.textEntityRevision,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll]);
     }
-    return page?JSON.stringify([page.id,page.floatMenu,page.contentKey,page.detailsKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupProfile,page.setupAnchor,page.palette,page.research,page.infoCard,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX,this.setupDetailsX,cardScrollKey()]):'';
+    return page?JSON.stringify([page.id,page.floatMenu,page.contentKey,page.detailsKey,page.title,page.subtitle,page.width,page.height,page.layout,page.tableProfile,page.setupCatalogueWidth,page.setupProfile,page.setupAnchor,page.palette,page.research,page.infoCard,page.inspectTab,page.historyMode,page.columnRatio,page.portrait?.url,page.visual?.selected,page.visual?.markers,page.rows.map(row=>this.rowInk(row)),page.actions?.map(control=>this.controlInk(control)),page.closable,this.textFontRevision,this.textEntityRevision,this.frontVisible,this.width,this.height,this.displayScale,this.bottomDockHeight,this.scroll,this.regionOffsets,this.graphX,this.paletteX,this.setupDetailsX,cardScrollKey()]):'';
   }
   private rebuildPage(force=false):void{
     const page=this.page;
@@ -2047,7 +2066,11 @@ export class NativeStage {
     x/=this.displayScale;y/=this.displayScale;
     const text=hit?this.hintTextOf(hit):'';
     if(!hit||!text){this.clearHint();return;}
-    if(this.hintOwner===hit.piece&&this.hintText===text){this.hintAt={x,y};this.placeHint();return;}
+    if(this.hintOwner===hit.piece){
+      this.hintHit=hit;this.hintAt={x,y};
+      if(this.hintText!==text){this.hintText=text;if(this.hintPiece)this.showHint();}
+      this.placeHint();return;
+    }
     this.clearHint();this.hintOwner=hit.piece;this.hintHit=hit;this.hintText=text;this.hintAt={x,y};
     if(immediate){this.showHint();return;}
     // Core TipSignal.delay: 0.45 s from the first frame over the region.

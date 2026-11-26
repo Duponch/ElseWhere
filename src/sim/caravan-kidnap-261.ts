@@ -1,6 +1,7 @@
+import {shiftActorPath297} from './actor-path-source-297.ts';
 import {isSchema263OrLater} from '../sim/schema-compatibility-257.ts';
 import {raidGroup261,raidKidnapSource261} from './temp-map-raids-261.ts';
-import {carrierOf,rescueClaim} from './rescue-state.ts';
+import {carrierOf,rescueClaim,markHumanCarrierCandidatesDirty,humanCarrierCandidates} from './rescue-state.ts';
 import {patientClaimed} from './care-access.ts';
 import {pawnBody,medicalWorkRefusal} from './health-rules.ts';
 import {isStunned} from './stun.ts';
@@ -35,7 +36,7 @@ export const kidnapCarrying261=(p:Pawn):boolean=>task(p)?.phase==='carry';
  * current producer represents actual sleep by state/medicalSleep/Need sleep;
  * no clinical reconstruction or unconditional state!=downed drop is added. */
 export const kidnapRecoveredAwake261=(p:Pawn):boolean=>p.state!=='downed'&&p.state!=='sleeping'&&!p.medicalSleep&&!(p.need?.kind==='sleep'&&p.need.phase==='sleep');
-export const kidnapCarrierOf261=(w:World,id:number):Pawn|undefined=>w.pawns.find(p=>task(p)?.phase==='carry'&&task(p)?.patientId===id);
+export const kidnapCarrierOf261=(w:World,id:number):Pawn|undefined=>humanCarrierCandidates(w.pawns).find(p=>task(p)?.phase==='carry'&&task(p)?.patientId===id);
 export function kidnapCarryPairs261(w:World):readonly {carrierId:number;patientId:number}[] {
  return w.pawns.flatMap(p=>task(p)?.phase==='carry'?[{carrierId:p.id,patientId:task(p)!.patientId}]:[]);
 }
@@ -85,7 +86,7 @@ export function kidnapPickupReady261(w:World,carrier:Pawn,patient:Pawn):boolean 
 export function startPhysicalKidnap261(w:World,carrier:Pawn,patient:Pawn):boolean {
  if(task(carrier)||carrier.raid?.exiting||physicalKidnapReason261(w,carrier,patient)||!settled(w,carrier)||carrier.melee?.strike||carrier.shooting?.stance||isStunned(carrier,w.tick*10))return false;
  cancelMelee(carrier);cancelShooting(carrier);delete carrier.tactics;carrier.path=[];carrier.planCooldown=0;
- (carrier as PhysicalRaider261).raid.goal=null;(carrier as PhysicalRaider261).raid.kidnap261={patientId:patient.id,phase:'approach'};return true;
+ (carrier as PhysicalRaider261).raid.goal=null;(carrier as PhysicalRaider261).raid.kidnap261={patientId:patient.id,phase:'approach'};markHumanCarrierCandidatesDirty();return true;
 }
 /** Call immediately after each real health update, before actor-order dispatch
  * or corpse materialization. Downing/death of a carrier drops the SAME body's
@@ -108,7 +109,7 @@ export function processPhysicalKidnap261(w:World,carrier:Pawn,getBlocked:Navigat
    const route=meleeRoute(w,carrier,captureMeleePlaces(w,carrier)(patient),getBlocked());if(!route)return 'handled';carrier.path=route;carrier.raid!.goal=route.at(-1)??null;}
   const next=carrier.path[0];if(!next)return 'handled';
   if(!canStep(w,carrier,next,getBlocked(),EMPTY)){carrier.path=[];carrier.raid!.goal=null;carrier.planCooldown=0;return 'handled';}
-  carrier.state='moving';if(startTravel(w,carrier,next,getLight))carrier.path.shift();return 'handled';
+  carrier.state='moving';if(startTravel(w,carrier,next,getLight))shiftActorPath297(carrier.path);return 'handled';
  }
  const drops=planPawnDrops(w,new Set([patient.id]));if(!drops||!releaseWork(w,patient,drops))return 'handled';
  patient.need=null;delete patient.medicalSleep;patient.path=[];carrier.path=[];carrier.raid!.exiting=true;carrier.raid!.goal=null;t.phase='carry';syncKidnappedPatient261(w,carrier);

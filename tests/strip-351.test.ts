@@ -135,7 +135,9 @@ test('refusals follow StrippableUtility: standing people, empty bodies, released
  const options=queryOrderOptions(w,hauler.id,{x:other.x,z:other.z});
  expect(options.find(o=>o.stripTargetId===other.id)).toMatchObject({label:`Dépouiller ${other.name}`,enabled:true});
  expect(queryOrderOptions(w,other.id,{x:other.x,z:other.z}).some(o=>o.stripTargetId===other.id)).toBe(false);
- expect(queryOrderOptions(w,hauler.id,{x:other.x,z:other.z},true).find(o=>o.stripTargetId===other.id)).toMatchObject({enabled:false});
+ expect(queryOrderOptions(w,hauler.id,{x:other.x,z:other.z},true).find(o=>o.stripTargetId===other.id)).toMatchObject({enabled:true});
+ const historical={...w,schemaVersion:377 as typeof w.schemaVersion};
+ expect(queryOrderOptions(historical,hauler.id,{x:other.x,z:other.z},true).find(o=>o.stripTargetId===other.id)).toMatchObject({enabled:false});
 });
 
 test('designations go when the target dies, is carried, leaves or changes faction, and with the Cancel tool; a merely unstrippable target keeps it',()=>{
