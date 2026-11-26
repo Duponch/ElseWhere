@@ -9,6 +9,7 @@ import { storageAccepts } from './storage-filters.ts';
 import { storageAt,storageCells,storageCellAccepts,shelfFixedAccepts,type StorageCell } from './shelf-storage.ts';
 import type { Cell, HaulTask, MaterialPile, StockpileCell, World } from './types.ts';
 import type { StagingGeometryReader } from './staging-validation.ts';
+export type StorageGeometry = Pick<StagingGeometryReader, 'groundAllows' | 'storageAllows'>;
 import { structureById } from './structure-navigation.ts';
 
 /** Connected nearby cells, deterministic breadth first order. Never spill across a wall. */
@@ -76,7 +77,7 @@ export function createGroundCapacityReader(world:World):GroundCapacityReader {
   for(const a of world.wildlife?.animals??[])if(a.haul&&a.haul.phase!=='holding')haul(a.haul,a.id);
   return {piles,storage,reservations,packed:new Set(world.packed.filter(p=>p.owner.type==='ground').map(p=>p.owner.type==='ground'?p.owner.z*world.width+p.owner.x:-1))};
 }
-function shelfCapacity(world:World,cell:Cell,subject:ItemId|MaterialPile,exceptPawn:number|undefined,zone:StorageCell,geometry:StagingGeometryReader|undefined,reader?:GroundCapacityReader,policy=true):number {
+function shelfCapacity(world:World,cell:Cell,subject:ItemId|MaterialPile,exceptPawn:number|undefined,zone:StorageCell,geometry:StorageGeometry|undefined,reader?:GroundCapacityReader,policy=true):number {
   if(!(policy?storageCellAccepts(world,zone,subject):shelfFixedAccepts(subject))||!(geometry?geometry.groundAllows(cell):groundOccupancyAllowsIndexed(world,cell)))return 0;
   if(policy&&!(geometry?.storageAllows?geometry.storageAllows(cell):storageOccupancyAllowsIndexed(world,cell)))return 0;
   const facts=reader??createGroundCapacityReader(world),key=cell.z*world.width+cell.x;
@@ -105,7 +106,7 @@ export function groundPileCells(world:World):ReadonlySet<number> {
   for(const p of world.piles)if(p.owner.type==='ground')cells.add(p.owner.z*world.width+p.owner.x);
   return cells;
 }
-function cellCapacity(world: World, cell: Cell, item: ItemId, limit: number, exceptPawn?: number, zone:StockpileCell|null|undefined=world.stockpiles.find(z=>z.x===cell.x&&z.z===cell.z),geometry?:StagingGeometryReader,condition:Pick<MaterialPile,'egg'|'eggForbidden'>=EMPTY_EGG_CONDITION_256): number {
+function cellCapacity(world: World, cell: Cell, item: ItemId, limit: number, exceptPawn?: number, zone:StockpileCell|null|undefined=world.stockpiles.find(z=>z.x===cell.x&&z.z===cell.z),geometry?:StorageGeometry,condition:Pick<MaterialPile,'egg'|'eggForbidden'>=EMPTY_EGG_CONDITION_256): number {
   if(world.packed?.some(p=>p.owner.type==='ground'&&p.owner.x===cell.x&&p.owner.z===cell.z))return 0;
   const pile = groundPile(world, cell);
   if (pile && (pile.item!==item||!canMergeEggPile256(pile,condition))) return 0;
@@ -146,7 +147,7 @@ export function groundCapacity(world: World, cell: Cell, subject: ItemId|Materia
   const item=typeof subject==='string'?subject:subject.item,zone=reader?reader.storage.get(cell.z*world.width+cell.x):geometry?.storageAt?geometry.storageAt(cell):storageAt(world,cell);
   return zone?.shelfId!==undefined?shelfCapacity(world,cell,subject,exceptPawn,zone,geometry,reader,false):cellCapacity(world,cell,item,ITEM_DEFINITIONS[item].stackLimit,exceptPawn,reader?zone??null:undefined,geometry,typeof subject==='string'?EMPTY_EGG_CONDITION_256:subject);
 }
-export function storageCapacity(world: World, zone: StorageCell, subject: ItemId|MaterialPile, exceptPawn?: number,geometry?:StagingGeometryReader,reader?:GroundCapacityReader): number {
+export function storageCapacity(world: World, zone: StorageCell, subject: ItemId|MaterialPile, exceptPawn?: number,geometry?:StorageGeometry,reader?:GroundCapacityReader): number {
   const item=typeof subject==='string'?subject:subject.item;
   return zone.shelfId!==undefined?shelfCapacity(world,zone,subject,exceptPawn,zone,geometry,reader):storageAccepts(zone,subject,world.tick) ? cellCapacity(world,zone,item,zone.capacity,exceptPawn,zone,geometry,typeof subject==='string'?EMPTY_EGG_CONDITION_256:subject) : 0;
 }

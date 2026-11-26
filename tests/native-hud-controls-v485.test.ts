@@ -40,6 +40,28 @@ describe('native HUD bounds and severity · V485',()=>{
     }finally{f.close();}
   });
 
+  it('keeps DOM paint, cut geometry and settled active poses for all four speed controls',()=>{
+    vi.stubGlobal('OffscreenCanvas',class {constructor(){throw Error('DOM paint used a Worker canvas');}});
+    const f=fixture();
+    try{
+      const speeds=[0,1,3,6],buttons=speeds.map(speed=>f.piece('hud:speed:'+speed));
+      expect(buttons.map(b=>b.userData.seed)).toEqual([310,333,356,379]);
+      expect(buttons.map(b=>[b.userData.w,b.userData.h,b.userData.depth])).toEqual(speeds.map(()=>[.32,.24,.03]));
+      for(const speed of speeds){
+        f.hud.update(undefined,speed,60);f.hud.animate(1);
+        for(const [i,piece]of buttons.entries()){
+          const active=speeds[i]===speed;
+          expect(piece.userData.bgColor).toBe(active?PALETTE.terracotta:PALETTE.kraftBase);
+          expect(piece.userData.nativeActivePose).toBe(Number(active));
+          expect(piece.position.z-piece.userData.basePos.z).toBeCloseTo(active?.065:0,12);
+        }
+        const versions=buttons.map(b=>b.userData.texture.version);
+        f.hud.update(undefined,speed,60);
+        expect(buttons.map(b=>b.userData.texture.version)).toEqual(versions);
+      }
+    }finally{f.close();}
+  });
+
   it('aligns both command rows to the same edges while keeping a separate gap and direct actions',()=>{
     const f=fixture();try{
       const speeds=[0,1,3,6].map(speed=>f.piece(`hud:speed:${speed}`)),views=['walls','roofs','foliage','zones','home','camera'].map(action=>f.piece(`hud:view:${action}`));

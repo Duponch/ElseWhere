@@ -1,3 +1,4 @@
+import {HUD_DISTANCE,nativeHudCamera,lightNativeHud,nativeManagementDock,placeBottomRight} from './native-hud-viewport';
 import * as THREE from 'three/webgpu';
 import {PAWN_TABLE,workLabelDown} from './native-pawn-table';
 import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
@@ -31,7 +32,6 @@ import {paintNativeBioCard,nativeBioTargets} from './native-bio-card';
 import {paintNativeTabCard,nativeTabTargets,setCardScroll,cardScrollKey,cardScroll} from './native-tab-card';
 import {NATIVE_UI,NATIVE_LEADING,NATIVE_RIGHT_DOCK_WIDTH,layoutNativePage,nativeVisualWidth,nativeMatrixColumns,nativeMatrixHeadingLines,nativeTableRowScroll,wrapNativeText,nativeCardInk,type NativePageBox,type NativeRowBox,type NativeRect,type NativeRegion,type NativeRegionBox} from './native-layout';
 
-const HUD_DISTANCE=7.5;
 const tradeNumber=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
 const PANEL_IDS=['architect','work','schedule','assign','animals','wildlife','research','quests','world','history','factions','menu'] as const;
 type NativePanelId=typeof PANEL_IDS[number];
@@ -71,7 +71,7 @@ export interface NativeStageOptions {
 export class NativeStage {
   readonly art=new PrototypeCardboardArt();
   readonly scene=new THREE.Scene();
-  readonly camera=new THREE.PerspectiveCamera(34,innerWidth/innerHeight,.1,220);
+  readonly camera=nativeHudCamera(innerWidth/innerHeight);
   private readonly frontBackdrop=new NativeFrontBackdrop(this.camera,()=>this.invalidate());
   readonly hudRoot=new THREE.Group();
   readonly anchors={topLeft:new THREE.Group(),topCenter:new THREE.Group(),topRight:new THREE.Group(),
@@ -260,9 +260,7 @@ export class NativeStage {
     }
     // The reference's three lights, with the world key expressed in HUD-camera
     // space. They light actual cream edges and matte painted mesh fronts.
-    this.scene.add(new THREE.AmbientLight(0xfff5e4,1.45));
-    const sun=new THREE.DirectionalLight(0xfff2d6,1.9);sun.position.set(18,28,22);this.scene.add(sun);
-    const key=new THREE.DirectionalLight(0xfffaf0,.85);key.position.set(-3,5,4);this.camera.add(key);
+    lightNativeHud(this.scene,this.camera);
     this.anchors.bottomCenter.add(this.art.createBottomShelf());
     this.anchors.bottomCenter.visible=false;
     MANAGEMENT_BUTTONS.forEach((config,index)=>{
@@ -574,9 +572,7 @@ export class NativeStage {
     Object.values(this.anchors).forEach(group=>group.scale.setScalar(s));
     // Preserve each card's selected size. Reflow whole cards instead of shrinking
     // the user's scale back down when the row no longer fits.
-    const dockScale=Math.min(1.18,(innerWidth-32)/860),capacity=Math.max(1,Math.min(this.management.length,Math.floor((this.width-24)/(67.5*dockScale))));
-    const paged=this.height<500&&capacity<this.management.length;
-    const rows=paged?1:Math.ceil(this.management.length/capacity),columns=paged?Math.max(1,Math.floor((this.width-100)/(67.5*dockScale))):Math.ceil(this.management.length/rows);
+    const {dockScale,paged,columns,bottomDockHeight}=nativeManagementDock(innerWidth,this.width,this.height,this.management.length);
     this.managementPages=paged?Math.ceil(this.management.length/columns):1;this.managementPage=Math.min(this.managementPage,this.managementPages-1);
     const first=paged?this.managementPage*columns:0,last=paged?Math.min(first+columns,this.management.length):this.management.length;
     this.anchors.bottomCenter.scale.setScalar(s*dockScale);
@@ -588,14 +584,14 @@ export class NativeStage {
     }
     for(const [piece,direction]of [[this.managementPrevious,-1],[this.managementNext,1]] as const)if(piece){piece.visible=paged;piece.setBaseTransform(direction*(columns*.675/2+.23),.325,.08);}
     const rail=this.anchors.bottomCenter.children.find(object=>object instanceof THREE.Mesh);if(rail)rail.scale.x=Math.min(columns,this.management.length)*.675/8.6;
-    this.bottomDockHeight=Math.ceil((.76+(rows-1)*.64)*100*dockScale+8);
+    this.bottomDockHeight=bottomDockHeight;
     this.bottomLeftClearance=this.width/2-(columns*.675/2+.10)*100*dockScale-(paged?48:0);
     this.anchors.topLeft.position.set(-halfW+.08*s,halfH-.08*s,0);
     this.anchors.topCenter.position.set(0,halfH-.04*s,0);
     this.anchors.topRight.position.set(halfW-.08*s,halfH-.08*s,0);
     this.anchors.bottomLeft.position.set(-halfW+.08*s,-halfH+.08*s,0);
     this.anchors.bottomCenter.position.set(0,-halfH+(.04+this.bottomOffset)*s,0);
-    this.anchors.bottomRight.position.set(halfW-.08*s,-halfH+.08*s,0);
+    placeBottomRight(this.anchors.bottomRight,halfW,halfH,s);
     this.anchors.drawerAnchor.position.set(0,-halfH,0);
     this.rebuildFloatMenu();
     this.refreshWorldReadout();

@@ -24,3 +24,35 @@ Ce mode utilise le code source courant de `SceneRenderCore` et le Worker de pré
 Dans la référence Window, les images passent par le chargeur de textures Three.js du jeu. Pour le canvas transféré, la page décode les fichiers PNG et SVG réels, dont le pictogramme vectoriel généré par le jeu. Elle transmet chaque `ImageBitmap` au Worker, qui l'utilise comme texture et le libère à la destruction de celle-ci. Les captures comparent également le résultat de ces deux chemins de décodage.
 
 Le navigateur accède aux fichiers via les routes locales de Playwright. Le module du Worker enfant utilise une URL Blob du même navigateur pour fonctionner hors réseau. Les octets reçus sont vérifiés par SHA-256 avant la création du Worker et la réception native conserve son contrôle d'identité. Un futur build qui découperait ce module en imports relatifs fera échouer ce banc. Les mesures et les captures de chaque passage aboutissent dans un nouveau dossier `tmp/test-runs/worker-colony-scene/full-*/`.
+
+Avec `node scripts/check-worker-colony-scene.mjs --advance`, chaque simulation reçoit en plus l’action de développement « Avancer le temps » d’une heure de jeu. Le banc exige un deuxième monde confirmé au tick 585, soit 250 ticks après le premier, et compare les pixels, les triangles, les matrices de caméra et le numéro de Core sur ce monde. Les deux contextes utilisent le même client de simulation et le même moteur de scène que la vue expérimentale.
+
+## Colonie en mouvement dans la vue expérimentale
+
+```powershell
+npm run build
+node scripts/check-worker-colony-live.mjs
+```
+
+Ce contrôle ouvre la page locale `worker-colony.html`. Il utilise ses boutons de vitesse, la souris et le clavier. Sur Les Forges, il exige une progression de la simulation et des phases reçues à ×1, ×3 et ×6, la stabilité du tick en pause, des publications dans l’ordre, des soumissions WebGPU et une file sans débordement. Il déplace, tourne et zoome la caméra, redimensionne la page, ouvre un fichier invalide pendant que la simulation tourne et rouvre Les Forges. Le journal et la capture de la carte arrivent dans un nouveau dossier `tmp/test-runs/worker-colony-live/run-*/`.
+
+Le banc sert le build par HTTP local. Sur un profil Chrome qui refuse les connexions loopback, Playwright sert les mêmes fichiers et le banc remplace seulement l’URL du Worker enfant par une URL Blob construite avec les octets du module de simulation. Le rapport consigne le transport et l’empreinte du module utilisé dans ce cas. La page livrée charge normalement ses scripts depuis leur URL Vite.
+
+L’option `--pick-reference=<chemin-du-result.json>` utilise les points relevés dans le rendu Window du banc `--full` ou `--advance`. Le contrôle ouvre la colonie en pause et adapte la surface à la résolution de référence. En mode scène seule, il exige l’identité de tous les pixels RGBA de l’image épinglée avec le fichier `window-first.png` du même dossier. Il vérifie aussi l’identité de l’image épinglée avec le canvas affiché juste avant le clic, y compris lorsque le HUD est activé. Il clique sur un acteur puis sur une case ou un objet et vérifie le tick, la caméra, l’identité de l’acteur, les coordonnées de la case et l’identité de l’objet lorsqu’il y en a un.
+
+Pour mesurer une fenêtre de 60 secondes en 1440 × 1000, lancer la commande suivante après le build local.
+
+```powershell
+node scripts/check-worker-colony-live.mjs --measure --speed=6 --seconds=60
+```
+
+La page `worker-colony.html?hud=speed` compose les quatre cartons de vitesse sur le GPU de la carte. La page sans ce paramètre garde la vue de la seule scène. Les contrôles suivants utilisent le build local et la sauvegarde de test Les Forges.
+
+```powershell
+node scripts/check-worker-colony-scene.mjs --advance --speed-hud
+node scripts/check-worker-colony-live.mjs --speed-hud
+```
+
+Le premier contrôle compare chaque pixel du rendu Worker avec les quatre pièces de `NativeHudCards` peintes sur le fil principal, après stabilisation de leur pose. Il vérifie aussi que les pixels de la carte hors de la bande des commandes sont identiques à ceux de la même caméra au même tick. Le second clique sur vitesse normale, ×3, ×6 et Pause, vérifie la vitesse confirmée et relâche une pression sur un autre carton pour contrôler son annulation. L’option `--pick-reference=<chemin-du-result.json>` permet d’enchaîner le contrôle des sélections de la carte dans la même ouverture.
+
+La mesure utilise Chrome avec le plafonnement de cadence et la synchronisation verticale désactivés. Entre deux états confirmés du Worker, elle relève le débit des soumissions et la progression des ticks de jeu, les intervalles entre callbacks d’animation du fil principal et le retard d’un temporisateur de 16 ms. À la fin, elle mesure le délai entre un clic sur Pause, la publication de la vitesse effective et l’accusé de réception de la commande. Les valeurs concernent cette vue de colonie et sa surface de rendu, dont les dimensions figurent dans le rapport. La variable `LISIERE_WORKER_COLONY_DIST` permet de choisir un autre dossier de build local.

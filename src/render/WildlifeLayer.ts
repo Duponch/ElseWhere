@@ -38,7 +38,7 @@ import { pawnSelectionMesh } from './PawnSelectionLayer';
 import { animalCoat,createAnimalCoatTexture } from './animal-surface-paint';
 import { ANIMAL_SPECIES_IDS } from '../sim/animal-species';
 import { GaitPhaseTracker,animalGaitRadiansPerUnit } from './gait-presentation';
-import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
+import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,type ConfirmedStrikeRosters,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import { corpseVisualMask } from './corpse-presentation';
 import { corpsePartAbsent } from '../sim/corpse-anatomy';
@@ -793,11 +793,12 @@ export class WildlifeLayer {
   }
   /** Registers each confirmed melee hit on an animal once (attackers: humans,
    * animals and mechanoids) and wakes the settled root it pushes. */
-  private observeMeleeHits(world:World,actorScene?:CoreActorScene297):void {
+  private observeMeleeHits(world:World,actorScene?:CoreActorScene297,attackers?:ReturnType<ConfirmedStrikeRosters['read']>):void {
     const humans=actorScene?.humans??world.pawns,animals=actorScene?.animals??world.wildlife?.animals??[];
     let index:Map<number,{x:number;z:number}>|undefined;
     const victim=(id:number)=>{if(!index){index=new Map();for(const a of animals)index.set(a.id,a);}return index.get(id);};
     const woken=(id:number|undefined)=>{if(id!==undefined)this.rigById.get(id)?.wakeSpring297(id);};
+    if(attackers){this.meleeRecoil.observeRoster(attackers,victim,woken);return;}
     for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)woken(this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim));}
     for(const animal of animals)if(animal.strike)woken(this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim));
     for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)woken(this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim));}
@@ -816,7 +817,7 @@ export class WildlifeLayer {
   forEachPose(visit:(id:number,species:string,x:number,y:number,z:number,height:number,radius:number)=>void):void {for(const rig of this.activeRigs)rig.forEachPose(visit);}
   cpuPoseForId(id:number){for(const rig of this.activeRigs){const pose=rig.cpuPoseForId(id);if(pose)return pose;}}
   presentedPose(id:number){return this.cpuPoseForId(id);}
-  update(world:World,timeline:MotionTimeline|undefined,reset=false,pawns?:PawnLayer,actorScene?:CoreActorScene297,dt297=0,speed297=0):void {
+  update(world:World,timeline:MotionTimeline|undefined,reset=false,pawns?:PawnLayer,actorScene?:CoreActorScene297,dt297=0,speed297=0,strikeRosters?:ConfirmedStrikeRosters):void {
     if(this.source!==world){
       this.source=world;this.groups=wildlifePresentationGroups(world,pawns?pileId=>pawns.animalCorpseTransferCarrier(pileId):undefined);
       // Retain canonical species order for pointer iteration and submission.
@@ -836,7 +837,7 @@ export class WildlifeLayer {
     // These scalar writes preserve each resident graph's independent clocks,
     // including during compile preparation; only active rigs prepare actors.
     for(const rig of this.rigs)rig.updateClock(tick,pawns);
-    if(isCorePhysicalSchema297(Number(world.schemaVersion)))this.observeMeleeHits(world,actorScene);
+    if(isCorePhysicalSchema297(Number(world.schemaVersion))){const attackers=strikeRosters?.read(world,actorScene);if(!attackers||attackers.length)this.observeMeleeHits(world,actorScene,attackers);}
     for(const rig of this.activeRigs)rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297);
   }
   adoptPhase297(world:World,indices:readonly number[],actorScene?:CoreActorScene297,changedActorIds?:ReadonlySet<number>):void {

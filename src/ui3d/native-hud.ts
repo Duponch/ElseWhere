@@ -1,3 +1,4 @@
+import {createNativeSpeedButtons,selectNativeSpeed,advanceNativeActivePoses,nativeTimeBottom} from './native-speed-controls';
 import {drawPicto} from '../ui/picto-artwork';
 import {NATIVE_TEXT} from './native-ui-scale';
 import {NativeClockRaster} from './native-clock-raster';
@@ -40,7 +41,7 @@ import {modelIconUrl} from '../ui/pictograms';
 import {coreAlertPriority,type CoreAlertPriority} from '../ui/alert-priority';
 import {ALERT_PULSE_LEVELS,ALERT_RECHECK_MS,AlertActivationTracker,AlertBounce,alertHoverText,alertPulseLevel,readNativeAlertRows,type HudAlert} from './native-alert-list';
 import {PrototypeCardboardArt, PALETTE, createMaskingTape, drawHandRect, drawMarkerLine, type CardboardPiece, type CardboardPieceOptions} from './prototype-art';
-import {applyNativeHudButtonPose,drawNativeSpeedIcon,drawNativeWeatherIcon,nativeWeatherColor,nativeWeatherIcon,nativeWeatherOutline,type NativeWeatherIcon} from './native-hud-art';
+import {drawNativeWeatherIcon,nativeWeatherColor,nativeWeatherIcon,nativeWeatherOutline,type NativeWeatherIcon} from './native-hud-art';
 
 export interface NativeHudAnchors {
   topCenter: THREE.Group;
@@ -123,12 +124,6 @@ const ROW_ICON = 22;
 const BAR_CARD_W = 57, BAR_CARD_H = 78;
 const FONT = '"Comic Sans MS", "Chalkboard SE", Georgia, serif';
 const quadrums = ['avrimai', 'juillêt', 'septobre', 'décembary'] as const;
-const speeds = [
-  {speed: 0, title: 'Pause'},
-  {speed: 1, title: 'Lecture ×1'},
-  {speed: 3, title: 'Vitesse ×3'},
-  {speed: 6, title: 'Vitesse ×6'}
-] as const;
 const hex = (value: number) => `#${value.toString(16).padStart(6, '0')}`;
 const rounded = (value: number) => Math.round(Math.max(0, Math.min(100, value)));
 const amount = (value: number) => value.toLocaleString('fr-FR', {maximumFractionDigits: 2});
@@ -290,16 +285,8 @@ export class NativeHudCards {
     this.temperaturePiece=letterPiece(column.temperature,213,'hud:temperature',(ctx,w,h)=>this.drawRowText(ctx,w,h,this.weatherReadout.temperature,column.temperature.width,0));
     this.weatherIconPiece=this.createWeatherIcon(this.weatherIconValue);
 
-    speeds.forEach((cfg, idx) => {
-      const rect=column.speed[idx]!;
-      const piece = this.makePiece({w: rect.width/100, h: rect.height/100, depth: .03, bgColor: PALETTE.kraftBase, bevel: .02, hasBorder:false,seed: 310 + idx * 23, interactive: true, tooltip: cfg.title,
-        drawFn: (ctx, w, h, rng) => drawNativeSpeedIcon(ctx,w,h,cfg.speed,this.speedValue===cfg.speed,rng),
-        onClick: () => { if (this.world) this.actions.speed(cfg.speed); }});
-      piece.userData.nativeId=`hud:speed:${cfg.speed}`;
-      piece.userData.nativeToolbarPose=true;piece.userData.nativeActivePose=0;
-      const pos=at(rect);piece.setBaseTransform(pos.x,pos.y,0,0);
-      this.timeGroup.add(piece); this.speedButtons.push(piece);
-    });
+    this.speedButtons.push(...createNativeSpeedButtons(column.speed,this.timeGroup,
+      options=>this.makePiece(options),()=>this.speedValue,speed=>{if(this.world)this.actions.speed(speed);}));
 
     NATIVE_VIEW_ACTIONS.forEach((action,index)=>{
       const rect=column.view[index]!;
@@ -337,7 +324,7 @@ export class NativeHudCards {
     if (this.fpsValue !== nextFps) { this.fpsValue = nextFps; this.fpsPiece.redraw(); }
     if (speed !== this.speedValue) {
       this.speedValue = speed;
-      this.speedButtons.forEach((piece, idx) => { const active=speeds[idx]!.speed===speed;if(piece.userData.active!==active){piece.userData.active=active;this.activePoses.add(piece);piece.redraw(undefined,active?PALETTE.terracotta:PALETTE.kraftBase);} });
+      selectNativeSpeed(this.speedButtons,speed,this.activePoses);
     }
     if (this.world === world) return;
     this.world = world;
@@ -425,7 +412,7 @@ export class NativeHudCards {
     if(barWidthChanged)this.portraitIds='';
     if(this.world)this.refreshPortraits(this.world);
     // The bottom shelf remains below the legacy-sized time and view controls.
-    this.baseTimeY=30+Math.max(0,bottomDockHeight-96);
+    this.baseTimeY=nativeTimeBottom(bottomDockHeight);
     this.layoutWindowDock();
     this.refreshAlerts();
     if(this.world)this.refreshResources();
@@ -492,14 +479,7 @@ export class NativeHudCards {
   /** Returns true through the last changed frame, so the stage invalidates its
    * composed scene even when the drawer has just reached its resting pose. */
   animate(deltaSeconds:number):boolean {
-    let changed=false;
-    for(const piece of this.activePoses){
-      const target=Number(piece.userData.active),before=Number(piece.userData.nativeActivePose??0);
-      const next=THREE.MathUtils.lerp(before,target,1-Math.exp(-Math.max(0,deltaSeconds)*16));
-      piece.userData.nativeActivePose=Math.abs(next-target)<.001?target:next;
-      changed=applyNativeHudButtonPose(piece)||changed;
-      if(piece.userData.nativeActivePose===target)this.activePoses.delete(piece);
-    }
+    let changed=advanceNativeActivePoses(this.activePoses,deltaSeconds);
     changed=this.animateAlerts(deltaSeconds)||changed;
     const target=this.rightDockOpen?0:3.16;
     const before=this.rightDockOffset;

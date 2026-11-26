@@ -23,17 +23,21 @@ export function plantClusterSwayPadding379(bounds:Box3):number {
 export class PlantClusterSpatial379 {
  private readonly pages=new Map<string,Page>();
  private readonly slots=new Map<number,Page>();
+ // Retirements leave zero matrices in their slots. The ordered slot IDs
+ // therefore survive every retirement, reuse and move until the next reset.
+ private readonly slotOrder:number[]=[];
+ private orderChanged=false;
  private readonly retired=new Set<number>();
  private readonly padded=new Box3();
  private revision=0;
  private published=-1;
  private ranges:readonly SpatialInstanceRange379[]|undefined;
  private invalid=false;
- private membershipDirty=true;
+ private firstMembershipChange=0;
  private runs:{first:number;count:number;page:Page}[]=[];
  private rangeBuilds=0;
  private sourceCount=-1;
- clear():void {this.pages.clear();this.slots.clear();this.retired.clear();this.runs=[];this.invalid=false;this.membershipDirty=true;this.sourceCount=-1;this.revision++;}
+ clear():void {this.pages.clear();this.slots.clear();this.slotOrder.length=0;this.orderChanged=false;this.retired.clear();this.runs=[];this.invalid=false;this.firstMembershipChange=0;this.sourceCount=-1;this.revision++;}
  remove(index:number):void {
   if(this.slots.has(index))this.retired.add(index);
   // Retain page affinity for the original zero-matrix tombstone. The draw
@@ -46,27 +50,47 @@ export class PlantClusterSpatial379 {
    this.invalid=true;this.revision++;return;
   }
   const px=pageCoordinate(x),pz=pageCoordinate(z),key=`${pz}:${px}`;
-  let page=this.pages.get(key),old=this.slots.get(index);
+  let page=this.pages.get(key);
+  const old=this.slots.get(index);
   this.retired.delete(index);
-  if(old&&(old.x!==px||old.z!==pz)){
-   this.slots.delete(index);if(--old.slots===0)this.pages.delete(`${old.z}:${old.x}`);
-   old=undefined;this.membershipDirty=true;this.revision++;
-  }
   if(!page){page={x:px,z:pz,bounds:new Box3(),slots:0};this.pages.set(key,page);}
-  if(!old){this.slots.set(index,page);page.slots++;this.membershipDirty=true;this.revision++;}
+  if(old!==page){
+   if(old){if(--old.slots===0)this.pages.delete(`${old.z}:${old.x}`);this.revision++;}
+   else{
+    if(this.slotOrder.length&&index<this.slotOrder[this.slotOrder.length-1]!)this.orderChanged=true;
+    this.slotOrder.push(index);
+   }
+   this.slots.set(index,page);page.slots++;this.firstMembershipChange=Math.min(this.firstMembershipChange,index);this.revision++;
+  }
   this.padded.copy(bounds).expandByScalar(plantClusterSwayPadding379(bounds));
   if(!page.bounds.containsBox(this.padded)){page.bounds.union(this.padded);this.revision++;}
  }
  /** Immutable range/bounds publication. The generic native draw owner may
   * retain it across callbacks and independently cache each camera's plan. */
  capture(count:number):readonly SpatialInstanceRange379[]|undefined {
-  if(count!==this.sourceCount){this.sourceCount=count;this.membershipDirty=true;this.revision++;}
+  if(count!==this.sourceCount){
+   const boundary=Math.min(count,this.sourceCount);
+   this.firstMembershipChange=Math.min(this.firstMembershipChange,Number.isFinite(boundary)?Math.max(0,Math.floor(boundary)):0);
+   this.sourceCount=count;this.revision++;
+  }
   if(this.published===this.revision)return this.ranges;
   if(this.invalid){this.published=this.revision;return this.ranges=undefined;}
-  if(this.membershipDirty){
-   const ordered=[...this.slots].filter(([index])=>index<count).sort(([a],[b])=>a-b),runs:{first:number;count:number;page:Page}[]=[];
-   for(const [index,page] of ordered){const last=runs.at(-1);if(last&&last.page===page&&last.first+last.count===index)last.count++;else runs.push({first:index,count:1,page});}
-   this.runs=runs;this.membershipDirty=false;this.rangeBuilds++;
+  if(this.firstMembershipChange!==Infinity){
+   const dirty=this.firstMembershipChange,runs=this.runs,ordered=this.slotOrder;
+   if(this.orderChanged){ordered.sort((a,b)=>a-b);this.orderChanged=false;}
+   // Keep the exact prefix of previously published runs. A run straddling
+   // the boundary keeps its prefix too; the first new slot can extend it.
+   while(runs.length&&runs[runs.length-1]!.first>=dirty)runs.pop();
+   const retained=runs.at(-1);
+   if(retained)retained.count=Math.min(retained.count,dirty-retained.first);
+   let lo=0,hi=ordered.length;
+   while(lo<hi){const mid=Math.floor((lo+hi)/2);if(ordered[mid]!<dirty)lo=mid+1;else hi=mid;}
+   for(let i=lo;i<ordered.length&&ordered[i]!<count;i++){
+    const index=ordered[i]!,page=this.slots.get(index)!,last=runs.at(-1);
+    if(last&&last.page===page&&last.first+last.count===index)last.count++;
+    else runs.push({first:index,count:1,page});
+   }
+   this.firstMembershipChange=Infinity;this.rangeBuilds++;
   }
   const bounds=new Map<Page,Box3>();
   this.ranges=this.runs.map(run=>{let box=bounds.get(run.page);if(!box){box=run.page.bounds.clone();bounds.set(run.page,box);}return{first:run.first,count:run.count,bounds:box};});

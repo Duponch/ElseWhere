@@ -7,6 +7,34 @@ import {MotionTimeline} from '../src/render/MotionTimeline';
 const edge=(start:number,end:number,x=0):PresentationSegment=>({from:{x,z:0},to:{x:x+1,z:0},start,end});
 const linear=(segments:readonly PresentationSegment[],tick:number)=>{let found:PresentationSegment|undefined;for(const item of segments){if(item.start>tick)break;found=item;}return found;};
 
+test('group readers share each ordered journal range while public snapshots and retained rows stay independent',()=>{
+ const timeline=new MotionTimeline();
+ const deliver=(...ids:number[])=>timeline.adopt(0,0,ids.map(id=>({id,segments:[]})),0,false,true);
+ timeline.adopt(0,0,[],0,true,true);const before=timeline.playbackRevision435;
+ deliver(2,1,2,-0);const one=timeline.playbackChanged435(before,true)!;
+ expect(one).toEqual([2,1,0]);expect(Object.isFrozen(one)).toBe(true);
+ expect(timeline.playbackChanged435(before,true)).toBe(one);
+ const publicCopy=timeline.playbackChanged435(before) as number[];publicCopy[0]=55;
+ expect(timeline.playbackChanged435(before)).toEqual([2,1,0]);
+ deliver(1,3,2,4);const union=timeline.playbackChanged435(before,true)!;
+ expect(union).toEqual([2,1,0,3,4]);expect(timeline.playbackChanged435(before,true)).toBe(union);
+ expect(timeline.playbackChanged435(before+.5)).toEqual(union);
+ expect(timeline.playbackChanged435(NaN)).toEqual([]);
+ for(let i=0;i<130;i++)deliver(10+i);
+ expect(timeline.playbackChanged435(before,true)).toBeUndefined();expect(one).toEqual([2,1,0]);expect(union).toEqual([2,1,0,3,4]);
+ timeline.adopt(0,0,[],0,true,true);expect(timeline.playbackChanged435(timeline.playbackRevision435-1,true)).toBeUndefined();
+});
+
+test('caller-owned boundary storage preserves the independent public result across corrections and missing tracks',()=>{
+ const timeline=new MotionTimeline(),first=edge(1,2),second=edge(2,7);
+ timeline.adopt(0,1,[{id:5,segments:[first,second]}],0,true,true);timeline.tick=1;
+ const held=timeline.playbackBoundary435(5),out={edge:undefined as PresentationSegment|undefined,next:Infinity};
+ expect(timeline.playbackBoundary435(5,out)).toBe(out);expect(out).toEqual({edge:first,next:2});
+ timeline.tick=2;expect(timeline.playbackBoundary435(5,out)).toEqual({edge:second,next:Infinity});
+ expect(held).toEqual({edge:first,next:2});
+ expect(timeline.playbackBoundary435(99,out)).toEqual({edge:undefined,next:Infinity});
+});
+
 test('closed cursor is the independent linear selection at every confirmed boundary, without mutating tracks',()=>{
  const cursor=new ConfirmedTrackCursor435();cursor.configure(true,true);
  const pieces=[edge(10,12),edge(12,12.5),edge(12,14,2),edge(14,16,3)],tracks=new Map([[7,pieces]]),before=JSON.stringify(pieces);

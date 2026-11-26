@@ -5,6 +5,11 @@ import * as THREE from 'three/webgpu';
  * Canvas is only a procedural paint surface; placement and interaction are meshes.
  * The host owns scene attachment, input, animation and the factory lifetime.
  */
+// The ordinary game uses DOM canvas. Worker paint stays on its owning thread
+// and uses the same 2D operations and texture upload as the native controls.
+function paintCanvas():HTMLCanvasElement {
+  return typeof document==='undefined'?new OffscreenCanvas(1,1) as unknown as HTMLCanvasElement:document.createElement('canvas');
+}
 type Paint = string | CanvasGradient | CanvasPattern;
 export type CardboardDraw = (ctx: CanvasRenderingContext2D, wPx: number, hPx: number, rng: () => number) => void;
 export interface CardboardPieceOptions {
@@ -363,7 +368,7 @@ export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number,
  * compatibility texture is never bound to a material, so it is never uploaded. */
 function createHitOnlyPiece({w,h,depth=.044,seed=1,interactive=false,onClick=null,tooltip='',drawFn,bgColor=PALETTE.kraftBase}:CardboardPieceOptions):CardboardPiece {
   const group=new THREE.Group() as CardboardPiece;
-  const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+  const canvas=paintCanvas();canvas.width=canvas.height=1;
   const ctx=canvas.getContext('2d');
   if(!ctx)throw new Error('Canvas 2D is required for native input compatibility.');
   const texture=new THREE.CanvasTexture(canvas),geometry=new THREE.PlaneGeometry(w,h);
@@ -428,7 +433,7 @@ export function createCardboardPiece({
 
   const wPx = textureWidth??Math.max(128, Math.round(w * 280));
   const hPx = textureHeight??Math.max(84, Math.round(h * 280));
-  const canvas = document.createElement('canvas');
+  const canvas = paintCanvas();
   canvas.width = wPx;
   canvas.height = hPx;
   // Small pieces (buttons, table cells) paint on a software canvas: Chrome
@@ -443,7 +448,7 @@ export function createCardboardPiece({
     if(paper&&cacheBackground){
       const key=JSON.stringify([wPx,hPx,seed,bg,hasBorder,surface]);
       if(backgroundKey!==key){
-        background??=document.createElement('canvas');background.width=wPx;background.height=hPx;
+        background??=paintCanvas();background.width=wPx;background.height=hPx;
         const backgroundCtx=background.getContext('2d',{alpha:false});
         if(!backgroundCtx)throw new Error('Canvas 2D is required for cached cardboard paint.');
         paintCardboardCanvas(backgroundCtx,wPx,hPx,bg,(_ctx,_w,_h,rng)=>{inkRandom=(rng as RandomStream).clone();},hasBorder,seed,randomStream(seed*313+7),surface);

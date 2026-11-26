@@ -1,6 +1,7 @@
 import { describe,expect,it } from 'vitest';
 import type * as THREE from 'three/webgpu';
-import { OrthographicCamera, Vector3 } from 'three/webgpu';
+import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three/webgpu';
+import { AnimationDetail } from '../src/render/AnimationDetail';
 import { createWorld } from '../src/sim/engine.ts';
 import type { CookingTask } from '../src/sim/cooking-types.ts';
 import type { Structure } from '../src/sim/types.ts';
@@ -11,6 +12,23 @@ import { ensureFireState } from '../src/sim/fire-rules.ts';
 const structure=(kind:Structure['kind'],id:number,x=8,z=8):Structure=>({id,kind,x,z,orientation:0,footprint:'standard'});
 
 describe('resident structure effects',()=>{
+  it('reprojects fixed emitter rows when the view, far threshold or confirmed sources change',()=>{
+    const world=createWorld(1255,32,32),front=structure('battery',951,8,8),rear=structure('battery',952,8,24);
+    for(const device of [front,rear])device.battery={stored:BATTERY_QUARTER};
+    world.structures=[front,rear];
+    const detail=new AnimationDetail(),layer=new StructureVfxLayer(detail),camera=new PerspectiveCamera(50,1,.1,100);
+    const slots=()=>Array.from({length:layer.glow.activeCount},(_,i)=>layer.glow.geometry.getAttribute('fxSlot').getX(i));
+    const show=(tick:number)=>{detail.beginFrame(tick*10,camera,100,tick);layer.present(tick);};
+    try{
+      layer.adopt(world,true);
+      camera.position.set(8,1,18);camera.lookAt(8,1,8);show(0);expect(slots()).toEqual([0]);
+      camera.lookAt(8,1,24);show(1);expect(slots()).toEqual([1]);
+      const version=layer.glow.instanceMatrix.version;show(2);expect(layer.glow.instanceMatrix.version).toBe(version);
+      detail.setSettings({...detail.settings,farPixels:22});show(3);expect(slots()).toEqual([]);
+      detail.setSettings({...detail.settings,enabled:false});show(4);expect(slots()).toEqual([0,1]);
+      rear.battery!.stored=0;layer.adopt(world);show(5);expect(slots()).toEqual([0]);
+    }finally{layer.dispose();}
+  });
   it('keeps the ten-triangle flame cone closed with outward faces, coherent normals and front-face culling',()=>{
     const fire=new FireLayer();
     try{

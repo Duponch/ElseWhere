@@ -2,6 +2,10 @@ import { expect, test } from 'vitest';
 import { addGroundMaterial, applyCommand, createWorld, deserializeWorld, hashWorld, refreshStock, serializeWorld, stepWorld, validateWorld } from '../src/sim/index.ts';
 import type { StructureKind, World } from '../src/sim/types.ts';
 import { comfortMood, updateWellbeing } from '../src/sim/wellbeing.ts';
+import { adjacentTable, chooseDiningPlace, validDiningPlace } from '../src/sim/dining.ts';
+import { reachableCells } from '../src/sim/pathfinding.ts';
+import { withJournalTerrainReadScope } from '../src/sim/terrain-read-scope.ts';
+import { couchCells365 } from '../src/sim/straw-couch-365.ts';
 import legacyMeal from './fixtures/schema-3-ingestion.json';
 
 function fixture(count = 1, size = 64): World {
@@ -19,6 +23,29 @@ function furniture(w: World, kind: StructureKind, x: number, z: number, orientat
 function checked(w: World, count = 1): void {
   for (let i = 0; i < count; i++) { stepWorld(w); expect(validateWorld(w), `tick ${w.tick}`).toEqual([]); }
 }
+
+test('closed dining lookups preserve couch cells, table priority and live claims', () => {
+  const world=fixture(1,32),pawn=world.pawns[0]!;
+  world.structures=[]; world.jobs=[];
+  const seatId=furniture(world,'couch',8,8);
+  const seat=couchCells365(world.structures[0]!)[1]!;
+  pawn.x=seat.x; pawn.z=seat.z;
+  const first=furniture(world,'table',seat.x+1,seat.z,1);
+  const last=furniture(world,'table',seat.x+1,seat.z,1);
+  const context={search:()=>reachableCells(world,pawn,new Uint8Array(world.width*world.height),new Set()),move(){},release:()=>true,event(){}};
+  const closed=<T>(f:()=>T)=>withJournalTerrainReadScope(world,f);
+  const choose=()=>chooseDiningPlace(world,pawn,context);
+  const placement={target:seat,seatId,tableId:last};
+  expect(choose()?.place).toEqual(placement);
+  expect(closed(choose)?.place).toEqual(placement);
+  expect(closed(()=>adjacentTable(world,seat))?.id).toBe(first);
+  expect(closed(()=>validDiningPlace(world,placement))).toBe(true);
+  world.structures[2]!.factionId=null;
+  expect(closed(choose)?.place.tableId).toBe(first);
+  expect(closed(()=>validDiningPlace(world,placement))).toBe(false);
+  world.structures=world.structures.slice(1);
+  expect(closed(()=>validDiningPlace(world,{...placement,tableId:first}))).toBe(false);
+});
 function until(w: World, predicate: () => boolean, limit = 600): void {
   for (let i = 0; i < limit && !predicate(); i++) checked(w);
   expect(predicate(), JSON.stringify(w.pawns)).toBe(true);

@@ -52,6 +52,21 @@ test('plant pages retain global slots, full-prefix tombstones and immutable cons
  pages.set(0,NaN,1,box(1,1));expect(pages.capture(4)).toBeUndefined();
 });
 
+test('out-of-order births, moves and prefix changes preserve the sorted native range table',()=>{
+ const pages=new PlantClusterSpatial379(),bounds=new THREE.Box3(new THREE.Vector3(),new THREE.Vector3(1,1,1));
+ const set=(i:number,page:number)=>pages.set(i,page*16,1,bounds);
+ const table=(count:number)=>pages.capture(count)!.map(r=>[r.first,r.count]);
+ const distant=2**34;
+ set(3,1);set(1,1);set(distant,4);set(0,1);
+ expect(table(Infinity)).toEqual([[0,2],[3,1],[distant,1]]);
+ set(2,1);expect(table(4)).toEqual([[0,4]]);
+ set(1,2);expect(table(2)).toEqual([[0,1],[1,1]]);
+ expect(table(4)).toEqual([[0,1],[1,1],[2,2]]);
+ set(1,1);expect(table(Infinity)).toEqual([[0,4],[distant,1]]);
+ expect(table(0)).toEqual([]);expect(table(2.5)).toEqual([[0,3]]);
+ pages.clear();set(2,1);expect(table(Infinity)).toEqual([[2,1]]);
+});
+
 test('real plant source transforms, animation fields and target colors survive culling, growth, reuse and capacity replacement',()=>{
  const material=new THREE.MeshLambertNodeMaterial({vertexColors:true}),layer=new PlantClusterLayer(material),w=world(fixture()),sourceOrder=w.resources.map(p=>p.id);
  layer.update(w,true);assertSource(layer,w);

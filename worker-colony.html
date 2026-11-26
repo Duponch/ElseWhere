@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.svg">
+  <title>Elsewhere · Rendu de la colonie en Worker</title>
+  <link rel="stylesheet" href="/src/worker-colony.css">
+  <style>
+    #surface { position: relative; }
+    .picked-frame { position: absolute; inset: 0; pointer-events: none; }
+    .pick-marker { position: absolute; width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px black; transform: translate(-50%, -50%); pointer-events: none; }
+    #pick-panel { position: absolute; left: .75rem; bottom: .75rem; display: flex; align-items: center; max-width: 95%; gap: .5rem; background: #293031f5; }
+    #pick-result:not(:empty) { padding: .4rem .55rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <a href="./" aria-label="Revenir au jeu">Elsewhere</a>
+      <h1>Rendu en Worker</h1>
+      <form id="open-colony">
+        <label for="colony">Colonie</label>
+        <select id="colony">
+          <option value="test-saves/v432/les-forges-crash-test.json">Les Forges</option>
+          <option value="test-saves/v419/les-eclaircies.json">Les Éclaircies</option>
+        </select>
+        <button type="submit">Ouvrir</button>
+        <button id="import" type="button">Ouvrir un fichier…</button>
+        <input id="file" type="file" accept=".json,application/json" hidden>
+      </form>
+    </header>
+    <section id="view" aria-label="Carte de la colonie">
+      <div id="surface"></div>
+      <div id="pick-panel"><output id="pick-result"></output><button id="pick-confirm" hidden>Confirmer</button><button id="pick-cancel" hidden>Annuler</button></div>
+      <p id="status" role="status">Choisis une colonie ou ouvre une sauvegarde Elsewhere.</p>
+    </section>
+    <footer>
+      <fieldset id="speed" disabled><legend>Vitesse</legend>
+        <button type="button" data-speed="0">Pause</button>
+        <button type="button" data-speed="1">×1</button>
+        <button type="button" data-speed="3">×3</button>
+        <button type="button" data-speed="6">×6</button>
+      </fieldset>
+      <span id="metrics" aria-live="off"></span>
+      <span class="controls">Clic gauche pour inspecter · Glisser pour déplacer · Clic droit pour pivoter · Molette pour zoomer</span>
+    </footer>
+  </main>
+  <script type="module" src="/src/worker-colony.ts"></script>
+</body>
+</html>

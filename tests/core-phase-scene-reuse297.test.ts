@@ -2,6 +2,7 @@ import {expect,test} from 'vitest';
 import type {World} from '../src/sim/types';
 import {CorePhaseFrameOwner297} from '../src/bridge/core-phase-owner-297';
 import {captureCoreActor297} from '../src/bridge/core-phase-data-297';
+import {captureNativeMessageForDeferred297} from '../src/bridge/native-message-capture';
 
 // Representation fixtures only; no simulation or Native authority is claimed.
 function anchored(){
@@ -49,4 +50,19 @@ test('an unowned frozen actor list still receives complete descriptor validation
  next.pawns=Object.freeze(next.pawns.map((pawn,index)=>Object.freeze(index===0?{...pawn,motion}:pawn))) as unknown as World['pawns'];
  expect(()=>owner.prepareFull(next,1,2,[],{mapId:0,core:200,projectilesRetained:[],actorMode297:'frontier'},1)).toThrow('Core phase requires plain own data');
  expect(reads).toBe(0);expect(owner.currentCore).toBe(200);expect(owner.currentSequence).toBe(0);
+});
+
+test('path patches resolve unique actors in either row order and survive a rejected packet',()=>{
+ const {owner,world}=anchored(),[human,other]=world.pawns;
+ const rows=[captureCoreActor297('human',1,{...other!,path:[]}),captureCoreActor297('human',0,{...human!,path:[]})];
+ const payload={...packet(),actors:rows,paths297:[{id:7,keep:2},{id:9,keep:1}]};
+ const capture=(raw:unknown)=>captureNativeMessageForDeferred297(raw);
+ expect(()=>owner.prepare(capture({...payload,actors:[...rows,rows[0]]}))).toThrow('Invalid physical actor phase');
+ expect(()=>owner.prepare(capture({...payload,actors:[rows[0]]}))).toThrow('Invalid Core path patches');
+ const reversed=owner.prepare(capture(payload)).projection;
+ const ordered=owner.prepare(capture({...payload,actors:[...rows].reverse()})).projection;
+ expect(reversed.actorScene).toEqual(ordered.actorScene);
+ expect(reversed.actors.map(r=>[r.id,r.fields.path])).toEqual([[9,other!.path.slice(-1)],[7,human!.path]]);
+ expect(world.pawns[1]!.path).toHaveLength(2);
+ expect(owner.currentCore).toBe(200);
 });

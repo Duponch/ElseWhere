@@ -1,0 +1,28 @@
+:root { color-scheme: dark; font: 15px/1.35 "Segoe UI", system-ui, sans-serif; color: #e7e4d9; background: #1d2325; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { display: grid; height: 100dvh; grid-template-rows: auto minmax(0, 1fr) auto; }
+header, footer, form, fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+header, footer { padding: .65rem 1rem; background: #293031; }
+header { border-bottom: 1px solid #545d56; }
+header a { color: #eddfb6; font: bold 1.4rem Georgia, serif; text-decoration: none; }
+h1 { margin: 0 .8rem 0 .25rem; font-size: .95rem; font-weight: 500; }
+form { margin-left: auto; }
+label, .controls { color: #c9cbbf; }
+button, select { font: inherit; padding: .32rem .65rem; border: 1px solid #69736b; border-radius: .22rem; background: #343e3c; color: inherit; }
+button:enabled { cursor: pointer; }
+button:enabled:hover, select:hover { background: #46534c; }
+button[aria-pressed="true"] { color: #17201a; background: #d4d6ab; }
+button:disabled, fieldset:disabled { opacity: .6; }
+:focus-visible { outline: 2px solid #efd489; outline-offset: 2px; }
+#view { position: relative; min-height: 0; }
+#surface, #surface canvas { display: block; width: 100%; height: 100%; }
+#surface canvas { touch-action: none; }
+#status { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: min(92%, 44rem); margin: 0; padding: .8rem 1.2rem; background: #293031f5; border: 1px solid #677067; border-radius: .25rem; text-align: center; pointer-events: none; }
+#status[hidden] { display: none; }
+footer { border-top: 1px solid #545d56; font-size: .88rem; }
+fieldset { border: 0; padding: 0; margin: 0; }
+legend { float: left; padding: 0 .3rem 0 0; }
+#metrics { font-variant-numeric: tabular-nums; }
+.controls { margin-left: auto; }
+@media (max-width: 800px) { form, .controls { margin-left: 0; } header, footer { padding: .45rem; } }

@@ -3,6 +3,8 @@ import {validConstructionMarkers379} from './construction-state-379.ts';
 import {isConstruction} from './construction-rules.ts';
 import {validConstructionBatchShape379,validateConstructionBatches379} from './construction-batch-379.ts';
 import {validHaulOpportunityShape379,validateHaulOpportunities379} from './haul-opportunity-379.ts';
+import {groundOccupancyAllows,storageOccupancyAllows} from './occupancy.ts';
+import type {StorageGeometry} from './ground-placement.ts';
 const lanes=['world','summary','map','maps','dynamic','campaign','secondarySite','worldMaps','sites','entries','worldGroups','groups','state','group','pending261','battlefield261','retained','groupLosses','animalLosses','losses','lost','abandoned','abandonedContents','abandonedPawns','contents','humans','animals','pawn','actor','human','animal','body','members','people','pawns','resources','structures','jobs','packed','building','items','piles','wildlife','animalOwners','worldPawns','owners','worldFactions','leaders','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','cryptosleep','shipCryptosleep277','occupant','visitors','podRescues','departed','banishedDepartures378','startingArrival','pods','scout','commercialTrip','civilianPost','campaignMap','wallDoor296','plan','upserted','orbital','ships','deliveries','cargo','pending','departures','raids','trade','prisonDepartures','arrivals','quests','worldSites263','tradeRequests284','requests','rewards','options','haul','orders','queue','constructionBatch379','haulOpportunity379','sources','destinations'] as const;
 const relevantKeys=new Set<PropertyKey>([...lanes,'forbidden379','tailorSteel379']);
 type TransportCheck=(raw:unknown,version:number)=>boolean;
@@ -60,9 +62,9 @@ function constructionTransport379(raw:unknown,version:number,ordinaryLeaf?:((val
 export function validateConstructionForbid379(w:World,version:number):string[] {
  return constructionWorld379(w,version,validConstructionTransport379);
 }
-function constructionWorld379(w:World,version:number,transport:TransportCheck):string[] {
+function constructionWorld379(w:World,version:number,transport:TransportCheck,storageGeometry?:StorageGeometry):string[] {
  if(!transport(w,version))return ['Invalid or future construction permission/material provenance.'];
- const errors:string[]=[...validateConstructionBatches379(w,version),...validateHaulOpportunities379(w,version)];
+ const errors:string[]=[...validateConstructionBatches379(w,version),...validateHaulOpportunities379(w,version,storageGeometry)];
  for(const job of w.jobs){
   if(job.forbidden379&&!isConstruction(job))errors.push('Non-construction job has a construction permission.');
   if(!job.forbidden379)continue;
@@ -102,5 +104,10 @@ function constructionValidators379(isOrdinary:(value:object)=>boolean,run?:Ordin
   return true;
  };
  const transport:TransportCheck=(raw,version)=>constructionTransport379(raw,version,leaf,run,immutable);
- return {transport,world:(w,version)=>constructionWorld379(w,version,transport)};
+ return {transport,world:(w,version)=>constructionWorld379(w,version,transport,run ? {
+   // One adopted Full generally asks about one destination. Its structures
+   // array is newly received; indexing every footprint here buys no reuse.
+   groundAllows:cell=>groundOccupancyAllows(w,cell),
+   storageAllows:cell=>storageOccupancyAllows(w,cell),
+ } : undefined)};
 }

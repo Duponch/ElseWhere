@@ -4,7 +4,11 @@ import { ObjectResourceBinder } from './object-bound-nodes';
 
 /** Instance color stream of a holder, read by name from its view geometry. */
 const INSTANCE_COLOR='cropInstanceColor';
-type Variant={readonly material:THREE.NodeMaterial;signature:readonly unknown[]};
+type MaterialState={
+  readonly keys:readonly string[];readonly keySet:ReadonlySet<string>;
+  readonly values:readonly unknown[];readonly version:number;readonly alphaTest:number;
+};
+type Variant={readonly material:THREE.NodeMaterial;state?:MaterialState};
 
 /**
  * Crop batches keep an InstancedMesh as the holder of their instance streams
@@ -65,19 +69,47 @@ export class CropInstanceViews {
   private variant(source:THREE.Material):THREE.Material {
     if(!(source instanceof THREE.NodeMaterial))throw Error('Crop instance views require node materials');
     let variant=this.variants.get(source);
-    if(!variant){variant={material:source.clone(),signature:[]};this.variants.set(source,variant);}
+    if(!variant){variant={material:source.clone()};this.variants.set(source,variant);}
     this.refresh(source,variant);return variant.material;
   }
   private refresh(source:THREE.NodeMaterial,variant:Variant):void {
-    const keys=Object.keys(source).filter(key=>key.endsWith('Node')).sort();
-    const signature=[source.version,source.alphaTest,...keys.flatMap(key=>[key,Reflect.get(source,key)])];
-    if(signature.length===variant.signature.length&&signature.every((value,i)=>value===variant.signature[i]))return;
+    // Three permits adding, deleting and replacing node fields without
+    // setting needsUpdate. Reuse the ordered layout and values while still
+    // observing every own enumerable node, including explicitly undefined
+    // ones. Read accessors once in the same sorted order as a cold capture.
+    const previous=variant.state,own=Object.keys(source);
+    let n=0,sameLayout=previous!==undefined;
+    for(let i=0;i<own.length;i++){
+      const key=own[i]!;
+      if(!key.endsWith('Node'))continue;
+      if(sameLayout&&!previous!.keySet.has(key))sameLayout=false;
+      own[n++]=key;
+    }
+    own.length=n;
+    sameLayout&&=n===previous!.keys.length;
+    const keys=sameLayout?previous!.keys:own.sort();
+    const version=source.version,alphaTest=source.alphaTest;
+    let changed:unknown[]|undefined=sameLayout?undefined:new Array(n);
+    for(let i=0;i<n;i++){
+      const value=Reflect.get(source,keys[i]!);
+      if(!changed&&value!==previous!.values[i])changed=previous!.values.slice();
+      if(changed)changed[i]=value;
+    }
+    const values=changed??previous!.values;
+    const current=variant.state;
+    if(current&&current.version===version&&current.alphaTest===alphaTest){
+      if(current===previous&&sameLayout&&!changed)return;
+      // A source getter can synchronously refresh another holder of this
+      // variant. Compare with the state published by that inner draw.
+      if(current!==previous&&n===current.keys.length&&keys.every((key,i)=>key===current.keys[i]&&values[i]===current.values[i]))return;
+    }
     const material=variant.material;
     material.copy(source);
     // three r186 NodeMaterial.copy skips the inherited alphaTest accessor.
     material.alphaTest=source.alphaTest;
     material.positionNode=this.position(source.positionNode);
-    material.needsUpdate=true;variant.signature=signature;
+    material.needsUpdate=true;
+    variant.state={keys,keySet:sameLayout?previous!.keySet:new Set(keys),values,version,alphaTest};
   }
   private position(source:THREE.Node|null):THREE.Node {
     let node=this.positions.get(source);

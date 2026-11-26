@@ -24,6 +24,11 @@ describe('literal Atelier gouache and physical edge reference',()=>{
     expect(source.split(replayMarker)).toHaveLength(2);
     source=source.slice(source.indexOf('export class GouacheCardboardPainter {'),source.indexOf(replayMarker))
       .replace('export class GouacheCardboardPainter {','class GouacheCardboardPainter {')
+      // The two environments provide the same 2D surface. Normalize only the
+      // allocation expression; all brush/RNG and compositing statements still
+      // contribute to the unchanged independent hash from the supplied HTML.
+      .replaceAll('createPaintCanvas()', "document.createElement('canvas')")
+      .replaceAll(': PaintContext', ': CanvasRenderingContext2D')
       .replace('      seed: number;\n','').replace('      edgeWearAmount: number;\n','').replace('      fillImperfectionAmount: number;\n','')
       .replace('randRange(min: number, max: number)','randRange(min, max)')
       .replace('varyColor(hexColor: string, hueShift','varyColor(hexColor, hueShift')

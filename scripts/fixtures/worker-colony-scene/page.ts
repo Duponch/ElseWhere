@@ -1,24 +1,9 @@
+import {decodeSceneTexture} from '../../../src/render/worker-scene/texture';
 import {openScene, type Draw} from './scene';
 
 async function decodeTexture(worker: Worker, asset: number, url: string): Promise<void> {
   try {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-    const options: ImageBitmapOptions = {imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none'};
-    let bitmap: ImageBitmap;
-    try {
-      bitmap = await createImageBitmap(image, options);
-    } catch {
-      // Some SVG sources must be rasterized by their owning document first.
-      const raster = document.createElement('canvas');
-      raster.width = image.naturalWidth;
-      raster.height = image.naturalHeight;
-      const ctx = raster.getContext('2d');
-      if (!ctx) throw Error('Texture needs Canvas2D: '+url);
-      ctx.drawImage(image,0,0);
-      bitmap = await createImageBitmap(raster, options);
-    }
+    const bitmap = await decodeSceneTexture(url);
     worker.postMessage({asset, bitmap}, [bitmap]);
   } catch (error) {
     worker.postMessage({asset, error: String(error)});
@@ -26,7 +11,12 @@ async function decodeTexture(worker: Worker, asset: number, url: string): Promis
 }
 
 const canvas = document.querySelector('canvas')!;
+declare const CHECK_NATIVE_SPEED_HUD:boolean;
 async function createDraw() {
+  if(CHECK_NATIVE_SPEED_HUD&&location.search!=='?worker'){
+    const {makeNativeSpeedReference}=await import('./speed-reference');
+    Object.assign(window,{makeNativeSpeedReference});
+  }
   if (location.search !== '?worker') return openScene(canvas);
   const worker = new Worker('./worker.js', {type: 'module'});
   function send(request: object, transfers: Transferable[] = []) {

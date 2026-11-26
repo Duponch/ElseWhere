@@ -8,8 +8,10 @@ import {build} from 'esbuild';
 import {installLocalBuildRoutes} from './local-build-router.mjs';
 
 const sources = resolve('scripts/fixtures/worker-colony-scene');
-const full = process.argv.includes('--full');
-const dist = resolve('dist');
+const advance = process.argv.includes('--advance');
+const speedHud = process.argv.includes('--speed-hud');
+const full = advance || speedHud || process.argv.includes('--full');
+const dist = resolve(process.env.LISIERE_WORKER_COLONY_DIST || 'dist');
 const fixture = resolve('public/test-saves/v432/les-forges-crash-test.json');
 const origin = 'http://127.0.0.1:5546';
 const reports = resolve('tmp/test-runs/worker-colony-scene');
@@ -20,7 +22,7 @@ await mkdir(site);
 let simulation;
 if(full){
   const names=(await readdir(join(dist,'assets'))).filter(n=>/^presentation\.worker-.*\.js$/.test(n));
-  assert.equal(names.length,1,'Build the current client using npm run build:pages');
+  assert.equal(names.length,1,'Build the current client, or select its directory with LISIERE_WORKER_COLONY_DIST');
   const bytes=await readFile(join(dist,'assets',names[0]));
   // A blob worker has no base for relative imports. Refuse a future
   // code-splitting build rather than letting its nested imports silently fail.
@@ -30,7 +32,7 @@ if(full){
 await build({
   entryPoints: [join(sources, 'page.ts'), join(sources, 'worker.ts')],
   outdir: site, format: 'esm', bundle: true, platform: 'browser', target: 'es2023',
-  define: {'import.meta.env.DEV': 'false', 'import.meta.env.BASE_URL': '"/"', ...(full && {FROZEN_PRESENTATION_ASSET: JSON.stringify(simulation)})},
+  define: {'import.meta.env.DEV': 'false', 'import.meta.env.BASE_URL': '"/"',CHECK_NATIVE_SPEED_HUD:JSON.stringify(speedHud), ...(full && {FROZEN_PRESENTATION_ASSET: JSON.stringify(simulation)})},
   plugins:full?[{
     name:'frozen-full-scene',
     setup(builder){
@@ -49,11 +51,12 @@ await build({
 });
 await copyFile(join(sources, 'index.html'), join(site, 'index.html'));
 const inputSHA256 = createHash('sha256').update(await readFile(fixture)).digest('hex');
-const cases = full ? [['first',{view:0}],['repeat',{view:0}],['second',{view:1}]] : [
+const cases = full ? [['first',{view:0}],['repeat',{view:0}],['second',{view:1}],...(advance?[['advanced',{view:0,advanceHour:true}]]:[])] : [
   ['first', {view: 0}], ['repeat', {view: 0}], ['second', {view: 1}],
   ...['walls','doors','pawns','shadows'].map(layer => ['without-'+layer,{view: 0, hide: layer}]),
 ];
 const browser = await chromium.launch({channel: 'chrome', headless: true, args: ['--mute-audio']});
+if(speedHud)cases.push(['hud',{view:0,speedHud:true}]);
 const errors = [], captures = {}, observations = {}, differences = {};
 try {
   for (const realm of ['window','worker']) {
@@ -86,7 +89,7 @@ try {
         }, input);
         assert.equal(data.worker, realm === 'worker');
         assert.ok(data.drawCalls && data.triangles,JSON.stringify(data));
-        if(full){assert.ok(data.visible>10&&data.assets.length>0&&data.world?.length===3);assert.equal(data.phase,null);}
+        if(full){assert.ok(data.visible>10&&data.assets.length>0&&data.world?.length===3);assert.equal(data.phase,null);assert.equal(data.core,data.tick*10);assert.equal(data.world[2],data.tick);}
         else {assert.ok(data.wallTriangles && data.doorLeaves && data.pawns && data.shadowMap, JSON.stringify(data));}
         observations[realm][name] = data;
         // Let the transferred canvas reach the compositor before capturing it.
@@ -119,9 +122,23 @@ try {
       parity[name]=different(sample,await rgba(captures.worker[name]));
       visibleChanges[name]=different(reference,sample);
     }
-    return {parity,visibleChanges};
+    let hud;
+    if(captures.window.hud){
+      const map=await rgba(captures.window.advanced??captures.window.first),composite=await rgba(captures.window.hud);
+      // Same camera and frozen Full. Allow the original controls, including
+      // their cut edge, lift and shadow, to occupy their bottom-right strip.
+      let inside=0,outside=0;
+      for(let p=0;p<map.length;p+=4){
+        if(map[p]===composite[p]&&map[p+1]===composite[p+1]&&map[p+2]===composite[p+2]&&map[p+3]===composite[p+3])continue;
+        const x=(p/4)%768,y=Math.floor(p/4/768);
+        if(x>=601&&y>=360&&y<455)inside++;else outside++;
+      }
+      hud={inside,outside};
+    }
+    return {parity,visibleChanges,hud};
   }, {captures,names:cases.map(c=>c[0])});
   Object.assign(differences,result);
+  if(speedHud){assert.equal(result.hud.outside,0,'The HUD altered map pixels outside the speed strip');assert.ok(result.hud.inside>1000,'The native controls did not cover the map');}
   assert.deepEqual(errors,[]);
   for(const [name] of cases){
     const {worker: lhs,...native}=observations.window[name],{worker: rhs,...remote}=observations.worker[name];

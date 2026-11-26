@@ -13,7 +13,7 @@ import { deserializeWorld } from '../../../src/sim/serialization';
 import { decodeStoredSave } from '../../../src/ui/save-storage-codec';
 
 export type Layer = 'walls' | 'doors' | 'pawns';
-export interface Draw { view: 0 | 1; hide?: Layer | 'shadows' }
+export interface Draw { view: 0 | 1; hide?: Layer | 'shadows'; advanceHour?:boolean; speedHud?:boolean }
 export const WIDTH = 768, HEIGHT = 512;
 
 /** Both realms run exactly this code. Only the type of the supplied surface differs. */

@@ -7,8 +7,10 @@ import type { PawnLayer } from './PawnLayer';
 import { actionProgress, selectedConfirmedPath } from './action-feedback';
 import {actionProgressAnchor,type ActionAnchorLookup,type ActionProgressAnchor} from './action-progress-anchor';
 import {isActorPlaybackWorld435} from './ActorPlayback435';
-import {readResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
+import {readResidentCollectionDirectory379,type ResidentCollectionDirectory379} from '../bridge/resident-collection-changes-379';
+import {hasOwnedResidentResourceShape379} from '../bridge/resident-resource-section-379';
 import {readSnapshotChanges} from '../bridge/snapshot-changes';
+import {ActionBarResourceCells} from './ActionBarResourceCells';
 
 type Clock=Pick<PawnLayer,'blend'|'travelTime'>;
 type Path491={index:number;id:number;route:readonly Readonly<Cell>[];anchor?:Readonly<Cell>};
@@ -17,14 +19,19 @@ type Path491={index:number;id:number;route:readonly Readonly<Cell>[];anchor?:Rea
 const firstRouteStep491=(item:Path491)=>item.anchor&&item.route[0]?.x===item.anchor.x&&item.route[0]?.z===item.anchor.z?1:0;
 const poseAttributes=['aFrom','aTo','aTravel'] as const;
 type Pawn=World['pawns'][number];
-type PhaseBarRow={pawn:Pawn;job:Job|undefined;anchor:ActionProgressAnchor|undefined;pileIds:readonly number[];clock:boolean};
+type PhaseBarRow={pawn:Pawn;job:Job|undefined;anchor:ActionProgressAnchor|undefined;clock:boolean};
 type FullBarLookup={world:World;lookup:ActionAnchorLookup;knownCells:Set<number>;knownIds:Set<number>;rows?:PhaseBarRow[];tick?:number;core?:number};
 /** Progress totals can depend on a workpiece or a ground/carry target even
  * when the actor isn't replaced; keep those real identities, not a counter flag. */
-function phaseBarPileIds(pawn:Pawn,job:Job|undefined):number[]{
-  const ids=[pawn.need?.kind==='eat'?pawn.need.carryPileId:undefined,pawn.feed?.carryPileId,pawn.animalFeed?.carryPileId,
-    pawn.equipmentTask?.itemId,pawn.hunting?.animalId,pawn.cooking?.ingredients[0]?.pileId,job?.tree?.kind==='replant'?job.tree.sourcePileId:undefined];
-  return ids.filter((id):id is number=>typeof id==='number');
+function phaseBarPileChanged(pawn:Pawn,job:Job|undefined,piles:ReadonlyMap<number,unknown>):boolean{
+  if(!piles.size)return false;
+  const touched=(id:number|null|undefined)=>typeof id==='number'&&piles.has(id);
+  return pawn.need?.kind==='eat'&&touched(pawn.need.carryPileId)||touched(pawn.feed?.carryPileId)||touched(pawn.animalFeed?.carryPileId)
+    ||touched(pawn.equipmentTask?.itemId)||touched(pawn.hunting?.animalId)||touched(pawn.cooking?.ingredients[0]?.pileId)
+    ||job?.tree?.kind==='replant'&&touched(job.tree.sourcePileId);
+}
+function lookupRow<T extends {id:number}>(values:readonly T[],directory:ResidentCollectionDirectory379):(id:number)=>T|undefined {
+  return id=>{const slot=directory.source(id);return slot===undefined?undefined:values[slot];};
 }
 function phaseBarStatic(base:World,view:World):boolean {
   return view.resources===base.resources&&view.structures===base.structures&&view.tiles===base.tiles&&view.filth===base.filth&&view.research===base.research&&view.packed===base.packed&&view.wildlife===base.wildlife&&view.growingZones===base.growingZones&&view.schemaVersion===base.schemaVersion&&view.width===base.width&&view.height===base.height&&view.seed===base.seed;
@@ -60,6 +67,7 @@ export class ActionFeedbackLayer {
   private fullLookup297:FullBarLookup|undefined;
   private phaseLookup297:FullBarLookup|undefined;
   private phaseJobs297:ReadonlyMap<number,Job>|undefined;
+  private resourceCells=new ActionBarResourceCells();
   private phaseDirty297:{humans:ReadonlySet<number>;piles:ReadonlyMap<number,Readonly<World['piles'][number]>|null>}|undefined;
 
   constructor(clock:Clock){
@@ -109,8 +117,19 @@ export class ActionFeedbackLayer {
     const anchors=this.bars.geometry.getAttribute('aActionAnchor') as THREE.InstancedBufferAttribute;
     const lookup:ActionAnchorLookup=retained?.lookup??{cleaningStart:this.cleaningStart};lookup.jobs=this.phaseJobs297??new Map(world.jobs.map(job=>[job.id,job]));
     const nativeRows=retained?.rows,phase=this.phaseDirty297;
+    const admitted=!!(readSnapshotChanges(world,world)!==undefined&&isActorPlaybackWorld435(world));
+    if(!retained&&admitted){
+      const structures=readResidentCollectionDirectory379(world,'structures'),piles=readResidentCollectionDirectory379(world,'piles');
+      if(structures)lookup.structureById=lookupRow(world.structures,structures);
+      if(piles)lookup.pileById=lookupRow(world.piles,piles);
+      const resources=readResidentCollectionDirectory379(world,'resources');
+      if(resources&&hasOwnedResidentResourceShape379(world.resources,world.nextId)){
+        this.resourceCells.bind(world);
+        lookup.resourceById=lookupRow(world.resources,resources);
+      }
+    }
     const sparse=!!(sameSource&&phase&&nativeRows&&nativeRows.length===world.pawns.length);
-    const rows=sparse?nativeRows!:readSnapshotChanges(world,world)!==undefined&&isActorPlaybackWorld435(world)?[]:undefined;
+    const rows=sparse?nativeRows!:admitted?[]:undefined;
     const dirty:number[]=[];
     if(sparse){
       const clock=retained!.tick!==world.tick||retained!.core!==world.phaseCore297;
@@ -118,7 +137,14 @@ export class ActionFeedbackLayer {
       // checks also catch actor-only frontiers between two feedback applications.
       for(let index=0;index<world.pawns.length;index++){
         const pawn=world.pawns[index]!,old=nativeRows![index]!,job=pawn.jobId===null?undefined:lookup.jobs?.get(pawn.jobId);
-        if(pawn!==old.pawn||phase!.humans.has(index)||old.job!==job||clock&&old.clock||old.anchor?.pawnId!==undefined||pawn.state==='working'&&(pawn.tend?.phase==='tend'||pawn.surgery?.phase==='work')||old.pileIds.some(id=>phase!.piles.has(id)))dirty.push(index);
+        // Travel and pose receipts replace actors even if they cannot have a
+        // bar. The literal actionProgress returns before it reads any tasks
+        // for both states. Preserve the cleaning ledger's per-pawn cleanup.
+        if(!old.anchor&&pawn.state!=='working'&&pawn.state!=='eating'&&old.pawn.state!=='working'&&old.pawn.state!=='eating'){
+          if(!pawn.cleaning)this.cleaningStart.delete(pawn.id);
+          old.pawn=pawn;old.job=job;continue;
+        }
+        if(pawn!==old.pawn||phase!.humans.has(index)||old.job!==job||clock&&old.clock||old.anchor?.pawnId!==undefined||pawn.state==='working'&&(pawn.tend?.phase==='tend'||pawn.surgery?.phase==='work')||phaseBarPileChanged(pawn,job,phase!.piles))dirty.push(index);
       }
       this.stats.phaseRows+=dirty.length;this.stats.phaseSkipped+=world.pawns.length-dirty.length;
     }else for(let i=0;i<world.pawns.length;i++)dirty.push(i);
@@ -126,6 +152,21 @@ export class ActionFeedbackLayer {
     // Retain only resources required by visible work counters. Building the
     // simulation's whole-map spatial index on each render snapshot cost ~1 ms
     // at 100 colonists; this linear capture avoids thousands of map entries.
+    const cache:FullBarLookup=retained??{world,lookup,knownCells:new Set<number>(),knownIds:new Set<number>()};
+    if(lookup.resourceById){
+      const cells=(lookup.resourceCells??=new Map()) as Map<number,World['resources'][number]>;
+      for(let i=0;i<dirty.length;i++){
+        const pawn=world.pawns[dirty[i]!]!;
+        if(pawn.state!=='working'||pawn.jobId===null)continue;
+        const job=lookup.jobs.get(pawn.jobId);
+        if(!job||job.clearance||job.tree?.kind==='extract'||job.kind!=='cut'&&job.kind!=='harvest')continue;
+        const cell=job.z*world.width+job.x;
+        if(cache.knownCells.has(cell))continue;
+        cache.knownCells.add(cell);
+        const resource=this.resourceCells.at(cell);
+        if(resource)cells.set(cell,resource);
+      }
+    }else{
     const cells=new Set<number>(),ids=new Set<number>();
     for(const index of dirty){const pawn=world.pawns[index]!;if(pawn.state==='working'&&pawn.jobId!==null){
       const job=lookup.jobs!.get(pawn.jobId);if(!job)continue;
@@ -145,7 +186,8 @@ export class ActionFeedbackLayer {
       if(!cells.size&&!ids.size)break;
     }
     lookup.resourceCells=resourceCells;lookup.resources=resources;
-    const cache:FullBarLookup=retained??{world,lookup,knownCells:new Set<number>(),knownIds:new Set<number>()};for(const cell of requestedCells)cache.knownCells.add(cell);for(const id of requestedIds)cache.knownIds.add(id);
+    for(const cell of requestedCells)cache.knownCells.add(cell);for(const id of requestedIds)cache.knownIds.add(id);
+    }
     let changed=false,anchorChanged=false,active=sparse?this.stats.activeBars:0,pawnIndices:Map<number,number>|undefined;
     for(const index of dirty){const pawn=world.pawns[index]!;
       const progress=actionProgress(world,pawn,lookup),fraction=Math.fround(progress?.fraction??0),visible=progress?1:0;
@@ -153,7 +195,7 @@ export class ActionFeedbackLayer {
       if(visible)active++;
       if(action.getX(index)!==fraction||action.getY(index)!==visible){action.setXY(index,fraction,visible);changed=true;}
       const anchor=progress?actionProgressAnchor(world,pawn,progress,lookup):undefined;
-      if(rows){const job=pawn.jobId===null?undefined:lookup.jobs?.get(pawn.jobId);rows[index]={pawn,job,anchor,pileIds:phaseBarPileIds(pawn,job),clock:pawn.state==='working'&&job?.kind==='cut'};}
+      if(rows){const job=pawn.jobId===null?undefined:lookup.jobs?.get(pawn.jobId);rows[index]={pawn,job,anchor,clock:pawn.state==='working'&&job?.kind==='cut'};}
       let x=anchor?.target?.x??0,z=anchor?.target?.z??0;
       if(anchor?.pawnId!==undefined){
         pawnIndices??=new Map(world.pawns.map((p,i)=>[p.id,i]));
@@ -178,10 +220,14 @@ export class ActionFeedbackLayer {
 
   /** Same progress/anchor arithmetic and presentation clock, with the Full's
    * immutable section lookups retained across actual native frontier edits. */
-  updatePhase297(base:World,view:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath:boolean,humans:ReadonlySet<number>,piles:ReadonlyMap<number,Readonly<World['piles'][number]>|null>,jobs?:ReadonlyMap<number,Job>):void {
+  updatePhase297(base:World,view:World,selected:ReadonlySet<number>,source:THREE.InstancedBufferGeometry,externalPath:boolean,humans:ReadonlySet<number>,piles:ReadonlyMap<number,Readonly<World['piles'][number]>|null>,jobs?:ReadonlyMap<number,Job>,pileDirectory?:ResidentCollectionDirectory379):void {
     const cache=this.fullLookup297;if(!cache||cache.world!==base||!isActorPlaybackWorld435(base)||!phaseBarStatic(base,view)){this.update(view,selected,source,externalPath);return;}
     const native=!!(cache.rows&&readSnapshotChanges(base,base)!==undefined&&isActorPlaybackWorld435(view)&&Object.isFrozen(view.pawns)&&phaseBarStatic(base,view)&&view.pawns.length===cache.rows.length&&view.pawns.every((p,i)=>p.id===cache.rows![i]!.pawn.id));
     const lookup=cache.lookup;lookup.sowingWorld=base;
+    // A phase may have appended or removed stacks since its Full. Its own
+    // directory resolves the actual view, including all prior pose phases.
+    const directory=native?(view.piles===base.piles?readResidentCollectionDirectory379(base,'piles'):pileDirectory):undefined;
+    lookup.pileById=directory?lookupRow(view.piles,directory):undefined;
     if(lookup.pawns){const map=lookup.pawns as Map<number,World['pawns'][number]>;if(native){for(let i=0;i<view.pawns.length;i++){const p=view.pawns[i]!;if(p!==cache.rows![i]!.pawn)map.set(p.id,p);}}else for(const p of view.pawns)map.set(p.id,p);}
     if(lookup.piles){const map=lookup.piles as Map<number,World['piles'][number]>;for(const [id,pile]of piles){if(pile)map.set(id,pile as World['piles'][number]);else map.delete(id);}}
     this.fullLookup297=undefined;this.phaseLookup297=cache;this.phaseJobs297=jobs;this.phaseDirty297=native?{humans,piles}:undefined;
@@ -303,6 +349,8 @@ export class ActionFeedbackLayer {
   }
 
   dispose():void {
+    this.fullLookup297=undefined;
+    this.resourceCells=new ActionBarResourceCells();
     this.bars.geometry.dispose();this.bars.material.dispose();
     this.path.geometry.dispose();this.path.material.dispose();
     this.group.clear();

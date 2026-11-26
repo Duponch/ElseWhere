@@ -28,6 +28,18 @@ function signature(canvas:RecordingCanvas):string{
  return createHash('sha256').update(JSON.stringify(canvas.commands.map(command=>({name:command.name,args:command.args.map(normalize)})))).digest('hex');
 }
 const dispose=(material:ReturnType<typeof createReferencePaintMaterial>)=>{for(const map of [material.map,material.alphaMap,material.bumpMap])map?.dispose();material.dispose();};
+it('issues the same pigment and relief strokes and advances the same seed on worker canvases',()=>{
+ const paint=()=>{
+  const painter=new GouacheCardboardPainter();painter.seed=9931;
+  const material=createReferencePaintMaterial(painter,{baseColor:'#94725a',strokeCount:2});
+  const result=[painter.seed,...[material.map!,material.bumpMap!].map(map=>signature(map.image as unknown as RecordingCanvas))];
+  dispose(material);return result;
+ };
+ const expected=paint();
+ vi.stubGlobal('document',undefined);
+ vi.stubGlobal('OffscreenCanvas',RecordingCanvas);
+ expect(paint()).toEqual(expected);
+});
 beforeEach(()=>{canvases.length=0;vi.stubGlobal('document',{createElement:(kind:string)=>{if(kind!=='canvas')throw Error('Unexpected DOM allocation');const canvas=new RecordingCanvas();canvases.push(canvas);return canvas;}});});
 afterEach(()=>vi.unstubAllGlobals());
 

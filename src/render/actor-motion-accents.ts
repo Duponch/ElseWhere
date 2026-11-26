@@ -11,6 +11,10 @@
  * tick here: 0.32 s for a lunge at x1). The offsets of an actor add up and are
  * capped at 0.35, as in JitterHandler.AddOffset. `core` below is the
  * presentation playhead in Core ticks (MotionTimeline.tick x 10). */
+import type {World} from '../sim/types';
+import type {CoreActorScene297} from '../bridge/core-phase-projection-297';
+import {isActorPlaybackWorld435} from './ActorPlayback435';
+
 export const MELEE_LUNGE=.35;
 export const MELEE_HIT_RECOIL=.17;
 export const JITTER_DROP_PER_TICK=.018;
@@ -26,6 +30,48 @@ export function joltRemaining(distance:number,elapsedTicks:number):number {
 type Recoil={atCore:number;dx:number;dz:number};
 type Strike={atCore:number;targetId:number|null;outcome:'hit'|'miss'|'dodge';structure?:unknown}|null|undefined;
 
+type Attacker={readonly id:number;readonly x:number;readonly z:number;readonly strike:NonNullable<Strike>};
+type Actor={readonly id:number;readonly x:number;readonly z:number};
+const noAttackers:readonly Attacker[]=Object.freeze([]);
+const meleeStrike=(a:Actor&{melee?:{strike?:Strike}|null})=>a.melee?.strike;
+const animalStrike=(a:Actor&{strike?:Strike})=>a.strike;
+
+/** A Full or phase replaces its immutable actor collection on a write. The
+ * two victim trackers consume the same ordered attackers but each retains
+ * its own deduplication, target resolution, wakeups and recoil lifetime. */
+export class ConfirmedStrikeRosters {
+  private readonly melee=new WeakMap<object,readonly Attacker[]>();
+  private readonly wildlife=new WeakMap<object,readonly Attacker[]>();
+  private humans=noAttackers;
+  private animals=noAttackers;
+  private mechs=noAttackers;
+  private combined=noAttackers;
+
+  private collect<T extends Actor>(rows:readonly T[]|undefined,cache:WeakMap<object,readonly Attacker[]>,strikeOf:(row:T)=>Strike):readonly Attacker[]{
+    if(!rows)return noAttackers;
+    const known=cache.get(rows);if(known)return known;
+    let entries:Attacker[]|undefined;
+    for(let i=0;i<rows.length;i++){
+      const actor=rows[i]!,strike=strikeOf(actor);
+      if(strike)(entries??=[]).push(Object.freeze({id:actor.id,x:actor.x,z:actor.z,strike}));
+    }
+    const found=entries?Object.freeze(entries):noAttackers;
+    cache.set(rows,found);return found;
+  }
+
+  read(world:World,scene?:CoreActorScene297):readonly Attacker[]|undefined {
+    if(!isActorPlaybackWorld435(world))return;
+    const humans=scene?.humans??world.pawns,animals=scene?.animals??world.wildlife?.animals,mechs=world.mechanoids;
+    if(!Object.isFrozen(humans)||animals&&!Object.isFrozen(animals)||mechs&&!Object.isFrozen(mechs))return;
+    const h=this.collect(humans,this.melee,meleeStrike),a=this.collect(animals,this.wildlife,animalStrike),m=this.collect(mechs,this.melee,meleeStrike);
+    if(h!==this.humans||a!==this.animals||m!==this.mechs){
+      this.humans=h;this.animals=a;this.mechs=m;
+      this.combined=!a.length&&!m.length?h:!h.length&&!m.length?a:!h.length&&!a.length?m:Object.freeze([...h,...a,...m]);
+    }
+    return this.combined;
+  }
+}
+
 /** Victims of confirmed melee hits. An attacker's strike is registered once
  * (by its confirmed Core time); the push direction is the attacker-to-victim
  * cell vector, as in RimWorld (DamageInfo angle of a melee blow). */
@@ -35,6 +81,9 @@ export class MeleeRecoilTracker {
   private readonly lifeCore=Math.ceil(MELEE_HIT_RECOIL/JITTER_DROP_PER_TICK)+1;
   clear():void {this.seen.clear();this.byVictim.clear();}
   get size():number {return this.byVictim.size;}
+  observeRoster(attackers:readonly Attacker[],victim:(id:number)=>{x:number;z:number}|undefined,wake:(id:number|undefined)=>void):void {
+    for(let i=0;i<attackers.length;i++){const a=attackers[i]!;wake(this.observe(a.id,a.strike,a.x,a.z,victim));}
+  }
   /** A Full may contain a confirmed hit ahead of the buffered playhead. */
   hasPending(victimId:number,core:number):boolean {const recoil=this.byVictim.get(victimId);return!!recoil&&core<recoil.atCore;}
   /** `victim` is resolved by the caller only for a strike not seen yet. */

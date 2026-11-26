@@ -29,6 +29,9 @@ export interface ActionProgress {
 }
 
 export interface ActionLookup {
+  /** Lookups from the adopted immutable Full. Public worlds keep their
+   * existing array and snapshot-map semantics. */
+  resourceById?:(id:number)=>Resource|undefined;
   /** Closed phase presentation may share the authentic Full's unchanged
    * growing-zone derivation for sowing. Other job clocks keep the phase World. */
   sowingWorld?:World;
@@ -103,11 +106,11 @@ export function actionProgress(world:World,pawn:Pawn,lookup?:ActionLookup):Actio
     const job=candidate?.status==='active'&&candidate.reservedBy===pawn.id?candidate:undefined;
     if(job){
       if(job.clearance){
-        if(lookup&&!lookup.resources)lookup.resources=new Map(world.resources.map(resource=>[resource.id,resource]));
-        const resource=lookup?.resources?.get(job.clearance.resourceId)??world.resources.find(r=>r.id===job.clearance!.resourceId);
+        if(lookup&&!lookup.resources&&!lookup.resourceById)lookup.resources=new Map(world.resources.map(resource=>[resource.id,resource]));
+        const resource=lookup?.resourceById?lookup.resourceById(job.clearance.resourceId):lookup?.resources?.get(job.clearance.resourceId)??world.resources.find(r=>r.id===job.clearance!.resourceId);
         if(resource)return measured('clearing',workProgress(job.clearance),clearingDuration(resource));}
       if(job.tree?.kind==='extract') {
-        const resource=lookup?.resources?.get(job.tree.resourceId)??world.resources.find(r=>r.id===job.tree!.resourceId);
+        const resource=lookup?.resourceById?lookup.resourceById(job.tree.resourceId):lookup?.resources?.get(job.tree.resourceId)??world.resources.find(r=>r.id===job.tree!.resourceId);
         const definition=resource&&extractTreeDefinition(resource);
         return definition?measured('job',workProgress(job),definition.workCore):undefined;
       }

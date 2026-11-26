@@ -11,7 +11,8 @@ import {isDoubleBedKind} from '../src/sim/bed-kinds.ts';
 import {PawnLayer,bedHeadEnd} from '../src/render/PawnLayer';
 import {WildlifeLayer} from '../src/render/WildlifeLayer';
 import {MotionTimeline} from '../src/render/MotionTimeline';
-import {ARRIVAL_TAIL_END,MELEE_LUNGE,MELEE_HIT_RECOIL,JITTER_DROP_PER_TICK,arrivalTailPhase,arrivalTailTarget} from '../src/render/actor-motion-accents';
+import {ARRIVAL_TAIL_END,MELEE_LUNGE,MELEE_HIT_RECOIL,JITTER_DROP_PER_TICK,ConfirmedStrikeRosters,MeleeRecoilTracker,arrivalTailPhase,arrivalTailTarget} from '../src/render/actor-motion-accents';
+import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
 import {origamiHumanGeometry,ORIGAMI_HUMAN_BIND} from '../src/render/origami/human-geometry';
 import {PAWN_MODEL_SCALE} from '../src/world/scale';
 import {WORK_POSE} from '../src/render/work-presentation';
@@ -21,6 +22,49 @@ import type {PresentationSegment} from '../src/sim/travel-timing.ts';
 
 type Attr=THREE.BufferAttribute|THREE.InterleavedBufferAttribute;
 const humanStreams=(layer:PawnLayer)=>{const g=layer.feedbackSource!;return {from:g.getAttribute('aFrom') as Attr,motion:g.getAttribute('aMotion') as Attr};};
+
+test('both victim trackers see the sparse confirmed strikers in source order through quiet, attack, replacement and retirement',()=>{
+ const rosters=new ConfirmedStrikeRosters(),base=createWorld(99,32,32);
+ const hit=Object.freeze({atCore:7,targetId:321,outcome:'hit' as const});
+ const rows=(...actors:object[])=>Object.freeze(actors.map(actor=>Object.freeze(actor)));
+ const world=(pawns:readonly object[],animals:readonly object[],mechs:readonly object[])=>{
+   const w={...base,pawns,wildlife:{...base.wildlife,animals},mechanoids:mechs} as unknown as World;
+   ownActorPlaybackWorld435(w,true);return w;
+ };
+ const idle=rows({id:1,x:0,z:0}),quiet=world(idle,idle,idle);
+ const quietList=rosters.read(quiet);expect(quietList).toEqual([]);
+ const humans=rows({id:9,x:0,z:0,melee:{strike:hit}},{id:4,x:5,z:2,melee:{strike:hit}});
+ const animals=rows({id:6,x:1,z:1,strike:hit}),mechs=rows({id:2,x:2,z:0,melee:{strike:hit}});
+ const fighting=world(humans,animals,mechs),list=rosters.read(fighting)!;
+ expect(list.map(a=>a.id)).toEqual([9,4,6,2]);expect(rosters.read(fighting)).toBe(list);
+ const literal=new MeleeRecoilTracker(),sparse=new MeleeRecoilTracker(),victim=()=>({x:3,z:2});
+ const a:number[]=[],b:number[]=[];
+ for(let i=0;i<2;i++){
+   sparse.observeRoster(list,victim,id=>{if(id!==undefined)a.push(id);});
+   for(const [id,x,z]of [[9,0,0],[4,5,2],[6,1,1],[2,2,0]]){const target=literal.observe(id!,hit,x!,z!,victim);if(target!==undefined)b.push(target);}
+ }
+ expect(a).toEqual(b);expect(a).toHaveLength(4);
+ const actual={x:0,z:0},expected={x:0,z:0};sparse.add(321,7,actual);literal.add(321,7,expected);expect(actual).toEqual(expected);
+ const next=world(rows({id:9,x:1,z:1,melee:{strike:{...hit,atCore:8}}}),animals,mechs);
+ expect(rosters.read(next)!.map(a=>[a.id,a.strike.atCore])).toEqual([[9,8],[6,7],[2,7]]);
+ expect(rosters.read(quiet)).toBe(quietList);
+});
+
+test('a public roster can gain an in-place melee strike after an initially quiet image',()=>{
+ const w=deconstructionCamp(2,32),rosters=new ConfirmedStrikeRosters(),pawns=new PawnLayer(),tl=new MotionTimeline();
+ const [attacker,target]=w.pawns;
+ Object.assign(attacker!,{x:10,z:10,state:'idle',motion:null,melee:null});Object.assign(target!,{x:11,z:10,state:'idle',motion:null});
+ tl.tick=w.tick;
+ try {
+   pawns.update(w,1,true);pawns.updateTravel(w,tl,1/60,1,undefined,rosters);
+   const attribute=pawns.feedbackSource!.getAttribute('aFrom'),before=attribute.getX(1);
+   expect(rosters.read(w)).toBeUndefined();
+   attacker!.melee={order:null,strike:{targetId:target!.id,atCore:w.tick*10,untilCore:w.tick*10+45,tool:'left-fist',outcome:'hit'}};
+   pawns.updateTravel(w,tl,1/60,1,undefined,rosters);
+   expect(attribute.getX(1)-before).toBeCloseTo(MELEE_HIT_RECOIL,4);
+   ownActorPlaybackWorld435(w,true);expect(rosters.read(w)).toBeUndefined();
+ }finally{ownActorPlaybackWorld435(w,false);pawns.dispose();}
+});
 
 /** Real Engine walk of one drafted colonist, painted at 60 frames per second
  * at x1: each frame commits one Core tick (60 Core ticks per second). */

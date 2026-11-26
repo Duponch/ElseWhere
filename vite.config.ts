@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { buildInputs } from './src/ui/developer-pages.ts';
 import { devAudioGainOffsets } from './scripts/vite-dev-audio-gain-offsets.ts';
+import { threeBindingKey } from './scripts/vite-three-binding-key.ts';
+
+// Keep a comparable baseline available for WebGPU profiling.
+const bindingKeyPlugins=()=>process.env.LISIERE_THREE_BINDING_KEY==='0'?[]:[threeBindingKey()];
 
 export default defineConfig(({ mode }) => ({
   // Temporary test output and the relocated host cache contain tens of thousands
@@ -9,7 +13,9 @@ export default defineConfig(({ mode }) => ({
   // The game and its developer pages (src/ui/developer-pages.ts decides which are published).
   build: { target: 'es2023', rolldownOptions: { input: buildInputs(mode) } },
   // Dev server only: « Enregistrer » of the sounds page writes the gain offsets file.
-  plugins: [devAudioGainOffsets()],
+  plugins: [devAudioGainOffsets(), ...bindingKeyPlugins()],
+  worker: { plugins: bindingKeyPlugins },
+  optimizeDeps: { rolldownOptions: { plugins: bindingKeyPlugins() } },
   resolve: { alias: [{ find: /^three$/, replacement: 'three/webgpu' }] },
   test: {
     include: ['tests/**/*.test.ts'],

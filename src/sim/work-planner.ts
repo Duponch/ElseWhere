@@ -58,7 +58,7 @@ import { turretReloadCapacity,wantsTurretReload,turretReloadPawnReason } from '.
 import { fuelCapacity, wantsFuel, fuelItem, refuelable,isFueledBuilding } from './fuel.ts';
 import { mayImproveStorage } from './idle-logistics.ts';
 import { asideCapacity, findAsideDestination } from './haul-aside.ts';
-import { storageCapacity,createGroundCapacityReader } from './ground-placement.ts';
+import { storageCapacity,createGroundCapacityReader,type StorageGeometry } from './ground-placement.ts';
 import { legacyItem, type ItemId } from './items.ts';
 import { storageConditionKey } from './storage-condition.ts';
 import { constructionCapacity, constructionRecipe, deliveredMaterial } from './construction-materials.ts';
@@ -110,7 +110,7 @@ export function destinationCell(world: World, destination: HaulDestination): (Ce
   if (destination.type === 'fuel'||destination.type==='turret'||destination.type==='hopper'||destination.type==='fermenting-barrel') return structureById(world,destination.structureId) ?? null;
   return destination.type === 'job' ? world.jobs.find(job => job.id === destination.jobId) ?? null : storageCellById(world,destination.stockpileId) ?? null;
 }
-export function destinationCapacity(world: World, destination: HaulDestination, kind: MaterialKind, exceptPawn?: number, subject: ItemId|MaterialPile = legacyItem(kind)): number {
+export function destinationCapacity(world: World, destination: HaulDestination, kind: MaterialKind, exceptPawn?: number, subject: ItemId|MaterialPile = legacyItem(kind), storageGeometry?:StorageGeometry): number {
   const item=typeof subject==='string'?subject:subject.item;
   if(destination.type==='fermenting-barrel')return item==='wort'?barrelFreeCapacity265(world,destination.structureId,exceptPawn):0;
   if(destination.type==='hopper')return hopperCapacity(world,destination.structureId,item,exceptPawn);
@@ -123,7 +123,7 @@ export function destinationCapacity(world: World, destination: HaulDestination, 
     return job ? constructionCapacity(world,job,item,exceptPawn) : 0;
   }
   const zone = storageCellById(world,destination.stockpileId);
-  return zone ? storageCapacity(world, zone, subject, exceptPawn) : 0;
+  return zone ? storageCapacity(world, zone, subject, exceptPawn, storageGeometry) : 0;
 }
 export function destinationValid(world: World, pawn: Pawn): boolean {
   const task = pawn.haul; if (!task) return false;

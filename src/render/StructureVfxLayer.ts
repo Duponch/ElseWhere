@@ -17,7 +17,6 @@ import { WORLD_SCALE } from '../world/scale.ts';
 import { BoxMesh, configureBoxMaterial } from './BoxMesh.ts';
 import { groundFireSmokeProfile } from './fire-paper.ts';
 import type { AnimationDetail } from './AnimationDetail';
-import { FxAnimationCache,fxBillboard,fxFract,fxSmoothstep } from './FxAnimationCache';
 
 type Glow = { x:number; y:number; z:number; sx:number; sy:number; sz:number; ry:number; color:number };
 type Smoke = { x:number; y:number; z:number; seed:number; size:number; opacityBias:number; rise:number };
@@ -84,20 +83,20 @@ export class StructureVfxLayer {
   private readonly chunkSphere=new THREE.Sphere(new THREE.Vector3(),1);
   private readonly firePoint=new THREE.Vector3();
   private readonly cameraPoint=new THREE.Vector3();
-  private readonly glowCache:FxAnimationCache;
-  private readonly smokeCache:FxAnimationCache;
   private glowRecords:Glow[]=[];
   private smokeRecords:(Smoke&{stretch:number})[]=[];
   private glowDrawn:number[]=[];
   private smokeDrawn:number[]=[];
+  private visibility:'all'|'none'|'perspective'|undefined;
+  private visibilityProjection=0;
+  private visibilityFarPixels=0;
+  private readonly visibilityDepth=new THREE.Vector4();
 
   constructor(private readonly detail?:AnimationDetail){
-    this.glowCache=new FxAnimationCache(2,detail);this.smokeCache=new FxAnimationCache(6,detail);
     configureBoxMaterial(this.glowMaterial);
     const point=attribute('boxMatrix3','vec4');
     const flutter=sin(this.tick.mul(2*Math.PI/18).add(point.x.mul(2.1)).add(point.z.mul(1.7))).mul(.12).add(.91);
-    const sampledFlutter=this.glowCache.cachedVarying(()=>this.glowCache.cell(1).x);
-    this.glowMaterial.colorNode=attribute('boxColor','vec3').mul(this.glowCache.choose(()=>flutter,()=>sampledFlutter,float(0)));
+    this.glowMaterial.colorNode=attribute('boxColor','vec3').mul(flutter);
     this.glow=new BoxMesh(this.boxBase,this.glowMaterial,128);
     this.glow.geometry.setAttribute('fxSlot',new THREE.InstancedBufferAttribute(new Float32Array(128),1));
     this.glow.name='Hot workpieces, powered indicators and breakdown marks — resident GPU batch';
@@ -105,7 +104,7 @@ export class StructureVfxLayer {
 
     const smokePosition=attribute('smokePosition','vec4'),smokeShape=attribute('smokeShape','vec4');
     const phase=this.tick.div(30).add(smokePosition.w).fract();
-    this.smokeMaterial.positionNode=this.smokeCache.choose(()=>Fn(()=>{
+    this.smokeMaterial.positionNode=Fn(()=>{
       const drift=sin(this.tick.mul(2*Math.PI/80).add(smokePosition.w.mul(19))).mul(.08).mul(phase);
       const downwind=phase.mul(phase).mul(this.windStrength).mul(smokeShape.z).mul(.42);
       const center=vec3(
@@ -122,7 +121,7 @@ export class StructureVfxLayer {
       const breadth=smokeShape.x.mul(float(.59).add(phase.mul(1.04))).mul(.72);
       return center.add(right.mul(positionLocal.x.mul(breadth)))
         .add(up.mul(positionLocal.y.mul(breadth).mul(smokeShape.w)));
-    })(),()=>this.smokeCache.affine(positionLocal));
+    })();
     const pixel=uv().sub(vec2(.5,.5)),radius=pixel.length();
     const seed=varying(smokePosition.w);
     // Round paper puffs: removing the angular lobes also removes the star-like
@@ -143,8 +142,7 @@ export class StructureVfxLayer {
     this.smokeMaterial.colorNode=varying(smokeShape.y).greaterThan(.7).select(smokePaint,steam);
     const birth=smoothstep(0,.17,phase),death=float(1).sub(smoothstep(.68,1,phase));
     const density=sin(smokePosition.w.mul(39.7)).mul(.055).add(smokeShape.y.mul(.07)).add(.31);
-    const sampledOpacity=this.smokeCache.cachedVarying(()=>this.smokeCache.cell(5).x);
-    this.smokeMaterial.opacityNode=edge.mul(this.smokeCache.choose(()=>birth.mul(death).mul(density),()=>sampledOpacity,float(0)));
+    this.smokeMaterial.opacityNode=edge.mul(birth.mul(death).mul(density));
     this.smoke=new THREE.Mesh(this.smokeGeometry(),this.smokeMaterial);
     this.smoke.name='Steam and smoke — resident GPU billboards';
     this.smoke.castShadow=false;this.smoke.receiveShadow=false;this.smoke.frustumCulled=false;this.smoke.renderOrder=3;
@@ -390,7 +388,7 @@ export class StructureVfxLayer {
       groundFires.push({id:fire.id,x:fire.x,z:fire.z,size:fire.size});
     }
     const key=tokens.join('|');if(key===this.key)return;this.key=key;
-    this.glowRecords=glow;this.glowDrawn=[];this.glowCache.reset();
+    this.glowRecords=glow;this.glowDrawn=[];
     this.structuralSmoke=smoke;
     const chunks=new Map<string,FireChunk>();
     for(const fire of groundFires){
@@ -434,7 +432,7 @@ export class StructureVfxLayer {
     if(count){positions.needsUpdate=true;shapes.needsUpdate=true;}
     // Own encoded primitive rows, independent of World and of compact draw
     // slots. Fire selection/birth/retraction is reconciled immediately.
-    this.smokeRecords=[];this.smokeDrawn=[];this.smokeCache.reset();
+    this.smokeRecords=[];this.smokeDrawn=[];this.visibility=undefined;
     for(let row=0;row<count;row++)this.smokeRecords.push({x:positions.getX(row),y:positions.getY(row),z:positions.getZ(row),seed:positions.getW(row),size:shapes.getX(row),opacityBias:shapes.getY(row),rise:shapes.getZ(row),stretch:shapes.getW(row)});
   }
 
@@ -486,35 +484,42 @@ export class StructureVfxLayer {
    * and GPU float precision stays stable after millions of simulation ticks. */
   present(tick:number):void {
     this.tick.value=((tick%7200)+7200)%7200;
-    if(!this.detail)return;
+    const detail=this.detail;if(!detail)return;
     const glowGeometry=this.glow.geometry;
     if(!glowGeometry.hasAttribute('fxSlot'))glowGeometry.setAttribute('fxSlot',new THREE.InstancedBufferAttribute(new Float32Array(this.glow.instanceMatrix.count),1));
+    // Near and middle emitters run the same live shader. Only the membership
+    // of the far group changes these two draw streams. In the orthographic
+    // view every fixed emitter has the same apparent scale; in perspective
+    // classification depends on the exact view-depth plane and projection.
+    const mode=!detail.settings.enabled?'all':detail.perspective.value>.5?'perspective':detail.classify(0,0,0)===2?'none':'all';
+    const projection=detail.projectionScale.value,far=detail.settings.farPixels,depth=detail.viewDepth.value;
+    if(this.visibility!==mode||mode==='perspective'&&
+      (this.visibilityProjection!==projection||this.visibilityFarPixels!==far||!this.visibilityDepth.equals(depth))){
+      this.projectEmitters(mode,detail);
+      this.visibility=mode;
+      if(mode==='perspective'){this.visibilityProjection=projection;this.visibilityFarPixels=far;this.visibilityDepth.copy(depth);}
+    }
+    this.glow.activeCount=this.glowDrawn.length;
+    this.smoke.geometry.instanceCount=this.smokeDrawn.length;this.smoke.visible=this.smokeDrawn.length>0;
+  }
+
+  private projectEmitters(mode:'all'|'none'|'perspective',detail:AnimationDetail):void {
+    if(mode==='none'){this.glowDrawn.length=0;this.smokeDrawn.length=0;return;}
+    const glowGeometry=this.glow.geometry;
     const glowSlots=glowGeometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;let count=0,dirty=false;
     for(let row=0;row<this.glowRecords.length;row++){
       const item=this.glowRecords[row]!;
-      if(this.glowCache.sampleDue(row,item.x,item.y,item.z)){
-        this.glowCache.set(row,1,Math.sin(this.tick.value*2*Math.PI/18+item.x*2.1+item.z*1.7)*.12+.91);
-      }
-      if(this.glowCache.commitSample(row)===2)continue;
+      if(mode==='perspective'&&detail.classify(item.x,item.y,item.z)===2)continue;
       if(this.glowDrawn[count]!==row){object.position.set(item.x,item.y,item.z);object.rotation.set(0,item.ry,0);object.scale.set(item.sx,item.sy,item.sz);object.updateMatrix();this.glow.setMatrixAt(count,object.matrix);this.glow.setColorAt(count,color.setHex(item.color));glowSlots.setX(count,row);this.glowDrawn[count]=row;dirty=true;}count++;
     }
-    this.glowDrawn.length=count;this.glow.activeCount=count;if(dirty){this.glow.instanceMatrix.needsUpdate=this.glow.colorBuffer.needsUpdate=glowSlots.needsUpdate=true;this.glow.computeBoundingSphere();}this.glowCache.flush();
+    this.glowDrawn.length=count;this.glow.activeCount=count;if(dirty){this.glow.instanceMatrix.needsUpdate=this.glow.colorBuffer.needsUpdate=glowSlots.needsUpdate=true;this.glow.computeBoundingSphere();}
     const geometry=this.smoke.geometry,positions=geometry.getAttribute('smokePosition') as THREE.InstancedBufferAttribute,shapes=geometry.getAttribute('smokeShape') as THREE.InstancedBufferAttribute,slots=geometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;count=0;dirty=false;
     for(let row=0;row<this.smokeRecords.length;row++){
       const item=this.smokeRecords[row]!;
-      if(this.smokeCache.sampleDue(row,item.x,item.y,item.z)){
-        const phase=fxFract(this.tick.value/30+item.seed),drift=Math.sin(this.tick.value*2*Math.PI/80+item.seed*19)*.08*phase,downwind=phase*phase*this.windStrength.value*item.rise*.42;
-        const x=item.x+this.windDirection.value.x*downwind-this.windDirection.value.y*drift,y=item.y+phase*item.rise,z=item.z+this.windDirection.value.y*downwind+this.windDirection.value.x*drift;
-        const basis=fxBillboard(x,y,z,this.cameraPoint),breadth=item.size*(.59+phase*1.04)*.72;
-        this.smokeCache.set(row,1,basis.right[0]*breadth,basis.right[1]*breadth,basis.right[2]*breadth);
-        this.smokeCache.set(row,2,basis.up[0]*breadth*item.stretch,basis.up[1]*breadth*item.stretch,basis.up[2]*breadth*item.stretch);
-        this.smokeCache.set(row,3,0,0,0);this.smokeCache.set(row,4,x,y,z);
-        this.smokeCache.set(row,5,fxSmoothstep(0,.17,phase)*(1-fxSmoothstep(.68,1,phase))*(Math.sin(item.seed*39.7)*.055+item.opacityBias*.07+.31));
-      }
-      if(this.smokeCache.commitSample(row)===2)continue;
+      if(mode==='perspective'&&detail.classify(item.x,item.y,item.z)===2)continue;
       if(this.smokeDrawn[count]!==row){positions.setXYZW(count,item.x,item.y,item.z,item.seed);shapes.setXYZW(count,item.size,item.opacityBias,item.rise,item.stretch);slots.setX(count,row);this.smokeDrawn[count]=row;dirty=true;}count++;
     }
-    this.smokeDrawn.length=count;if(dirty)positions.needsUpdate=shapes.needsUpdate=slots.needsUpdate=true;geometry.instanceCount=count;this.smoke.visible=count>0;this.smokeCache.flush();
+    this.smokeDrawn.length=count;if(dirty)positions.needsUpdate=shapes.needsUpdate=slots.needsUpdate=true;
   }
   setWind(strength:number,directionX:number,directionZ:number):void {
     this.windStrength.value=Number.isFinite(strength)?Math.max(0,Math.min(2,strength)):0;
@@ -529,5 +534,5 @@ export class StructureVfxLayer {
     if(!before.smoke){const position=this.smoke.geometry.getAttribute('smokePosition') as THREE.InstancedBufferAttribute,shape=this.smoke.geometry.getAttribute('smokeShape') as THREE.InstancedBufferAttribute;position.setXYZW(0,0,-100,0,0);shape.setXYZW(0,.001,0,0,1);position.needsUpdate=shape.needsUpdate=true;this.smoke.geometry.instanceCount=1;this.smoke.visible=true;}
     return ()=>{this.group.visible=before.group;this.glow.activeCount=before.glow;this.glow.frustumCulled=before.glowCull;this.smoke.geometry.instanceCount=before.smoke;this.smoke.visible=before.smokeVisible;};
   }
-  dispose():void {this.glowCache.dispose();this.smokeCache.dispose();this.glowRecords=[];this.smokeRecords=[];this.group.clear();this.glow.dispose();this.smoke.geometry.dispose();this.boxBase.dispose();this.smokeBase.dispose();this.glowMaterial.dispose();this.smokeMaterial.dispose();}
+  dispose():void {this.glowRecords=[];this.smokeRecords=[];this.group.clear();this.glow.dispose();this.smoke.geometry.dispose();this.boxBase.dispose();this.smokeBase.dispose();this.glowMaterial.dispose();this.smokeMaterial.dispose();}
 }

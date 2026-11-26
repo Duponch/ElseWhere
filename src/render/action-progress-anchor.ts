@@ -4,6 +4,8 @@ import type {ActionLookup,ActionProgress} from './action-feedback';
 
 /** Snapshot-only indices, shared by all visible bars. Nothing is cached on World. */
 export interface ActionAnchorLookup extends ActionLookup {
+  structureById?:(id:number)=>Structure|undefined;
+  pileById?:(id:number)=>MaterialPile|undefined;
   structures?:ReadonlyMap<number,Structure>;
   piles?:ReadonlyMap<number,MaterialPile>;
   pawns?:ReadonlyMap<number,Pawn>;
@@ -32,9 +34,9 @@ function center(structure:Structure):Cell {
  * MoteDualAttached's midpoint. MoteProgressBar applies -0.5 on map Z (+0.25
  * for a quality-bearing target). Existing counters/visibility stay authoritative. */
 export function actionProgressAnchor(world:World,pawn:Pawn,progress:ActionProgress,lookup:ActionAnchorLookup={}):ActionProgressAnchor {
-  const structure=(id:number|undefined)=>id===undefined?undefined:(lookup.structures??=byId(world.structures)).get(id);
-  const pile=(id:number|null|undefined)=>id==null?undefined:(lookup.piles??=byId(world.piles)).get(id);
-  const resource=(id:number):Resource|undefined=>(lookup.resources??=byId(world.resources)).get(id);
+  const structure=(id:number|undefined)=>id===undefined?undefined:lookup.structureById?lookup.structureById(id):(lookup.structures??=byId(world.structures)).get(id);
+  const pile=(id:number|null|undefined)=>id==null?undefined:lookup.pileById?lookup.pileById(id):(lookup.piles??=byId(world.piles)).get(id);
+  const resource=(id:number):Resource|undefined=>lookup.resourceById?lookup.resourceById(id):(lookup.resources??=byId(world.resources)).get(id);
   const building=(id:number|undefined)=>{const found=structure(id);return found?target(center(found),false,found.quality!==undefined):actor();};
   const groundPile=(id:number|null|undefined)=>{const found=pile(id);return target(found?.owner.type==='ground'?found.owner:undefined,false,!!(found?.apparel||found?.weapon));};
   const human=(id:number)=>{

@@ -17,16 +17,17 @@ export class ConfirmedTrackCursor435 {
  enabled=false;generation=0;
  readonly stats={reads:0,steps:0,restarts:0,configurations:0};
  configure(enabled:boolean,reset:boolean):void{if(reset||enabled!==this.enabled){this.cursors.clear();this.generation++;}this.enabled=enabled;this.stats.configurations++;}
- segment(tracks:ReadonlyMap<number,readonly PresentationSegment[]>,id:number,tick:number):PresentationSegment|undefined{
+ segment(tracks:ReadonlyMap<number,readonly PresentationSegment[]>,id:number,tick:number,boundary?:{next:number}):PresentationSegment|undefined{
+  if(boundary)boundary.next=Infinity;
   this.stats.reads++;const segments=tracks.get(id);if(!segments?.length){this.cursors.delete(id);return;}
-  if(!this.enabled){let current:PresentationSegment|undefined;for(const segment of segments){if(segment.start>tick)break;current=segment;}return current;}
+  if(!this.enabled){let current:PresentationSegment|undefined;for(const segment of segments){if(segment.start>tick)break;current=segment;}if(boundary){const cursor=this.cursors.get(id);if(cursor)boundary.next=segments[cursor.index+1]?.start??Infinity;}return current;}
   let cursor=this.cursors.get(id);if(!cursor||cursor.segments!==segments||tick<cursor.tick){cursor={segments,index:-1,tick};this.cursors.set(id,cursor);this.stats.restarts++;}
   while(cursor.index+1<segments.length&&segments[cursor.index+1]!.start<=tick){cursor.index++;this.stats.steps++;}cursor.tick=tick;
+  if(boundary)boundary.next=segments[cursor.index+1]?.start??Infinity;
   return cursor.index<0?undefined:segments[cursor.index];
  }
- boundary(tracks:ReadonlyMap<number,readonly PresentationSegment[]>,id:number,tick:number):{edge:PresentationSegment|undefined;next:number}{
-  const edge=this.segment(tracks,id,tick),cursor=this.cursors.get(id),segments=tracks.get(id);
-  return{edge,next:segments&&cursor?segments[cursor.index+1]?.start??Infinity:Infinity};
+ boundary(tracks:ReadonlyMap<number,readonly PresentationSegment[]>,id:number,tick:number,out={edge:undefined as PresentationSegment|undefined,next:Infinity}):{edge:PresentationSegment|undefined;next:number}{
+  out.edge=this.segment(tracks,id,tick,out);return out;
  }
 }
 
@@ -36,8 +37,8 @@ export interface ActorTimeline435 {
  playbackSegment435(id:number):PresentationSegment|undefined;
  readonly playbackOwned435?:boolean;
  readonly playbackRevision435?:number;
- playbackChanged435?(after:number):readonly number[]|undefined;
- playbackBoundary435?(id:number):{edge:PresentationSegment|undefined;next:number};
+ playbackChanged435?(after:number,borrow?:boolean):readonly number[]|undefined;
+ playbackBoundary435?(id:number,out?:{edge:PresentationSegment|undefined;next:number}):{edge:PresentationSegment|undefined;next:number};
 }
 type ActorSource={id:number;motion?:PresentationSegment|null};
 export interface PreparedActor435 {
@@ -59,6 +60,7 @@ export class ActorPlayback435<A extends ActorSource> {
  private pendingCount=0;
  private owned=false;
  private readonly indices435=new Map<number,number>();
+ private readonly frameBoundary435={edge:undefined as PresentationSegment|undefined,next:Infinity};
  private readonly ready435=new ActorSlotMask();
  private readonly dependents435=new ActorSlotMask();
  private readonly frame435=new ActorFrameSlots();
@@ -126,9 +128,11 @@ export class ActorPlayback435<A extends ActorSource> {
   this.scheduleActive435=false;
   if(!this.owned||!timeline?.playbackOwned435||!timeline.playbackBoundary435||!timeline.playbackChanged435||!Number.isFinite(tick)||!Number.isFinite(origin)){this.scheduleReset435=true;return;}
   const generation=timeline.playbackGeneration435,revision=timeline.playbackRevision435??0;
-  const changes=timeline.playbackChanged435(this.scheduleRevision435);
-  const reset=this.scheduleReset435||timeline!==this.scheduleTimeline435||generation!==this.scheduleGeneration435||origin!==this.scheduleOrigin435||tick<this.scheduleTick435||changes===undefined;
-  if(reset){this.boundaries435.clear();this.nextBoundary435.length=0;for(let i=0;i<this.slots.length;i++)this.ready435.add(i);}
+  const reset=this.scheduleReset435||timeline!==this.scheduleTimeline435||generation!==this.scheduleGeneration435||origin!==this.scheduleOrigin435||tick<this.scheduleTick435;
+  // Rebuilding already visits every actor. Even a large pending delivery
+  // burst has no changed-ID dependency on a reset, seek or failed frame.
+  const changes=reset?undefined:timeline.playbackChanged435(this.scheduleRevision435,true);
+  if(changes===undefined){this.boundaries435.clear();this.nextBoundary435.length=0;for(let i=0;i<this.slots.length;i++)this.ready435.add(i);}
   else for(let i=0;i<changes.length;i++){const index=this.indices435.get(changes[i]!);if(index!==undefined)this.ready435.add(index);}
   for(let event=this.boundaries435.peek();event&&event.at<=tick;event=this.boundaries435.peek()){
    this.boundaries435.pop();if(this.serial435[event.index]!==event.serial)continue;this.nextBoundary435[event.index]=Infinity;this.ready435.add(event.index);this.stats.boundaryWakes++;
@@ -139,7 +143,7 @@ export class ActorPlayback435<A extends ActorSource> {
  }
  select(index:number,timeline:ActorTimeline435|undefined,tick:number,origin:number):PreparedActor435|undefined{
   const row=this.slots[index];if(!row)throw new Error('Actor playback slot was not prepared at adoption.');
-  const boundary=this.scheduleActive435?timeline?.playbackBoundary435?.(row.id):undefined;
+  const boundary=this.scheduleActive435?timeline?.playbackBoundary435?.(row.id,this.frameBoundary435):undefined;
   const edge=(boundary?boundary.edge:timeline?.playbackSegment435(row.id))??row.fallback,phase=edge?(tick<edge.start?0:tick<edge.end?1:2):-1,generation=timeline?.playbackGeneration435??0;
   if(this.scheduleActive435){const next=Math.min(boundary?.next??Infinity,edge&&edge.start>tick?edge.start:Infinity,edge&&edge.end>tick?edge.end:Infinity);
    // Continuous carrier dependencies may visit the same edge hundreds of

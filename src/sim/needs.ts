@@ -13,7 +13,7 @@ import { resetTactics } from './tactics-state.ts';
 import type { Reachability } from './pathfinding.ts';
 import { interruptWork,retryInterruptedCargo } from './interrupted-cargo.ts';
 import { urgentMedicalTask } from './urgent-care.ts';
-import { reservedSource } from './materials.ts';
+import { createSourceReservationRead379, reservedSource } from './materials.ts';
 import { mealQuantity } from './items.ts';
 import { TICKS_PER_DAY } from './types.ts';
 import { processEating } from './eating.ts';
@@ -54,7 +54,10 @@ function tryFoodNeed(world:World,pawn:Pawn,context:NeedContext,foodBinge299=fals
  const allowed=selfAllowedFood(world,pawn);
  const topology=pawn.prisoner||hasPrisonBedMark379(world)?capturePrisonTopology(world):undefined;
  const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,foodBinge299);
- const sources=world.piles.filter(pile=>pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId)&&accessible(pile)&&pile.quantity>reservedSource(world,pile.id,pawn.id));
+ // The eligibility pass observes one decision before search, release or
+ // pickup can change an owner's claims. A later admission rechecks its pile.
+ const reserved=createSourceReservationRead379(world,undefined,pawn.id);
+ const sources=world.piles.filter(pile=>pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId)&&accessible(pile)&&pile.quantity>reserved(pile.id));
  const held=world.piles.find(pile=>pile.owner.type==='pawn'&&pile.owner.pawnId===pawn.id&&pile.kind==='food'&&selfFoodPermission299(pile,foodBinge299)&&allowed.includes(pile.item as FoodItemId));
  const pasteAvailable=pasteDispenserCandidates379(world).some(s=>s.kind==='nutrient-paste-dispenser'&&planPasteRequest(world,pawn,s,pawn,topology));
  if(!sources.length&&!held&&!pasteAvailable)return 'unavailable';

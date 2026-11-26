@@ -9,6 +9,7 @@ import * as contacts from '../src/bridge/actor-phase-dependencies-297';
 import {DoorLayer} from '../src/render/DoorLayer';
 import {PawnLayer} from '../src/render/PawnLayer';
 import {ActionFeedbackLayer} from '../src/render/ActionFeedbackLayer';
+import {ActionBarResourceCells} from '../src/render/ActionBarResourceCells';
 import {ActionParticleLayer} from '../src/render/ActionParticleLayer';
 import {harness} from './resident-presentation-fixtures-v427';
 import {MotionTimeline} from '../src/render/MotionTimeline';
@@ -25,6 +26,19 @@ function fixture(){const w=createWorld(37958,32,32);w.tiles=w.tiles.map(()=>({te
  for(const [i,p]of w.pawns.entries()){p.state='idle';p.jobId=null;p.path=[];p.motion=null;p.x=8+i;p.z=8;}return w;}
 function bytes(layer:PawnLayer){const g=layer.feedbackSource!;return Object.fromEntries(['aFrom','aTo','aTravel','aMotion','aCargo','aTint','aEquipment','aShape','aSkin','aHair','aBodyBlood'].map(name=>{const a=g.getAttribute(name);return[name,Array.from(a instanceof THREE.InterleavedBufferAttribute?a.data.array:a.array)];}));}
 function doorBytes(layer:DoorLayer){return{matrix:Array.from(layer.mesh.instanceMatrix.array),colors:Array.from(layer.mesh.colorBuffer.array),...Object.fromEntries(['doorCurrent','doorPrevious','doorShift'].map(name=>[name,Array.from(layer.mesh.geometry.getAttribute(name).array)]))};}
+
+test('action bar cells preserve the first source at overlapping coordinates through misses and Full replacement',()=>{
+ const world=fixture(),cells=new ActionBarResourceCells();
+ const at=(x:number,z:number)=>cells.at(z*world.width+x);
+ world.resources=[{id:1,kind:'berries',x:3,z:5,amount:3},{id:9,kind:'rock',x:2,z:2,amount:1},{id:2,kind:'tree',x:3,z:5,amount:9}];
+ cells.bind(world);
+ expect(at(2,2)).toBe(world.resources[1]);
+ expect(at(7,7)).toBeUndefined();
+ expect(at(3,5)).toBe(world.resources[0]);
+ world.resources=world.resources.slice().reverse();
+ cells.bind(world);
+ expect(at(3,5)).toBe(world.resources[0]);
+});
 
 test('phase door reversals rewrite only their two segments and match exhaustive leaves through reset and deferred upload',()=>{
  const w=fixture(),native=new DoorLayer(),literal=new DoorLayer();w.structures=[8,14].map(x=>({id:w.nextId++,kind:'door',material:'wood',orientation:0,footprint:'standard',x,z:8,door:newDoorState(w.tick)}));ownActorPlaybackWorld435(w,true);

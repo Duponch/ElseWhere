@@ -16,6 +16,7 @@ import {destinationCapacity,destinationCell} from './work-planner.ts';
 import {haulingWork,workPriority} from './work-types.ts';
 import {releaseWork} from './work-release.ts';
 import type {Cell,HaulTask,MaterialPile,Pawn,World} from './types.ts';
+import type {StorageGeometry} from './ground-placement.ts';
 
 export interface HaulOpportunity379 {quantity:number}
 const own=(v:object,k:string)=>Object.getOwnPropertyDescriptor(v,k);
@@ -33,7 +34,7 @@ export function validHaulOpportunityShape379(raw:unknown,version:number):boolean
 }
 const mergeable=(a:MaterialPile,b:MaterialPile)=>a.item===b.item&&a.kind===b.kind&&canMergeEggPile256(a,b);
 function carryFor(w:World,p:Pawn,t:HaulTask):MaterialPile|undefined {return w.piles.find(i=>i.id===t.carryPileId&&i.owner.type==='pawn'&&i.owner.pawnId===p.id);}
-export function validHaulOpportunity379(w:World,p:Pawn,t:HaulTask,version:number):boolean {
+export function validHaulOpportunity379(w:World,p:Pawn,t:HaulTask,version:number,storageGeometry?:StorageGeometry):boolean {
  if(!validHaulOpportunityShape379(t,version))return false;if(!t.haulOpportunity379)return true;
  const carry=carryFor(w,p,t),source=pileById(w,t.sourcePileId),target=destinationCell(w,t.destination);
  if(!isColonist(p)||p.prisoner||['dead','downed'].includes(p.state)||!carry||!source||source.owner.type!=='ground'||!target||!mergeable(carry,source)||!ITEM_DEFINITIONS[source.item]||ITEM_DEFINITIONS[source.item].stackLimit<=1)return false;
@@ -41,13 +42,13 @@ export function validHaulOpportunity379(w:World,p:Pawn,t:HaulTask,version:number
  return materialAllowedForPlayer256(source)&&eggAllowedForPlayer256(source)&&allowedAreaAllows(w,p,source.owner)&&allowedAreaAllows(w,p,target)
   &&t.quantity===carry.quantity+t.haulOpportunity379.quantity&&t.quantity<=carryQuantityBound379(w,carry.item)
   &&source.quantity-reservedSource(w,source.id,p.id)>=t.haulOpportunity379.quantity
-  &&destinationCapacity(w,t.destination,carry.kind,p.id,carry)>=t.quantity
+  &&destinationCapacity(w,t.destination,carry.kind,p.id,carry,storageGeometry)>=t.quantity
   &&(p.orders.active==='haul'||workPriority(p,haulingWork(t.destination))>0);
 }
-export function validateHaulOpportunities379(w:World,version:number):string[] {
+export function validateHaulOpportunities379(w:World,version:number,storageGeometry?:StorageGeometry):string[] {
  const errors:string[]=[];
  for(const p of w.pawns){
-  if(p.haul&&!validHaulOpportunity379(w,p,p.haul,version))errors.push('Invalid or future opportunistic hauling owner.');
+  if(p.haul&&!validHaulOpportunity379(w,p,p.haul,version,storageGeometry))errors.push('Invalid or future opportunistic hauling owner.');
   for(const q of p.orders.queue)if(typeof q==='object'&&q!==null&&'haulOpportunity379' in q)errors.push('Future queued job already owns opportunistic cargo.');
  }
  return errors;

@@ -44,9 +44,15 @@ export function copyCoreData297<T>(value:T):T {
  };
  return copy(value,0) as T;
 }
-function fields(kind:CoreActorProjection297['kind']):{required:readonly string[];optional:readonly string[]} {
- return kind==='human'?{required:CORE_HUMAN_REQUIRED297,optional:CORE_HUMAN_OPTIONAL297}:kind==='animal'?{required:CORE_ANIMAL_REQUIRED297,optional:CORE_ANIMAL_OPTIONAL297}:{required:CORE_MECH_REQUIRED297,optional:CORE_MECH_OPTIONAL297};
+function physicalFields297(required:readonly string[],optional:readonly string[]){
+ return {required,optional,allowed:new Set([...required,...optional])};
 }
+const actorFields297={
+ human:physicalFields297(CORE_HUMAN_REQUIRED297,CORE_HUMAN_OPTIONAL297),
+ animal:physicalFields297(CORE_ANIMAL_REQUIRED297,CORE_ANIMAL_OPTIONAL297),
+ mechanical:physicalFields297(CORE_MECH_REQUIRED297,CORE_MECH_OPTIONAL297)
+};
+const fields=(kind:CoreActorProjection297['kind'])=>kind==='human'?actorFields297.human:kind==='animal'?actorFields297.animal:actorFields297.mechanical;
 export function captureCoreActor297(kind:'human',index:number,actor:Pawn):CoreActorProjection297;
 export function captureCoreActor297(kind:'animal',index:number,actor:WildAnimal):CoreActorProjection297;
 export function captureCoreActor297(kind:'mechanical',index:number,actor:Mechanoid):CoreActorProjection297;
@@ -80,26 +86,59 @@ export function coreAnchor297(w:World,epoch:number,revision:number,core:number,m
  return copyCoreData297({epoch,mapId,revision,core,width:w.width,height:w.height,nextId:w.nextId,layout});
 }
 const finite=(v:unknown,min=-Infinity,max=Infinity):v is number=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
-function cell(v:unknown,a:CorePhaseAnchor297):boolean{return rec297(v)&&exact(v,['x','z'])&&coreInteger297(v.x,0,a.width-1)&&coreInteger297(v.z,0,a.height-1);}
-const motionKeys=['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction','coreMove297','coreMoveWalk297','stop297'];
+const cellKeys297=['x','z'];
+const actorHeader297=['kind','id','index','fields'];
+const stopKeys297=['from','to','start','end','fromFraction','toFraction','stop297'];
+const intervalKeys297=['start','end'];
+const cooldownKeys297=['moveCooldown','planCooldown','nextDecision'];
+const booleanMotion297=['animalFlight','snowEntryPending','coreMove297','coreMoveWalk297'];
+const fractionKeys297=['fromFraction','toFraction'];
+const factorKeys297=['speedFactor','terrainDelay'];
+const intervalListKeys297=['stagger','stuns'];
+const actorStates297=new Set(['idle','moving','working','eating','sleeping','hungry','downed','dead','resting','recreating']);
+const motionKeys=new Set(['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction','coreMove297','coreMoveWalk297','stop297']);
+/** Captured records have only enumerable string data properties. Avoid
+ * allocating an array for every row or point. Inherited names never count. */
+function phaseKeys297(v:Data,required:readonly string[],allowed?:ReadonlySet<string>):boolean{
+ for(let i=0;i<required.length;i++)if(!own(v,required[i]!))return false;
+ if(!capturedShape297){
+  const keys=Reflect.ownKeys(v);return allowed?keys.every(k=>typeof k==='string'&&allowed.has(k)):keys.length===required.length;
+ }
+ if(allowed){
+  for(const key in v)if(!allowed.has(key)&&own(v,key))return false;
+ }else{
+  let count=0;for(const key in v)if(own(v,key)&&++count>required.length)return false;
+ }
+ return true;
+}
+const emptyRequired297:readonly string[]=[];
+function cell(v:unknown,a:CorePhaseAnchor297,fromOwnedRecord:boolean):boolean {
+ return rec297(v)&&(fromOwnedRecord?phaseKeys297(v,cellKeys297):exact(v,cellKeys297))&&coreInteger297(v.x,0,a.width-1)&&coreInteger297(v.z,0,a.height-1);
+}
 function segment(v:unknown,a:CorePhaseAnchor297,allowStop=true):v is PresentationSegment {
- if(!rec297(v)||Object.keys(v).some(k=>!motionKeys.includes(k))||!cell(v.from,a)||!cell(v.to,a)||!finite(v.start,0)||!finite(v.end,v.start))return false;
- if(own(v,'stop297'))return allowStop&&v.stop297===true&&exact(v,['from','to','start','end','fromFraction','toFraction','stop297'])&&v.start===v.end&&coreInteger297(Number(v.start)*10)&&v.fromFraction===0&&v.toFraction===0&&(v.from as Data).x===(v.to as Data).x&&(v.from as Data).z===(v.to as Data).z;
- for(const k of ['animalFlight','snowEntryPending','coreMove297','coreMoveWalk297'])if(own(v,k)&&v[k]!==true)return false;
+ if(!rec297(v)||!phaseKeys297(v,emptyRequired297,motionKeys)||!cell(v.from,a,own(v,'from'))||!cell(v.to,a,own(v,'to'))||!finite(v.start,0)||!finite(v.end,v.start))return false;
+ if(own(v,'stop297'))return allowStop&&v.stop297===true&&phaseKeys297(v,stopKeys297)&&v.start===v.end&&coreInteger297(Number(v.start)*10)&&v.fromFraction===0&&v.toFraction===0&&(v.from as Data).x===(v.to as Data).x&&(v.from as Data).z===(v.to as Data).z;
+ for(const k of booleanMotion297)if(own(v,k)&&v[k]!==true)return false;
  if(own(v,'coreMoveWalk297')&&v.coreMove297!==true)return false;
- for(const k of ['fromFraction','toFraction'])if(own(v,k)&&!finite(v[k],0,1))return false;
+ for(const k of fractionKeys297)if(own(v,k)&&!finite(v[k],0,1))return false;
  if(own(v,'edgeStart')&&!finite(v.edgeStart,0,Number(v.start)))return false;
- for(const k of ['speedFactor','terrainDelay'])if(own(v,k)&&!finite(v[k],k==='speedFactor'?Number.MIN_VALUE:0))return false;
- for(const k of ['stagger','stuns'])if(own(v,k)&&(!arr297(v[k])||!v[k].every(s=>rec297(s)&&exact(s,['start','end'])&&finite(s.start,0)&&finite(s.end,Number(s.start)))))return false;
+ for(const k of factorKeys297)if(own(v,k)&&!finite(v[k],k==='speedFactor'?Number.MIN_VALUE:0))return false;
+ for(const k of intervalListKeys297)if(own(v,k)){
+  const ranges=v[k];if(!arr297(ranges))return false;
+  for(let i=0;i<ranges.length;i++){const s=ranges[i];if(!rec297(s)||!phaseKeys297(s,intervalKeys297)||!finite(s.start,0)||!finite(s.end,Number(s.start)))return false;}
+ }
  return true;
 }
 function actor(row:unknown,a:CorePhaseAnchor297):row is CoreActorProjection297 {
- if(!rec297(row)||!exact(row,['kind','id','index','fields'])||!['human','animal','mechanical'].includes(String(row.kind))||!coreInteger297(row.index)||!coreInteger297(row.id,1,a.nextId-1)||!rec297(row.fields))return false;
+ if(!rec297(row)||!phaseKeys297(row,actorHeader297))return false;
+ const name=String(row.kind);
+ if(!(name==='human'||name==='animal'||name==='mechanical')||!coreInteger297(row.index)||!coreInteger297(row.id,1,a.nextId-1)||!rec297(row.fields))return false;
  const kind=row.kind as CoreActorProjection297['kind'],ids=a.layout[kind];if(ids[row.index]!==row.id)return false;
- const spec=fields(kind),v=row.fields;if(spec.required.some(k=>!own(v,k))||Object.keys(v).some(k=>!spec.required.includes(k)&&!spec.optional.includes(k)))return false;
- if(!coreInteger297(v.x,0,a.width-1)||!coreInteger297(v.z,0,a.height-1)||!arr297(v.path)||v.path.length>a.width*a.height||!v.path.every(c=>cell(c,a)))return false;
- if(!['idle','moving','working','eating','sleeping','hungry','downed','dead','resting','recreating'].includes(String(v.state)))return false;
- for(const k of ['moveCooldown','planCooldown','nextDecision'])if(own(v,k)&&!finite(v[k],0))return false;
+ const spec=fields(kind),v=row.fields;if(!phaseKeys297(v,spec.required,spec.allowed))return false;
+ if(!coreInteger297(v.x,0,a.width-1)||!coreInteger297(v.z,0,a.height-1)||!arr297(v.path)||v.path.length>a.width*a.height)return false;
+ for(let i=0;i<v.path.length;i++)if(!cell(v.path[i],a,true))return false;
+ if(!actorStates297.has(String(v.state)))return false;
+ for(const k of cooldownKeys297)if(own(v,k)&&!finite(v[k],0))return false;
  if(own(v,'heading')&&!finite(v.heading))return false;
  if(own(v,'motion')&&v.motion!==undefined&&v.motion!==null&&!segment(v.motion,a,false))return false;
  return true;
@@ -120,11 +159,26 @@ export function validCoreAudioCues297(cues:unknown,fromCore:number,toCore:number
  * authority are checked separately by the private lane owner. */
 export function readCorePhaseData297(raw:unknown,a:CorePhaseAnchor297,expectedCore:number,expectedSeq:number,minimumNextId=a.nextId,knownProjectiles:ReadonlySet<number>=new Set(),actorMode:CoreActorMode297='same-civil'):CorePhaseEnvelope297 {
  const captured=isCapturedCoreData297(raw),v=(captured?raw:copyCoreData297(raw)) as unknown;
+ const previousCapture=capturedShape297;
  capturedShape297=captured;
  try{
  if(!rec297(v)||!exact(v,['type','epoch','mapId','baseRevision','phaseSeq','nextId','fromCore','toCore','speed','actors','tracks','projectiles','audioCues',...own(v,'poses297')?['poses297']:[],...own(v,'doors297')?['doors297']:[],...own(v,'piles297')?['piles297']:[],...own(v,'paths297')?['paths297']:[]])||!(v.type==='actor-phase-297'||v.type==='actor-frontier-297'&&actorMode==='frontier')||v.epoch!==a.epoch||v.mapId!==a.mapId||v.baseRevision!==a.revision||v.phaseSeq!==expectedSeq||v.fromCore!==expectedCore||!coreInteger297(v.nextId,minimumNextId)||!coreInteger297(v.toCore,expectedCore)||v.type==='actor-phase-297'&&Math.floor(v.toCore/10)!==Math.floor(a.core/10)||(typeof v.speed!=='number'||![0,1,3,6].includes(v.speed)))throw Error('Invalid Core phase header/predecessor');
  if(!validCoreAudioCues297(v.audioCues,Number(v.fromCore),Number(v.toCore)))throw Error('Invalid confirmed Core audio cues');
- if(!arr297(v.actors)||v.actors.length>a.layout.human.length+a.layout.animal.length+a.layout.mechanical.length||!v.actors.every(row=>actor(row,a))||new Set(v.actors.map(row=>Number((row as unknown as Data).id))).size!==v.actors.length)throw Error('Invalid physical actor phase');
+ if(!arr297(v.actors)||v.actors.length>a.layout.human.length+a.layout.animal.length+a.layout.mechanical.length)throw Error('Invalid physical actor phase');
+ // The normal publisher emits actors in increasing ID order. Prove it on
+ // this packet, so a single cursor can join rows with path patches. Public
+ // callers may supply any row order: build the ordinary index on disorder.
+ let previousId=0,ordered=true;
+ for(let i=0;i<v.actors.length;i++){
+  const row=v.actors[i];if(!actor(row,a))throw Error('Invalid physical actor phase');
+  if(row.id<=previousId)ordered=false;previousId=row.id;
+ }
+ const actors=v.actors as CoreActorProjection297[];
+ let byId:Map<number,CoreActorProjection297>|undefined;
+ if(!ordered){
+  byId=new Map();
+  for(const row of actors){if(byId.has(row.id))throw Error('Invalid physical actor phase');byId.set(row.id,row);}
+ }
  if(!arr297(v.tracks)||v.tracks.length>a.nextId||new Set(v.tracks.map(row=>rec297(row)?row.id:undefined)).size!==v.tracks.length)throw Error('Invalid Core motion patches');
  for(const p of v.tracks){if(!rec297(p)||!exact(p,['id','drop','keep','append'])||!coreInteger297(p.id,1,a.nextId-1)||!coreInteger297(p.drop)||!coreInteger297(p.keep)||!arr297(p.append)||!p.append.every(s=>segment(s,a)&&(!rec297(s)||s.stop297!==true||Number(s.start)*10<=Number(v.toCore))))throw Error('Invalid Core motion patch');}
  const p=v.projectiles;if(!rec297(p)||!exact(p,['upserted','removed'])||!arr297(p.upserted)||!arr297(p.removed)||!p.upserted.every(t=>validCoreTrace297(t,{...a,nextId:Number(v.nextId)},Number(v.toCore)))||!p.removed.every(id=>coreInteger297(id,1,Number(v.nextId)-1)&&(knownProjectiles.has(id)||(p.upserted as CoreProjectileTrace297[]).some(t=>t.id===id)))||new Set(p.upserted.map(t=>(t as CoreProjectileTrace297).id)).size!==p.upserted.length||new Set(p.removed).size!==p.removed.length)throw Error('Invalid Core projectile events');
@@ -137,17 +191,23 @@ export function readCorePhaseData297(raw:unknown,a:CorePhaseAnchor297,expectedCo
  if(own(v,'poses297')){const poses=v.poses297;if(v.type!=='actor-frontier-297'||!arr297(poses)||poses.length===0||poses.length>a.layout.human.length||!poses.every(row=>humanPose(row,a))||new Set(poses.map(row=>(row as Data).id)).size!==poses.length)throw Error('Invalid Core pose patches');}
  if(own(v,'doors297')){const doors=v.doors297;if(v.type!=='actor-frontier-297'||!arr297(doors)||doors.length===0||doors.length>Number(v.nextId)||!doors.every(row=>doorPatch(row,Number(v.nextId)))||new Set(doors.map(row=>(row as Data).id)).size!==doors.length)throw Error('Invalid Core door patches');}
  if(own(v,'piles297')){const piles=v.piles297;if(v.type!=='actor-frontier-297'||!arr297(piles)||piles.length===0||piles.length>Number(v.nextId)||!piles.every((row,i)=>pilePatch(row,Number(v.nextId))&&(i===0||Number((row as Data).id)>Number((piles[i-1] as Data).id))))throw Error('Invalid Core pile patches');}
- if(own(v,'paths297')){const paths=v.paths297,rows=new Map((v.actors as Data[]).map(row=>[row.id,row]));if(v.type!=='actor-frontier-297'||!arr297(paths)||paths.length===0||paths.length>v.actors.length||!paths.every((row,i)=>pathKeep(row,a,rows)&&(i===0||Number((row as Data).id)>Number((paths[i-1] as Data).id))))throw Error('Invalid Core path patches');}
+ if(own(v,'paths297')){
+  const paths=v.paths297;
+  if(v.type!=='actor-frontier-297'||!arr297(paths)||!paths.length||paths.length>v.actors.length)throw Error('Invalid Core path patches');
+  let last=0,at=0;
+  for(let i=0;i<paths.length;i++){
+   const path=paths[i];
+   if(!rec297(path)||!phaseKeys297(path,pathKeepKeys297)||!coreInteger297(path.id,last+1,a.nextId-1)||!coreInteger297(path.keep,0,a.width*a.height))throw Error('Invalid Core path patches');
+   if(!byId)while(at<actors.length&&actors[at]!.id<path.id)at++;
+   const row=byId?byId.get(path.id):actors[at];
+   if(!row||row.id!==path.id||row.fields.path.length!==0)throw Error('Invalid Core path patches');
+   last=path.id;
+  }
+ }
  return v as unknown as CorePhaseEnvelope297;
- }finally{capturedShape297=false;}
+ }finally{capturedShape297=previousCapture;}
 }
-/** Frontier path patch: an actor of this packet whose row carries no cells,
- * and how many cells of the path the renderer holds remain (its tail). */
-function pathKeep(row:unknown,a:CorePhaseAnchor297,rows:ReadonlyMap<unknown,Data>):boolean {
- if(!rec297(row)||!exact(row,['id','keep'])||!coreInteger297(row.id,1,a.nextId-1)||!coreInteger297(row.keep,0,a.width*a.height))return false;
- const fields=rows.get(row.id)?.fields;
- return rec297(fields)&&arr297(fields.path)&&fields.path.length===0;
-}
+const pathKeepKeys297=['id','keep'];
 /** Frontier pile patch: an id and the pile's complete own-data record (with
  * its identity, quantity, item, kind and owner), or null once it is gone. */
 function pilePatch(row:unknown,nextId:number):boolean {

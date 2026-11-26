@@ -142,9 +142,18 @@ export class CorePhaseFrameOwner297 {
   * rows are complete, like the rows of a packet without path patches. */
  private expandPaths297(scene:CoreActorScene297,rows:readonly CoreActorProjection297[],paths:readonly CorePathKeep297[]|undefined):readonly CoreActorProjection297[] {
   if(!paths?.length)return rows;
-  const keeps=new Map(paths.map(row=>[row.id,row.keep] as const));
+  let at=0,lastId=0;
   return Object.freeze(rows.map(row=>{
-   const keep=keeps.get(row.id);if(keep===undefined)return row;
+   // Paths are verified strictly increasing. Most actor streams have the
+   // same order; a backward step in a valid unordered packet just seeks
+   // again in that immutable path list.
+   if(row.id<lastId){
+    let low=0,high=paths.length;
+    while(low<high){const middle=(low+high)>>>1;if(paths[middle]!.id<row.id)low=middle+1;else high=middle;}
+    at=low;
+   }else while(at<paths.length&&paths[at]!.id<row.id)at++;
+   lastId=row.id;const patch=paths[at];if(!patch||patch.id!==row.id)return row;
+   const keep=patch.keep;
    const source=row.kind==='human'?scene.humans[row.index]:row.kind==='animal'?scene.animals[row.index]:scene.mechanical[row.index];
    if(!source||source.id!==row.id)throw Error('Changed Core actor escaped its anchored slot');
    const held=source.path;if(!Array.isArray(held)||keep>held.length||row.fields.path.length!==0)throw Error('Core path predecessor mismatch');
@@ -161,12 +170,11 @@ export class CorePhaseFrameOwner297 {
   const byId:Record<number,CoreActorSceneRecord297>={...base.byId};
   for(const row of changes){const source=row.kind==='human'?(humans??base.humans)[row.index]:row.kind==='animal'?(animals??base.animals)[row.index]:(mechanical??base.mechanical)[row.index];
    if(!source||source.id!==row.id)throw Error('Changed Core actor escaped its anchored slot');
-   const clone={...source} as unknown as Record<string,unknown>,optionals=row.kind==='human'?CORE_HUMAN_OPTIONAL297:row.kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
-   for(const key of optionals)if(!Object.hasOwn(row.fields,key))delete clone[key];
-   // An already-own key is assigned (no inherited setter can run); a new one is
-   // defined. Freezing then gives the same frozen own-data record as before.
-   const values=row.fields as unknown as Record<string,unknown>;
-   for(const key of Object.keys(values)){if(Object.hasOwn(clone,key))clone[key]=values[key];else Object.defineProperty(clone,key,{value:values[key],enumerable:true,writable:true,configurable:true});}Object.freeze(clone);
+   // Both spreads create ordinary own data properties in source order. This
+   // also shadows inherited setters on newly present optional fields.
+   const clone={...source,...row.fields} as unknown as Record<string,unknown>,optionals=row.kind==='human'?CORE_HUMAN_OPTIONAL297:row.kind==='animal'?CORE_ANIMAL_OPTIONAL297:CORE_MECH_OPTIONAL297;
+   for(const key of optionals)if(!Object.hasOwn(row.fields,key)&&Object.hasOwn(clone,key))delete clone[key];
+   Object.freeze(clone);
    if(row.kind==='human'){const actor=clone as unknown as Readonly<Pawn>;(humans??=base.humans.slice())[row.index]=actor;byId[row.id]=Object.freeze({kind:row.kind,index:row.index,actor});}
    else if(row.kind==='animal'){const actor=clone as unknown as Readonly<WildAnimal>;(animals??=base.animals.slice())[row.index]=actor;byId[row.id]=Object.freeze({kind:row.kind,index:row.index,actor});}
    else {const actor=clone as unknown as Readonly<Mechanoid>;(mechanical??=base.mechanical.slice())[row.index]=actor;byId[row.id]=Object.freeze({kind:row.kind,index:row.index,actor});}

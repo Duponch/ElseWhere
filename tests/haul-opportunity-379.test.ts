@@ -2,6 +2,7 @@ import {expect,test} from 'vitest';
 import {applyCommand,stepWorld} from '../src/sim/engine';
 import {addMaterial,refreshStock,reservedSource} from '../src/sim/materials';
 import {reconcileHaulOpportunities379} from '../src/sim/haul-opportunity-379';
+import {createResidentConstructionValidators379,validateConstructionForbid379} from '../src/sim/construction-forbid-save-379';
 import {deserializeWorld,serializeWorld,validateWorld} from '../src/sim/serialization';
 import {FUEL_UNIT_TICKS,newBuildingFuel} from '../src/sim/fuel';
 import {medicalCamp} from './scenarios/health';
@@ -18,6 +19,25 @@ function camp(second=30,x=9,item:'wood'|'duck-egg-unfertilized'='wood',count=1){
  ok(w,{type:'stockpile',x:20,z:5,enabled:true,filters:{wood:true,food:true}});
  ok(w,{type:'order-haul',pawnId:p.id,target:{type:'pile',pileId:first.id},queue:false});return {w,p,first,extra};
 }
+
+test('admission rechecks a haul destination after terrain or a rotated footprint changes between publications',()=>{
+ const {w,p}=camp();until(w,()=>!!p.haul?.haulOpportunity379);
+ const resident=createResidentConstructionValidators379(()=>false,()=>((_rows,from)=>from));
+ const version=Number(w.schemaVersion),cell=w.stockpiles.find(z=>p.haul?.destination.type==='stockpile'&&z.id===p.haul.destination.stockpileId)!;
+ const check=(valid:boolean)=>{
+  const errors=resident.world(w,version);
+  // Fresh arrays on the ordinary snapshot prevent sharing an index between
+  // the reference and the resident validator or between mutations below.
+  expect(errors).toEqual(validateConstructionForbid379({...w,structures:w.structures.slice()},version));
+  expect(errors).toEqual(valid?[]:['Invalid or future opportunistic hauling owner.']);
+ };
+ check(true);
+ const bed=fixtureBuilding(w,'bed',cell.x-1,cell.z,1);
+ check(false);bed.orientation=0;check(true);
+ const index=cell.z*w.width+cell.x,original=w.tiles[index]!;
+ w.tiles[index]={...original,terrain:'water'};check(false);
+ w.tiles[index]=original;check(true);
+});
 
 test('nearby partial stacks join the same real cargo only after contact, with exact pickup and destination claims and replay',()=>{
  const {w,p,first,extra}=camp();until(w,()=>!!p.haul?.haulOpportunity379);

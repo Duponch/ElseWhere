@@ -41,10 +41,16 @@ export interface ReferenceSeparatedPaintPixels {
   /** PRIVATE read-only checkpoint, never a derived/skipped seed. */
   coverageSeed:number;
 }
+type PaintCanvas = HTMLCanvasElement | OffscreenCanvas;
+type PaintContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+function createPaintCanvas(): PaintCanvas {
+  return typeof document === 'undefined' ? new OffscreenCanvas(300,150) : document.createElement('canvas');
+}
+
 type PaintCaptureStage='paper'|'pigment'|'coverage';
-type PaintCapture=(stage:PaintCaptureStage,color:HTMLCanvasElement,bump?:HTMLCanvasElement)=>void;
+type PaintCapture=(stage:PaintCaptureStage,color:PaintCanvas,bump?:PaintCanvas)=>void;
 const referencePaintCapture=new WeakMap<GouacheCardboardPainter,PaintCapture>();
-function capturedRgba(canvas:HTMLCanvasElement):Uint8Array {
+function capturedRgba(canvas:PaintCanvas):Uint8Array {
   const context=canvas.getContext('2d');if(!context)throw new Error('Origami paint separation requires Canvas2D');
   const data=context.getImageData(0,0,canvas.width,canvas.height).data;
   return new Uint8Array(data.buffer,data.byteOffset,data.byteLength);
@@ -76,7 +82,7 @@ export function createSeparatedReferencePaint(painter:GouacheCardboardPainter,co
   // The literal source omits its mask entirely when fill is disabled.
   coverageRgba??=new Uint8Array(512*512*4).fill(255);
   return {width:512,height:512,material,paperColorRgba,paperBumpRgba,pigmentColorRgba,pigmentBumpRgba,coverageRgba,
-    canonicalColorRgba:capturedRgba(material.userData.colorCanvas as HTMLCanvasElement),canonicalBumpRgba:material.userData.bumpCanvas?capturedRgba(material.userData.bumpCanvas as HTMLCanvasElement):undefined,seed,seedAfter:painter.seed,coverageSeed};
+    canonicalColorRgba:capturedRgba(material.userData.colorCanvas as PaintCanvas),canonicalBumpRgba:material.userData.bumpCanvas?capturedRgba(material.userData.bumpCanvas as PaintCanvas):undefined,seed,seedAfter:painter.seed,coverageSeed};
 }
 
 /** Selective production raster options. Defaults dispatch to the literal
@@ -91,7 +97,7 @@ export function createReferenceEdgeMaterial(painter:GouacheCardboardPainter,chan
 
 /** The authored color draw stream with height-only random calls retained.
  * This branch has no hidden/placeholder height Canvas or drawing context. */
-function drawColorOnlyStroke(this:GouacheCardboardPainter,ctx: CanvasRenderingContext2D, x: number, y: number, length: number, width: number, angle: number, colorHex: string, options: ReferenceStrokeOptions = {}) {
+function drawColorOnlyStroke(this:GouacheCardboardPainter,ctx: PaintContext, x: number, y: number, length: number, width: number, angle: number, colorHex: string, options: ReferenceStrokeOptions = {}) {
         const bristles = options.bristles || 9;
         const curve = options.curve || this.randRange(-0.22, 0.22);
         const dryBrush = options.dryBrush || false;
@@ -143,7 +149,7 @@ function createColorOnlyGouacheMaterial(this:GouacheCardboardPainter,config:Refe
         } = config;
 
         const size = 512;
-        const colorCanvas = document.createElement('canvas');
+        const colorCanvas = createPaintCanvas();
         colorCanvas.width = size;
         colorCanvas.height = size;
         const ctx = colorCanvas.getContext('2d')!;
@@ -169,7 +175,7 @@ function createColorOnlyGouacheMaterial(this:GouacheCardboardPainter,config:Refe
         referencePaintCapture.get(this)?.('paper', colorCanvas); // Color-only separation.
 
         // 2. Separate Gouache Paint Layer (so unpainted contours are a true absence of paint)
-        const paintCanvas = document.createElement('canvas');
+        const paintCanvas = createPaintCanvas();
         paintCanvas.width = size;
         paintCanvas.height = size;
         const pCtx = paintCanvas.getContext('2d')!;
@@ -283,7 +289,7 @@ function createColorOnlyGouacheMaterial(this:GouacheCardboardPainter,config:Refe
         // unpainted Kraft cardboard canvas visible underneath.
         const imp = kraftEdgeWear ? this.fillImperfectionAmount : 0;
         if (imp > 0.01) {
-          const maskCanvas = document.createElement('canvas');
+          const maskCanvas = createPaintCanvas();
           maskCanvas.width = size;
           maskCanvas.height = size;
           const mCtx = maskCanvas.getContext('2d')!;
@@ -374,17 +380,17 @@ function createSelectiveEdgeMaterial(this:GouacheCardboardPainter,channels:{colo
         const w = 512;
         const h = 128;
 
-        const colorCanvas=channels.color?document.createElement('canvas'):undefined;
+        const colorCanvas=channels.color?createPaintCanvas():undefined;
         if(colorCanvas){colorCanvas.width=w;colorCanvas.height=h;}
         const ctx=colorCanvas?.getContext('2d')??undefined;
         if(colorCanvas&&!ctx)throw Error('Origami requires Canvas2D for edge color');
 
-        const alphaCanvas = document.createElement('canvas');
+        const alphaCanvas = createPaintCanvas();
         alphaCanvas.width = w;
         alphaCanvas.height = h;
         const aCtx = alphaCanvas.getContext('2d')!;
 
-        const bumpCanvas=channels.height?document.createElement('canvas'):undefined;
+        const bumpCanvas=channels.height?createPaintCanvas():undefined;
         if(bumpCanvas){bumpCanvas.width=w;bumpCanvas.height=h;}
         const bCtx=bumpCanvas?.getContext('2d')??undefined;
         if(bumpCanvas&&!bCtx)throw Error('Origami requires Canvas2D for edge height');
@@ -525,7 +531,7 @@ export class GouacheCardboardPainter {
         return `#${col.getHexString()}`;
       }
 
-      drawGouacheStroke(ctx: CanvasRenderingContext2D, bumpCtx: CanvasRenderingContext2D, x: number, y: number, length: number, width: number, angle: number, colorHex: string, options: ReferenceStrokeOptions = {}) {
+      drawGouacheStroke(ctx: PaintContext, bumpCtx: PaintContext, x: number, y: number, length: number, width: number, angle: number, colorHex: string, options: ReferenceStrokeOptions = {}) {
         const bristles = options.bristles || 9;
         const curve = options.curve || this.randRange(-0.22, 0.22);
         const dryBrush = options.dryBrush || false;
@@ -595,12 +601,12 @@ export class GouacheCardboardPainter {
         } = config;
 
         const size = 512;
-        const colorCanvas = document.createElement('canvas');
+        const colorCanvas = createPaintCanvas();
         colorCanvas.width = size;
         colorCanvas.height = size;
         const ctx = colorCanvas.getContext('2d')!;
 
-        const bumpCanvas = document.createElement('canvas');
+        const bumpCanvas = createPaintCanvas();
         bumpCanvas.width = size;
         bumpCanvas.height = size;
         const bumpCtx = bumpCanvas.getContext('2d')!;
@@ -630,12 +636,12 @@ export class GouacheCardboardPainter {
         referencePaintCapture.get(this)?.('paper', colorCanvas, bumpCanvas); // Read-only separation hook.
 
         // 2. Separate Gouache Paint Layer (so unpainted contours are a true absence of paint)
-        const paintCanvas = document.createElement('canvas');
+        const paintCanvas = createPaintCanvas();
         paintCanvas.width = size;
         paintCanvas.height = size;
         const pCtx = paintCanvas.getContext('2d')!;
 
-        const paintBumpCanvas = document.createElement('canvas');
+        const paintBumpCanvas = createPaintCanvas();
         paintBumpCanvas.width = size;
         paintBumpCanvas.height = size;
         const pBumpCtx = paintBumpCanvas.getContext('2d')!;
@@ -755,7 +761,7 @@ export class GouacheCardboardPainter {
         // unpainted Kraft cardboard canvas visible underneath.
         const imp = kraftEdgeWear ? this.fillImperfectionAmount : 0;
         if (imp > 0.01) {
-          const maskCanvas = document.createElement('canvas');
+          const maskCanvas = createPaintCanvas();
           maskCanvas.width = size;
           maskCanvas.height = size;
           const mCtx = maskCanvas.getContext('2d')!;
@@ -858,17 +864,17 @@ export class GouacheCardboardPainter {
         const w = 512;
         const h = 128;
 
-        const colorCanvas = document.createElement('canvas');
+        const colorCanvas = createPaintCanvas();
         colorCanvas.width = w;
         colorCanvas.height = h;
         const ctx = colorCanvas.getContext('2d')!;
 
-        const alphaCanvas = document.createElement('canvas');
+        const alphaCanvas = createPaintCanvas();
         alphaCanvas.width = w;
         alphaCanvas.height = h;
         const aCtx = alphaCanvas.getContext('2d')!;
 
-        const bumpCanvas = document.createElement('canvas');
+        const bumpCanvas = createPaintCanvas();
         bumpCanvas.width = w;
         bumpCanvas.height = h;
         const bCtx = bumpCanvas.getContext('2d')!;
@@ -974,7 +980,7 @@ function replayCoverageBlock(this:GouacheCardboardPainter,kraftEdgeWear:boolean)
  const size=512;let coverageRgba:Uint8Array|undefined;
         const imp = kraftEdgeWear ? this.fillImperfectionAmount : 0;
         if (imp > 0.01) {
-          const maskCanvas = document.createElement('canvas');
+          const maskCanvas = createPaintCanvas();
           maskCanvas.width = size;
           maskCanvas.height = size;
           const mCtx = maskCanvas.getContext('2d')!;

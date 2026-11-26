@@ -5,6 +5,7 @@ import type {CorePhaseTypedProjection297,CorePhaseAnchor297,CoreActorScene297,Co
 import {canRetainOpaqueWorld435,OwnedOpaqueRevisions435} from './OwnedOpaqueRevisions435';
 import {createOwnedMaterialResources435} from './OwnedMaterialResources435';
 import {ownActorPlaybackWorld435,isActorPlaybackWorld435} from './ActorPlayback435';
+import {ConfirmedStrikeRosters} from './actor-motion-accents';
 import {StaticSceneCompiler435} from './StaticSceneCompiler435';
 import type {SceneApplicationContext} from './SceneApplicationContext';
 import {PhaseJobRows297} from './PhaseJobRows297';
@@ -560,6 +561,7 @@ export class SceneRenderCore {
   private appliedCore297=-Infinity;
   /** The authentic Full and confirmed physical records have distinct data frontiers. */
   private actorScene297:CoreActorScene297|undefined;
+  private readonly strikeRosters = new ConfirmedStrikeRosters();
   /** Only the private native-lane receipt can enter this confirmed channel. */
   setCorePhase297(nativeInput:object):void {
     if(this.disposed||this.fatalError)return;
@@ -631,7 +633,7 @@ export class SceneRenderCore {
       this.pawns.updatePhase297(world,view,poses,human,poseChanges,pileChanges,directory?.source,jobs?.byId);
       this.actionParticles.update(view,this.pawns.feedbackSource,this.wildlife,{jobs:jobs?.byId,pileSource:directory?.source,base:world,humans:human,piles:pileChanges,
         pawnSource:jobs?id=>{const found=actors.byId[id];return found?.kind==='human'?found.actor:undefined;}:undefined});
-      this.actionFeedback.updatePhase297(world,view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents,human,pileChanges,jobs?.byId);
+      this.actionFeedback.updatePhase297(world,view,this.selectedPawns,this.pawns.feedbackSource!,!!this.confirmedIntents,human,pileChanges,jobs?.byId,this.applicationContext?.piles.viewDirectory297(view));
     },this.applicationContext?.readSupports);
     else this.pawns.adoptPhase297(world,[...human],actors,changedIds);
     this.wildlife.adoptPhase297(world,[...animal],actors,changedIds);this.mechanoids.adoptPhase297(world,[...mechanical],actors);
@@ -2124,7 +2126,7 @@ export class SceneRenderCore {
     this.lastFrame = now;
     this.pawns.blend.value = this.snapshotDuration > 0 ? Math.min(1, Math.max(0, (this.hostPort.now() - this.snapshotAt) / this.snapshotDuration)) : 1;
     this.pawns.time.value = THREE.MathUtils.lerp(this.timeFrom, this.timeTo, this.pawns.blend.value);
-    if(this.hasTracks && this.world) {this.pawns.time.value=(this.timeline.tick/TICKS_PER_SECOND)%(2*Math.PI);this.pawns.updateTravel(this.world,this.timeline,dtTweener297,this.received?.speed??0,this.actorScene297);}
+    if(this.hasTracks && this.world) {this.pawns.time.value=(this.timeline.tick/TICKS_PER_SECOND)%(2*Math.PI);this.pawns.updateTravel(this.world,this.timeline,dtTweener297,this.received?.speed??0,this.actorScene297,this.strikeRosters);}
     if (!this.hostPort.selectionActive()) {
       if (!this.areaDrag) this.moveCamera(dt);
       this.controls.update();
@@ -2148,7 +2150,7 @@ export class SceneRenderCore {
       this.invalidatePausedShadow(false);this.updatePiles(cargoWorld,false);
     }
     if(this.pawns.feedbackSource)this.actionFeedback.syncTravel(this.pawns.feedbackSource);
-    if(this.world)this.wildlife.update(this.world,this.hasTracks?this.timeline:undefined,false,this.pawns,this.actorScene297,dtTweener297,this.received?.speed??0);
+    if(this.world)this.wildlife.update(this.world,this.hasTracks?this.timeline:undefined,false,this.pawns,this.actorScene297,dtTweener297,this.received?.speed??0,this.strikeRosters);
     if(this.world)this.mechanoids.update(this.world,this.hasTracks?this.timeline:undefined,false,this.pawns,this.actorScene297);
     this.pawns.presentAnimations();this.wildlife.presentAnimations(this.pawns);this.mechanoids.presentAnimations(this.pawns);
     if(this.animalCargo.present(this.wildlife))this.invalidatePausedShadow(false);

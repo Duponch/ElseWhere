@@ -31,7 +31,8 @@ import {LETTER_CLASSES_352,type Letter352} from './sim/letters-352';
 import type {NativeHudViewAction} from './ui3d/native-hud';
 import {NativeEnvironmentStatsReader,type NativeEnvironmentModes} from './ui3d/native-environment-stats';
 import {NATIVE_DOCK_PREFERENCE_KEY,parseNativeDockPreferences,NATIVE_UI_SCALE_PREFERENCE_KEY,parseNativeUiScale,normalizeNativeUiScale,type NativeDockPreferences} from './ui3d/native-preferences';
-import {GRAPHICS_STYLE_PREFERENCE_KEY,parseGraphicsStylePreferences,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
+import {GRAPHICS_STYLE_PREFERENCE_KEY,normalizeGraphicsStylePreferences,type GraphicsStylePreferences} from './ui3d/native-preferences';
+import {GROUND_GRASS_PREFERENCE_KEY,TEXTURE_PREFERENCE_KEY,readColonyGraphicsPreferences} from './render/colony-graphics-preferences';
 import {graphicsStyleComparisonsShareScene,type GraphicsStyleComparisonResult} from './render/graphics-style-comparison';
 import {installNativeCardboardCursors} from './ui/native-cardboard-cursors';
 import type {NativeUiState,NativeUiActions,NativePage} from './ui3d/native-contract';
@@ -118,16 +119,14 @@ import { fetchTestColonies, readSaveFile, readTestColony } from './ui/test-colon
 import { startRimWorldImport } from './ui/rimworld-import';
 import { createFrontMenu,type FrontMenuOptions } from './ui/front-menu';
 import { bindRenderPerformanceControls } from './ui/render-performance-controls';
-import { DEFAULT_SHADOW_SETTINGS, SHADOW_PREFERENCE_KEY, parseShadowSettings, type ShadowSettings } from './render/shadow-settings';
-import { DEFAULT_ANIMATION_SETTINGS, ANIMATION_PREFERENCE_KEY, parseAnimationSettings, type AnimationSettings } from './render/animation-settings';
+import { SHADOW_PREFERENCE_KEY, parseShadowSettings, type ShadowSettings } from './render/shadow-settings';
+import { ANIMATION_PREFERENCE_KEY, parseAnimationSettings, type AnimationSettings } from './render/animation-settings';
 import {DESIGNATION_VISIBILITY_KEY,designationMinCellPixels,designationVisibilityLabel} from './ui/designation-visibility';
 import {ITEM_LABEL_VISIBILITY_KEY,itemLabelMinCellPixels,itemLabelVisibilityLabel} from './ui/item-label-visibility';
 import {applyUiFont,readUiFont,saveUiFont,UI_FONT_CHOICES,type UiFontId} from './ui/ui-fonts';
-import {CLOUD_MASK_RADIUS_KEY} from './render/cloud-mask';
-import {DECOR_OCCLUSION_KEY,DEFAULT_DECOR_OCCLUSION_ENABLED,decorOcclusionEnabled} from './render/decor-occlusion-settings';
-import {DIORAMA_PREFERENCE_KEY,DEFAULT_DIORAMA_ENABLED,dioramaEnabled as parseDioramaEnabled} from './render/diorama-settings';
-import {ROOM_PREFERENCE_KEY,DEFAULT_ROOM_ENABLED,roomEnabled as parseRoomEnabled} from './render/room-settings';
-import {ROOM_MASK_RADIUS_KEY} from './render/room-mask-settings';
+import {DECOR_OCCLUSION_KEY} from './render/decor-occlusion-settings';
+import {DIORAMA_PREFERENCE_KEY} from './render/diorama-settings';
+import {ROOM_PREFERENCE_KEY} from './render/room-settings';
 import {LIGHTING_PREFERENCE_KEY,DEFAULT_LIGHTING_SETTINGS,LIGHTING_CONTROLS,parseLightingSettings,lightingPercentLabel,type LightingSettings} from './render/lighting-settings';
 import type { PawnTrack } from './bridge/motion-tracks';
 import { SCENARIOS, type ScenarioId } from './sim/scenario-definitions';
@@ -722,23 +721,14 @@ class MainColonyRenderer extends ColonyRenderer {
   protected override renderScene():void {super.renderScene();nativeUi?.renderOverlay(this.renderer);}
 }
 let renderer: ColonyRenderer | undefined;
-const TEXTURE_PREFERENCE_KEY = 'lisiere.presentation.textures.v1';
-const GROUND_GRASS_PREFERENCE_KEY = 'lisiere.presentation.ground-grass.v1';
 const SOUND_ENABLED_PREFERENCE_KEY = 'lisiere.audio.effects.enabled.v1';
 const SOUND_VOLUME_PREFERENCE_KEY = 'lisiere.audio.effects.volume.v1';
 const MUSIC_ENABLED_PREFERENCE_KEY = 'lisiere.audio.music.enabled.v1';
 const MUSIC_VOLUME_PREFERENCE_KEY = 'lisiere.audio.music.volume.v1';
-let texturesEnabled = true;
-let designationIconThreshold = 32;
-let itemLabelThreshold = 96;
-let groundGrassEnabled = true;
-let dioramaEnabled = DEFAULT_DIORAMA_ENABLED;
-let roomEnabled = DEFAULT_ROOM_ENABLED;
-let decorOcclusionPreference = DEFAULT_DECOR_OCCLUSION_ENABLED;
-let lightingSettings = { ...DEFAULT_LIGHTING_SETTINGS };
-let shadowSettings = { ...DEFAULT_SHADOW_SETTINGS };
-let animationSettings = { ...DEFAULT_ANIMATION_SETTINGS };
-let graphicsStylePreferences=parseGraphicsStylePreferences(null);
+let {texturesEnabled,groundGrassEnabled,dioramaEnabled,roomEnabled,decorOcclusion:decorOcclusionPreference,
+  lighting:lightingSettings,shadows:shadowSettings,animation:animationSettings,style:graphicsStylePreferences,
+  designationMinCellPixels:designationIconThreshold,itemLabelMinCellPixels:itemLabelThreshold}
+  = readColonyGraphicsPreferences(key=>localStorage.getItem(key));
 let graphicsStyleChanging=false;
 const graphicsMeasurements=new Map<string,GraphicsStyleComparisonResult>();
 const graphicsSceneIds=new WeakMap<object,number>();let nextGraphicsSceneId=0;
@@ -753,17 +743,6 @@ const autosaveScheduler = new AutosaveScheduler();
 let autosaveIntervalMinutes = autosaveMinutes(null);
 try {
   autosaveIntervalMinutes = autosaveMinutes(localStorage.getItem(AUTOSAVE_PREFERENCE_KEY));
-  designationIconThreshold=designationMinCellPixels(localStorage.getItem(DESIGNATION_VISIBILITY_KEY));
-  itemLabelThreshold=itemLabelMinCellPixels(localStorage.getItem(ITEM_LABEL_VISIBILITY_KEY));
-  texturesEnabled = localStorage.getItem(TEXTURE_PREFERENCE_KEY) !== 'false';
-  groundGrassEnabled = localStorage.getItem(GROUND_GRASS_PREFERENCE_KEY) !== 'false';
-  dioramaEnabled = parseDioramaEnabled(localStorage.getItem(DIORAMA_PREFERENCE_KEY));
-  roomEnabled = parseRoomEnabled(localStorage.getItem(ROOM_PREFERENCE_KEY));
-  decorOcclusionPreference=decorOcclusionEnabled(localStorage.getItem(DECOR_OCCLUSION_KEY),localStorage.getItem(CLOUD_MASK_RADIUS_KEY),localStorage.getItem(ROOM_MASK_RADIUS_KEY));
-  lightingSettings = parseLightingSettings(localStorage.getItem(LIGHTING_PREFERENCE_KEY));
-  shadowSettings = parseShadowSettings(localStorage.getItem(SHADOW_PREFERENCE_KEY));
-  animationSettings = parseAnimationSettings(localStorage.getItem(ANIMATION_PREFERENCE_KEY));
-  graphicsStylePreferences=parseGraphicsStylePreferences(localStorage.getItem(GRAPHICS_STYLE_PREFERENCE_KEY));
   soundEnabled = localStorage.getItem(SOUND_ENABLED_PREFERENCE_KEY) !== 'false';
   const storedVolume = Number(localStorage.getItem(SOUND_VOLUME_PREFERENCE_KEY));
   if (localStorage.getItem(SOUND_VOLUME_PREFERENCE_KEY) !== null && Number.isFinite(storedVolume)) soundVolume = Math.max(0, Math.min(1, storedVolume));

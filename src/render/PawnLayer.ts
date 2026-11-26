@@ -57,7 +57,7 @@ import { pawnPresentationPose } from './pawn-presentation';
 import { headingAt,turnToward,TURN_TICKS,TURN_SECONDS,type TurnHeading } from './turn-presentation';
 import { pawnWorkPose,pasteCollectionSource,workApproach,meleeApproach,WORK_POSE } from './work-presentation';
 import { GaitPhaseTracker,HUMAN_GAIT_RADIANS_PER_UNIT } from './gait-presentation';
-import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
+import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,type ConfirmedStrikeRosters,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
 import { constructionWorkTarget } from '../sim/construction-rules';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
 import type { MotionTimeline } from './MotionTimeline';
@@ -1678,16 +1678,17 @@ export class PawnLayer {
   /** Registers each confirmed melee hit on a human once (attackers: humans,
    * animals and mechanoids). Property reads only; a victim is resolved by
    * its slot index when a new hit appears. */
-  private observeMeleeHits(world:World,humans:readonly Pawn[],animals:readonly {id:number;x:number;z:number;strike?:MeleeState['strike']}[]|undefined):void {
+  private observeMeleeHits(world:World,humans:readonly Pawn[],animals:readonly {id:number;x:number;z:number;strike?:MeleeState['strike']}[]|undefined,attackers?:ReturnType<ConfirmedStrikeRosters['read']>):void {
     const victim=(id:number)=>{const slot=this.pawnIndices.get(id),pawn=slot===undefined?undefined:humans[slot];return pawn?.id===id?pawn:undefined;};
     const wake=(id:number|undefined)=>{if(id===undefined)return;const slot=this.pawnIndices.get(id);if(slot!==undefined){this.springActive297[slot]=1;this.springWork297.wake(slot);this.springMetrics297.hitWakes++;}};
+    if(attackers){this.meleeRecoil.observeRoster(attackers,victim,wake);return;}
     for(const pawn of humans){const strike=pawn.melee?.strike;if(strike)wake(this.meleeRecoil.observe(pawn.id,strike,pawn.x,pawn.z,victim));}
     if(animals)for(const animal of animals)if(animal.strike)wake(this.meleeRecoil.observe(animal.id,animal.strike,animal.x,animal.z,victim));
     for(const mech of world.mechanoids??[]){const strike=mech.melee?.strike;if(strike)wake(this.meleeRecoil.observe(mech.id,strike,mech.x,mech.z,victim));}
   }
 
   /** CPU chooses a confirmed edge; translation, orientation and rig evaluation stay on GPU. */
-  updateTravel(world:World,timeline:MotionTimeline,dt297=0,speed297=0,actorScene?:CoreActorScene297):void {
+  updateTravel(world:World,timeline:MotionTimeline,dt297=0,speed297=0,actorScene?:CoreActorScene297,strikeRosters?:ConfirmedStrikeRosters):void {
     const humans=actorScene?.humans??world.pawns,animals=actorScene?.animals??world.wildlife?.animals,actorTick=actorScene?actorScene.core/10:world.tick;
     if(!this.pawnMesh)return;
     const geometry=this.pawnMesh.geometry;
@@ -1703,7 +1704,7 @@ export class PawnLayer {
     const retainSpring=isActorPlaybackWorld435(world);
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(humans.length);
     this.frameCore297=timeline.tick*10;
-    if(spring)this.observeMeleeHits(world,humans,animals);
+    if(spring){const attackers=strikeRosters?.read(world,actorScene);if(!attackers||attackers.length)this.observeMeleeHits(world,humans,animals,attackers);}
     let dirty=false,partUnionDirty=false,allRigidBefore=true,allRigidAfter=true;
     const scheduled=playback?this.playback435.frameSlots435(timeline,timeline.tick,origin):undefined;
     if(scheduled&&spring)this.springWork297.wakeCoefficient(dt297,speed297);

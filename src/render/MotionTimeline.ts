@@ -59,13 +59,28 @@ export class MotionTimeline {
   private readonly mutableHistories435=new Set<number>();
   private trackRevision435=0;
   private readonly trackChanges435:{revision:number;ids:readonly number[]}[]=[];
+  private joinedChanges435:readonly number[]=noPlaybackChanges435;
+  private joinedAfter435=-1;
+  private readonly joinedIds435=new Set<number>();
   get playbackOwned435():boolean{return this.playbackEnabled435&&!this.trackStoreEscaped435&&this.mutableHistories435.size===0;}
   get playbackRevision435():number{return this.trackRevision435;}
-  playbackBoundary435(id:number):{edge:TravelSegment|undefined;next:number}{return this.playbackCursor435.boundary(this.trackStore435,id,this.tick);}
-  playbackChanged435(after:number):readonly number[]|undefined{
+  playbackBoundary435(id:number,out?:{edge:TravelSegment|undefined;next:number}):{edge:TravelSegment|undefined;next:number}{return this.playbackCursor435.boundary(this.trackStore435,id,this.tick,out);}
+  playbackChanged435(after:number,borrow?:boolean):readonly number[]|undefined{
    if(after===this.trackRevision435)return noPlaybackChanges435;
    if(after<0||!this.trackChanges435.length||after<this.trackChanges435[0]!.revision-1||after>this.trackRevision435)return;
-   const changed=new Set<number>();for(const frame of this.trackChanges435)if(frame.revision>after)for(const id of frame.ids)changed.add(id);return[...changed];
+   // Every species, the human rig and machines consume the same delivery
+   // window. Publish the ordered union once. The frozen journal rows and
+   // returned unions remain safe for a caller retaining them across adoptions.
+   if(Number.isNaN(after))return borrow?noPlaybackChanges435:[];
+   const first=Math.floor(after)-this.trackChanges435[0]!.revision+1;
+   if(first===this.trackChanges435.length-1){const row=this.trackChanges435[first]!.ids;return borrow?row:row.slice();}
+   if(after===this.joinedAfter435)return borrow?this.joinedChanges435:this.joinedChanges435.slice();
+   const changed=this.joinedIds435;changed.clear();
+   for(let i=first;i<this.trackChanges435.length;i++){
+    const ids=this.trackChanges435[i]!.ids;
+    for(let j=0;j<ids.length;j++)changed.add(ids[j]!);
+   }
+   this.joinedAfter435=after;this.joinedChanges435=Object.freeze([...changed]);changed.clear();return borrow?this.joinedChanges435:this.joinedChanges435.slice();
   }
   playbackDiagnostics435(){return{enabled:this.playbackCursor435.enabled,generation:this.playbackCursor435.generation,...this.playbackCursor435.stats,trackRowVisits:this.trackRowVisits435,sparseTrackAdoptions:this.sparseTrackAdoptions435};}
   /** Preserve the mutable public Map. Once exposed it can be retained and
@@ -79,7 +94,15 @@ export class MotionTimeline {
    this.trackRowVisits435+=(edits??tracks).length;if(edits)this.sparseTrackAdoptions435++;
    for(const track of edits??tracks){if(this.trackStore435.get(track.id)===track.segments)continue;this.trackStore435.set(track.id,track.segments);changed.push(track.id);if(immutablePlaybackHistory435(track.segments))this.mutableHistories435.delete(track.id);else this.mutableHistories435.add(track.id);}
    this.lastOwnedTracks435=closed?tracks:undefined;
-   if(changed.length){this.trackRevision435++;this.trackChanges435.push({revision:this.trackRevision435,ids:changed});if(this.trackChanges435.length>128)this.trackChanges435.shift();}
+   if(changed.length){
+    // Literal/public track arrays may repeat an ID with a different history.
+    // Preserve last-write wins in the store and first-change order in the
+    // published revision. No reader can mutate an internal journal row.
+    const seen=this.joinedIds435;let count=0;
+    for(let i=0;i<changed.length;i++){const id=changed[i]!;if(!seen.has(id)){seen.add(id);changed[count++]=id===0?0:id;}}
+    changed.length=count;seen.clear();
+    this.joinedAfter435=-1;this.joinedChanges435=noPlaybackChanges435;
+    this.trackRevision435++;this.trackChanges435.push({revision:this.trackRevision435,ids:Object.freeze(changed)});if(this.trackChanges435.length>128)this.trackChanges435.shift();}
   }
   tick=0;
   private latest=0;
@@ -155,7 +178,7 @@ export class MotionTimeline {
     if(fineCore297&&!wasFine297)this.fineFrameRate297=this.frameRate;
     this.reserve=fineCore297 ? speed*LOCAL_TICKS_PER_SECOND*FINE_BUFFER_MS297/1000 : MOTION_BUFFER_TICKS;
     this.playbackCursor435.configure(closed435&&!this.trackStoreEscaped435,reset);
-    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.trackStore435.clear();this.lastOwnedTracks435=undefined;this.mutableHistories435.clear();this.trackRevision435++;this.trackChanges435.length=0;this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;this.transition297=undefined;}
+    if(reset){this.tick=tick;this.latest=tick;this.previous=now;this.ready=Infinity;this.buffering=true;this.trackStore435.clear();this.lastOwnedTracks435=undefined;this.mutableHistories435.clear();this.trackRevision435++;this.trackChanges435.length=0;this.joinedAfter435=-1;this.joinedChanges435=noPlaybackChanges435;this.speed=speed;this.rate=speed*LOCAL_TICKS_PER_SECOND;this.frameRate=this.fineFrameRate297=this.rate;this.rateChanges.length=0;this.transition297=undefined;}
     // An adopted pause is authoritative presentation state, not a request or
     // predicted Core tick. Show its latest confirmed frontier immediately.
     // Running deliveries keep the ordinary smooth, buffered RAF policy below.

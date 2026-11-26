@@ -14,6 +14,8 @@ export interface DeveloperPage {
 }
 
 export const DEVELOPER_PAGES: readonly DeveloperPage[] = [
+  { id: 'worker-colony', file: 'worker-colony.html', title: 'Rendu de la colonie en Worker',
+    description: 'Ouvrir une colonie, déplacer la caméra et mesurer le rendu WebGPU et la simulation à chaque vitesse.', published: false },
   { id: 'assets', file: 'assets.html', title: 'Modèles et assets',
     description: 'L’atelier des modèles 3D : personnes, animaux, plantes, objets et bâtiments dans les styles du jeu.', published: true },
   { id: 'animations', file: 'animations.html', title: 'Animations',
