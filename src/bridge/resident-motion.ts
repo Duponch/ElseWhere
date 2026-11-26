@@ -18,7 +18,7 @@ function record(v:unknown):v is Data {
  return true;
 }
 function dense(v:unknown):v is unknown[]{if(!Array.isArray(v)||Object.getPrototypeOf(v)!==Array.prototype||Reflect.ownKeys(v).length!==v.length+1)return false;for(let i=0;i<v.length;i++){const d=Object.getOwnPropertyDescriptor(v,String(i));if(!d?.enumerable||!own(d,'value'))return false;}return true;}
-const exact=(v:Data,keys:string[])=>Object.keys(v).length===keys.length&&Object.keys(v).every(k=>keys.includes(k));
+const exact=(v:Data,keys:readonly string[])=>{const actual=Object.keys(v);return actual.length===keys.length&&actual.every(k=>keys.includes(k));};
 interface MotionExtent297 {readonly nodes:number;readonly height:number;readonly finite:boolean}
 const CORE_MOTION_NODES297=1048576,CORE_MOTION_DEPTH297=24;
 const motionExtents297=new WeakMap<object,MotionExtent297>(),motionLists297=new WeakSet<object>();
@@ -127,18 +127,47 @@ function same(a:unknown,b:unknown):boolean {
  return keys.length===other.length&&keys.every((k,i)=>k===other[i]&&same((a as Data)[k as string],b[k as string]));
 }
 function deepFreeze(x:unknown):void {if(x&&typeof x==='object'){if(motionExtents297.has(x))return;for(const key of Object.keys(x))deepFreeze((x as Data)[key]);Object.freeze(x);}}
-/** The checks of a segment before its copy test. */
-function segmentFields(v:unknown,version:number):v is PresentationSegment {
- if(!record(v)||Object.keys(v).some(k=>!['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction',...(isCorePhysicalSchema297(version)?['coreMove297','coreMoveWalk297','stop297']:[])].includes(k)))return false;
+const segmentKeys=new Set(['from','to','start','end','terrainDelay','speedFactor','stagger','stuns','animalFlight','snowEntryPending','edgeStart','fromFraction','toFraction']);
+const coreSegmentKeys=new Set([...segmentKeys,'coreMove297','coreMoveWalk297','stop297']);
+const pointKeys=['x','z'] as const;
+const ends=['from','to'] as const;
+const privatePlainRecord=(value:unknown):value is Data=>!!value&&typeof value==='object'&&Object.getPrototypeOf(value)===Object.prototype;
+function segmentFields(v:unknown,version:number,privateMotion=false):v is PresentationSegment {
+ // A private structured clone on the exclusively bound port has only own,
+ // enumerable data keys on ordinary objects. Public inputs keep record().
+ const plain=privateMotion?privatePlainRecord:record;
+ if(!plain(v))return false;
+ const allowed=isCorePhysicalSchema297(version)?coreSegmentKeys:segmentKeys;
+ for(const key of Object.keys(v))if(!allowed.has(key))return false;
  if(!validCapturedCoreMove297(v,version)||!validPresentationStop297(v,version))return false;
- for(const name of ['from','to']){const c=v[name];if(!record(c)||!exact(c,['x','z'])||typeof c.x!=='number'||!Number.isFinite(c.x)||typeof c.z!=='number'||!Number.isFinite(c.z))return false;}
+ for(const name of ends){const c=v[name];if(!plain(c)||!exact(c,pointKeys)||typeof c.x!=='number'||!Number.isFinite(c.x)||typeof c.z!=='number'||!Number.isFinite(c.z))return false;}
  if(typeof v.start!=='number'||!Number.isFinite(v.start)||typeof v.end!=='number'||!Number.isFinite(v.end)||v.end<v.start)return false;
  return true;
 }
+/** On the exclusive native port the ordinary record and its two points have
+ * already passed segmentFields. Copy the frequent scalar layout in one pass.
+ * A point is copied per occurrence even if the incoming references alias.
+ * Extra nested histories still take the complete bounded recursive path. */
+function copyPrivateScalarSegment379(segment:PresentationSegment):PresentationSegment|undefined {
+ const data=segment as unknown as Data,keys=Object.keys(data);
+ if(!own(data,'from')||!own(data,'to'))return;
+ let finite=true;
+ for(const key of keys){
+  if(key==='from'||key==='to')continue;
+  const value=data[key];
+  if(value!==null&&typeof value==='object')return;
+  if(value!==null&&value!==undefined&&typeof value!=='number'&&typeof value!=='string'&&typeof value!=='boolean')return;
+  if(typeof value==='number'&&!Number.isFinite(value))finite=false;
+ }
+ const from=Object.freeze({...segment.from}),to=Object.freeze({...segment.to});
+ const result=Object.freeze({...segment,from,to});
+ motionExtents297.set(result,{nodes:keys.length+5,height:2,finite});
+ return result;
+}
 /** A valid segment's copy, made once (checking it used to copy it a first time). */
 function copiedSegment(v:unknown,version:number,ownedMotion=false,privateMotion=false):PresentationSegment|undefined {
- if(!segmentFields(v,version))return undefined;
- try{return (privateMotion?copyPrivateMotion379(v,new Set()):ownedMotion?copyOwnedMotion297(v):copy(v)) as PresentationSegment;}catch{return undefined;}
+ if(!segmentFields(v,version,privateMotion))return undefined;
+ try{return (privateMotion?copyPrivateScalarSegment379(v)??copyPrivateMotion379(v,new Set()):ownedMotion?copyOwnedMotion297(v):copy(v)) as PresentationSegment;}catch{return undefined;}
 }
 /** Every value's copiedSegment, or undefined when one is not a valid segment. */
 function copiedSegments(values:readonly unknown[],version:number,ownedMotion=false,privateMotion=false):PresentationSegment[]|undefined {

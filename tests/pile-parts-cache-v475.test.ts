@@ -125,7 +125,7 @@ test('real BoxBatches retains exact F32, atlas ordinals and bounds across quanta
  const h=camp(),owner=new ScenePilePresentation(),a=new BoxBatches(),b=new BoxBatches(),ga=new THREE.Group(),gb=new THREE.Group();
  const apply=()=>{const frame=read(owner,h.send());for(const change of frame.changedChunks){
   const exact=pileParts(change.bundles),cached=owner.placements(frame,change),before=structuredClone(cached);
-  a.set(ga,`pile:${change.key}`,exact);b.set(gb,`pile:${change.key}`,cached);
+  a.set(ga,`pile:${change.key}`,exact);b.setPileChunk(gb,owner,frame,change);
   expect(cached).toEqual(before);expect(state(gb)).toEqual(state(ga));
  }owner.acknowledge(frame);};
  try{apply();h.world.piles[2]!.quantity=5;apply();h.world.piles.shift();apply();h.world.piles.reverse();apply();

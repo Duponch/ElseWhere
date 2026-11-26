@@ -59,11 +59,15 @@ function captureStations(world:World) {
     if(job.kind==='uninstall'&&job.furniture)retiring.add(job.furniture.structureId);
   }
   const benches:Structure[]=[];
+  const knownAdvanced:Structure[]=[];
   let simple=false,advanced=false,poweredAdvanced=false;
   for(const structure of world.structures){
+    if(structure.kind!=='research-bench'&&structure.kind!=='hi-tech-research-bench')continue;
     if(!knownBuilding256(world,structure))continue;
-    if((structure.kind!=='research-bench'&&structure.kind!=='hi-tech-research-bench')
-      ||(structure.damage??0)>=structureMaxHp(structure)||retiring.has(structure.id))continue;
+    // Selection checks all known advanced benches, including one awaiting removal.
+    // The station advice below counts only working, non-retiring buildings.
+    if(structure.kind==='hi-tech-research-bench')knownAdvanced.push(structure);
+    if((structure.damage??0)>=structureMaxHp(structure)||retiring.has(structure.id))continue;
     benches.push(structure);
     if(structure.kind==='research-bench')simple=true;
     else {advanced=true;if(isPowerActive(structure))poweredAdvanced=true;}
@@ -73,7 +77,8 @@ function captureStations(world:World) {
   let analyzer: boolean|undefined;
   const hasAnalyzer=()=>analyzer??=(poweredAdvanced&&benches.some(bench=>bench.kind==='hi-tech-research-bench'
     &&isPowerActive(bench)&&researchStationUsable(world,bench,'vitals-monitor')));
-  return {benches,simple,advanced,poweredAdvanced,hasAnalyzer};
+  const canSelectVitals=()=>knownAdvanced.some(bench=>researchStationUsable(world,bench,'vitals-monitor'));
+  return {benches,simple,advanced,poweredAdvanced,hasAnalyzer,canSelectVitals};
 }
 type StationFacts=ReturnType<typeof captureStations>;
 function issue(facts:StationFacts,project:ResearchProject):ResearchStationIssue|undefined {
@@ -93,7 +98,7 @@ export function captureResearchStationIssues(world:World):ResearchStationCapture
   return {benchIds:sorted(facts.benches.map(bench=>bench.id)),issues,
     // Selection admission intentionally keeps retirement distinct from usage.
     vitalsMonitorAvailable:admitted(world,'vitals-monitor')&&!researchPrerequisite(world,'vitals-monitor')
-      &&world.structures.some(bench=>knownBuilding256(world,bench)&&researchStationUsable(world,bench,'vitals-monitor'))};
+      &&facts.canSelectVitals()};
 }
 /** Confirmed facts only. Assignment is not a promise of accessible work.
  * Without the optional panel capture, only the inspected/active project and
@@ -103,8 +108,7 @@ export function readResearchReadiness(world:World,inspectedProject?:ResearchProj
   const facts=stationCapture?undefined:captureStations(world);
   const benchIds=stationCapture?.benchIds??sorted(facts!.benches.map(bench=>bench.id));
   const benchSet=new Set(benchIds);
-  const vitalsAvailable=()=>stationCapture?stationCapture.vitalsMonitorAvailable
-    :world.structures.some(bench=>knownBuilding256(world,bench)&&researchStationUsable(world,bench,'vitals-monitor'));
+  const vitalsAvailable=()=>stationCapture?stationCapture.vitalsMonitorAvailable:facts!.canSelectVitals();
   let remainingCount=0,availableCount=0;
   for(const candidate of researchProjects){
     if(!admitted(world,candidate.id)||researchUnlocked(world,candidate.id))continue;

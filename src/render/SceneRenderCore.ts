@@ -2048,7 +2048,7 @@ export class SceneRenderCore {
       for(const [key,chunk]of this.pileChunks)if(!prepared.activeKeys.has(key)&&chunk.signature!==''){this.boxes.set(chunk.group,`pile:${key}`,[]);chunk.signature='';}
       for(const change of prepared.changedChunks){const {key,signature}=change,previous=this.pileChunks.get(key);if(previous?.signature===signature)continue;
         const group=previous?.group??this.createPileChunkGroup();if(!previous)this.pileGroup.add(group);group.name=`Material piles ${key}`;
-        this.boxes.set(group,`pile:${key}`,this.applicationContext!.piles.ownedPlacements(prepared,change));this.pileChunks.set(key,{signature,group});
+        this.boxes.setPileChunk(group,this.applicationContext!.piles,prepared,change);this.pileChunks.set(key,{signature,group});
       }
       this.applicationContext!.acknowledgePiles(prepared);return;
     }

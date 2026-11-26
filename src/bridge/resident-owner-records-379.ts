@@ -117,3 +117,77 @@ export function observeNativeResidentOwners379(source:Worker|MessagePort):()=>vo
  source.addEventListener('message',listener as EventListener);
  return ()=>source.removeEventListener('message',listener as EventListener);
 }
+
+/** First capture listener on a channel constructed here, before either port
+ * escapes. The native structured clone has fresh ordinary data properties:
+ * no input getter can run. This fact ends at the first callback outside this
+ * module. Later validators receive only the identity witness, never a shape
+ * or an immutability claim. */
+const isArray=Array.isArray, setPrototype=Object.setPrototypeOf;
+const NativeWeakSet=WeakSet,NativeWeakMap=WeakMap;
+const NativeChannel=globalThis.MessageChannel,portListener=globalThis.MessagePort?.prototype.addEventListener;
+const removePortListener=globalThis.MessagePort?.prototype.removeEventListener;
+const firstPort=NativeChannel&&ownDescriptor(NativeChannel.prototype,'port1')?.get;
+const privateEventData=actualMessageReader(),receiveTime=globalThis.performance?.now.bind(globalThis.performance);
+const arrivalsSet=WeakMap.prototype.set,arrivalsGet=WeakMap.prototype.get;
+function enrollFreshClone(root:object):void {
+ // Shallow paths visit the named transport lanes. Entering actors or motion
+ // visits every nested record. The same identity can occur in both modes.
+ // Private null-prototype stacks never invoke an inherited numeric setter.
+ const shallow:object[]=setPrototype([root],null),deep:object[]=setPrototype([],null);
+ const expanded=new NativeWeakSet<object>();
+ let shallowCount=1,deepCount=0;
+ while(shallowCount||deepCount){
+  const all=deepCount>0;
+  const row=all?deep[--deepCount]!:shallow[--shallowCount]!;
+  const array=isArray(row),registry=array?ordinaryArrays:ordinary;
+  if(prototypeOf(row)!==(array?ownerArrayPrototype:ownerObjectPrototype))continue;
+  if(all){
+   if(weakHas(expanded,row))continue;
+   weakAdd(expanded,row);
+  }else if(weakHas(registry,row))continue;
+  weakAdd(registry,row);
+  if(array){
+   for(let i=0;i<row.length;i++){
+    if(!hasOwn(row,i))continue;
+    const child:unknown=row[i];
+    if(child!==null&&typeof child==='object'){
+     if(all)deep[deepCount++]=child;
+     else shallow[shallowCount++]=child;
+    }
+   }
+  }else {
+   for(const key in row){
+    if(!hasOwn(row,key))continue;
+    const nested=all||key==='motion'||key==='actors';
+    if(!nested&&!setHas(lanes,key))continue;
+    const child=(row as Record<string,unknown>)[key];
+    if(child!==null&&typeof child==='object'){
+     if(nested)deep[deepCount++]=child;
+     else shallow[shallowCount++]=child;
+    }
+   }
+  }
+ }
+}
+
+export function createNativeResidentOwnerChannel379(){
+ const channel=new NativeChannel();
+ const port:MessagePort=firstPort?apply(firstPort,channel,[]):channel.port1;
+ const arrival=new NativeWeakMap<MessageEvent<unknown>,number>();
+ const listener=(event:MessageEvent<unknown>)=>{
+  const raw=privateEventData?.(event,port);
+  if(!raw||typeof raw!=='object')return;
+  const type=ownDescriptor(raw,'type');
+  if(type?.value!=='resident-publication')return;
+  // Frame admission uses arrival before enrollment, including on a large Full.
+  apply(arrivalsSet,arrival,[event,receiveTime()]);
+  const packet=ownDescriptor(raw,'publication')?.value;
+  if(!packet||typeof packet!=='object')return;
+  const kind=ownDescriptor(packet,'type')?.value;
+  if(kind==='snapshot'||kind==='campaign-only')enrollFreshClone(raw);
+ };
+ apply(portListener,port,['message',listener,true]);
+ return {channel,arrivalAt:(event:MessageEvent<unknown>)=>apply(arrivalsGet,arrival,[event]) as number|undefined,
+  unobserve:()=>apply(removePortListener,port,['message',listener,true])};
+}

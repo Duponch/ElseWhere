@@ -1,5 +1,7 @@
 import {drawPicto} from '../ui/picto-artwork';
 import {NATIVE_TEXT} from './native-ui-scale';
+import {NativeClockRaster} from './native-clock-raster';
+import {clockLabel,paintClockInk} from './native-clock-ink';
 import {alertsDisabled347} from '../sim/game-profile';
 import * as THREE from 'three/webgpu';
 import type {MaterialPile, Pawn, World} from '../sim/types';
@@ -245,7 +247,8 @@ export class NativeHudCards {
   private readonly barRaster379=new NativeColonistBarRaster379();
   private barTimer?: ReturnType<typeof setTimeout>;
   private allAlertsCount = 0;
-  private weatherSignature = '';
+  private readonly clockRaster=new NativeClockRaster();
+  private civilMinute=-1;
   private weatherReadout = {clock: '—', date: '—', weather: '—', temperature: '—', condition: '', wind: '—'};
   private speedValue = -1;
   private fpsValue = -1;
@@ -838,18 +841,25 @@ export class NativeHudCards {
     const kind = world.weather ? perceivedWeather(world) : 'clear', temperature = outdoorTemperature(world);
     const date = world.climate ? climateDate(world) : undefined;
     const icon=nativeWeatherIcon(kind,minute>=360&&minute<1080,!!activeEclipse(world));
-    if(icon!==this.weatherIconValue){this.dropPiece(this.weatherIconPiece);this.weatherIconValue=icon;this.weatherIconPiece=this.createWeatherIcon(icon);}
+    const iconChanged=icon!==this.weatherIconValue;
+    if(iconChanged){this.dropPiece(this.weatherIconPiece);this.weatherIconValue=icon;this.weatherIconPiece=this.createWeatherIcon(icon);}
     const readout = {
-      clock: `${String(Math.floor(minute / 60)).padStart(2, '0')}h${String(minute % 60).padStart(2, '0')}`,
+      clock: clockLabel(minute),
       date: date ? `${date.day} ${quadrums[date.quadrum]} ${date.year}` : `Jour ${1 + Math.floor(civil / TICKS_PER_DAY)} · historique`,
       weather: kind === 'clear' && (minute < 360 || minute >= 1080) ? 'Ciel dégagé' : WEATHER[kind].label,
       temperature: this.hoverTemperature ?? `Extérieur ${Math.round(temperature)} °C`,
       condition: weatherConditionLabel(world),
       wind: world.wind ? windIntensity(world).toFixed(2) : '—'
     };
-    const signature = [readout.clock, readout.date, readout.weather, readout.temperature, readout.condition].join('|');
-    this.weatherReadout = readout;
-    if (signature !== this.weatherSignature) { this.weatherSignature = signature;const tip=`${readout.date} · ${readout.weather} · ${readout.temperature}${readout.condition ? ` · ${readout.condition}` : ''}`;for(const piece of [this.weatherPiece,this.weatherLabelPiece,this.temperaturePiece,this.weatherIconPiece])piece.userData.tooltip=tip;this.weatherPiece.redraw();this.weatherLabelPiece.redraw();this.temperaturePiece.redraw(); }
+    const previous=this.weatherReadout;
+    this.weatherReadout=readout;this.civilMinute=minute;
+    if(previous.clock!==readout.clock||previous.date!==readout.date)this.weatherPiece.redraw();
+    if((previous.condition||previous.weather)!==(readout.condition||readout.weather))this.weatherLabelPiece.redraw();
+    if(previous.temperature!==readout.temperature)this.temperaturePiece.redraw();
+    if(iconChanged||previous.date!==readout.date||previous.weather!==readout.weather||previous.condition!==readout.condition||previous.temperature!==readout.temperature){
+      const tip=`${readout.date} · ${readout.weather} · ${readout.temperature}${readout.condition ? ` · ${readout.condition}` : ''}`;
+      for(const piece of [this.weatherPiece,this.weatherLabelPiece,this.temperaturePiece,this.weatherIconPiece])piece.userData.tooltip=tip;
+    }
   }
   private createWeatherIcon(icon:NativeWeatherIcon):CardboardPiece {
     const rect=this.column.weather,size=ROW_ICON;
@@ -859,10 +869,8 @@ export class NativeHudCards {
   }
   /** Core DateReadout: time of day over the date, right-aligned, 7 in from the edge. */
   private drawDate(ctx:CanvasRenderingContext2D,w:number,h:number):void {
-    ctx.save();ctx.scale(w/200,h/48);this.letters(ctx);
-    ctx.textAlign='right';ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;
-    ctx.strokeText(this.weatherReadout.clock,193,19);ctx.fillText(this.weatherReadout.clock,193,19);
-    ctx.font=`${NATIVE_TEXT.small}px ${FONT}`;ctx.strokeText(this.weatherReadout.date,193,41);ctx.fillText(this.weatherReadout.date,193,41);ctx.restore();
+    if(this.civilMinute<0)paintClockInk(ctx,w,h,this.weatherReadout.clock,this.weatherReadout.date);
+    else this.clockRaster.draw(ctx,w,h,this.civilMinute,this.weatherReadout.date,this.speedValue>0);
   }
   /** One right-aligned line of the 26-high rows (weather, temperature); `inset` keeps the icon clear. */
   private drawRowText(ctx:CanvasRenderingContext2D,w:number,h:number,text:string,width:number,inset:number):void {
@@ -940,7 +948,7 @@ export class NativeHudCards {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;if(this.barTimer!==undefined)clearTimeout(this.barTimer);
-    this.barRaster379.dispose();this.blightReader379.reset();
+    this.clockRaster.dispose();this.barRaster379.dispose();this.blightReader379.reset();
     for (const entry of this.portraits) if (entry.image) { entry.image.onload = null; entry.image.onerror = null; }
     for(const image of this.resourceImages.values()){image.onload=null;image.onerror=null;}this.resourceImages.clear();
     for (const piece of this.ownedPieces) this.art.disposePiece(piece);

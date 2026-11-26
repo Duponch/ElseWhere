@@ -84,3 +84,30 @@ test('immutable owner reschedules corrected boundaries without retaining stale e
  // the private schedule rather than losing that ordinary observable update.
  timeline.tracks;expect(p.beginFrame(timeline)).toBe(false);expect(p.frameIndices435(timeline,10250,0)).toBeUndefined();
 });
+
+test('frame work preserves sorted slot order and snapshots springs before endpoint writers run',()=>{
+ const world=createWorld(),actors=Array.from({length:97},(_,i)=>({id:1000+i,dependent:i===31||i===63||i===96}));
+ const timeline=new MotionTimeline(),playback=new ActorPlayback435<typeof actors[number]>(actor=>actor.dependent);
+ ownActorPlaybackWorld435(world,true);playback.prepare(world,actors);
+ timeline.adopt(0,1,[],0,true,true);
+ playback.beginFrame(timeline);
+ const retained=playback.frameIndices435(timeline,0,0)!;
+ for(const i of retained)playback.select(i,timeline,0,0);
+ playback.commit();
+ const springs=new Set([80,31,32,0,64,180]);
+ for(let frame=0;frame<2;frame++){
+  playback.beginFrame(timeline);
+  const snapshot=playback.frameSlots435(timeline,1,0)!;snapshot.includeSprings(springs);
+  const expected=frame===0?[0,31,32,63,64,80,96]:[31,62,63,96];
+  springs.clear();springs.add(62);
+  const visited:number[]=[],endpoints:number[]=[];
+  for(let i=snapshot.next(0);i>=0;i=snapshot.next(i+1)){
+   visited.push(i);if(snapshot.isEndpoint(i)){endpoints.push(i);playback.select(i,timeline,1,0);}
+  }
+  expect(endpoints).toEqual([31,63,96]);expect(visited).toEqual(expected);expect(snapshot.endpointCount).toBe(3);
+  playback.commit();
+ }
+ expect(retained).toEqual(actors.map((_,i)=>i));
+ playback.prepare(world,actors.slice(0,32),true);playback.beginFrame(timeline);
+ expect(playback.frameIndices435(timeline,1,0)).toEqual(actors.slice(0,32).map((_,i)=>i));
+});

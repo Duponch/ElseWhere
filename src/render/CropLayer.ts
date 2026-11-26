@@ -9,7 +9,7 @@ import { readHydroponicCells } from '../sim/hydroponics';
 import { HYDROPONIC_SUPPORT_HEIGHT } from './hydroponics-parts';
 import { ResourceTargetTint } from './resource-target-tint';
 import {markResidentAttributeRange} from './resident-attribute-range';
-import {PreparedCropPresentation,type PreparedCropChange} from './prepared-crop-presentation';
+import {PreparedCropPresentation,type PreparedCropChanges} from './prepared-crop-presentation';
 import {CropResidentBounds} from './crop-resident-bounds';
 import type {SceneResourceFrame} from './scene-resource-index';
 import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
@@ -196,7 +196,7 @@ class CropBatch {
   }
   /** Exact prepared values only. No resource partition, alive Set, growth or
    * all-instance sphere calculation runs on this admitted path. */
-  updatePrepared(world:World,reset:boolean,changes:ReadonlyMap<number,PreparedCropChange>,cropCount:number,last:Resource|undefined):void {
+  updatePrepared(world:World,reset:boolean,changes:PreparedCropChanges,cropCount:number,last:Resource|undefined):void {
     if(reset)this.resetPreparedVariants();
     const wasTracking=this.preparedTracking;
     if(!wasTracking){
@@ -206,15 +206,16 @@ class CropBatch {
     if(reset)this.clearTargetPreview();else this.targetTint.restore();this.version++;
     if(reset){this.slots.clear();this.free.length=0;this.used=0;this.mesh.count=0;this.captures.clear();this.liveSlots.clear();this.insertionOrder.clear();this.nextInsertion=0;this.residentBounds.clear();}
     let firstMatrix=Infinity,lastMatrix=-1,firstColor=Infinity,lastColor=-1,boundsChanged=reset||!wasTracking;
-    const removed:number[]=[];
+    let removed=changes.removed;
     if(!wasTracking){
       // The first prepared read is complete, but its new consumer knows no
       // tombstones for a prior public RAW. Reconcile those public memberships
       // exactly ONCE, preserving their Map/free-stack and zero-matrix order.
-      const present=new Set<number>();for(const [id,{resource}]of changes)if(resource?.kind===this.kind)present.add(id);
+      removed=[];
+      const present=new Set<number>();for(const crop of changes.resources)present.add(crop.id);
       if(present.size!==cropCount)throw Error('Prepared crop entry requires complete membership');
       for(const id of this.slots.keys())if(!present.has(id))removed.push(id);
-    }else for(const [id,{resource}]of changes)if(this.slots.has(id)&&resource?.kind!==this.kind)removed.push(id);
+    }else if(reset)removed=[];
     // Literal Map iteration order governs free-stack order, even when several
     // deaths and births occur together. Numerical stamps avoid scanning slots.
     removed.sort((a,b)=>this.insertionOrder.get(a)!-this.insertionOrder.get(b)!);
@@ -226,8 +227,8 @@ class CropBatch {
     if(resized){const old=this.mesh,mesh=this.createMesh(2**Math.ceil(Math.log2(required)));mesh.instanceMatrix.array.set(old.instanceMatrix.array);mesh.instanceColor!.array.set(old.instanceColor!.array);mesh.count=old.count;this.group.remove(old);this.views?.detach(old);old.dispose();this.mesh=mesh;this.group.add(mesh);}
     let visibleCount=this.mesh.count;
     // Producer changes are already sorted by CURRENT source ordinal.
-    for(const [id,{resource:crop,appearance}]of changes){
-      if(!crop||crop.kind!==this.kind)continue;if(!appearance)throw Error('Missing crop numerical appearance');
+    for(let row=0;row<changes.resources.length;row++){
+      const crop=changes.resources[row]!,appearance=changes.appearances[row]!,id=crop.id;
       let slot=this.slots.get(id);
       if(slot===undefined){slot=this.free.pop()??this.used++;this.slots.set(id,slot);this.liveSlots.add(slot);this.insertionOrder.set(id,this.nextInsertion++);}
       visibleCount=Math.max(visibleCount,slot+1);
@@ -360,7 +361,7 @@ export class CropLayer {
       if(!this.haygrassBatch&&this.prepared.count('haygrass')){created=this.haygrassBatch=this.createBatch('haygrass');this.batches.push(created);}
       let createdDevilstrand:CropBatch|undefined;
       if(!this.devilstrandBatch&&this.prepared.count('devilstrand')){createdDevilstrand=this.devilstrandBatch=this.createBatch('devilstrand');this.batches.push(createdDevilstrand);}
-      for(const batch of this.batches)batch.updatePrepared(world,reset||batch===created||batch===createdDevilstrand,this.prepared.changes,this.prepared.count(batch.kind),this.prepared.last(batch.kind));return;
+      for(const batch of this.batches)batch.updatePrepared(world,reset||batch===created||batch===createdDevilstrand,this.prepared.changesFor(batch.kind),this.prepared.count(batch.kind),this.prepared.last(batch.kind));return;
     }
     this.prepared.clear();
     const crops=this.partition.read(world,reset,immutableSnapshot);

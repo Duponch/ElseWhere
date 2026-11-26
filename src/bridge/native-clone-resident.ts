@@ -25,7 +25,7 @@ import {captureNativeMessageForDeferred297 as captureNativeMessageForDeferred} f
 import {isOwnedResidentFilthCopyInternal,isOwnedResidentFilthItemListInternal} from './resident-filth-section';
 import {createFirefoamLaneValidatorsInternal290} from '../sim/firefoam-save-290';
 import {ResidentVegetationAssembler} from './resident-vegetation-assembler';
-import {observeNativeResidentOwners379} from './resident-owner-records-379';
+import {createNativeResidentOwnerChannel379} from './resident-owner-records-379';
 import {readResidentWorkerMessage} from './resident-protocol';
 import {planetTileCount} from '../sim/planet-geography-256';
 import type {NativeSnapshotDispatch379} from './native-snapshot-dispatch-379';
@@ -258,13 +258,14 @@ function createNativeLane379(privateStream:boolean):PrivateNativeCloneResidentLa
    if(closed||worker)throw Error('Native clone lane already created or closed');
    worker=new Worker(new URL('./presentation.worker.ts',import.meta.url),{type:'module'});
    const source=worker;
-   let transferred:MessagePort|undefined;
-   if(privateStream){const channel=new MessageChannel();output=channel.port1;transferred=channel.port2;}
+   const ownerChannel=privateStream?createNativeResidentOwnerChannel379():undefined;
+   const transferred=ownerChannel?.channel.port2;
+   if(ownerChannel){output=ownerChannel.channel.port1;unobserveOutput=ownerChannel.unobserve;}
    const target=output??source;
    capture=event=>{
     if(closed||worker!==source)return;
     const native=readNative?.(event,target);if(!native)return;
-    const arrivalAt=performance.now();
+    const arrivalAt=ownerChannel?.arrivalAt(event)??performance.now();
     try{
      const captured=captureNativeMessageForDeferred(native.value);
      const phaseType297=(captured as {type?:unknown})?.type;
@@ -303,9 +304,8 @@ function createNativeLane379(privateStream:boolean):PrivateNativeCloneResidentLa
    if(output&&transferred){
     // Capture/mark before the sole dispatcher, with the exact private target.
     // Bootstrap is the FIRST command on the original ordered input channel.
-    unobserveOutput=observeNativeResidentOwners379(output);
     try{source.postMessage({type:'bind-native-presentation-port379',port:transferred},[transferred]);}
-    catch(error){unobserveOutput();output.removeEventListener('message',capture);output.close();transferred.close();source.terminate();output=undefined;closed=true;throw error;}
+    catch(error){unobserveOutput?.();output.removeEventListener('message',capture);output.close();transferred.close();source.terminate();output=undefined;closed=true;throw error;}
    }
    return worker;
   },

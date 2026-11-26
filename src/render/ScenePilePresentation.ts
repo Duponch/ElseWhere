@@ -18,14 +18,14 @@ const chunkKey=(x:number,z:number)=>`${Math.floor(x/WORLD_SCALE.chunkSize)}:${Ma
 interface SupportState {readonly cells:ReadonlyMap<number,PileSurface>;readonly identities:ReadonlyMap<number,PileSurface>}
 interface Input {readonly key:string;readonly chunk:string;readonly quantity:number;readonly job:Job|undefined;readonly jobX:number|undefined;readonly jobZ:number|undefined;readonly hidden:number;readonly surface:PileSurface|undefined;readonly corpseStage:PileBundle['corpseStage'];readonly seed:PileBundle}
 interface PileRecord {readonly id:number;source:number;pile:MaterialPile;input:Input|undefined;seen:number;supportCell?:number}
-interface Bundle {readonly id:number;readonly source:number;readonly chunk:string;readonly value:PileBundle}
+interface Bundle {readonly id:number;readonly source:number;readonly chunk:string;readonly value:PileBundle;readonly signature:string}
 interface Chunk {readonly id:number;readonly signature:string;readonly bundles:readonly PileBundle[];readonly source:number}
 export interface ScenePileChunks {readonly activeKeys:ReadonlySet<string>;readonly emptiedKeys:readonly string[];readonly changedChunks:readonly {key:string;signature:string;bundles:readonly PileBundle[]}[]}
 
-/** The exact old chunk signature, including its historical string collisions.
- * This is called only for affected chunks on the closed immutable path. */
-function signature(bundles:readonly PileBundle[]):string {
- return bundles.map(bundle=>`${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}${bundle.forbidden?':forbidden':''}${bundle.markerOnly?':marker-only':''}`).join('|');
+/** Capture once with the owned bundle. Reassembling a changed chunk can then
+ * reuse the exact text for all of its unchanged neighbours, in source order. */
+function pileSignature(bundle:PileBundle):string {
+ return `${bundle.x}:${bundle.z}:${bundle.item}:${bundle.quantity}:${bundle.supplied}:${bundle.pileId??''}:${bundle.corpseStage??''}:${bundle.facing??0}:${bundle.innerResource?`${bundle.innerResource.species??'legacy'}:${bundle.innerResource.growth??1}:${bundle.innerResource.blight??false}`:''}:${bundle.corpse?corpseVisualMask(bundle.corpse):0}:${bundle.surface?Object.values(bundle.surface).join(','):'ground'}${bundle.forbidden?':forbidden':''}${bundle.markerOnly?':marker-only':''}`;
 }
 
 /** Clone BEFORE freezing: seeds may contain nested references to the admitted
@@ -244,12 +244,13 @@ export class ScenePilePresentation {
    // Preserve original floating arithmetic/source-order even for atypical
    // direct fixtures. No sum is reordered by ID or chunk membership.
    for(let i=1;i<ordered.length;i++)value.quantity+=ordered[i]!.input!.quantity;
-   const bundle:Bundle={id:first.id,source:directory?.source(first.id)??first.source,chunk:input.chunk,value:ownBundle(value)};this.bundles.set(key,bundle);
+   const owned=ownBundle(value);
+   const bundle:Bundle={id:first.id,source:directory?.source(first.id)??first.source,chunk:input.chunk,value:owned,signature:pileSignature(owned)};this.bundles.set(key,bundle);
    let chunk=this.chunkMembers.get(input.chunk);if(!chunk){chunk=new Map();this.chunkMembers.set(input.chunk,chunk);}chunk.set(key,bundle);dirtyChunks.add(input.chunk);
   }
   for(const key of dirtyChunks){
    const members=this.chunkMembers.get(key),old=this.chunks.get(key);if(!members?.size){if(old||this.pendingChunks.has(key)){this.chunks.delete(key);this.pendingChunks.delete(key);this.pendingEmpty.add(key);}continue;}
-   const ordered=[...members.values()].sort((a,b)=>(directory?.source(a.id)??a.source)-(directory?.source(b.id)??b.source)),bundles=Object.freeze(ordered.map(row=>row.value)),text=signature(bundles),id=ordered[0]!.id,source=directory?.source(id)??ordered[0]!.source;
+   const ordered=[...members.values()].sort((a,b)=>(directory?.source(a.id)??a.source)-(directory?.source(b.id)??b.source)),bundles=Object.freeze(ordered.map(row=>row.value)),text=ordered.map(row=>row.signature).join('|'),id=ordered[0]!.id,source=directory?.source(id)??ordered[0]!.source;
    this.chunks.set(key,{id,signature:text,bundles,source});this.pendingEmpty.delete(key);if(old?.signature!==text||this.pendingChunks.has(key))this.pendingChunks.set(key,Object.freeze({key,signature:text,bundles,source,id}));
   }
   this.world=world;this.hidden=new Map(hidden);this.previousSupports=supports;
@@ -270,17 +271,21 @@ export class ScenePilePresentation {
   return this.ownedPlacements(frame,chunk).map(part=>({...part}));
  }
 
- /** Intrinsic geometry is scalar own data. The actual scene can submit its
-  * immutable part records directly; public mutable placement copies are
-  * still produced by placements(). Each BoxBatches writer only reads them. */
- ownedPlacements(frame:ScenePileChunks,chunk:ScenePileChunks['changedChunks'][number]):Placement[] {
+ /** Intrinsic geometry is scalar own data. Each run belongs to its immutable
+  * bundle and survives changes to other piles in the same chunk. */
+ visitPlacementRuns(frame:ScenePileChunks,chunk:ScenePileChunks['changedChunks'][number],visit:(parts:readonly Placement[])=>void):void {
   if(frame!==this.lastRead||!frame.changedChunks.includes(chunk))throw Error('Stale or foreign pile placement frame');
-  const result:Placement[]=[];
-  for(const bundle of chunk.bundles){
+  for(let i=0;i<chunk.bundles.length;i++){
+   const bundle=chunk.bundles[i]!;
    let parts=this.partCache.get(bundle);
    if(!parts){parts=Object.freeze(pileParts([bundle]).map(part=>Object.freeze(part)));this.partCache.set(bundle,parts);}
-   for(const part of parts)result.push(part);
+   visit(parts);
   }
+ }
+
+ ownedPlacements(frame:ScenePileChunks,chunk:ScenePileChunks['changedChunks'][number]):Placement[] {
+  const result:Placement[]=[];
+  this.visitPlacementRuns(frame,chunk,parts=>{for(let i=0;i<parts.length;i++)result.push(parts[i]!);});
   return result;
  }
 

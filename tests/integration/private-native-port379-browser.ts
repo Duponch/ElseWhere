@@ -1,11 +1,13 @@
 import {createNativeCloneResidentLane,createPrivateNativeCloneResidentLane379,isNativeCoreFullAdmissionTicket297,isNativeCorePhaseAdmissionTicket297,readNativeCorePhaseInput297} from '../../src/bridge/native-clone-resident';
 import {ResidentVegetationAssembler} from '../../src/bridge/resident-vegetation-assembler';
+import {createNativeResidentOwnerChannel379,isOrdinaryResidentOwnerArray379,isOrdinaryResidentOwnerRecord379} from '../../src/bridge/resident-owner-records-379';
 import {readResidentWorkerMessage} from '../../src/bridge/resident-protocol';
 import type {World} from '../../src/sim/types';
 
 /** Real browser fixed Worker, no synthetic ports, data or admission receipts. */
 export async function runPrivateNativePortContracts379(inspect?:(lane:ReturnType<typeof createPrivateNativeCloneResidentLane379>)=>void){
  let assertions=0;const check=(ok:unknown,reason:string)=>{assertions++;if(!ok)throw Error(reason);};
+ await checkFreshOwnerChannel(check);
  const legacy=createNativeCloneResidentLane();check(!Object.hasOwn(legacy,'bindOutput'),'Public direct factory exposed private output binding');legacy.close();
  const lane=createPrivateNativeCloneResidentLane379(),worker=lane.createWorker(),strict=new ResidentVegetationAssembler();
  const queue:{run:()=>void;info?:object}[]=[],seen:{type:string;id?:number;epoch?:number;revision?:number}[]=[],replies=new Map<number,unknown>();
@@ -72,4 +74,29 @@ export async function runPrivateNativePortContracts379(inspect?:(lane:ReturnType
   check(seen.length===before,'Closed private port dispatched queued output');check(lastPhase&&readNativeCorePhaseInput297(lastPhase)===undefined,'Closed private port retained renderer phase token');check(errors.length===0&&invalid===0,'Unexpected native error');
   return {status:'passed',assertions,fastFulls,phases,direct,errors,ordered:seen.length};
  }finally{if(!closed)lane.close();worker.terminate();}
+}
+
+async function checkFreshOwnerChannel(check:(ok:unknown,reason:string)=>void){
+ const source=createNativeResidentOwnerChannel379(),{port1,port2}=source.channel;
+ try{
+  const visible={path:[{x:1}]},hidden={x:2},sparse=[visible,,visible];
+  const packet={type:'resident-publication',publication:{type:'snapshot',actors:sparse},ignored:hidden};
+  Object.assign(visible,{cycle:packet});
+  port1.dispatchEvent(new MessageEvent('message',{data:packet}));
+  check(!isOrdinaryResidentOwnerRecord379(visible),'Synthetic data acquired a native clone identity');
+  const arrived=new Promise<MessageEvent<typeof packet>>(resolve=>port1.addEventListener('message',resolve,{capture:true,once:true}));
+  port1.start();port2.postMessage(packet);
+  const event=await arrived,copy=event.data,actors=copy.publication.actors,row=actors[0]!;
+  check(source.arrivalAt(event)!<=performance.now(),'Missing original native arrival');
+  check(isOrdinaryResidentOwnerArray379(actors)&&actors.length===3&&!Object.hasOwn(actors,1)&&row===actors[2],'Sparse or aliased clone members lost');
+  check(isOrdinaryResidentOwnerRecord379(row)&&isOrdinaryResidentOwnerRecord379(row.path[0]!),'Deep actor lane did not enroll own nested data');
+  check(isOrdinaryResidentOwnerRecord379(copy.ignored),'Deep back edge did not revisit the original shallow root');
+  const replacement=new Proxy({path:[]},{});
+  actors[0]=replacement;
+  check(!isOrdinaryResidentOwnerRecord379(replacement)&&!isOrdinaryResidentOwnerArray379(replacement.path),'Postcapture replacement acquired the prior identity');
+  source.unobserve();
+  const second=new Promise<MessageEvent<typeof packet>>(resolve=>port1.addEventListener('message',resolve,{once:true}));
+  port2.postMessage(packet);
+  check(!isOrdinaryResidentOwnerRecord379((await second).data),'Closed observer enrolled later packets');
+ }finally{source.unobserve();port1.close();port2.close();}
 }

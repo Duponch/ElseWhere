@@ -147,7 +147,7 @@ class MechanicalRaceBatch {
     g.instanceCount=this.records.length;let dirty=false;
     this.playback435.prepare(world,this.records,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
     if(changed||reset){this.carrierSlots.clear();if(reset)this.animationCache.reset();}
-    const scheduled=playback?this.playback435.frameIndices435(timeline,tick,origin):undefined;
+    const scheduled=playback?this.playback435.frameSlots435(timeline,tick,origin):undefined;
     const updateSlot=(actor:VisualMech,i:number)=>{
       if(!changed&&!reset&&actor.pile?.owner.type==='ground'&&actor.carrierId===undefined)return;
       const prepared=playback?this.playback435.select(i,timeline,tick,origin):undefined;if(playback&&!prepared)return;
@@ -191,7 +191,7 @@ class MechanicalRaceBatch {
       gait.setXY(i,phase??0,strike?attackBone:actor.ranged?.stance?.phase==='warmup'?10:0);
       mask.setXY(i,...visualMask);carrierState.setXYZW(i,0,0,0,0);transfer.setXY(i,0,0);
     };
-    if(scheduled)for(const i of scheduled)updateSlot(this.records[i]!,i);else this.records.forEach(updateSlot);
+    if(scheduled)for(let i=scheduled.next(0);i>=0;i=scheduled.next(i+1))updateSlot(this.records[i]!,i);else this.records.forEach(updateSlot);
     if(dirty)(from as THREE.InterleavedBufferAttribute).data.needsUpdate=true;
     if(changed||reset||dirty)this.records.forEach((actor,i)=>this.animationCache.reconcile(i,actor.id,[rig.getW(i),mask.getX(i),mask.getY(i),carrierState.getX(i),this.carrierSlots.get(i),actor.carrierId,actor.pile?.owner.type].join(':')));
     if(playback)this.playback435.commit();

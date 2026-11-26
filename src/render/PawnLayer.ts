@@ -1705,7 +1705,7 @@ export class PawnLayer {
     this.frameCore297=timeline.tick*10;
     if(spring)this.observeMeleeHits(world,humans,animals);
     let dirty=false,partUnionDirty=false,allRigidBefore=true,allRigidAfter=true;
-    const scheduled=playback?this.playback435.frameIndices435(timeline,timeline.tick,origin):undefined;
+    const scheduled=playback?this.playback435.frameSlots435(timeline,timeline.tick,origin):undefined;
     if(scheduled&&spring)this.springWork297.wakeCoefficient(dt297,speed297);
     // The real atlas still validates every pose before any endpoint writes.
     // Without an atlas no per-slot aggregate work is needed.
@@ -1819,19 +1819,17 @@ export class PawnLayer {
       if(motion.getY(i)!==priorActivity)partUnionDirty=true;
       if(spring){this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,retainSpring)||dirty;}
     };
-    if(scheduled&&scheduled.length===humans.length)humans.forEach(updateSlot);
+    if(scheduled&&scheduled.endpointCount===humans.length)humans.forEach(updateSlot);
     else if(scheduled){
-      const visit=new Set(scheduled);
-      // Keep native source order while evaluating the small union of actual
-      // endpoint changes, dependent actors and still-active Float32 roots.
-      if(spring)for(const i of this.springWork297.active)if(i<humans.length)visit.add(i);
-      if(spring)this.springMetrics297.retained+=humans.length-visit.size;
-      const changedSlots=new Set(scheduled);
-      for(const i of [...visit].sort((a,b)=>a-b)){
+      if(spring)scheduled.includeSprings(this.springWork297.active);
+      let visited=0;
+      for(let i=scheduled.next(0);i>=0;i=scheduled.next(i+1)){
+        visited++;
         const pawn=humans[i]!;
-        if(changedSlots.has(i))updateSlot(pawn,i);
+        if(scheduled.isEndpoint(i))updateSlot(pawn,i);
         else if(spring){if(!this.springValid297[i])this.captureSpring297(i,from,to,times,motion);dirty=this.springPose297(i,pawn,dt297,speed297,from,to,times,motion,true)||dirty;}
       }
+      if(spring)this.springMetrics297.retained+=humans.length-visited;
     }else humans.forEach(updateSlot);
     let crouchFinished=false;
     for(const [id,transition] of this.crouchTransitions){

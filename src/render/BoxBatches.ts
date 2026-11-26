@@ -6,6 +6,7 @@ import * as THREE from 'three/webgpu';
 import { attribute, texture, uv } from 'three/tsl';
 import { material } from './primitives';
 import type { Placement } from './primitives';
+import type {ScenePileChunks,ScenePilePresentation} from './ScenePilePresentation';
 import { BoxMesh, configureBoxMaterial } from './BoxMesh';
 import {SpatialInstanceRanges379,type SpatialInstanceRange379} from './SpatialInstanceRanges379';
 import {markResidentAttributeRange} from './resident-attribute-range';
@@ -175,18 +176,34 @@ export class BoxBatches {
       this.setGeometry(group,key,items,this.sandbagGeometry,style,shadows);return;
     }
     if(style==='solid'&&(key.startsWith('pile:')||this.itemBatchKeys.has(key)||items.some(p=>p.shape&&(ITEM_SHAPES as readonly string[]).includes(p.shape)))){
-      this.itemBatchKeys.add(key);this.warmRoundedRocks(group,key,shadows);
-      const ordinary:Placement[]=[],complex:Placement[]=[],rocks:Placement[]=[],small:Placement[]=[];
-      for(const p of items){if(p.shape==='rounded-rock')(isSmallChunk(p.key,p.sx)?small:rocks).push(p);else(this.itemAtlas.isSmall(p.shape as ItemShape|undefined)?ordinary:complex).push(p);}
-      this.setGeometry(group,key,ordinary,this.itemAtlas.smallGeometry,style,shadows);
-      if(complex.length||this.batches.has(`${key}:complex`))this.setGeometry(group,`${key}:complex`,complex,this.itemAtlas.geometry,style,shadows);
-      if(rocks.length||small.length||this.batches.has(`${key}:rounded-rock`)){
-        this.setGeometry(group,`${key}:rounded-rock`,rocks,this.roundedRockGeometry,style,shadows);
-        this.setGeometry(group,`${key}:small-rock`,small,this.smallRockGeometry,style,shadows);
-      }
+      this.setItemRuns(group,key,shadows,accept=>accept(items));
       return;
     }
     this.setHistorical(group,key,items,style,shadows);
+  }
+
+  /** Consume the prepared bundle runs directly in their approved chunk order.
+   * Classification produces the same slot order for each atlas and rock mesh. */
+  setPileChunk(group:THREE.Group,owner:ScenePilePresentation,frame:ScenePileChunks,chunk:ScenePileChunks['changedChunks'][number]):void {
+    this.setItemRuns(group,`pile:${chunk.key}`,true,accept=>owner.visitPlacementRuns(frame,chunk,accept));
+  }
+
+  private setItemRuns(group:THREE.Group,key:string,shadows:boolean,read:(accept:(run:readonly Placement[])=>void)=>void):void {
+    const ordinary:Placement[]=[],complex:Placement[]=[],rocks:Placement[]=[],small:Placement[]=[];
+    read(run=>{
+      for(let i=0;i<run.length;i++){
+        const p=run[i]!;
+        if(p.shape==='rounded-rock')(isSmallChunk(p.key,p.sx)?small:rocks).push(p);
+        else(this.itemAtlas.isSmall(p.shape as ItemShape|undefined)?ordinary:complex).push(p);
+      }
+    });
+    this.itemBatchKeys.add(key);this.warmRoundedRocks(group,key,shadows);
+    this.setGeometry(group,key,ordinary,this.itemAtlas.smallGeometry,'solid',shadows);
+    if(complex.length||this.batches.has(`${key}:complex`))this.setGeometry(group,`${key}:complex`,complex,this.itemAtlas.geometry,'solid',shadows);
+    if(rocks.length||small.length||this.batches.has(`${key}:rounded-rock`)){
+      this.setGeometry(group,`${key}:rounded-rock`,rocks,this.roundedRockGeometry,'solid',shadows);
+      this.setGeometry(group,`${key}:small-rock`,small,this.smallRockGeometry,'solid',shadows);
+    }
   }
   private warmRoundedRocks(group:THREE.Group,key:string,shadows:boolean):void {
     if(key.startsWith('pile:')&&!this.roundedRockWarm){
@@ -347,7 +364,8 @@ export class BoxBatches {
     let matrixFirst=Infinity,matrixLast=-1,colorFirst=Infinity,colorLast=-1,shapeFirst=Infinity,shapeLast=-1,contourFirst=Infinity,contourLast=-1,variantFirst=Infinity,variantLast=-1;
     const restore=()=>{if(!restored){targets.tint.restore();restored=true;}};
     if(countChanged)restore();
-    const ids:(number|undefined)[]=[],patternIndices=atlas?new Map<number,number>():undefined;
+    let ids:(number|undefined)[]|undefined;
+    const patternIndices=atlas?new Map<number,number>():undefined;
     const variants=!rock&&this.preparedSurfaces?this.ensurePreparedVariant(mesh):undefined;
     if(variants&&items.length<oldLength){variants.array.fill(-1,items.length,oldLength);prepared=true;variantFirst=items.length;variantLast=oldLength-1;}
     for(let i=0;i<items.length;i++){
@@ -360,7 +378,9 @@ export class BoxBatches {
       if(!old||!Object.is(old.color??0xffffff,item.color??0xffffff)){
         restore();mesh.setColorAt(i,color.setHex(item.color??0xffffff));colors=changed=true;colorFirst=Math.min(colorFirst,i);colorLast=i;
       }
-      ids.push(item.targetId);
+      const targetId=item.targetId;
+      if(!ids&&(i>=targets.ids.length||!Object.is(targetId,targets.ids[i])))ids=targets.ids.slice(0,i);
+      if(ids)ids[i]=targetId;
       if(!old||!Object.is(old.targetId,item.targetId)){restore();idsChanged=changed=true;}
       let modelChanged=false;
       if(atlas){
@@ -383,7 +403,14 @@ export class BoxBatches {
     if(shapes)dirty(mesh.itemShapeBuffer!,shapeFirst,shapeLast,2);
     if(contours)dirty(mesh.geometry.getAttribute('chunkContour') as THREE.InstancedBufferAttribute,contourFirst,contourLast,4);
     if(matrices||countChanged)mesh.computeBoundingSphere(resident?Math.min(matrixFirst,oldLength,items.length):undefined,this.ownedProducer435);
-    if(colors||idsChanged){targets.ids=ids;targets.tint.setInstances(mesh.colorBuffer,ids);const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);}
+    if(colors||idsChanged){
+      // The tint is allowed to keep reading the prior slot directory while a
+      // batch is being written. Publish its successor after the write succeeds.
+      if(ids)targets.ids=ids;
+      else if(targets.ids.length!==items.length)targets.ids=targets.ids.slice(0,items.length);
+      targets.tint.setInstances(mesh.colorBuffer,targets.ids);
+      const selected=this.targetGroups.get(group);if(selected)targets.tint.setTargets(selected);
+    }
     if(prepared){
       // Rebuild only the tiny numeric counts, in first-slot order just like
       // the full writer (including variant contribution order after a reorder).

@@ -1,5 +1,6 @@
 import type {World} from '../sim/types';
 import type {PresentationSegment} from '../sim/travel-timing';
+import {ActorFrameSlots,ActorSlotMask} from './ActorFrameSlots';
 
 const ownedWorlds=new WeakSet<World>();
 /** Called only by the closed MAIN factory's adoption boundary. Merely frozen
@@ -54,11 +55,13 @@ export class ActorPlayback435<A extends ActorSource> {
  private world:World|undefined;
  private source:readonly A[]|undefined;
  private slots:PreparedActor435[]=[];
- private pending:PreparedActor435[]=[];
+ private pending:(PreparedActor435|undefined)[]=[];
+ private pendingCount=0;
  private owned=false;
  private readonly indices435=new Map<number,number>();
- private readonly ready435=new Set<number>();
- private readonly dependents435=new Set<number>();
+ private readonly ready435=new ActorSlotMask();
+ private readonly dependents435=new ActorSlotMask();
+ private readonly frame435=new ActorFrameSlots();
  private readonly boundaries435=new PlaybackBoundaryHeap435();
  private readonly serial435:number[]=[];
  private readonly nextBoundary435:number[]=[];
@@ -76,8 +79,9 @@ export class ActorPlayback435<A extends ActorSource> {
  prepare(world:World,actors:readonly A[],reset=false):void{
   const owned=isActorPlaybackWorld435(world);if(!reset&&this.world===world&&this.source===actors&&this.owned===owned)return;
   const stableRoster=owned&&this.owned&&this.slots.length===actors.length&&actors.every((actor,index)=>this.slots[index]!.id===actor.id);
-  this.world=world;this.source=actors;this.owned=owned;this.pending.length=0;this.retrying=false;
+  this.world=world;this.source=actors;this.owned=owned;this.pending.length=0;this.pendingCount=0;this.retrying=false;
   this.scheduleReset435=true;this.ready435.clear();this.dependents435.clear();this.boundaries435.clear();this.nextBoundary435.length=0;
+  if(owned){this.ready435.reserve(actors.length);this.dependents435.reserve(actors.length);}
   if(stableRoster){
    // Rebase all playback/spring inputs exactly as the complete prepare. The
    // ordered IDs themselves were checked and own the same resident slots.
@@ -101,27 +105,37 @@ export class ActorPlayback435<A extends ActorSource> {
   this.stats.adoptions++;this.stats.preparedActors+=indices.length;
  }
  beginFrame(timeline:ActorTimeline435|undefined):boolean{
-  this.retrying=this.pending.length>0||this.scheduleOpen435;if(this.retrying){for(const row of this.pending)row.dirty=true;this.pending.length=0;this.scheduleReset435=true;this.scheduleOpen435=false;this.stats.retries++;}
+  this.retrying=this.pendingCount>0||this.scheduleOpen435;
+  if(this.retrying){
+   for(let i=0;i<this.pendingCount;i++){this.pending[i]!.dirty=true;this.pending[i]=undefined;}
+   this.pendingCount=0;this.scheduleReset435=true;this.scheduleOpen435=false;this.stats.retries++;
+  }
   const enabled=this.owned&&(!timeline||timeline.playbackEnabled435);if(enabled)this.stats.frames++;return enabled;
  }
  /** O(changes + crossed boundaries + carrier dependencies). Only the closed
   * timeline can supply this list. An escaped public Map or mutable history
   * immediately restores the original per-actor path, including absent tracks. */
  frameIndices435(timeline:ActorTimeline435|undefined,tick:number,origin:number):readonly number[]|undefined{
+  const frame=this.frameSlots435(timeline,tick,origin);if(!frame)return;
+  const indices:number[]=[];for(let i=frame.next(0);i>=0;i=frame.next(i+1))indices.push(i);
+  return indices;
+ }
+ /** Borrowed until the next scheduled frame on this group. Callers needing
+  * to retain a result use frameIndices435 for an independent snapshot. */
+ frameSlots435(timeline:ActorTimeline435|undefined,tick:number,origin:number):ActorFrameSlots|undefined{
   this.scheduleActive435=false;
   if(!this.owned||!timeline?.playbackOwned435||!timeline.playbackBoundary435||!timeline.playbackChanged435||!Number.isFinite(tick)||!Number.isFinite(origin)){this.scheduleReset435=true;return;}
   const generation=timeline.playbackGeneration435,revision=timeline.playbackRevision435??0;
   const changes=timeline.playbackChanged435(this.scheduleRevision435);
   const reset=this.scheduleReset435||timeline!==this.scheduleTimeline435||generation!==this.scheduleGeneration435||origin!==this.scheduleOrigin435||tick<this.scheduleTick435||changes===undefined;
   if(reset){this.boundaries435.clear();this.nextBoundary435.length=0;for(let i=0;i<this.slots.length;i++)this.ready435.add(i);}
-  else for(const id of changes??[]){const index=this.indices435.get(id);if(index!==undefined)this.ready435.add(index);}
+  else for(let i=0;i<changes.length;i++){const index=this.indices435.get(changes[i]!);if(index!==undefined)this.ready435.add(index);}
   for(let event=this.boundaries435.peek();event&&event.at<=tick;event=this.boundaries435.peek()){
    this.boundaries435.pop();if(this.serial435[event.index]!==event.serial)continue;this.nextBoundary435[event.index]=Infinity;this.ready435.add(event.index);this.stats.boundaryWakes++;
   }
-  for(const index of this.dependents435)this.ready435.add(index);
-  const result=[...this.ready435].sort((a,b)=>a-b);this.ready435.clear();
+  this.frame435.capture(this.ready435,this.dependents435,this.slots.length);this.ready435.clear();
   this.scheduleActive435=true;this.scheduleOpen435=true;this.scheduleReset435=false;this.scheduleTimeline435=timeline;this.scheduleGeneration435=generation;this.scheduleRevision435=revision;this.scheduleOrigin435=origin;this.scheduleTick435=tick;
-  this.stats.scheduledFrames++;this.stats.scheduledActors+=result.length;this.stats.skips+=this.slots.length-result.length;return result;
+  this.stats.scheduledFrames++;this.stats.scheduledActors+=this.frame435.endpointCount;this.stats.skips+=this.slots.length-this.frame435.endpointCount;return this.frame435;
  }
  select(index:number,timeline:ActorTimeline435|undefined,tick:number,origin:number):PreparedActor435|undefined{
   const row=this.slots[index];if(!row)throw new Error('Actor playback slot was not prepared at adoption.');
@@ -134,13 +148,19 @@ export class ActorPlayback435<A extends ActorSource> {
    if(this.nextBoundary435[index]!==next){const serial=(this.serial435[index]??0)+1;this.serial435[index]=serial;this.nextBoundary435[index]=next;if(Number.isFinite(next))this.boundaries435.push({at:next,index,serial});else this.boundaries435.delete(index);}
   }
   if(!row.dirty&&!row.dependent&&row.committedEdge===edge&&row.committedPhase===phase&&row.committedOrigin===origin&&row.committedGeneration===generation&&row.committedTimeline===timeline){this.stats.skips++;return;}
-  row.edge=edge;row.phase=phase;row.origin=origin;row.generation=generation;row.timeline=timeline;this.pending.push(row);this.stats.visits++;if(row.dependent)this.stats.dependentVisits++;return row;
+  row.edge=edge;row.phase=phase;row.origin=origin;row.generation=generation;row.timeline=timeline;this.pending[this.pendingCount++]=row;this.stats.visits++;if(row.dependent)this.stats.dependentVisits++;return row;
  }
  /** Called after normal endpoint writes, upload flags and rescue copies. A
   * failed batch never commits; the next caller revokes its native key caches. */
- commit():void{for(const row of this.pending){row.committedEdge=row.edge;row.committedPhase=row.phase;row.committedOrigin=row.origin;row.committedGeneration=row.generation;row.committedTimeline=row.timeline;row.dirty=false;this.stats.commits++;}this.pending.length=0;this.scheduleOpen435=false;}
- snapshot(){return{enabled:this.owned,actors:this.slots.length,pending:this.pending.length,scheduledBoundaries:this.boundaries435.size,...this.stats};}
- clear():void{this.world=undefined;this.source=undefined;this.slots=[];this.pending=[];this.owned=false;this.retrying=false;this.indices435.clear();this.ready435.clear();this.dependents435.clear();this.boundaries435.clear();this.serial435.length=0;this.nextBoundary435.length=0;this.scheduleTimeline435=undefined;this.scheduleRevision435=-1;this.scheduleReset435=true;this.scheduleOpen435=false;this.scheduleActive435=false;}
+ commit():void{
+  for(let i=0;i<this.pendingCount;i++){
+   const row=this.pending[i]!;row.committedEdge=row.edge;row.committedPhase=row.phase;row.committedOrigin=row.origin;row.committedGeneration=row.generation;row.committedTimeline=row.timeline;row.dirty=false;
+   this.pending[i]=undefined;this.stats.commits++;
+  }
+  this.pendingCount=0;this.scheduleOpen435=false;
+ }
+ snapshot(){return{enabled:this.owned,actors:this.slots.length,pending:this.pendingCount,scheduledBoundaries:this.boundaries435.size,...this.stats};}
+ clear():void{this.world=undefined;this.source=undefined;this.slots=[];this.pending=[];this.pendingCount=0;this.owned=false;this.retrying=false;this.indices435.clear();this.ready435.clear();this.dependents435.clear();this.boundaries435.clear();this.serial435.length=0;this.nextBoundary435.length=0;this.scheduleTimeline435=undefined;this.scheduleRevision435=-1;this.scheduleReset435=true;this.scheduleOpen435=false;this.scheduleActive435=false;}
 }
 
 type PlaybackBoundary435={at:number;index:number;serial:number};

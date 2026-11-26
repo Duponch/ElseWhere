@@ -112,6 +112,23 @@ describe('HUD dossiers keep the accepted live facts',()=>{
 });
 
 describe('retained native HUD resources',()=>{
+  it('an advancing civil minute repaints only the clock while hover changes repaint only the temperature',()=>{
+    const f=fixture(),world=createWorld(8_530_099,16,16);
+    const access=f.hud as unknown as {world:typeof world;refreshWeather:(value:typeof world)=>void};
+    try{
+      access.world=world;f.hud.setHoverTemperature('Intérieur 21 °C');
+      const clock=f.piece('hud:clock'),weather=f.piece('hud:weather-label'),temperature=f.piece('hud:temperature');
+      const versions=()=>[clock,weather,temperature].map(piece=>piece.userData.texture.version);
+      const [c,w,t]=versions() as [number,number,number];
+      world.tick+=5;access.refreshWeather(world);
+      expect(versions()).toEqual([c+1,w,t]);
+      f.hud.setHoverTemperature('Intérieur 22 °C');
+      expect(versions()).toEqual([c+1,w,t+1]);
+      expect(clock.userData.tooltip).toContain('22 °C');
+      access.refreshWeather(world);
+      expect(versions()).toEqual([c+1,w,t+1]);
+    }finally{f.close();}
+  });
   it('changes only affected ink and preserves canvases, GPU resources, hit meshes and hover state',()=>{
     const f=fixture();
     try{

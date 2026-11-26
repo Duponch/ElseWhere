@@ -614,7 +614,7 @@ class SpeciesRig {
     const spring=isCorePhysicalSchema297(Number(world.schemaVersion));if(spring)this.ensureSpring297(animals.length);
     this.playback435.prepare(world,animals,reset);const playback=this.playback435.beginFrame(timeline);if(this.playback435.retrying)this.keys.clear();
     if(changed||reset){this.carrierSlots.clear();this.springSlots297.clear();if(reset)this.animationCache.reset();}
-    const scheduled=playback?this.playback435.frameIndices435(timeline,tick,origin):undefined;
+    const scheduled=playback?this.playback435.frameSlots435(timeline,tick,origin):undefined;
     const updateSlot=(a:VisualAnimal,i:number)=>{
       // These bodies have equal endpoints and no local clocks or handoff.
       // New snapshots (even at the same tick), resets and transferred bodies
@@ -714,13 +714,12 @@ class SpeciesRig {
       scale.setX(i,growth);
       if(springActor){this.captureSpring297(i,from,to,times,state);springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;}
     };
-    if(scheduled&&scheduled.length===animals.length)animals.forEach(updateSlot);
+    if(scheduled&&scheduled.endpointCount===animals.length)animals.forEach(updateSlot);
     else if(scheduled){
-      const changedSlots=new Set(scheduled),visit=new Set(scheduled);
-      if(spring)for(const i of this.springSlots297)if(i<animals.length)visit.add(i);
-      for(const i of [...visit].sort((a,b)=>a-b)){
+      if(spring)scheduled.includeSprings(this.springSlots297);
+      for(let i=scheduled.next(0);i>=0;i=scheduled.next(i+1)){
         const a=animals[i]!;
-        if(changedSlots.has(i))updateSlot(a,i);
+        if(scheduled.isEndpoint(i))updateSlot(a,i);
         else if(spring)springDirty=this.springPose297(i,a,dt297,speed297,from,to,times,state)||springDirty;
       }
     }else animals.forEach(updateSlot);

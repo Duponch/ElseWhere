@@ -48,6 +48,12 @@ function atDelivery(pile:MaterialPile,cell:NonNullable<ReturnType<typeof deliver
     :cell.type==='job'&&pile.owner.type==='job'&&pile.owner.jobId===cell.jobId);
 }
 
+function pileDirectory(piles:readonly MaterialPile[]):Map<number,MaterialPile> {
+  const result=new Map<number,MaterialPile>();
+  for(let i=0;i<piles.length;i++){const pile=piles[i]!;result.set(pile.id,pile);}
+  return result;
+}
+
 /** Snapshot-only visual transfer ledger. Piles remain authoritative and selectable;
  * only the quantity drawn in their resident chunk waits for the cargo to land. */
 export class CargoHandoffs {
@@ -73,15 +79,17 @@ export class CargoHandoffs {
     if(!previous||!animate){this.clear();return;}
     this.complete(tick);
     if(previous.piles===world.piles&&this.active.size===0)return;
-    const before=new Map(previous.piles.map(p=>[p.id,p]));
-    const after=new Map(world.piles.map(p=>[p.id,p]));
     const oldCarried=new Map<number,MaterialPile>(),nowCarried=new Map<number,MaterialPile>();
-    for(const pile of previous.piles)if(pile.owner.type==='pawn'&&!pile.humanCorpse)oldCarried.set(pile.owner.pawnId,pile);
-    for(const pile of world.piles)if(pile.owner.type==='pawn'&&!pile.humanCorpse)nowCarried.set(pile.owner.pawnId,pile);
+    for(let i=0;i<previous.piles.length;i++){const pile=previous.piles[i]!;if(pile.owner.type==='pawn'&&!pile.humanCorpse)oldCarried.set(pile.owner.pawnId,pile);}
+    for(let i=0;i<world.piles.length;i++){const pile=world.piles[i]!;if(pile.owner.type==='pawn'&&!pile.humanCorpse)nowCarried.set(pile.owner.pawnId,pile);}
     let currentGround:{surfaces:ReturnType<typeof pileSurfaces>;identities:ReturnType<typeof pileIdentitySurfaces>}|undefined;
     const groundNow=()=>currentGround??={surfaces:pileSurfaces(world),identities:pileIdentitySurfaces(world)};
+    let after:Map<number,MaterialPile>|undefined;
     for(const [id,item] of this.active){
-      const target=item.targetPileId===undefined?undefined:after.get(item.targetPileId);
+      const targetId=item.targetPileId;
+      const target=targetId===undefined?undefined:this.active.size===1
+        ?world.piles.findLast(pile=>pile.id===targetId)
+        :(after??=pileDirectory(world.piles)).get(targetId);
       if(item.direction==='drop'&&(!target||target.owner.type!=='ground'&&target.owner.type!=='job'||
           nowCarried.get(id)?.id!==oldCarried.get(id)?.id&&nowCarried.has(id))||
         item.direction==='pickup'&&nowCarried.get(id)?.id!==item.pile.id||
@@ -97,12 +105,19 @@ export class CargoHandoffs {
         item.to=to;item.groundScale=(surface?.scale??1)*(target.item==='minified-tree'?1:.8);
       }
     }
-    const transfers=[...new Set([...oldCarried.keys(),...nowCarried.keys()])].filter(id=>{
-      if(this.active.has(id))return false;
-      const old=oldCarried.get(id),current=nowCarried.get(id);
-      return old?.id!==current?.id||!!old&&!!current&&current.quantity<old.quantity;
-    });
-    if(!transfers.length)return;
+    let transfer=false;
+    for(const [id,old] of oldCarried){
+      const current=nowCarried.get(id);
+      if(!this.active.has(id)&&(!current||current.id!==old.id||current.quantity<old.quantity)){transfer=true;break;}
+    }
+    if(!transfer)for(const id of nowCarried.keys()){
+      if(!oldCarried.has(id)&&!this.active.has(id)){transfer=true;break;}
+    }
+    if(!transfer)return;
+    // Retain both identity snapshots before invoking the hand-position reader.
+    // A publication with no new transfer needs only its carried-pile rows.
+    const before=pileDirectory(previous.piles);
+    after??=pileDirectory(world.piles);
     const previousSurfaces=pileSurfaces(previous),previousIdentities=pileIdentitySurfaces(previous),{surfaces:currentSurfaces,identities:currentIdentities}=groundNow();
     const claimed=new Map<number,number>();
     for(const [pawnId,pile] of oldCarried){

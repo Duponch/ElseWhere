@@ -491,13 +491,18 @@ export class StructureVfxLayer {
     if(!glowGeometry.hasAttribute('fxSlot'))glowGeometry.setAttribute('fxSlot',new THREE.InstancedBufferAttribute(new Float32Array(this.glow.instanceMatrix.count),1));
     const glowSlots=glowGeometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;let count=0,dirty=false;
     for(let row=0;row<this.glowRecords.length;row++){
-      const item=this.glowRecords[row]!,level=this.glowCache.sample(row,item.x,item.y,item.z,()=>this.glowCache.set(row,1,Math.sin(this.tick.value*2*Math.PI/18+item.x*2.1+item.z*1.7)*.12+.91));if(level===2)continue;
+      const item=this.glowRecords[row]!;
+      if(this.glowCache.sampleDue(row,item.x,item.y,item.z)){
+        this.glowCache.set(row,1,Math.sin(this.tick.value*2*Math.PI/18+item.x*2.1+item.z*1.7)*.12+.91);
+      }
+      if(this.glowCache.commitSample(row)===2)continue;
       if(this.glowDrawn[count]!==row){object.position.set(item.x,item.y,item.z);object.rotation.set(0,item.ry,0);object.scale.set(item.sx,item.sy,item.sz);object.updateMatrix();this.glow.setMatrixAt(count,object.matrix);this.glow.setColorAt(count,color.setHex(item.color));glowSlots.setX(count,row);this.glowDrawn[count]=row;dirty=true;}count++;
     }
     this.glowDrawn.length=count;this.glow.activeCount=count;if(dirty){this.glow.instanceMatrix.needsUpdate=this.glow.colorBuffer.needsUpdate=glowSlots.needsUpdate=true;this.glow.computeBoundingSphere();}this.glowCache.flush();
     const geometry=this.smoke.geometry,positions=geometry.getAttribute('smokePosition') as THREE.InstancedBufferAttribute,shapes=geometry.getAttribute('smokeShape') as THREE.InstancedBufferAttribute,slots=geometry.getAttribute('fxSlot') as THREE.InstancedBufferAttribute;count=0;dirty=false;
     for(let row=0;row<this.smokeRecords.length;row++){
-      const item=this.smokeRecords[row]!,level=this.smokeCache.sample(row,item.x,item.y,item.z,()=>{
+      const item=this.smokeRecords[row]!;
+      if(this.smokeCache.sampleDue(row,item.x,item.y,item.z)){
         const phase=fxFract(this.tick.value/30+item.seed),drift=Math.sin(this.tick.value*2*Math.PI/80+item.seed*19)*.08*phase,downwind=phase*phase*this.windStrength.value*item.rise*.42;
         const x=item.x+this.windDirection.value.x*downwind-this.windDirection.value.y*drift,y=item.y+phase*item.rise,z=item.z+this.windDirection.value.y*downwind+this.windDirection.value.x*drift;
         const basis=fxBillboard(x,y,z,this.cameraPoint),breadth=item.size*(.59+phase*1.04)*.72;
@@ -505,7 +510,8 @@ export class StructureVfxLayer {
         this.smokeCache.set(row,2,basis.up[0]*breadth*item.stretch,basis.up[1]*breadth*item.stretch,basis.up[2]*breadth*item.stretch);
         this.smokeCache.set(row,3,0,0,0);this.smokeCache.set(row,4,x,y,z);
         this.smokeCache.set(row,5,fxSmoothstep(0,.17,phase)*(1-fxSmoothstep(.68,1,phase))*(Math.sin(item.seed*39.7)*.055+item.opacityBias*.07+.31));
-      });if(level===2)continue;
+      }
+      if(this.smokeCache.commitSample(row)===2)continue;
       if(this.smokeDrawn[count]!==row){positions.setXYZW(count,item.x,item.y,item.z,item.seed);shapes.setXYZW(count,item.size,item.opacityBias,item.rise,item.stretch);slots.setX(count,row);this.smokeDrawn[count]=row;dirty=true;}count++;
     }
     this.smokeDrawn.length=count;if(dirty)positions.needsUpdate=shapes.needsUpdate=slots.needsUpdate=true;geometry.instanceCount=count;this.smoke.visible=count>0;this.smokeCache.flush();

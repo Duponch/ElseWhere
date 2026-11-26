@@ -9,6 +9,8 @@
 // Usage: node scripts/perf-client-publication.mjs <port> <save URL path> <seconds> <speeds csv> <out.json>
 //   CHROME=<chrome.exe> to choose the browser (default: the project's Playwright Chromium)
 //   PROFILE=1 also writes a main-thread CPU profile of each window (diagnosis only: it adds overhead).
+//   PERF_GC=1 adds main-thread RAF/GC correlation and sampled allocations to
+//   <out.json>.gc-summary.json. Use separate runs for uninstrumented timing.
 //   PERF_ORBIT=1 measures continuous real right-button camera dragging instead
 //   of a stationary view. Use one speed per run for the same starting view.
 // Then: node scripts/perf-client-publication-summary.mjs out.json [...]
@@ -25,10 +27,12 @@ const channel=process.env.PERF_BROWSER_CHANNEL;
 const orbit=process.env.PERF_ORBIT==='1';
 const uncapped=process.env.PERF_UNCAPPED==='1';
 const cadenceProbe=process.env.PERF_CADENCE==='1';
+const measureGc=process.env.PERF_GC==='1';
 if(orbit&&speeds.split(',').length!==1)throw Error('Orbit comparisons require one speed and the same starting camera');
 if(channel!==undefined&&!['chrome','chromium'].includes(channel))throw Error('Unknown benchmark browser channel');
 const args=['--mute-audio',...uncapped?['--disable-frame-rate-limit','--disable-gpu-vsync']:[]];
 const browser = await chromium.launch(channel?{channel,headless:true,args}:{ executablePath: process.env.CHROME ?? 'E:/Code/RimWorld/.playwright/chromium-1243/chrome-win64/chrome.exe', headless: true, args: [...args, '--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist', '--js-flags=--max-old-space-size=8192'] });
+try {
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
 // Offline native benchmark: serve only a frozen, existing local build through
 // Playwright's fixture router, with no TCP connection or external requests.
@@ -71,7 +75,7 @@ if(cadenceProbe){
   });
   await tab.close();
 }
-await ctx.addInitScript(() => {
+await ctx.addInitScript(measureGc => {
   for (const [k, v] of Object.entries({ 'lisiere.audio.effects.enabled.v1': 'false', 'lisiere.audio.music.enabled.v1': 'false', 'lisiere.autosave-minutes.v1': '0', 'lisiere.presentation.threat-pause.v1': 'never' })) localStorage.setItem(k, v);
   const zero = () => ({ cb: 0, frame: 0, apply: 0, applyN: 0, setWorld: 0, render: 0, draws: 0, phases: 0, phaseSet: 0, phaseN: 0, deserFull: 0, deserPhase: 0, listenFull: 0, listenPhase: 0, onmsgFull: 0, onmsgPhase: 0, nFull: 0, nPhase: 0 });
   const st = window.__fa = { on: false, frames: [], cur: zero(), zero, last: 0, tasks: [], types: new WeakMap(), publishedCore: -1 };
@@ -105,10 +109,14 @@ await ctx.addInitScript(() => {
   window.requestAnimationFrame = cb => raf(ts => { const t = performance.now(); try { cb(ts); } finally { st.cur.cb += performance.now() - t; } });
   // One record per animation frame, closed before the frame's callbacks run:
   // work between two frames (messages, timers, HUD) lands in the next record.
-  const tick = ts => { const c2 = window.__c2; if (st.on) st.frames.push({ dt: ts - st.last, ...st.cur, ...(c2 ? c2.cur : {}) }); st.last = ts; st.cur = zero(); if (c2) c2.cur = c2.z(); raf(tick); };
+  const tick = ts => { const c2 = window.__c2; if (st.on) {
+    const sample = {dt: ts - st.last, ...st.cur, ...(c2 ? c2.cur : {})};
+    if (measureGc) { sample.rafEndMs = ts; sample.observationMs = performance.now(); }
+    st.frames.push(sample);
+  } st.last = ts; st.cur = zero(); if (c2) c2.cur = c2.z(); raf(tick); };
   raf(tick);
   try { new PerformanceObserver(l => { if (st.on) for (const e of l.getEntries()) st.tasks.push(e.duration); }).observe({ type: 'longtask', buffered: false }); } catch { }
-});
+}, measureGc);
 const page = await ctx.newPage(); page.setDefaultTimeout(process.env.PERF_LOCAL_BUILD?120000:900000);
 const errors = []; const reportError=e=>{errors.push(String(e).slice(0,300));if(process.env.PERF_LOCAL_BUILD)console.log('[local build error]',String(e).slice(0,300));};
 page.on('pageerror', reportError); page.on('console', m => { if (m.type() === 'error') reportError(m.text()); });
@@ -186,6 +194,7 @@ async function captureSceneCpu(){
   try{for(let i=0;i<120;i++)await new Promise(done=>requestAnimationFrame(done));}finally{for(const reset of originals.reverse())reset();}
   return [...rows.values()].sort((a,b)=>b.ms-a.ms).slice(0,60);
 }
+const endGc = measureGc ? await (await import('./perf-client-gc.mjs')).startClientGc(ctx,page) : undefined;
 for (const speed of speeds.split(',').map(Number)) {
   await page.evaluate(s => window.__perf.speedTo(s), speed);
   await page.waitForTimeout(5000);
@@ -198,7 +207,11 @@ for (const speed of speeds.split(',').map(Number)) {
     await page.mouse.move(drag.x-drag.amplitude,drag.y);await page.mouse.down({button:'right'});
   }
   const graphicsStart=await page.evaluate(graphicsCounters);
-  await page.evaluate(() => { const st = window.__fa; st.frames = []; st.tasks = []; st.on = true; st.t0 = performance.now(); st.tick0 = window.__perf.world?.tick; st.core0=st.publishedCore; });
+  await page.evaluate(marker => {
+    const st = window.__fa; st.frames = []; st.tasks = []; st.on = true;
+    st.t0 = marker ? performance.mark(marker).startTime : performance.now();
+    st.tick0 = window.__perf.world?.tick; st.core0 = st.publishedCore;
+  }, measureGc ? 'elsewhere-gc-trace-start-x'+speed : null);
   if(drag){
     const start=performance.now(),duration=Number(secs)*1000,period=8000;
     const angles=[];let sampleAt=0;
@@ -210,7 +223,14 @@ for (const speed of speeds.split(',').map(Number)) {
     result.orbitAngleSpanRad=Math.max(0,...angles.flatMap(a=>angles.map(b=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b))))));
     if(result.orbitAngleSpanRad<.2)throw Error('Right-button input did not actually rotate the camera');
   }else await page.waitForTimeout(Number(secs) * 1000);
-  const raw = await page.evaluate(() => { const st = window.__fa; st.on = false; return { frames: st.frames.slice(1), tasks: st.tasks, wallS: (performance.now() - st.t0) / 1000, ticks: (window.__perf.world?.tick ?? 0) - st.tick0, ...(st.core0>=0&&st.publishedCore>=st.core0?{publishedCoreTicks:st.publishedCore-st.core0}:{}) }; });
+  const raw = await page.evaluate(marker => {
+    const st = window.__fa; st.on = false;
+    const end = marker ? performance.mark(marker).startTime : performance.now();
+    const run = {frames:st.frames.slice(1),tasks:st.tasks,wallS:(end-st.t0)/1000,ticks:(window.__perf.world?.tick ?? 0)-st.tick0,
+      ...(st.core0>=0&&st.publishedCore>=st.core0?{publishedCoreTicks:st.publishedCore-st.core0}:{})};
+    if (marker) { run.gcMarkerMs = st.t0; run.gcEndMarkerMs = end; run.gcFirstObservationMs = st.frames[0]?.observationMs; }
+    return run;
+  }, measureGc ? 'elsewhere-gc-trace-stop-x'+speed : null);
   if(drag)await page.mouse.up({button:'right'});
   if (cdp) { const { profile } = await cdp.send('Profiler.stop'); writeFileSync(`${out}.x${speed}.cpuprofile`, JSON.stringify(profile)); await cdp.detach(); }
   result['x' + speed] = {...raw,graphicsStart,graphicsEnd:await page.evaluate(graphicsCounters)};
@@ -220,4 +240,13 @@ for (const speed of speeds.split(',').map(Number)) {
 }
 result.errors = errors.slice(0, 5);
 writeFileSync(out, JSON.stringify(result));
-await browser.close();
+if (endGc) {
+  const gc = await endGc(result);
+  writeFileSync(out+'.gc-summary.json',JSON.stringify(gc,null,2));
+  for (const warning of gc.warnings) console.warn('[PERF_GC]',warning);
+}
+} finally {
+  // Closing this private browser also ends tracing and sampling if the page,
+  // a speed window, or CDP finalization failed before writing the summary.
+  await browser.close();
+}
