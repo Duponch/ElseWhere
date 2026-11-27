@@ -47,7 +47,7 @@ export function actorPoseIsRigid(kind:'human'|'animal',g:THREE.BufferGeometry,sl
  if(kind==='human'){const m=g.getAttribute('aMotion');return!!m&&m.getX(slot)>=-.5&&![WORK_POSE.ground,WORK_POSE.groundMelee,10].includes(m.getZ(slot));}
  const t=g.getAttribute('aCorpseHandoff');return!t||Math.abs(t.getY(slot))<=.0001;
 }
-function parameters(c:GraphicsStyleContext){const p=c.preferences;return JSON.stringify([p.impasto,p.wear,p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection,c.paintReplayState().refreshed]);}
+function parameters(c:GraphicsStyleContext){const p=c.preferences;return JSON.stringify([p.impasto,p.wear,p.edges,p.blackEdges,p.edgeWidth,p.strokeImperfection,p.contourImperfection,c.paintReplayState().refreshed,p.personalizedTextures]);}
 const numberKey=(p:ActorBodyBakePort,slot:number)=>{const g=p.geometry,s=g.getAttribute('aShape'),e=g.getAttribute('aEquipment'),row=Math.floor(s.getW(slot)/32),body=s.getX(slot)%10,head=s.getY(slot),outfit=e.getY(slot),wood=Math.round((e.getX(slot)-Math.floor(e.getX(slot)))*8);return(row|(body<<12)|(head<<15)|(outfit<<19)|(wood<<22))>>>0;};
 const keyNode=()=>{const s=attribute('aShape','vec4'),e=attribute('aEquipment','vec4');return s.w.div(32).floor().toUint().bitOr(s.x.mod(10).toUint().shiftLeft(uint(12))).bitOr(s.y.toUint().shiftLeft(uint(15))).bitOr(e.y.toUint().shiftLeft(uint(19))).bitOr(e.x.fract().mul(8).round().toUint().shiftLeft(uint(22)));};
 export function createActorBakeSource(options:ActorAtlasOwnerOptions,port:ActorBodyBakePort,completeIndex:Uint16Array|Uint32Array):ActorBakeSource{

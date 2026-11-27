@@ -24,6 +24,7 @@ import {FurniturePresentation} from '../render/FurnitureLayer';
 import {DoorLayer} from '../render/DoorLayer';
 import {WindLayer} from '../render/WindLayer';
 import {TimberCladdingLayer,timberCladdingParts} from '../render/TimberCladdingLayer';
+import {isWallAppliance} from '../render/wall-appliance';
 import {doorLeafParts} from '../render/door-parts';
 import {miniTurretTopPartsForStructure} from '../render/mini-turret-parts';
 import {windBladeParts} from '../render/wind-blade-parts';
@@ -277,7 +278,7 @@ export function createEnvironmentAssetCatalog(context:GraphicsStyleContext):Cata
       };
       previewCall(presentation,presentation.update,record,group,false,sink);presentation.clear();
       const bounds=boundsReader.parts(captured);
-      if(kind==='wall'&&material==='wood'){
+      if(kind==='wall'&&material==='wood'||isWallAppliance(kind)){
         const timber=new TimberCladdingLayer();previewCall(timber,timber.update,record,false,true);group.add(timber.group);dispose.push(()=>timber.dispose());
         const parts=previewCall(undefined,timberCladdingParts,record,false);for(const p of parts.walls)boundsReader.add(bounds,p,timber.wallGeometry);for(const p of parts.eaves)boundsReader.add(bounds,p,timber.eaveGeometry);
       }

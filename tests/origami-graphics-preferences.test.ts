@@ -13,7 +13,7 @@ test('graphics preferences default safely for absent, corrupt and invalid enum s
 });
 
 test('new profiles use the requested screenshot defaults while the selected base style stays Default',()=>{
-  const expected={style:'default',impasto:1,blackEdges:.79,edges:0,edgeWidth:1.7,strokeImperfection:.15,wear:.75,contourImperfection:.60};
+  const expected={style:'default',personalizedTextures:true,impasto:1,blackEdges:.79,edges:0,edgeWidth:1.7,strokeImperfection:.15,wear:.75,contourImperfection:.60};
   expect(DEFAULT_GRAPHICS_STYLE_PREFERENCES).toEqual(expected);expect(parseGraphicsStylePreferences(null)).toEqual(expected);
   expect(normalizeGraphicsStylePreferences({style:'origami'})).toEqual({...expected,style:'origami'});
   expect(normalizeGraphicsStylePreferences({style:'origami',edgeWidth:2.1,edges:.65})).toEqual({...expected,style:'origami',edgeWidth:2.1,edges:.65});
@@ -21,12 +21,12 @@ test('new profiles use the requested screenshot defaults while the selected base
 
 test('explicit saved controls including the previous defaults are preserved exactly',()=>{
   const previous={style:'origami',impasto:1,blackEdges:.45475625,edges:.65,edgeWidth:1,strokeImperfection:.45,wear:.75,contourImperfection:.60},custom={...previous,blackEdges:0,edgeWidth:3.6,strokeImperfection:.48,edges:.23};
-  for(const saved of [previous,custom])expect(parseGraphicsStylePreferences(JSON.stringify(saved))).toEqual(saved);
+  for(const saved of [previous,custom])expect(parseGraphicsStylePreferences(JSON.stringify(saved))).toEqual({...saved,personalizedTextures:true});
 });
 
 test('pre-black v1 keeps its historical intensity even though new paper defaults changed',()=>{
   const original={style:'origami',impasto:1,edges:.65,wear:.75,contourImperfection:.60};
-  expect(parseGraphicsStylePreferences(JSON.stringify(original))).toEqual({...original,blackEdges:.45475625,edgeWidth:1.7,strokeImperfection:.15});
+  expect(parseGraphicsStylePreferences(JSON.stringify(original))).toEqual({...original,personalizedTextures:true,blackEdges:.45475625,edgeWidth:1.7,strokeImperfection:.15});
   const partial=normalizeGraphicsStylePreferences({style:'origami',wear:.3});
   expect(partial.edges).toBe(0);expect(partial.blackEdges).toBeCloseTo(.65*(1-Math.min(1,.3*(.2+.60*1.15))*.45),14);
   expect(parseGraphicsStylePreferences(JSON.stringify(partial))).toEqual(partial);
@@ -61,9 +61,9 @@ test('black contour settings have their own finite bounds and do not overwrite t
 
 test('missing contour width takes the current physical multiplier default with finite independent bounds',()=>{
  const legacy={style:'origami',impasto:1.4,blackEdges:.33,edges:.8,wear:.2,contourImperfection:.4};
- expect(parseGraphicsStylePreferences(JSON.stringify(legacy))).toEqual({...legacy,edgeWidth:1.7,strokeImperfection:.15});
+ expect(parseGraphicsStylePreferences(JSON.stringify(legacy))).toEqual({...legacy,personalizedTextures:true,edgeWidth:1.7,strokeImperfection:.15});
  for(const [value,expected]of [[-2,.5],[.5,.5],[2.4,2.4],[99,5],[NaN,1.7],[Infinity,1.7],['2',1.7],[null,1.7]] as const){
-  expect(normalizeGraphicsStylePreferences({...legacy,edgeWidth:value})).toEqual({...legacy,edgeWidth:expected,strokeImperfection:.15});
+  expect(normalizeGraphicsStylePreferences({...legacy,edgeWidth:value})).toEqual({...legacy,personalizedTextures:true,edgeWidth:expected,strokeImperfection:.15});
  }
  const control=ORIGAMI_STYLE_CONTROLS.find(control=>control.key==='edgeWidth')!;
  expect(control).toMatchObject({label:'Épaisseur des contours',min:.5,max:5,step:.1,unit:'×'});
@@ -114,6 +114,16 @@ test('Graphismes offers Pastel and Gouache without changing any preference throu
     ['origami-impasto','100 %'],['origami-blackEdges','79 %'],['origami-edges','0 %'],['origami-edgeWidth','1.7 ×'],['origami-strokeImperfection','15 %'],['origami-wear','75 %'],['origami-contourImperfection','60 %']]);
   expect(f.page.rows.filter(row=>row.id.startsWith('origami-')).every(row=>row.compact&&row.dense&&row.region==='details')).toBe(true);
   expect(f.page.rows.find(row=>row.id==='origami-edges')!.label).toBe('Contours carton d’origine');
+});
+
+test('drawings can be switched live independently of the style and the other settings',async()=>{
+ const f=fixture();await f.click('option-section-graphics');
+ expect(f.control('graphics-personalized-textures').active).toBe(true);
+ await f.click('graphics-personalized-textures');expect(f.settings).toEqual({...DEFAULT_GRAPHICS_STYLE_PREFERENCES,personalizedTextures:false});
+ await f.control('graphics-style').select!.onChange('origami');expect(f.settings.personalizedTextures).toBe(false);
+ expect(f.control('graphics-personalized-textures').active).toBe(false);await f.click('graphics-personalized-textures');expect(f.settings.personalizedTextures).toBe(true);
+ expect(parseGraphicsStylePreferences(JSON.stringify({...f.settings,personalizedTextures:false})).personalizedTextures).toBe(false);
+ for(const invalid of [null,0,'false',{}])expect(normalizeGraphicsStylePreferences({personalizedTextures:invalid}).personalizedTextures).toBe(true);
 });
 
 test('Origami ranges apply exact bounded settings through the backend and switching retains slider values',async()=>{

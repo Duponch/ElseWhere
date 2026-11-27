@@ -1,11 +1,12 @@
 import * as THREE from 'three/webgpu';
-import {NATIVE_TEXT} from './native-ui-scale';
+import {NATIVE_TEXT,NATIVE_INK} from './native-ui-scale';
 import {PALETTE,drawHandBlob,drawHandRect,type CardboardPiece,type CardboardPieceOptions,type PrototypeCardboardArt} from './prototype-art';
 import {wrapNativeText} from './native-layout';
 import {GUIDANCE_STATUS_LABELS,guidanceTabLabel,readGuidanceCard,readGuidanceConcepts,readGuidanceGesture,startingArrivalPending,type GuidanceCardConcept,type GuidanceCardMode,type GuidanceCardModel,type GuidanceCardSession} from '../ui/guidance-card';
 import type {FirstDayGuideAction,FirstDayGuideSection,FirstDayGuideStatus} from '../ui/first-day-guide';
 import type {FirstGesturesLearning} from '../ui/first-gestures-learning';
 import type {World} from '../sim/types';
+import {readableUiInk} from './ui-theme';
 
 /** Player actions offered by the card. Each one is an existing interface
  * route; none is a game command or a learning record by itself. */
@@ -67,7 +68,7 @@ export class NativeGuidanceCard {
     if(!ctx)throw Error('Canvas 2D is required for the native advice card.');
     this.measureCtx=ctx;
     this.helpButton=this.piece({w:.52,h:.24,depth:.036,bgColor:PALETTE.kraftLight,bevel:.03,seed:9411,interactive:true,hasBorder:false,uvPadding:1,textureWidth:104,textureHeight:48,
-      tooltip:'Aide · carnet de survie (H)',drawFn:(c,w,h)=>this.drawLabel(c,w,h,'Aide',52,24),onClick:()=>this.actions.openHelp()});
+      tooltip:'Aide · carnet de survie (H)',drawFn:(c,w,h)=>this.drawLabel(c,w,h,'Aide',52,24,PALETTE.kraftLight),onClick:()=>this.actions.openHelp()});
     this.helpButton.userData.nativeId='hud:help';
     this.helpButton.setBaseTransform(-1.06,-.12,.02);
     this.helpGroup.add(this.helpButton);
@@ -103,6 +104,9 @@ export class NativeGuidanceCard {
   /** Notions whose text is painted on the card now (none when it is folded
    * to its tab, closed or hidden): their controls are highlighted. */
   get shownConcepts():readonly string[] {return this.conceptIds;}
+  /** Layout stores literal ink colours, so a theme boundary refreshes it even
+   * when the gameplay advice/model itself has not changed. */
+  refreshTheme():void{if(this.disposed)return;this.panelInk='';this.apply();}
 
   dispose():void {
     if(this.disposed)return;this.disposed=true;this.conceptIds=[];
@@ -174,7 +178,7 @@ export class NativeGuidanceCard {
       y=lines(`Notions à découvrir · ${concepts.length}`,y,NATIVE_TEXT.small,{bold:true});
       for(const concept of concepts){
         const top=y,id=concept.id;
-        y=lines(concept.title,y,NATIVE_TEXT.small,{bold:true,max:2,color:PALETTE.pineDark});
+        y=lines(concept.title,y,NATIVE_TEXT.small,{bold:true,max:2,color:NATIVE_INK.sectionTitle});
         if(level!=='minimal')y=lines(concept.text,y,NATIVE_TEXT.small,{max:level==='full'?6:3});
         const progress=concept.knowledge>0&&concept.knowledge<1?`\nAcquis à ${Math.round(concept.knowledge*100)} %`:'';
         rows.push({id:`hud:guidance:concept:${id}`,hint:`${concept.title}\n${concept.text}${progress}`,y:top,height:Math.max(ROW,y-top),onClick:()=>{}});
@@ -201,7 +205,7 @@ export class NativeGuidanceCard {
       y=lines(current.instruction,y,NATIVE_TEXT.small,{max:compact?2:3});
       buttonRow([{id:'hud:guidance:gesture-action',label:current.actionLabel,hint:current.instruction,onClick:()=>this.actions.guide({...action})},
         {id:'hud:guidance:gesture-declare',label:'Déjà connu',hint:'Je connais déjà ce geste · déclaration personnelle, aucune commande au jeu.',onClick:()=>this.actions.declareGesture()}]);
-    }else if(gesture.state==='complete')y=lines('Les quatre gestes sont repérés.',y,NATIVE_TEXT.small,{color:PALETTE.pineDark});
+    }else if(gesture.state==='complete')y=lines('Les quatre gestes sont repérés.',y,NATIVE_TEXT.small,{color:NATIVE_INK.good});
     else{
       y=lines(gesture.state==='paused'?'Parcours interrompu ; vos repères sont conservés.':'Quatre repères facultatifs pour bien démarrer.',y,NATIVE_TEXT.small,{max:2});
       const paused=gesture.state==='paused';
@@ -212,7 +216,7 @@ export class NativeGuidanceCard {
     y=lines(`Préparations · ${ready}/${checks.length} disponibles`,y,NATIVE_TEXT.small,{bold:true});
     // Short column: only the first unfinished preparations; the notebook keeps them all.
     const unfinished=checks.filter(check=>check.status!=='ready'),listed=compact?unfinished.slice(0,COMPACT_CHECKS):checks;
-    if(!listed.length)y=lines(checks.length?'Toutes les préparations sont disponibles.':'Aucune carte locale active.',y,NATIVE_TEXT.small,{color:PALETTE.pineDark});
+    if(!listed.length)y=lines(checks.length?'Toutes les préparations sont disponibles.':'Aucune carte locale active.',y,NATIVE_TEXT.small,{color:NATIVE_INK.good});
     for(const check of listed){
       ink.push({kind:'dot',x:PAD+6,y:y+ROW/2,color:STATUS_COLORS[check.status]});
       ink.push({kind:'text',text:check.title,x:PAD+18,y:y+13,size:NATIVE_TEXT.small,color:PALETTE.inkDark,width:inner-18});
@@ -220,7 +224,7 @@ export class NativeGuidanceCard {
       rows.push({id:`hud:guidance:check:${check.id}`,hint:`${check.title} · ${GUIDANCE_STATUS_LABELS[check.status]}\n${check.detail}\nClic : ${check.actionLabel}`,y,onClick:()=>this.actions.guide({...action})});
       y+=ROW;
     }
-    if(compact&&unfinished.length>listed.length)y=lines(`Et ${unfinished.length-listed.length} autre(s) dans le carnet.`,y,NATIVE_TEXT.tiny,{color:PALETTE.kraftDark});
+    if(compact&&unfinished.length>listed.length)y=lines(`Et ${unfinished.length-listed.length} autre(s) dans le carnet.`,y,NATIVE_TEXT.tiny,{color:NATIVE_INK.subtle});
     y+=4;
     buttons.push({id:'hud:guidance:help',label:'Carnet de survie (H)',hint:'Ouvrir l’aide : premiers gestes, commandes et conseils détaillés',x:PAD,y,width:inner,height:BUTTON,color:PALETTE.creamPaper,onClick:()=>this.actions.openHelp()});
     y+=BUTTON+PAD;
@@ -257,13 +261,13 @@ export class NativeGuidanceCard {
       const geometry=`${box.width}|${box.height}`;
       if(piece&&piece.userData.geometry!==geometry){this.drop(piece);this.buttons.delete(box.id);piece=undefined;}
       if(!piece){
-        const label={text:box.label};
+        const label={text:box.label,background:box.color};
         piece=this.piece({w:box.width*unit,h:box.height*unit,depth:.03,bgColor:box.color,bevel:.02,seed:9450+this.buttons.size*7,hasBorder:false,uvPadding:1,
-          textureWidth:Math.ceil(box.width*2),textureHeight:Math.ceil(box.height*2),interactive:true,drawFn:(c,w,h)=>this.drawLabel(c,w,h,label.text,box.width,box.height)});
+          textureWidth:Math.ceil(box.width*2),textureHeight:Math.ceil(box.height*2),interactive:true,drawFn:(c,w,h)=>this.drawLabel(c,w,h,label.text,box.width,box.height,label.background)});
         piece.userData.geometry=geometry;piece.userData.label=label;this.buttons.set(box.id,piece);this.cardGroup.add(piece);
       }
-      const label=piece.userData.label as {text:string};
-      if(label.text!==box.label||piece.userData.bgColor!==box.color){label.text=box.label;piece.redraw(undefined,box.color);}
+      const label=piece.userData.label as {text:string;background:string};
+      if(label.text!==box.label||piece.userData.bgColor!==box.color){label.text=box.label;label.background=box.color;piece.redraw(undefined,box.color);}
       piece.userData.nativeId=box.id;piece.userData.tooltip=box.hint;piece.userData.onClick=box.onClick;
       place(piece,box.x,box.y,box.width,box.height,layout.variant==='tab'?0:.06);
     }
@@ -292,8 +296,8 @@ export class NativeGuidanceCard {
     }
     ctx.restore();
   }
-  private drawLabel(ctx:CanvasRenderingContext2D,wPx:number,hPx:number,label:string,width:number,height:number):void {
-    ctx.save();ctx.scale(wPx/width,hPx/height);ctx.font=`bold ${label.length<=2?NATIVE_TEXT.medium:NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='center';
+  private drawLabel(ctx:CanvasRenderingContext2D,wPx:number,hPx:number,label:string,width:number,height:number,background=PALETTE.creamPaper):void {
+    ctx.save();ctx.scale(wPx/width,hPx/height);ctx.font=`bold ${label.length<=2?NATIVE_TEXT.medium:NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle=readableUiInk(PALETTE.inkDark,background);ctx.textAlign='center';
     ctx.fillText(label,width/2,height/2+(label.length<=2?6:4),width-8);ctx.restore();
   }
   private piece(options:CardboardPieceOptions):CardboardPiece {const piece=this.art.createPiece(options);this.owned.add(piece);return piece;}

@@ -93,6 +93,11 @@ function actorNeeds(pawn:Pawn):string{return `Faim ${Math.round(pawn.hunger)} % 
 function tileLabel(id:number):string {const planet=source().planet,tile=planet&&planetTile(planet,id);return tile?`Case ${id} · ${tile.biome==='ocean'?'Océan':tile.biome==='lake'?'Lac':BIOME_LABELS[tile.biome]} · ${HILLINESS_LABELS[tile.hilliness]}`:`Case ${id}`;}
 function changeTab(next:typeof tab):void {tab=next;rootPage();}
 export function setNativeWorldTab(next:'maps'|'groups'|'individual'|'factions'):void {tab=next;}
+export function resetNativeWorldSession():void{
+ tab='maps';selectedTile=undefined;worldJumpKey='';formation=undefined;tradeOpenRevision++;
+ activeWorldTrade?.dispose();activeWorldTrade=undefined;activeDelivery?.dispose();activeDelivery=undefined;shownWorldPage=undefined;
+ factionBrowser.search='';factionBrowser.sort='name';scope=`${campaignIdentity}:${++scopeRevision}`;
+}
 async function send(command:Command):Promise<unknown>{
  const current=actions?.readState?.()??state;
  if(!actions||current?.busy||current?.fault||pending)throw Error(current?.fault??'Attendez la fin de l’opération courante.');
@@ -654,7 +659,7 @@ export function buildNativeFactions(next:NativeUiState,callbacks:NativeUiActions
 function buildNativeFactionsPage(next:NativeUiState,callbacks:NativeUiActions):NativePage {
  update(next,callbacks);const identity=factionBrowserIdentity(next);if(factionBrowser.identity!==identity){factionBrowser.identity=identity;factionBrowser.search='';factionBrowser.sort='name';}
  const input=next.world??next.campaign,registry=input?.worldFactions;
- const close=factionBrowserGuard(next,callbacks,()=>callbacks.panel(null));
+ const close=factionBrowserGuard(next,callbacks,()=>{factionBrowser.search='';factionBrowser.sort='name';return callbacks.panel(null);});
  if(!input)return{id:'factions',title:'Factions',rows:[r('factions-no-game','Aucune partie active.')],onClose:close};
  if(!registry)return{id:'factions',title:'Factions',rows:[r('factions-empty','Cette partie ne possède pas de registre de factions.')],onClose:close};
  const refresh=factionBrowserGuard(next,callbacks,fresh=>show(buildNativeFactions(fresh,callbacks)));

@@ -1,4 +1,5 @@
-import type { FrontMenu, FrontMenuOptions } from '../ui/front-menu';
+import type { FrontMenu, FrontMenuOptions, FrontMenuOrigin } from '../ui/front-menu';
+import {UI_THEME_PRESETS,uiThemeHex,readableUiInk,uiContrast,type UiTheme} from './ui-theme';
 import type { NativeControl, NativePage, NativeRow } from './native-contract';
 import { createWorldCreationFlow256 } from '../ui/world-creation-flow';
 import type { WorldCreationProgress256 } from '../ui/world-creation-contract';
@@ -61,10 +62,11 @@ const errorMessage = (cause: unknown) => cause instanceof Error ? cause.message 
 
 /** Data-only front screens. The renderer owns every visible control, input,
  * layout and hit test. Only the explicit import gesture creates a file picker. */
-export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: NativePage | null) => void): FrontMenu {
+export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: NativePage | null, origin: FrontMenuOrigin) => void): FrontMenu {
   const backend = options.worldCreation;
   const flow = backend && typeof backend.generate === 'function' && typeof backend.confirmSite === 'function' && typeof backend.start === 'function' ? createWorldCreationFlow256(backend) : undefined;
   let page: Page = 'home', open = false, hasGame = false, busy = false, pending = false;
+  let origin:FrontMenuOrigin='home';
   let externalPage=false;
   let error = '', status = '', generation = 0, difficultyChosen = false, reloadChosen = false;
   /** Core "Learn to play" (MainMenuDrawer.InitLearnToPlay): scenario Tutorial,
@@ -114,16 +116,16 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
   function paint(): void {
     if (!open||externalPage) return;
     if (confirmation) {
-      show({ id: 'front-confirm', title: confirmation.title ?? 'Confirmer le départ', modal: true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'confirmation',label: confirmation.message }], actions: [
+      show({ id: 'front-confirm', title: confirmation.title ?? 'Confirmer le départ', modal: true, closeOwnsNavigation:true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'confirmation',label: confirmation.message }], actions: [
         control('confirm-cancel', 'Annuler', () => { confirmation = undefined; }),
         control('confirm-accept', confirmation.acceptLabel ?? 'Confirmer', () => { const accept = confirmation!.accept; confirmation = undefined; return accept(); }),
-      ], onClose: () => { confirmation = undefined; paint(); } });
+      ], onClose: () => { confirmation = undefined; paint(); } },origin);
       return;
     }
     if (notice) {
-      show({ id: 'front-learning-notice', title: notice.title, modal: true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'learning-notice',label: notice.text }], actions: [
+      show({ id: 'front-learning-notice', title: notice.title, modal: true, closeOwnsNavigation:true, layout:'message',width:NATIVE_MESSAGE.width,height:NATIVE_MESSAGE.height,rows: [{ id: 'learning-notice',label: notice.text }], actions: [
         control('learning-notice-accept', 'Compris', () => { notice = undefined; }),
-      ], onClose: () => { notice = undefined; paint(); } });
+      ], onClose: () => { notice = undefined; paint(); } },origin);
       return;
     }
     const result = renderPage();
@@ -131,9 +133,9 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     if (status) result.rows.unshift({ id: 'front-status', label: status, ...statusMeter!==undefined?{meter:{value:statusMeter,max:1,label:`${Math.floor(statusMeter*100)} %`,color:'#63885d'}}:{} });
     const tip = loadingTip();
     if (tip) result.rows.splice(1, 0, nativeTipRow(tip, 'navigation'));
-    result.id = `front-${page}`; result.modal = true;
+    result.id = `front-${page}`; result.modal = true;result.closeOwnsNavigation=true;
     result.onClose = () => { if (!busy && !pending) back(); };
-    show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}));
+    show(presentNativeFront(result,page,{button:control,field:input,tests:testCatalogue}),origin);
   }
   function navigate(next: Page): void { if (next !== 'rimworld') discardRimWorld(); const previous=open?page:undefined;externalPage=false;page = next; open = true; error = ''; status = '';statusMeter=undefined; confirmation = undefined; notice = undefined; tutorialPages(previous,next); paint(); }
   /** Core Page.DoNext/DoBack (PageClosed) and Page.PostOpen (PageStart-<page>)
@@ -201,6 +203,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
     finally { busy = pending = false; status = ''; paint(); }
   }
   function back(): void {
+    if(origin==='game'&&(page==='options'||page==='load')){hide();options.onReturnToGameMenu?.();return;}
     if (page === 'home') { if (hasGame) void run(options.onResume, 'Reprise de la colonie…'); return; }
     if (page === 'site') { flow?.cancel(); selectedTile = null; navigate('world'); }
     else navigate(({ pawns: 'site', world: tutorial ? 'home' : 'story', story: 'scenario', tests: 'load', rimworld: 'load' } as Partial<Record<Page, Page>>)[page] ?? 'home');
@@ -267,6 +270,8 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         return run(()=>preference(options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...current,...patch}))),'Application du style graphique…');
       };
       rows.push(choice('graphics-style','Texture des modèles',settings.style,['default','origami'] as const,style=>apply({style}),style=>style==='origami'?'Gouache':'Pastel'));
+      rows.push({...toggle('graphics-personalized-textures','Dessins personnalisés',settings.personalizedTextures,personalizedTextures=>apply({personalizedTextures})),
+        hint:'Pelages, coutures et illustrations propres aux modèles. Désactivez-les pour retrouver le grain simple sans changer de style ni de partie.'});
       if(settings.style==='origami')for(const control of ORIGAMI_STYLE_CONTROLS){
         const {key,label,min,max,step,unit}=control,scale=origamiStyleDisplayScale(control),value=unit==='%'?Math.round(settings[key]*scale):settings[key];
         rows.push({...range(`origami-${key}`,label,value,min*scale,max*scale,step*scale,next=>apply({[key]:next/scale},true),false,` ${unit}`),value:formatOrigamiStyleValue(control,settings[key]),compact:true,dense:true});
@@ -283,6 +288,17 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
         if(!open){externalPage=false;page='options';open=true;paint();}
       },!options.canMeasureGraphicsStyle?.())]});
     if(options.getUiScale&&options.onUiScaleChange)rows.push(range('ui-scale','Échelle de l’interface',Math.round(options.getUiScale()*100),NATIVE_UI_SCALE_LIMITS.min*100,NATIVE_UI_SCALE_LIMITS.max*100,NATIVE_UI_SCALE_LIMITS.step*100,value=>preference(options.onUiScaleChange!(value/100)),false,' %'));
+    if(options.getUiTheme&&options.onUiThemeChange){
+      const theme=options.getUiTheme(),apply=async(next:UiTheme)=>{if(!open||externalPage||page!=='options'||optionSection!=='interface'||renderGeneration!==graphicsPreferenceGeneration||busy||pending)return false;await preference(options.onUiThemeChange!(next));paint();return true;};
+      rows.push({id:'ui-theme-heading',label:'Couleurs de l’interface',emphasis:'heading'},
+        {id:'ui-theme-presets',label:'Palette',controls:UI_THEME_PRESETS.map(({theme:choice,label},index)=>({...control(`ui-theme-preset-${index}`,label,()=>apply(choice),false,choice.background===theme.background&&choice.text===theme.text),color:choice.background}))});
+      for(const [key,label]of [['background','Fond des fenêtres'],['text','Couleur du texte']] as const){
+        rows.push({id:`ui-theme-${key}`,label,value:theme[key],hint:'Choisissez une couleur RVB hexadécimale, par exemple #e8d7b9.',input:{value:theme[key],placeholder:'#RRGGBB',maxLength:7,onCommit:async text=>{const color=uiThemeHex(text);if(!color)return false;return apply({...options.getUiTheme!(),[key]:color});}}});
+      }
+      rows.push({id:'ui-theme-legend',label:'Légende des couleurs',detail:'Ocre : titres, noms et actions. Vert : objets et effets favorables. Bleu : repos et loisirs. Orange : besoin pressant ou mobilisation. Rouge : alertes et effets défavorables. Violet : valeurs. Encre atténuée : inactivité et informations secondaires.'});
+      if(uiContrast(theme.text,theme.background)<4.5)rows.push({id:'ui-theme-contrast',label:`Contraste ajusté pour la lisibilité : ${readableUiInk(theme.text,theme.background)}`,emphasis:'muted'});
+    }
+    if(options.getJournalBubblesEnabled&&options.onJournalBubblesEnabledChange)rows.push({...toggle('journal-bubbles','Bulles du journal des colons',options.getJournalBubblesEnabled(),enabled=>preference(options.onJournalBubblesEnabledChange!(enabled))),hint:'Affiche quelques secondes les nouvelles entrées au-dessus de leur auteur.'});
     if(options.getUiAutoHide&&options.onUiAutoHideChange){
       const settings=options.getUiAutoHide();
       rows.push(toggle('auto-hide-bottom','Barre du bas escamotable',settings.bottom,bottom=>preference(options.onUiAutoHideChange!({...options.getUiAutoHide!(),bottom}))),
@@ -341,7 +357,7 @@ export function createNativeFrontMenu(options: FrontMenuOptions, show: (page: Na
       if(id.startsWith('rimworld-texts'))return 'rimworld-texts';
       if(id.startsWith('developer-'))return 'developer';
       if(['autosave','threat','settlements','learning-helper','learning-helper-reset'].includes(id))return 'game';
-      if(['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font'].includes(id))return 'interface';
+      if(id.startsWith('ui-theme-')||['ui-scale','auto-hide-bottom','auto-hide-notifications','designation','item-label','font','journal-bubbles'].includes(id))return 'interface';
       if(id.startsWith('light-'))return 'lighting';
       if(['sound','sound-volume','test-sound','music','music-volume'].includes(id))return 'audio';
       return 'graphics';
@@ -850,20 +866,21 @@ ${pawn.name} appartient à ${colonyName}, votre colonie.`}:undefined;
   function showTutorial(): void { startCreation(true); }
   function startCreation(learn: boolean): void {
     if (busy || pending) return;
+    origin='home';
     if(learn)options.tutorialLessons?.begin();else if(tutorial)options.tutorialLessons?.end();
     tutorial = learn; difficultyChosen = reloadChosen = learn; invalidateDraft();
     let seed = ''; try { seed = randomSiteSeed(); teamSeed = Number(randomSiteSeed()); } catch { teamSeed = 0; }
     parameters = { seed, settings: defaultWorldGenerationSettings(), size: 250, season: 'auto' };
     roster = createStartingCandidateRoster(teamSeed, { capableOfViolence: learn }); inspected = roster[0]!.serial; navigate(learn ? 'world' : 'scenario');
   }
-  function hide(): void { discardRimWorld(); if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; if (!pending) busy = false; show(null); }
+  function hide(): void { discardRimWorld(); if(open)tutorialPages(page,undefined); generation++; flow?.cancel(); confirmation = undefined; notice = undefined; open = false; origin='home'; if (!pending) busy = false; show(null,origin); }
   return {
-    showHome(nextHasGame = hasGame) { if (busy || pending) return; hasGame = nextHasGame; navigate('home'); },
+    showHome(nextHasGame = hasGame) { if (busy || pending) return; hasGame = nextHasGame; origin='home'; navigate('home'); },
     setHasGame(next) { hasGame = next; if (page === 'home') paint(); },
     showCreation,
-    showOptions(){if(!busy&&!pending)navigate('options');},
-    showLoad() { if (!busy && !pending) navigate('load'); },
-    hide, isOpen: () => open,
+    showOptions(nextOrigin='home'){if(!busy&&!pending){origin=nextOrigin;navigate('options');}},
+    showLoad(nextOrigin='home') { if (!busy && !pending) {origin=nextOrigin;navigate('load');} },
+    hide, isOpen: () => open, isGameOverlay:()=>open&&origin==='game',
     setBusy(next, message = 'Préparation de la colonie…') { busy = next; status = next ? message : ''; paint(); },
     showError(message) { error = message; paint(); },
   };

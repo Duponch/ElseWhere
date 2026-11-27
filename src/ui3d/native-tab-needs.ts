@@ -6,7 +6,8 @@ import {NATIVE_INK} from './native-ui-scale';
  * high; a minor need is 0.73 as wide and 0.666 as high, at least 30, after a gap
  * of 10), then the mood bar on 80 % of the remaining width and its thought list
  * (rows of 20 every 24, the offset in a column of 32 at x = 235). The window is
- * 580 × 520, or 225 wide when the person has no mood. */
+ * 580 × 520 in Core, or 225 wide without mood. Elsewhere adapts the height
+ * to the occupied content, retaining Core's maximum and all scrollable rows. */
 export interface NeedBarSpec {id:string;label:string;major:boolean;level:number;thresholds:readonly number[];arrow:number;marker?:number;hint:string;unavailable?:boolean}
 export interface NeedThoughtSpec {id:string;label:string;count:number;offset:number;hint:string}
 export interface NeedsSpec {type:'needs';needs:readonly NeedBarSpec[];mood?:NeedBarSpec;thoughts:readonly NeedThoughtSpec[]}
@@ -24,7 +25,7 @@ export function needBarGeometry(rect:{x:number;y:number;width:number;height:numb
 }
 function drawNeed(builder:CardBuilder,need:NeedBarSpec,rect:{x:number;y:number;width:number;height:number},ids:string):void{
   const g=needBarGeometry(rect);
-  builder.text(g.label.x,g.label.y,g.label.width,g.label.height,need.label,{role:g.smallLabel?'tiny':'small',v:'bottom'});
+  builder.text(g.label.x,g.label.y,g.label.width,g.label.height,need.label,{role:g.smallLabel?'tiny':'small',v:'bottom',ink:NATIVE_INK.sectionTitle});
   if(need.unavailable)builder.text(g.bar.x,g.bar.y,g.bar.width,g.bar.height,'—',{ink:NATIVE_INK.none,align:'center'});
   else builder.bar({x:g.bar.x,y:g.bar.y,w:g.bar.width,h:g.bar.height,fill:need.level,color:NATIVE_INK.barFill,border:g.bar.height>15&&g.bar.width>20,ticks:need.thresholds,arrow:need.arrow,marker:need.marker});
   builder.target({id:ids+need.id,x:g.outer.x,y:g.outer.y,w:g.outer.width,h:g.outer.height,hint:need.hint,highlight:true});
@@ -45,13 +46,25 @@ export function layoutNeedsTab(spec:NeedsSpec,measure:CardMeasure):NativeTabCard
     }
     drawNeed(builder,need,rect,'need:');y=rect.y+rect.height-column.y;
   });
+  // Keep the bar geometry stable when thoughts appear or expire. Only remove
+  // the unused bottom of the sheet: recomputing each bar from the new height
+  // would progressively squeeze the same needs on every refresh.
+  const thoughtsHeight=spec.thoughts.length*NEEDS_FULL.thoughtPitch;
+  builder.height=Math.ceil(Math.min(height,Math.max(y,full?100+thoughtsHeight:0)));
+  // Minor needs have a minimum height of 30. An unusually long list can
+  // therefore exceed Core's cap; keep every need reachable in its own list.
+  if(y>height){
+    for(const item of builder.items)item.region='needs';
+    for(const target of builder.targets)target.region='needs';
+    builder.region('needs',0,0,NEEDS_FULL.column,height,y);
+  }
   if(spec.mood){
     const rightWidth=width-NEEDS_FULL.column;
     drawNeed(builder,spec.mood,{x:NEEDS_FULL.column,y:0,width:rightWidth*.8,height:70},'');
     // The thought listing: (0, 80, w, h − 70 − 10) contracted by 10, rows of 20
     // every 24, the scroll view 16 narrower than the list.
-    const listing={x:NEEDS_FULL.column+10,y:90,width:rightWidth-20,height:height-70-10-20},rowWidth=listing.width-16;
-    builder.region('thoughts',listing.x,listing.y,listing.width,listing.height,spec.thoughts.length*NEEDS_FULL.thoughtPitch);
+    const listing={x:NEEDS_FULL.column+10,y:90,width:rightWidth-20,height:Math.max(0,builder.height-100)},rowWidth=listing.width-16;
+    builder.region('thoughts',listing.x,listing.y,listing.width,listing.height,thoughtsHeight);
     spec.thoughts.forEach((thought,index)=>{
       const top=index*NEEDS_FULL.thoughtPitch,label=thought.count>1?`${thought.label} x${thought.count}`:thought.label,ink=thought.offset===0?NATIVE_INK.none:thought.offset>0?NATIVE_INK.positive:NATIVE_INK.negative;
       builder.text(10,top-3,225,NEEDS_FULL.thoughtHeight+6,label,{region:'thoughts',truncate:true});

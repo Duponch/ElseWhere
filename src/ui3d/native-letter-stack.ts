@@ -4,6 +4,7 @@ import {globalColumn,NATIVE_VIEW_ACTIONS} from './native-hud-rimworld';
 import type {World} from '../sim/types';
 import {BUNDLE_LETTER_COLOR_352, LETTER_CLASSES_352, isSchema352OrLater, letterStackRows352, stackLetters352, type Letter352} from '../sim/letters-352';
 import {PALETTE, drawHandRect, type CardboardPiece, type PrototypeCardboardArt} from './prototype-art';
+import {readableUiInk} from './ui-theme';
 
 /* The Core letter stack (LetterStack.LettersOnGUI, Letter.DrawButtonAt,
  * BundleLetter), drawn as native cardboard cards above the time board:
@@ -117,14 +118,17 @@ export class NativeLetterStack {
   }
   private drawCard(ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number,card:LetterCard,label:string):void {
     ctx.save();ctx.scale(w/card.width,h/LETTER_ROW_PX);
+    const background=card.letter?LETTER_CLASSES_352[card.letter.cls][card.flashing?'flash':'color']:BUNDLE_LETTER_COLOR_352;
+    const ink=readableUiInk(PALETTE.inkDark,background);
     if(card.flashing&&card.letter){ctx.fillStyle=LETTER_CLASSES_352[card.letter.cls].flash;ctx.fillRect(0,0,card.width,LETTER_ROW_PX);}
-    drawHandRect(ctx,3,3,card.width-6,LETTER_ROW_PX-6,null,PALETTE.inkDark,1.2,rng);
+    drawHandRect(ctx,3,3,card.width-6,LETTER_ROW_PX-6,null,ink,1.2,rng);
     // Envelope on the right, like Core's icon at the screen edge.
     const ex=card.width-ICON_PX+6,ey=7,ew=ICON_PX-12,eh=LETTER_ROW_PX-14;
-    ctx.fillStyle=card.letter?.read?'#e9e2d0':'#fff8e9';ctx.fillRect(ex,ey,ew,eh);
+    const originalPaper=PALETTE.creamPaper==='#f3ead6'&&PALETTE.inkDark==='#261e18';
+    ctx.fillStyle=originalPaper?(card.letter?.read?'#e9e2d0':'#fff8e9'):(card.letter?.read?PALETTE.kraftLight:PALETTE.creamPaper);ctx.fillRect(ex,ey,ew,eh);
     ctx.strokeStyle=PALETTE.inkDark;ctx.lineWidth=1.4;ctx.strokeRect(ex,ey,ew,eh);
     ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex+ew/2,ey+eh*.6);ctx.lineTo(ex+ew,ey);ctx.stroke();
-    ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
+    ctx.fillStyle=ink;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
     let text=label;while(text.length>1&&ctx.measureText(text).width>card.width-ICON_PX-12)text=text.slice(0,-2)+'…';
     ctx.fillText(text,8,20,card.width-ICON_PX-10);
     ctx.restore();

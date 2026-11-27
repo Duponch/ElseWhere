@@ -1,13 +1,25 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import {
   colonistInspectorLayoutContract,
   colonistInspectorScaffold,
   colonistInspectorState,
   colonistInspectorTabs,
   resolveColonistInspectorTab,
+  mountColonistInspector,
 } from '../src/ui/colonist-inspector';
 
 describe('colonist inspector structure', () => {
+  test('a reused legacy tab reads its current callback and prisoner status instead of the first mounted person',()=>{
+    // Narrow host port: no DOM parser/rendering claim. The real mount/update
+    // functions install and invoke their original event callback on this tab.
+    const events=new Map<string,()=>void>(),attributes=new Set<string>();let mounted=false;
+    const button={dataset:{colonistTab:'prisoner'},textContent:'Prisonnier',hasAttribute:(name:string)=>attributes.has(name),setAttribute:(name:string)=>{attributes.add(name);},removeAttribute:(name:string)=>{attributes.delete(name);},addEventListener:(name:string,callback:()=>void)=>{events.set(name,callback);}};
+    const root={dataset:{colonistInspectorTab:'bio'},style:{setProperty:vi.fn()},classList:{add:vi.fn()},insertAdjacentHTML:()=>{mounted=true;},querySelector:(selector:string)=>selector==='.colonist-inspector-tabs'&&mounted?{}:null,querySelectorAll:(selector:string)=>selector==='[data-colonist-tab]'?[button]:[]};
+    const old=vi.fn(),current=vi.fn();
+    mountColonistInspector(root as unknown as HTMLElement,{pawnId:1,activeTab:'bio',prisoner:true,onTabChange:old});
+    mountColonistInspector(root as unknown as HTMLElement,{pawnId:2,activeTab:'bio',prisoner:false,onTabChange:current});
+    events.get('click')!();expect(old).not.toHaveBeenCalled();expect(current).toHaveBeenCalledExactlyOnceWith('bio');
+  });
   test('offers the six human records in Core order and only exposes Prisonnier for a captive', () => {
     expect(colonistInspectorTabs(false).map(tab => tab.label)).toEqual(['Journal', 'Matériel', 'Social', 'Bio', 'Besoins', 'Santé']);
     expect(colonistInspectorTabs(true).map(tab => tab.label)).toEqual(['Journal', 'Matériel', 'Prisonnier', 'Social', 'Bio', 'Besoins', 'Santé']);

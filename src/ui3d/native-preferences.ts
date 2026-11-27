@@ -20,6 +20,7 @@ export function parseNativeDockPreferences(raw:string|null):NativeDockPreference
 export type GraphicsStyle='default'|'origami';
 export interface GraphicsStylePreferences {
  style:GraphicsStyle;
+ personalizedTextures:boolean;
  impasto:number;
  blackEdges:number;
  edgeWidth:number;
@@ -30,7 +31,7 @@ export interface GraphicsStylePreferences {
 }
 /** Browser display preference, deliberately separate from World and save data. */
 export const GRAPHICS_STYLE_PREFERENCE_KEY='elsewhere.graphics-style.v1';
-export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',impasto:1,blackEdges:.79,edgeWidth:1.7,strokeImperfection:.15,edges:0,wear:.75,contourImperfection:.60});
+export const DEFAULT_GRAPHICS_STYLE_PREFERENCES:Readonly<GraphicsStylePreferences>=Object.freeze({style:'default',personalizedTextures:true,impasto:1,blackEdges:.79,edgeWidth:1.7,strokeImperfection:.15,edges:0,wear:.75,contourImperfection:.60});
 const LEGACY_PAPER_DEFAULTS=Object.freeze({edges:.65,wear:.75,contourImperfection:.60,blackEdges:.45475625});
 export const ORIGAMI_STYLE_CONTROLS=[
  {key:'impasto',label:'Relief empâtement gouache',min:0,max:2.2,step:.01,unit:'%'},
@@ -49,7 +50,7 @@ export function formatOrigamiStyleValue(control:Pick<OrigamiStyleControl,'unit'>
 }
 export function normalizeGraphicsStylePreferences(value:unknown):GraphicsStylePreferences {
  const data=value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
- const result:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:data.style==='origami'?'origami':'default'};
+ const result:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:data.style==='origami'?'origami':'default',personalizedTextures:data.personalizedTextures!==false};
  for(const {key,min,max} of ORIGAMI_STYLE_CONTROLS){
   const number=data[key];
   result[key]=typeof number==='number'&&Number.isFinite(number)?Math.max(min,Math.min(max,number)):DEFAULT_GRAPHICS_STYLE_PREFERENCES[key];

@@ -1,3 +1,4 @@
+import {captureBedOwners} from '../render/bed-owner-labels';
 import {isDoubleBedKind} from '../sim/bed-kinds';
 import {constructionCostText} from '../ui/construction-material-presentation';
 import { IED_COMMON_357,IED_TRAPS_357,iedsUnlocked357,isIedTrapKind357 } from '../sim/ied-traps-357';
@@ -18,6 +19,9 @@ import { targetBuildingPlayerUse263 } from '../sim/world-target-building-263';
 import { registeredMapId } from '../sim/world-map-context';
 import { normalizeLinkedStorageName286 } from '../sim/linked-storage-plan-286';
 import { isShelfKind } from '../sim/shelf-storage';
+import {blueprintStorageJob380,blueprintStorageSettings380} from '../sim/blueprint-storage-380';
+import {createNativeStorageEditor} from './native-storage-editor';
+import {shelfControlOptions} from '../ui/shelf-inspection';
 import { isColonist } from '../sim/affiliation';
 import { isBedKind } from '../sim/bed-kinds';
 import { footprintCells } from '../sim/definitions';
@@ -197,8 +201,15 @@ function bedPolicyRows(world: World, bed: Structure, scope: Scope): NativeRow[] 
   const double = isDoubleBedKind(bed.kind), rows: NativeRow[] = [];
   if (!double) rows.push(toggle('special-medical-bed', 'Usage médical', !!bed.medical, async enabled => { assertScope(scope); await send({ type: 'medical-bed', bedId: bed.id, enabled }); }), toggle('special-prison-bed', 'Réservé aux prisonniers', !!bed.prisoner, async enabled => { assertScope(scope); await send({ type: 'prison-bed', bedId: bed.id, enabled }); }));
   else rows.push(row('double-bed-civil', 'Deux places civiles indépendantes', undefined, 'Usage médical et prisonniers indisponibles. Une attribution automatique dans le lit d’un autre colon est réservée à son partenaire.'));
-  if (!bed.prisoner) for (const slot of double ? [0, 1] as const : [undefined]) {
-    const current = world.pawns.find(pawn => pawn.bedId === bed.id && (slot === undefined || pawn.bedSlot === slot)), choices = world.pawns.filter(pawn => isColonist(pawn) && pawn.state !== 'dead' && (!double || !pawn.prisoner && !pawn.visitor && !pawn.raid && !pawn.podRescue && !pawn.health?.death));
+  const assigned=captureBedOwners(world).get(bed.id)??[];
+  if(bed.medical){
+    rows.push(row('special-bed-medical-owner','Propriétaire','Aucun — lit médical','Un lit médical accueille les patients sans attribution permanente.'));
+    const patient=world.pawns.find(pawn=>pawn.need?.kind==='sleep'&&pawn.need.phase==='sleep'&&pawn.need.bedId===bed.id&&(pawn.state==='sleeping'||pawn.state==='resting'||pawn.state==='downed'));
+    if(patient)rows.push(row('special-bed-patient','Patient',patient.name));
+  }else if(bed.prisoner){
+    rows.push(row('special-bed-prison-owner','Propriétaire',assigned.map(owner=>owner.pawn.name).join(', ')||'Non attribué','Les prisonniers prennent leur lit par les règles de détention ; ce réglage ne permet pas une attribution civile.'));
+  }else for (const slot of double ? [0, 1] as const : [undefined]) {
+    const current = assigned.find(owner=>slot===undefined||owner.slot===slot)?.pawn, choices = world.pawns.filter(pawn => isColonist(pawn) && pawn.state !== 'dead' && (!double || !pawn.prisoner && !pawn.visitor && !pawn.raid && !pawn.podRescue && !pawn.health?.death));
     rows.push({ id: `special-bed-slot-${slot ?? 0}`, label: double ? `Place ${slot! + 1}` : 'Propriétaire', value: current?.name ?? 'Non attribué', controls: [button(`special-bed-clear-${slot ?? 0}`, 'Non attribué', async () => { assertScope(scope); await send({ type: 'assign-bed', bedId: bed.id, pawnId: null, ...(slot === undefined ? {} : { slot }) }); }, !!bed.medical), ...choices.map(pawn => button(`special-bed-${slot ?? 0}-${pawn.id}`, pawn.name, async () => { assertScope(scope); await send({ type: 'assign-bed', bedId: bed.id, pawnId: pawn.id, ...(slot === undefined ? {} : { slot }) }); }, !!bed.medical, current?.id === pawn.id))] });
   }
   return rows;
@@ -295,12 +306,36 @@ function shipAssemblyPage(scope: Scope, structureId: number): void {
   show(`Vaisseau relié · ${report.partIds.length} pièces`, rows);
 }
 
+/** Storage settings belong to the selected plan's durable Job ID, not its
+ * cell: a cancelled/replaced/completed blueprint can never inherit this draft. */
+export function nativeBlueprintStoragePage380(state:NativeUiState,nativeActions:NativeUiActions,jobId:number):NativePage|null {
+ const original=state.world,job=original&&blueprintStorageJob380(original,jobId),initial=original&&blueprintStorageSettings380(original,jobId);
+ if(!original||!job||!initial||!state.selectedObjects.some(selected=>selected.kind==='job'&&selected.id===jobId))return null;
+ const scope=scopeOf(state),identity=JSON.stringify([job.id,job.kind,job.x,job.z,job.orientation,job.footprint]),policy=JSON.stringify(initial);
+ const fresh=()=>{
+  const next=(nativeActions as ExtendedActions).readState?.()??state,current=scopeOf(next),world=next.world;
+  if(!world||current.epoch!==scope.epoch||current.mapId!==scope.mapId||current.seed!==scope.seed||current.width!==scope.width||current.height!==scope.height
+   ||!next.selectedObjects.some(selected=>selected.kind==='job'&&selected.id===jobId))throw Error('Le plan sélectionné ou la carte a changé. Rouvrez ses réglages.');
+  const target=blueprintStorageJob380(world,jobId),settings=blueprintStorageSettings380(world,jobId);
+  if(!target||!settings||JSON.stringify([target.id,target.kind,target.x,target.z,target.orientation,target.footprint])!==identity||JSON.stringify(settings)!==policy)throw Error('Ce plan ou ses réglages ont changé. Rouvrez ses réglages.');
+  return world;
+ };
+ return createNativeStorageEditor({id:`blueprint-storage-${jobId}`,title:`${buildingLabels[job.kind as 'shelf'|'small-shelf']} · Stockage`,initial,
+  fixedAllows:shelfControlOptions.fixedAllows,show:page=>nativeActions.showPage(page),
+  onBack:()=>{(nativeActions as ExtendedActions).closePage?.();nativeActions.refresh();},
+  onApply:async settings=>{
+   fresh();const result=await nativeActions.command({type:'blueprint-storage-policy',jobId,settings});
+   if(result&&typeof result==='object'&&'ok'in result&&result.ok===false)throw Error('reason'in result?String(result.reason):'Les réglages ont été refusés.');
+  }});
+}
+
 /** Extra native controls for genuinely present owners. Opening a chooser never
  * issues a command, advances a clock, changes a World or creates an occupant. */
 export function nativeSpecialRows(state: NativeUiState, nativeActions: NativeUiActions): NativeRow[] {
   lastState = state; actions = nativeActions; const world = state.world; if (!world) return [];
   const scope = scopeOf(state), selected = state.selectedObjects[0], pawn = world.pawns.find(pawn => pawn.id === state.selectedPawnIds[0]), structure = selected?.kind === 'structure' ? world.structures.find(structure => structure.id === selected.id) : undefined;
   const cell = pawn ?? state.selectedCell ?? structure, rows: NativeRow[] = [];
+  if(selected?.kind==='job'&&blueprintStorageJob380(world,selected.id))rows.push({id:'special-blueprint-storage',label:'Stockage du plan',controls:[button('special-blueprint-storage','Régler le stockage…',()=>{const page=nativeBlueprintStoragePage380(now(),actions,selected.id);if(page)actions.showPage(page);})]});
   if(structure?.kind==='comms-console'&&isSchema298OrLater(Number(world.schemaVersion))&&actions.openFactionComms298)rows.push({id:'special-faction-comms298',label:'Communications de faction',controls:[button('special-faction-comms298','Appeler une faction…',()=>actions.openFactionComms298?.(structure.id))]});
   if(pawn?.visitor&&actions.openVisitorTrade) rows.push({id:'special-visitor-trade',label:'Échanges avec les visiteurs',controls:[button('special-visitor-trade','Ouvrir le commerce',()=>actions.openVisitorTrade?.())]});
   if (cell && (!pawn || pawn.state !== 'dead') && knownPosition256(world, cell)) rows.push({ id: 'special-environment', label: 'Pièce et hygiène', controls: [button('special-environment', 'Environnement et nettoyage', () => environmentPage(scope, { x: cell.x, z: cell.z }))] });

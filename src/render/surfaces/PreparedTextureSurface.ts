@@ -6,7 +6,7 @@ import type {SurfaceBudgetInventory} from './SurfaceBudgetInventory';
 import {Fn,If,float,mix,texture,uniform,varying,vec2,vec3} from 'three/tsl';
 import type {GraphicsStyleContext} from '../graphics-style';
 import type {PreparedSurfaceScalarInk} from '../origami/baked/surfaces/PreparedSurfaceTypes';
-import {copyPastelTextureToArray} from './TextureSurface';
+import {copyPastelTextureToArray,refreshPastelTextureCopy,type PastelTextureSize} from './TextureSurface';
 import {createOwnedMaterialResources435,type OwnedMaterialResourceSnapshot435} from '../OwnedMaterialResources435';
 
 export interface PreparedTextureAddress {
@@ -20,7 +20,7 @@ export interface PreparedTextureSurfaceOptions {
  readonly context:GraphicsStyleContext;
  readonly sourceMaterial:THREE.NodeMaterial;
  readonly pastelTexture:THREE.DataTexture;
- readonly pastelSize?:64|256;
+ readonly pastelSize?:PastelTextureSize;
  readonly pastelUv:THREE.Node<'vec2'>;
  readonly pastelFromSample:(sample:THREE.Node<'vec4'>)=>THREE.Node<'vec3'>;
  readonly tint:THREE.Node<'vec3'>;
@@ -48,6 +48,7 @@ export function validatePreparedScalarInk(value:PreparedSurfaceScalarInk|undefin
 export class PreparedTextureSurface {
  readonly material:THREE.NodeMaterial;
  private readonly pastel:THREE.DataArrayTexture;
+ private pastelSourceVersion:number;
  private readonly body:THREE.TextureNode;
  private readonly ink:THREE.TextureNode;
  private readonly pureColor:THREE.Node<'vec3'>;
@@ -62,6 +63,7 @@ export class PreparedTextureSurface {
   let ownedPastel:THREE.DataArrayTexture|undefined,ownedMaterial:THREE.NodeMaterial|undefined,ownedJournal:ReturnType<typeof createOwnedMaterialResources435>|undefined;
   try{
   this.pastel=ownedPastel=copyPastelTextureToArray(options.pastelTexture,options.pastelSize??64);
+  this.pastelSourceVersion=options.pastelTexture.version;
   const material=ownedMaterial=options.sourceMaterial.clone();this.material=material;material.userData={...options.sourceMaterial.userData,rendererOwned:true};
   const address=options.address(),encoding=options.context.surfaceEncoding,physicalLayer=Fn(()=>{
    const layer=float(0).toVar('preparedPhysicalBodyLayer');layer.assign(address.bodyLayer);
@@ -117,7 +119,12 @@ export class PreparedTextureSurface {
   const extra=this.options.resources;return{textures:[map,...(extra?.textures??[])],arrayTextures:[map,...(extra?.arrayTextures??[])],sharedGroups:extra?.sharedGroups??[],storage:extra?.storage??[],objectUniforms:[this.options.context.surfaceEncoding,this.scalarInkEnabled,this.scalarInkColor,...(extra?.objectUniforms??[])]};
  }
  private refresh():void{
-  if(this.closed)return;const map=this.options.context.origami&&this.current?this.current.texture:this.pastel;
+  if(this.closed)return;
+  const source=this.options.pastelTexture;
+  if(source.version!==this.pastelSourceVersion){
+   refreshPastelTextureCopy(source,this.pastel);this.pastelSourceVersion=source.version;
+  }
+  const map=this.options.context.origami&&this.current?this.current.texture:this.pastel;
   this.body.value=map;this.ink.value=map;this.journal.publish(this.resources(map));
  }
  get assets():PreparedTextureAsset|undefined{return this.current;}

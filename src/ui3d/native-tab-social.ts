@@ -29,9 +29,10 @@ export function socialColumnWidths(rowWidth:number){
 /** `OpinionLabelColor`: grey under 10 in magnitude, red when negative, green. */
 export function opinionInk(opinion:number,alpha=1):string{
   const ink=Math.abs(opinion)<10?NATIVE_INK.relation:opinion<0?NATIVE_INK.red:NATIVE_INK.good;
-  if(alpha>=1)return ink;
-  // The other's opinion is drawn at 0.4 alpha in Core; on paper a lighter mix keeps it readable.
-  return `rgba(${parseInt(ink.slice(1,3),16)},${parseInt(ink.slice(3,5),16)},${parseInt(ink.slice(5,7),16)},${alpha})`;
+  // Core dims the reciprocal opinion with alpha on a black background. Keep
+  // its semantic sign fully readable on configurable paper; parentheses and
+  // its own column already distinguish the other person's opinion.
+  void alpha;return ink;
 }
 export function signedInteger(value:number):string{const rounded=Math.round(value);return rounded>0?`+${rounded}`:String(rounded);}
 export function layoutSocialTab(spec:SocialSpec,measure:CardMeasure):NativeTabCard{
@@ -72,10 +73,20 @@ export function layoutSocialTab(spec:SocialSpec,measure:CardMeasure):NativeTabCa
     builder.target({id:'interaction:'+entry.id,x:S.textX,y:logY,w:textWidth,h:height,hint:entry.hint,region:'interactions',highlight:true});
     logY+=height;
   }
+  // Preserve the two independent lists and their Core maximums, but remove
+  // their empty bottom areas when this person has few relations or events.
+  const relationsRegion=builder.regions[0]!,logRegion=builder.regions[1]!;
+  const relationRowsHeight=rows.reduce((sum,entry)=>sum+entry.height,0);
+  relationsRegion.h=Math.min(relationsHeight,Math.max(NATIVE_LINE.small,relationRowsHeight));
+  relationsRegion.contentHeight=relationRowsHeight;
+  logRegion.h=Math.min(logHeight,Math.max(S.imageHeight,logY));
+  logRegion.y=area.y+relationsRegion.h+S.gap;
+  const rule=builder.items.find(item=>item.k==='line')!;rule.y=Math.round(area.y+relationsRegion.h+S.gap/2);
+  builder.height=Math.ceil(logRegion.y+logRegion.h+S.pad);
   return builder.card();
 }
 
-export type LogLineSpec={kind:'header';text:string}|{kind:'gap';height:number}|{kind:'entry';id:string;text:string;hint:string};
+export type LogLineSpec={kind:'header';text:string}|{kind:'gap';height:number}|{kind:'entry';id:string;text:string;hint:string;icon?:import('../ui/journal-events').JournalPictogram};
 export interface LogSpec {
   type:'log';toggles:readonly {id:string;label:string;x:number;width:number;on:boolean;control:NativeControl}[];copy:NativeControl;lines:readonly LogLineSpec[];emptyText:string;
 }
@@ -103,6 +114,7 @@ export function layoutLogTab(spec:LogSpec,measure:CardMeasure):NativeTabCard{
     else if(item.spec.kind==='entry'){
       if(alternate)builder.fill(0,item.y,width,item.h,NATIVE_INK.rowAlt,'log');
       alternate=!alternate;
+      builder.glyph('journal',0,item.y+2,24,24,{region:'log',journalIcon:item.spec.icon??'command'});
       item.lines.forEach((line,i)=>builder.label(L.textX,item.y+2+i*NATIVE_LINE.small,width-L.textX,line,{region:'log'}));
       builder.target({id:'log:'+item.spec.id,x:0,y:item.y,w:width,h:item.h,hint:item.spec.hint,region:'log',highlight:true});
     }

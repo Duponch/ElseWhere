@@ -9,10 +9,10 @@ function capture(s:Structure):Slot|undefined {
  if(!scalar(plant?.hitPoints)||!scalar(plant?.growth)||!scalar(fuel?.ticks))return;
  const v:Scalar[]=[s.id,s.kind,s.material,s.x,s.z,s.orientation,s.footprint,s.medical,s.grave?.corpseId,!!plant,plant?plant.hitPoints>0:undefined,plant?Math.floor(plant.growth*4):undefined,
   s.power?.on,s.power?.parentId,s.power?.switchOn,s.breakdown?.brokenAt??'',fuel?fuel.ticks>0:'',s.vent?.open,
-  s.kind==='cryptosleep-casket'?!!s.cryptosleep?.human:s.kind==='ship-cryptosleep-casket'?!!s.shipCryptosleep277?.occupant:undefined,s.kind==='ship-reactor'?(s.shipReactor275?.state??'hibernating'):undefined];
+  s.kind==='cryptosleep-casket'?!!s.cryptosleep?.human:s.kind==='ship-cryptosleep-casket'?!!s.shipCryptosleep277?.occupant:undefined,s.kind==='ship-reactor'?(s.shipReactor275?.state??'hibernating'):undefined,s.prisoner];
  if(!v.every(scalar))return;
  const flower=v[9]?`${v[10]}:${v[11]}`:'';
- return{values:v,text:`${v[0]}:${v[1]}:${v[2]}:${v[3]}:${v[4]}:${v[5]}:${v[6]}:${v[7]}:${v[8]}:${flower}:${v[12]}:${v[13]}:${v[14]}:${v[15]}:${v[16]}${v[17]===undefined?'':':vent'+v[17]}${v[18]===undefined?'':':crypto'+v[18]}${v[19]===undefined?'':':reactor'+v[19]}`};
+ return{values:v,text:`${v[0]}:${v[1]}:${v[2]}:${v[3]}:${v[4]}:${v[5]}:${v[6]}:${v[7]}:${v[8]}:${flower}:${v[12]}:${v[13]}:${v[14]}:${v[15]}:${v[16]}${v[17]===undefined?'':':vent'+v[17]}${v[18]===undefined?'':':crypto'+v[18]}${v[19]===undefined?'':':reactor'+v[19]}${v[20]?':prisoner':''}`};
 }
 const equal=(a:readonly Scalar[],b:readonly Scalar[])=>a.length===b.length&&a.every((value,i)=>Object.is(value,b[i]));
 

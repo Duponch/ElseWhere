@@ -16,6 +16,7 @@ import type { Placement } from './primitives';
 import { windBladeParts } from './wind-blade-parts';
 import { buildingMaterialColor } from './building-material-color';
 import { MASONRY_FALLBACK, masonryCapColor, WALL_CAP_HEIGHT } from './wall-network';
+import {isWallAppliance,wallApplianceSurroundMaterial,WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from './wall-appliance';
 
 export { createTimberGeometry } from './TimberCladdingLayer';
 
@@ -131,7 +132,7 @@ export function constructionPreviewParts(world: World, specs: readonly Construct
     if (spec.kind === 'build-roof') continue;
     const structure = virtuals.get(spec)!;
     const linear = lineModels.get(structure.id);
-    const parts: Placement[] = linear ? [...linear, ...masonryWallParts(structure, cutaway)] : [...captureFurniture([structure]), ...doorLeafParts(contextWorld, cutaway, [structure])];
+    const parts: Placement[] = linear ? [...linear, ...masonryWallParts(structure, cutaway,contextWorld)] : [...captureFurniture([structure]), ...doorLeafParts(contextWorld, cutaway, [structure]),...masonryWallParts(structure,cutaway,contextWorld)];
     if (structure.kind === 'mini-turret') parts.push(...miniTurretTopPartsForStructure(structure));
     if (structure.kind === 'wind-turbine') result.rotatedBoxes.push(...windBladeParts(structure).map(part => ({ ...part, key })));
     result.boxes.push(...parts.map(part => ({ ...part, key })));
@@ -199,7 +200,7 @@ export function constructionGhostParts(world: World, specs: readonly Constructio
     authored.set(name, parts);
   } };
   buildFurniture({ ...contextWorld, structures: subjects, packed: [] }, new THREE.Group(), cutaway, sink as BoxBatches, contextWorld);
-  const parts = [...authored.get('furniture') ?? [], ...authored.get('sandbags') ?? [], ...doorLeafParts(contextWorld, cutaway, subjects), ...subjects.flatMap(s => masonryWallParts(s, cutaway))];
+  const parts = [...authored.get('furniture') ?? [], ...authored.get('sandbags') ?? [], ...doorLeafParts(contextWorld, cutaway, subjects), ...subjects.flatMap(s => masonryWallParts(s, cutaway,contextWorld))];
   for (const structure of subjects) if (structure.kind === 'mini-turret') parts.push(...miniTurretTopPartsForStructure(structure));
   result.boxes.push(...parts.map(part => ({ ...part, key: owner(part) })));
   for (const structure of subjects) if (structure.kind === 'wind-turbine')
@@ -209,10 +210,18 @@ export function constructionGhostParts(world: World, specs: readonly Constructio
 /** A wall of stone blocks or steel: WallLayer draws every wall, the timber
  * trim only covers wooden ones, so the ghost of any other wall is the block
  * WallLayer draws for it, body and lighter cap in its material colour. */
-function masonryWallParts(structure: Structure, cutaway: boolean): Placement[] {
-  if (structure.kind !== 'wall' || structure.material === 'wood') return [];
-  const body = buildingMaterialColor(structure.material, MASONRY_FALLBACK) ?? MASONRY_FALLBACK, cap = masonryCapColor(body);
+function masonryWallParts(structure: Structure, cutaway: boolean,world:Pick<World,'structures'>): Placement[] {
+  const appliance=isWallAppliance(structure.kind);
+  if (structure.kind !== 'wall'&&!appliance)return [];
+  const material=appliance?wallApplianceSurroundMaterial(structure,(x,z)=>world.structures.find(s=>s.kind==='wall'&&s.x===x&&s.z===z)?.material):structure.material;
+  if(material==='wood')return [];
+  const body = buildingMaterialColor(material, MASONRY_FALLBACK) ?? MASONRY_FALLBACK, cap = masonryCapColor(body);
   const top = cutaway ? WORLD_SCALE.wallCutawayHeight : WORLD_SCALE.wallHeight, rest = top - WALL_CAP_HEIGHT;
+  if(appliance&&!cutaway)return [
+    {targetId:structure.id,x:structure.x,z:structure.z,y:WALL_APPLIANCE_BOTTOM/2,sx:1,sy:WALL_APPLIANCE_BOTTOM,sz:1,color:body},
+    {targetId:structure.id,x:structure.x,z:structure.z,y:(WALL_APPLIANCE_TOP+rest)/2,sx:1,sy:rest-WALL_APPLIANCE_TOP,sz:1,color:body},
+    {targetId:structure.id,x:structure.x,z:structure.z,y:rest+WALL_CAP_HEIGHT/2,sx:1,sy:WALL_CAP_HEIGHT,sz:1,color:cap},
+  ];
   return [{ targetId: structure.id, x: structure.x, z: structure.z, y: rest / 2, sx: 1, sy: rest, sz: 1, color: body },
     { targetId: structure.id, x: structure.x, z: structure.z, y: rest + WALL_CAP_HEIGHT / 2, sx: 1, sy: WALL_CAP_HEIGHT, sz: 1, color: cap }];
 }

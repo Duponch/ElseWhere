@@ -25,12 +25,73 @@ export const ITEM_VISUAL_IDS:readonly ItemId[]=Object.freeze((Object.keys(ITEM_D
 const cargoKinds=new Map(ITEM_VISUAL_IDS.map((item,ordinal)=>[item,200+ordinal] as const));
 export const itemCargoKind=(item:ItemId):number=>item==='minified-tree'?treeCargoKind():cargoKinds.get(sharedHatCargo353(item)??item)??0;
 
+type ItemArt='wood'|'book'|'cloth'|'leaf'|'corn'|'hay'|'hide'|'wool'|'tuque'|'parka'|'armor'|'tshirt'|'jacket'|'meal'|'crate'|'fuel'|'wort'|'component'|'medicine'|'rigid-material';
+
+/** Classify each immutable catalogue definition once. Rebuilding a
+ * placement never repeats garment-name or textile-family string tests. */
+function itemArt(item:ItemId):ItemArt|undefined {
+  switch(item){
+    case 'wood':return 'wood';case 'novel':return 'book';
+    case 'cloth':case 'devilstrand':return 'cloth';
+    case 'herbal-medicine':case 'berries':case 'agave-fruit':return 'leaf';
+    case 'corn':return 'corn';case 'hay':return 'hay';
+    case 'recon-armor':case 'unfinished-recon-armor':return 'armor';
+    case 'survival-meal':return 'meal';
+    case 'shell-high-explosive':case 'shell-incendiary':return 'crate';
+    case 'chemfuel':return 'fuel';case 'wort':return 'wort';
+    case 'advanced-component':return 'component';
+    case 'glitterworld-medicine':case 'penoxycyline':return 'medicine';
+  }
+  const kind=ITEM_DEFINITIONS[item].kind;
+  if(kind==='textile')return item.includes('wool')?'wool':'hide';
+  if(kind==='weapon')return 'rigid-material';
+  if(item.endsWith('-tuque'))return 'tuque';
+  if(item.endsWith('-parka'))return 'parka';
+  if(item.endsWith('-tshirt'))return 'tshirt';
+  if(item.endsWith('-jacket'))return 'jacket';
+}
+const itemArtById=new Map((Object.keys(ITEM_DEFINITIONS) as ItemId[]).map(item=>[item,itemArt(item)]));
+
+/** Only broad readable regions receive an object-specific drawing. These
+ * numbers address the shared immutable atlas and never affect geometry,
+ * tint, cargo kind, simulation or the number of instances. */
+function itemPartDesign(art:ItemArt|undefined,shape:Placement['shape'],sx:number,sy:number,sz:number,tint:number):number|undefined {
+  switch(art){
+    case'wood':if(shape==='item-log')return sx<.025?53:43;break;
+    case'book':if(!shape&&sy===.024)return 41;break;
+    case'cloth':if(shape==='item-log'||!shape)return 44;break;
+    case'leaf':if(shape==='item-leaf')return 46;break;
+    case'corn':if(shape==='item-leaf')return 46;if(shape==='item-log')return 56;break;
+    case'hay':if(shape==='item-log')return 57;break;
+    case'hide':if(shape==='item-leaf')return 45;break;
+    case'wool':if(shape==='item-round')return 61;break;
+    case'tuque':if(shape==='item-helmet')return 51;break;
+    case'parka':if(shape==='item-coat')return 52;break;
+    case'armor':if(shape==='item-shirt')return 47;break;
+    case'tshirt':if(shape==='item-shirt')return 55;break;
+    case'jacket':if(shape==='item-shirt')return 59;break;
+    case'meal':if(shape==='item-ingot')return 48;break;
+    case'crate':if(!shape&&sx>=.5)return 48;break;
+    case'fuel':if(!shape&&sx>=.3&&sy>=.3)return 42;break;
+    case'wort':if(shape==='item-disc'&&sy>.2)return 58;break;
+    case'component':if(!shape&&sx>.3&&sz>.3)return 54;break;
+    case'medicine':if(!shape&&sx>=.35&&sz>=.25)return 42;break;
+    // The broad surfaces read as wood or metal. Narrow fittings and tiny
+    // parts need no authored material ornament.
+    case'rigid-material':if(!shape&&Math.max(sx,sy,sz)>.18&&Math.max(sy,sz)>.09)return (tint>>>16)>(tint&255)+25?49:50;break;
+  }
+}
+
 /** Local ground assembly, centred on X/Z; never owns mutable gameplay state. */
 export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].stackLimit,anchor?:{x:number;z:number},tree?:TreeVisualTraits):Placement[] {
-  const definition=ITEM_DEFINITIONS[item],color=definition.color,parts:Placement[]=[];
+  const definition=ITEM_DEFINITIONS[item],color=definition.color,parts:Placement[]=[],art=itemArtById.get(item);
   if(item.endsWith('-corpse'))return parts;
   if(item==='minified-tree')return centreItemParts(treeVisualParts(tree));
-  const add=(shape:Placement['shape'],x:number,y:number,z:number,sx:number,sy:number,sz:number,tint:number=color,ry=0)=>parts.push({shape,x,y,z,sx,sy,sz,color:tint,ry});
+  const add=(shape:Placement['shape'],x:number,y:number,z:number,sx:number,sy:number,sz:number,tint:number=color,ry=0)=>{
+    const part:Placement={shape,x,y,z,sx,sy,sz,color:tint,ry},design=itemPartDesign(art,shape,sx,sy,sz,tint);
+    if(design!==undefined)part.surfaceDesign=design;
+    parts.push(part);
+  };
   const box=(x:number,y:number,z:number,sx:number,sy:number,sz:number,tint:number=color,ry=0)=>add(undefined,x,y,z,sx,sy,sz,tint,ry);
   const round=(x:number,y:number,z:number,sx:number,sy:number,sz:number,tint:number=color)=>add('item-round',x,y,z,sx,sy,sz,tint);
   const amount=Math.max(.65,Math.min(1,quantity/Math.max(1,definition.stackLimit)));
@@ -70,9 +131,11 @@ export function itemGeometry(item:ItemId,quantity:number=ITEM_DEFINITIONS[item].
     for(let i=0;i<5;i++){const a=i*2.4;add('item-nugget',Math.cos(a)*.16,.09+(i%2)*.09,Math.sin(a)*.14,.20,.17,.18,i%2?0x9fae6b:0xb7bf7d,a);}
     box(0,.055,0,.30,.025,.04,0x6c8d5b);
   }else if(item==='wood'){
-    for(const [x,y,z,turn] of [[0,.075,-.09,-.035],[.01,.075,.09,.05],[-.015,.205,0,-.08]]){
-      add('item-log',x!,y!,z!, .65*amount,.14,.14,color,turn);
-      for(const side of [-1,1])add('item-log',x!+side*.324*amount*Math.cos(turn!),y!,z!-side*.324*amount*Math.sin(turn!),.008,.114,.114,0xc9ad77,turn);
+    // Three short trunk sections, with the same nine existing pieces and
+    // painted bark/end-grain charts. The stack clears the shelf above it.
+    for(const [x,y,z,turn] of [[0,.12,-.105,-.035],[.01,.12,.105,.05],[-.015,.30,0,-.08]]){
+      add('item-log',x!,y!,z!, .72*amount,.22,.22,color,turn);
+      for(const side of [-1,1])add('item-log',x!+side*.359*amount*Math.cos(turn!),y!,z!-side*.359*amount*Math.sin(turn!),.008,.194,.194,0xc9ad77,turn);
     }
   }else if(definition.kind==='chunk')return centreItemParts(chunkParts(anchor?.x??0,anchor?.z??0,item));
   else if(definition.kind==='blocks')return centreItemParts(blockParts(anchor?.x??0,anchor?.z??0,item,Math.min(75,quantity)));

@@ -1,28 +1,16 @@
 import type { Pawn, World } from '../sim/types';
-import { SOCIAL_LABELS } from '../sim/social-state';
+import {personalJournalEvents,journalPictogram} from './journal-events';
+import {drawJournalPictogram} from './journal-pictograms';
 import { TICKS_PER_DAY } from '../sim/types';
 import { setTooltip } from './tooltip';
 
 export type JournalFilter = 'all' | 'social' | 'combat' | 'mental';
 export interface JournalRow { tick: number; kind: 'social' | 'combat' | 'mental'; text: string }
 
-const socialLabels = Object.values(SOCIAL_LABELS);
-
 /** The existing bounded event log is the only source of journal entries. Do not
  * invent dialogue, blows or a durable history from transient opinion scores. */
 export function pawnJournalRows(world: World, pawn: Pawn): JournalRow[] {
-  const escapedName=pawn.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const named=new RegExp(`(?<![\\p{L}\\p{N}])${escapedName}(?![\\p{L}\\p{N}])`,'iu');
-  return world.events.flatMap(event => {
-    const text = event.message;
-    if (!named.test(text)) return [];
-    const lower = text.toLocaleLowerCase('fr-FR');
-    const mental=event.type==='need'&&['errance triste','frénésie alimentaire','crise de destruction','fureur violente','colère meurtrière','frénésie incendiaire'].some(label=>lower.includes(label));
-    const kind: JournalRow['kind'] | undefined = mental?'mental':socialLabels.some(label => text.startsWith(`${label} entre `)) || ['a vexé', 'a insulté', 'bagarre'].some(word => lower.includes(word))
-      ||event.type==='need'&&['deviennent partenaires','repousse l’avance de','se sépare de'].some(word=>lower.includes(word))
-      ? 'social' : ['tir', 'touché', 'blessé', 'attaque', 'frappé', 'combat'].some(word => lower.includes(word)) ? 'combat' : undefined;
-    return kind ? [{ tick: event.tick, kind, text }] : [];
-  }).reverse();
+  return personalJournalEvents(world,pawn).map(({event,kind})=>({tick:event.tick,kind,text:event.message}));
 }
 
 export function createJournalInspection(panel: HTMLElement): void {
@@ -84,8 +72,10 @@ export function updateJournalInspection(panel: HTMLElement, world: World, pawn: 
   list.replaceChildren(...rows.map(row => {
     const entry = document.createElement('li');
     entry.dataset.kind = row.kind;
-    const icon = document.createElement('span');
-    icon.className = `pawn-journal-icon pawn-journal-icon-${row.kind}`;
+    const icon = document.createElement('canvas');
+    icon.width=icon.height=52;icon.style.width=icon.style.height='26px';
+    icon.className = 'pawn-journal-icon';
+    const context=icon.getContext('2d');if(context)drawJournalPictogram(context,journalPictogram({tick:row.tick,type:'need',message:row.text}),26,26,21);
     icon.setAttribute('aria-hidden', 'true');
     const text = document.createElement('span');
     text.textContent = row.text;

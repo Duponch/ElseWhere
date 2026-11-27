@@ -38,7 +38,7 @@ export function layoutGearTab(spec:GearSpec,measure:CardMeasure):NativeTabCard{
   const line=(id:string,text:string,hint:string)=>{builder.label(0,y,widthAt(y),text,{region,truncate:true});builder.target({id,x:0,y,w:widthAt(y),h:NATIVE_LINE.small,hint,region,highlight:true});y+=NATIVE_LINE.small;};
   if(spec.mass)line('gear-mass',spec.mass.text,spec.mass.hint);
   if(spec.comfort)line('gear-comfort',spec.comfort.text,spec.comfort.hint);
-  const separator=(label:string)=>{y+=3;const width=widthAt(y);builder.text(0,y,width,20,label,{region,ink:NATIVE_INK.separator,v:'top'});y+=20;builder.line(0,y,width,NATIVE_INK.line,region);y+=2;};
+  const separator=(label:string)=>{y+=3;const width=widthAt(y);builder.text(0,y,width,20,label,{region,ink:NATIVE_INK.sectionTitle,v:'top'});y+=20;builder.line(0,y,width,NATIVE_INK.line,region);y+=2;};
   if(spec.armor?.length){
     separator('Armure globale');
     for(const armor of spec.armor){builder.label(0,y,120,armor.label,{region,truncate:true});builder.label(120,y,widthAt(y)-120,armor.value,{region});y+=NATIVE_LINE.small;}
@@ -47,7 +47,7 @@ export function layoutGearTab(spec:GearSpec,measure:CardMeasure):NativeTabCard{
     // Core shows the three sections of a humanlike even when they are empty (ShouldShowEquipment/Apparel/Inventory).
     separator(section.label);
     for(const row of section.rows){
-      const rowWidth=inner;let right=rowWidth;
+      const rowWidth=widthAt(y);let right=rowWidth;
       if(row.info){right-=G.button;builder.glyph('info',right,y,G.button,G.button,{region});builder.target({id:'gear-info:'+row.id,x:right,y,w:G.button,h:G.button,hint:row.info.hint,control:row.info,region});}
       if(row.drop){right-=G.button;builder.glyph('drop',right,y,G.button,G.button,{region,disabled:row.drop.disabled});builder.target({id:'gear-drop:'+row.id,x:right,y,w:G.button,h:G.button,hint:row.drop.hint,control:row.drop,region});}
       if(row.ingest){right-=G.button;builder.glyph('ingest',right,y,G.button,G.button,{region});builder.target({id:'gear-ingest:'+row.id,x:right,y,w:G.button,h:G.button,hint:row.ingest.hint,control:row.ingest,region});}
@@ -59,12 +59,14 @@ export function layoutGearTab(spec:GearSpec,measure:CardMeasure):NativeTabCard{
     }
   }
   for(const extra of spec.extras){
-    const width=inner;builder.label(G.labelX,y,width-G.labelX-120,extra.label,{region,truncate:true,h:G.row});
+    const width=widthAt(y);builder.label(G.labelX,y,Math.max(1,width-G.labelX-120),extra.label,{region,truncate:true,h:G.row});
     builder.button(width-116,y+2,116,24,extra.control.label,{region,disabled:extra.control.disabled});
     builder.target({id:'gear-extra:'+extra.id,x:width-116,y:y+2,w:116,h:24,hint:extra.hint,control:extra.control,region});y+=G.row;
   }
-  const content=y+20,top=G.top,view={x:G.pad,y:top+G.pad,w:viewWidth,h:G.height-top-G.pad*2};
-  builder.height=Math.max(G.height,Math.min(content+70+0,spec.maxHeight));view.h=builder.height-top-G.pad*2;
+  const content=Math.max(y,portraitBottom)+G.pad,top=G.top,view={x:G.pad,y:top+G.pad,w:viewWidth,h:G.height-top-G.pad*2};
+  // Core starts at 450. Fit the possessions and the portrait instead, with a
+  // real viewport bound even when the screen is shorter than that initial size.
+  builder.height=Math.max(top+G.pad*2+NATIVE_LINE.small,Math.min(content+top+G.pad*2,spec.maxHeight));view.h=builder.height-top-G.pad*2;
   builder.region(region,view.x,view.y,view.w,view.h,content);
   if(spec.portrait){
     const x=inner-GEAR_PORTRAIT.width,y0=GEAR_PORTRAIT.height+4;

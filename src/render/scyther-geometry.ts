@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {mechanicalPaint,mechanicalFacePaintUv,type MechanicalPaintChart} from './mechanical-surface-art';
 
 type Point=readonly [number,number,number];
 export interface ScytherVisualPart {readonly part:string;readonly bone:number;readonly size:Point;readonly center:Point;readonly pivot:Point;readonly color:number;readonly roll?:number}
@@ -33,14 +34,37 @@ export function scytherGeometry(capacity:number,partIndex:(id:string)=>number):T
   return mechanicalGeometry(SCYTHER_VISUAL_PARTS,capacity,partIndex);
 }
 
+/** Front faces have a visor or panel, backs have ventilation. Narrow pieces
+ * use recessed seams and joints instead of repeating the large body panel. */
+function paintChart(part: ScytherVisualPart, face: number): MechanicalPaintChart {
+  const name=part.part, [sx,sy,sz]=part.size;
+  if(name.endsWith('-eye'))return mechanicalPaint.sensor;
+  if(name.endsWith('-blade'))return mechanicalPaint.edge;
+  if(name==='head')return face===4?mechanicalPaint.head:mechanicalPaint.panel;
+  if(name==='neck'||name.endsWith('-hand')||name.endsWith('-shoulder'))return mechanicalPaint.joint;
+  if(name.endsWith('-foot'))return mechanicalPaint.rim;
+  if(name==='torso'){
+    if(sx<=.23&&sz>=.4)return face===4||face===5?mechanicalPaint.cap:mechanicalPaint.housing;
+    if(sx<.35&&sy<.36&&part.center[2]<0)return mechanicalPaint.vent;
+    return face===5||face===2?mechanicalPaint.vent:mechanicalPaint.panel;
+  }
+  return sy>sx*1.5?mechanicalPaint.limb:mechanicalPaint.joint;
+}
+
 /** Shared format, authored silhouette and clinical indices supplied per race. */
 export function mechanicalGeometry(parts:readonly ScytherVisualPart[],capacity:number,partIndex:(id:string)=>number):THREE.InstancedBufferGeometry {
   if(parts.length>SCYTHER_MAX_VISUAL_BOXES)throw Error('Mechanical geometry exceeds its resident shape budget.');
-  const vertices:number[]=[];
+  const vertices:number[]=[],paintUvs:number[]=[];
   for(const part of parts){
     const index=partIndex(part.part);if(!Number.isInteger(index)||index<0||index>=32)throw Error(`Missing mechanical visual part ${part.part}.`);
     const box=new THREE.BoxGeometry(...part.size).toNonIndexed();if(part.roll)box.rotateX(part.roll);
-    const positions=box.getAttribute('position'),normals=box.getAttribute('normal'),color=new THREE.Color(part.color);
+    const positions=box.getAttribute('position'),normals=box.getAttribute('normal'),uv=box.getAttribute('uv'),color=new THREE.Color(part.color);
+    for(let i=0;i<uv.count;i++){
+      const face=Math.floor(i/6),[sx,sy,sz]=part.size;
+      // Axis pairs are defined by BoxGeometry before a blade's local roll.
+      const width=face<2?sz:sx,height=face===2||face===3?sz:sy;
+      paintUvs.push(...mechanicalFacePaintUv(paintChart(part,face),uv.getX(i),uv.getY(i),width,height));
+    }
     for(let i=0;i<positions.count;i++)vertices.push(
       positions.getX(i)+part.center[0],positions.getY(i)+part.center[1],positions.getZ(i)+part.center[2],
       normals.getX(i),normals.getY(i),normals.getZ(i),color.r,color.g,color.b,
@@ -51,6 +75,7 @@ export function mechanicalGeometry(parts:readonly ScytherVisualPart[],capacity:n
   const geometry=new THREE.InstancedBufferGeometry(),data=new THREE.InterleavedBuffer(new Float32Array(vertices),16);
   for(const [name,size,offset] of [['position',3,0],['normal',3,3],['color',3,6],['mechPart',4,9],['bindPivot',3,13]] as const)
     geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(data,size,offset));
+  geometry.setAttribute('uv',new THREE.Float32BufferAttribute(paintUvs,2));
   const instances=new THREE.InstancedInterleavedBuffer(new Float32Array(capacity*34),34).setUsage(THREE.StaticDrawUsage);
   for(const [name,size,offset] of [['aFrom',4,0],['aTo',4,4],['aTravel',4,8],['aRig',4,12],['aMask',2,16],['aGait',2,18],['aCarrier',4,20],['aCorpseHandoff',2,24],['aCorpseFrom',4,26],['aCorpseTo',4,30]] as const)
     geometry.setAttribute(name,new THREE.InterleavedBufferAttribute(instances,size,offset));

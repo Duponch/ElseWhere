@@ -2,7 +2,7 @@ import type {NativeControl, NativePage, NativeRow} from './native-contract';
 import type {StorageControlSettings} from '../ui/storage-item-controls';
 import {
   STORAGE_FILTER_TREE, storageTreeSelection, storageTreePermissions,
-  storageSearchNodes, storageNodeState, storageNodeLeaves, setStorageNode, STORAGE_LEAVES, type StorageFilterNode, type StorageLeafId,
+  storageSearchNodes, storageNodeState, storageNodeLeaves, STORAGE_LEAVES, type StorageFilterNode, type StorageLeafId,
 } from '../ui/storage-filter-tree';
 import {WEAPON_QUALITIES, QUALITY_LABELS, type WeaponQuality} from '../sim/equipment-rules';
 
@@ -14,6 +14,8 @@ export interface NativeStorageEditorOptions {
   onApply:(settings:StorageControlSettings)=>void|Promise<unknown>;
   onBack:()=>void;
   applyLabel?:string;
+  /** Physical exclusions of a building remain independent of copied policy. */
+  fixedAllows?:(item:StorageLeafId)=>boolean;
 }
 
 export interface NativeStorageTreeOptions {
@@ -73,6 +75,7 @@ export function createNativeStorageEditor(options:NativeStorageEditorOptions):Na
   const id=(suffix:string)=>`${options.id}-${suffix}`;
   const redraw=()=>options.show(make());
   const control=(suffix:string,label:string,onActivate:NativeControl['onActivate'],extra:Partial<NativeControl>={}):NativeControl=>({id:id(suffix),label,onActivate,...extra});
+  const setAllowed=(allowed:readonly StorageLeafId[],enabled:boolean)=>{for(const leaf of allowed)if(!options.fixedAllows||options.fixedAllows(leaf)){if(enabled)selected.add(leaf);else selected.delete(leaf);}};
   function change(write:()=>void):void {if(applying)return;write();redraw();}
   function readPercentage(value:string):number {
     const number=Number(value);
@@ -119,13 +122,13 @@ export function createNativeStorageEditor(options:NativeStorageEditorOptions):Na
     rows.push(
       {id:id('search'),label:'Rechercher',region:'navigation',compact:true,presentation:'plain',input:{value:search,placeholder:'Objet ou catégorie…',maxLength:160,onCommit:value=>{if(!applying){search=value;redraw();}}}},
       {id:id('all'),label:`${selected.size} / ${STORAGE_LEAVES.length}`,hint:'Nombre d’objets autorisés dans le filtre',region:'navigation',compact:true,presentation:'plain',controls:[
-        control('clear','Tout effacer',()=>change(()=>{for(const node of STORAGE_FILTER_TREE)setStorageNode(node,selected,false);}),{disabled:applying}),
-        control('allow','Tout autoriser',()=>change(()=>{for(const node of STORAGE_FILTER_TREE)setStorageNode(node,selected,true);}),{disabled:applying}),
+        control('clear','Tout effacer',()=>change(()=>setAllowed(STORAGE_LEAVES,false)),{disabled:applying}),
+        control('allow','Tout autoriser',()=>change(()=>setAllowed(STORAGE_LEAVES,true)),{disabled:applying}),
       ]},
     );
-    rows.push(...nativeStorageTreeRows({id:options.id,selected,expanded,search,disabled:applying,
+    rows.push(...nativeStorageTreeRows({id:options.id,selected,expanded,search,disabled:applying,fixedAllows:options.fixedAllows,
       onExpand:nodeId=>change(()=>{if(expanded.has(nodeId))expanded.delete(nodeId);else expanded.add(nodeId);}),
-      onToggle:(node,state)=>change(()=>setStorageNode(node,selected,state!=='all')),
+      onToggle:(_node,state,allowed)=>change(()=>setAllowed(allowed,state!=='all')),
     }));
     return {id:options.id,title:options.title,contentKey:search,layout:'storage',width:480,height:760,rows,modal:true,onClose:()=>{if(!applying)options.onBack();},actions:[
       control('apply',options.applyLabel??'Appliquer',async()=>{

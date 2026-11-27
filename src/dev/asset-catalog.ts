@@ -17,7 +17,11 @@ host.innerHTML=`<main class="catalog-app"><header class="catalog-header"><div cl
 const $=<T extends HTMLElement>(id:string)=>document.getElementById(id) as T;
 const stage=$<HTMLElement>('catalog-stage'),overlay=$('catalog-overlay'),loading=$('catalog-loading'),errorView=$('catalog-error');
 const styleControl=$<HTMLSelectElement>('catalog-style'),search=$<HTMLInputElement>('catalog-search'),labelsControl=$<HTMLInputElement>('catalog-labels'),floorControl=$<HTMLInputElement>('catalog-floor');
+const drawingsLabel=document.createElement('label'),drawingsControl=document.createElement('input');
+drawingsControl.id='catalog-personalized-textures';drawingsControl.type='checkbox';drawingsControl.checked=new URLSearchParams(location.search).get('drawings')!=='0';
+drawingsLabel.append(drawingsControl,document.createTextNode('Dessins personnalisés'));styleControl.parentElement!.after(drawingsLabel);
 const previewPreferences:GraphicsStylePreferences={...DEFAULT_GRAPHICS_STYLE_PREFERENCES};
+previewPreferences.personalizedTextures=drawingsControl.checked;
 const paintSettings=document.createElement('details');paintSettings.className='catalog-paint-settings';
 const paintSummary=document.createElement('summary');paintSummary.textContent='Réglages Gouache';paintSettings.append(paintSummary);
 const paintInputs:HTMLInputElement[]=[];let paintRefreshTimer:ReturnType<typeof setTimeout>|undefined;
@@ -61,7 +65,7 @@ renderer.onError=fail;renderer.onDeviceLost=info=>fail(info.message);
 window.addEventListener('error',event=>fail(event.error??event.message));window.addEventListener('unhandledrejection',event=>fail(event.reason));
 const normalize=(text:string)=>text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const nextFrame=()=>new Promise<void>(resolve=>{const frame=requestAnimationFrame(()=>{preparationFrames.delete(frame);resolve();});preparationFrames.set(frame,resolve);});
-function lock(value:boolean):void{styleControl.disabled=value;$<HTMLButtonElement>('catalog-all').disabled=value;$<HTMLButtonElement>('catalog-above').disabled=value;search.disabled=value;labelsControl.disabled=floorControl.disabled=value;for(const input of paintInputs)input.disabled=value||styleControl.value!=='origami';}
+function lock(value:boolean):void{styleControl.disabled=drawingsControl.disabled=value;$<HTMLButtonElement>('catalog-all').disabled=value;$<HTMLButtonElement>('catalog-above').disabled=value;search.disabled=value;labelsControl.disabled=floorControl.disabled=value;for(const input of paintInputs)input.disabled=value||styleControl.value!=='origami';}
 function progress(message:string):void{$('catalog-loading-text').textContent=message;$('catalog-message').textContent=message;}
 function disposeCatalog():void{
   if(catalogCleanupFailed)throw Error('Catalog cleanup is quarantined; paint context remains owned');
@@ -163,7 +167,7 @@ async function finishView(assertCurrent:()=>void,prepared=false):Promise<void>{
 function build(style:GraphicsStyle):Promise<void>{
   return exclusiveCatalogJob(async assertCurrent=>{
     if(paintRefreshTimer){clearTimeout(paintRefreshTimer);paintRefreshTimer=undefined;}
-    disposeCatalog();const graphics=context=new GraphicsStyleContext({...previewPreferences,style});diagnostics.style=style;
+    disposeCatalog();const graphics=context=new GraphicsStyleContext({...previewPreferences,style});Object.assign(previewPreferences,graphics.preferences);diagnostics.style=style;
     progress('Humains, animaux et variantes disponibles…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createActorCatalog(graphics)));
     progress('Végétation, mobilier, fragments et objets…');await nextFrame();assertCurrent();collections.push(withGraphicsStyle(graphics,()=>createEnvironmentAssetCatalog(graphics)));
     collections.push(withGraphicsStyle(graphics,()=>createTransportAssetCatalog()));
@@ -177,7 +181,7 @@ function refreshPaint(next:GraphicsStylePreferences):Promise<void>{
     progress('Actualisation des textures et des contours…');await nextFrame();assertCurrent();
     try{await changeCatalogSurface(graphics,next,collections,{renderer,scene,camera,epoch:jobEpoch,assertCurrent});}
     finally{
-      Object.assign(previewPreferences,graphics.preferences);styleControl.value=graphics.preferences.style;
+      Object.assign(previewPreferences,graphics.preferences);styleControl.value=graphics.preferences.style;drawingsControl.checked=graphics.preferences.personalizedTextures;
       for(const[i,input]of paintInputs.entries()){const control=ORIGAMI_STYLE_CONTROLS[i]!;input.value=String(graphics.preferences[control.key]);(input.nextElementSibling as HTMLOutputElement).value=formatOrigamiStyleValue(control,graphics.preferences[control.key]);}
     }
     diagnostics.style=graphics.preferences.style;diagnostics.trees=collections.flatMap(collection=>collection.treeStatus?[collection.treeStatus()]:[]);
@@ -187,8 +191,9 @@ function refreshPaint(next:GraphicsStylePreferences):Promise<void>{
   });
 }
 styleControl.onchange=()=>void refreshPaint({...previewPreferences,style:styleControl.value as GraphicsStyle});$('catalog-all').onclick=()=>{selected=undefined;focus(wholeBounds);renderInventory();};$('catalog-above').onclick=()=>focus(selected?worldBox(selected):wholeBounds,true);
+drawingsControl.onchange=()=>void refreshPaint({...previewPreferences,personalizedTextures:drawingsControl.checked});
 search.addEventListener('input',renderInventory);search.addEventListener('keydown',event=>{if(event.key==='Escape'){search.value='';renderInventory();}});labelsControl.onchange=requestRender;floorControl.onchange=()=>{floor.visible=floorControl.checked;if(grid)grid.visible=floorControl.checked;requestRender();};
-Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{if(busy||closed)return false;const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{if(busy||closed)return activeJob??Promise.resolve();styleControl.value=style;return refreshPaint({...previewPreferences,style});},inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
+Object.assign(window,{assetCatalog:{diagnostics,overview:()=>focus(wholeBounds),focus:(id:string)=>{if(busy||closed)return false;const entry=entries.find(entry=>entry.item.id===id);if(entry)selectEntry(entry);return !!entry;},setStyle:(style:GraphicsStyle)=>{if(busy||closed)return activeJob??Promise.resolve();styleControl.value=style;return refreshPaint({...previewPreferences,style});},setPersonalizedTextures:(personalizedTextures:boolean)=>{if(busy||closed)return activeJob??Promise.resolve();drawingsControl.checked=personalizedTextures;return refreshPaint({...previewPreferences,personalizedTextures});},getPersonalizedTextures:()=>context?.preferences.personalizedTextures,inventory:()=>sections.map(section=>({id:section.id,label:section.label,items:section.items.map(({id,label,status,note})=>({id,label,status,note})),missing:section.missing??[]}))}});
 async function init(){await renderer.init();if(closed)return;stage.prepend(renderer.domElement);const backend=renderer.backend as unknown as {isWebGPUBackend?:boolean;device?:{limits?:{maxVertexAttributes?:number}}};diagnostics.backend={webgpu:backend.isWebGPUBackend===true,name:renderer.backend.constructor.name,maxVertexAttributes:backend.device?.limits?.maxVertexAttributes};resizeObserver.observe(stage);resize();const requested=new URLSearchParams(location.search).get('style');styleControl.value=requested==='default'?'default':'origami';await build(styleControl.value as GraphicsStyle);}
 window.addEventListener('pagehide',()=>{
   if(closed)return;closed=true;jobEpoch++;if(paintRefreshTimer)clearTimeout(paintRefreshTimer);if(frame!==undefined)cancelAnimationFrame(frame);for(const [frame,resolve]of preparationFrames){cancelAnimationFrame(frame);resolve();}preparationFrames.clear();resizeObserver.disconnect();controls.enabled=false;

@@ -1,3 +1,4 @@
+import {personalJournalEvents} from '../ui/journal-events';
 import {composeThingPane, objectPaneParts, lineOfRow, type PaneGauge, type PaneSpec, type PaneTab} from './native-thing-pane';
 import { stripInspectorAction351 } from '../sim/strip-351';
 import { PLAN_COLORS_369, PLAN_COLOR_DEFS_369, isPlanColor369, planById369, planLabel369, totalPlanArea369 } from '../sim/plans-369';
@@ -183,10 +184,10 @@ let healthPane: 'overview' | 'operations' = 'overview';
 /** Core `ITab_Pawn_Log`: « Tout » off, « Social » and « Combat » on at first. */
 const logFilter = { all: false, social: true, combat: true };
 let portraitClothed = true;
+let inspectorInteractionRevision=0;
 export function setNativeInspectorTab(value:string):void {
-  identityDialog378=undefined;
-  if(value==='none'){activeTab=null;subpage=undefined;infoSession=undefined;resetCardScroll();return;}
-  if(!tabs.some(([tab])=>tab===value)&&!THING_TAB_IDS.includes(value))return;activeTab=value;subpage=undefined;infoSession=undefined;resetCardScroll();
+  if(value!=='none'&&!tabs.some(([tab])=>tab===value)&&!THING_TAB_IDS.includes(value))return;
+  resetInspectorDetails();activeTab=value==='none'?null:value;
 }
 let selectionKey = '', subpage: { kind: 'bills' | 'storage' | 'item' | 'anatomy' | 'info'; structureId?: number; stockpileId?: number; itemId?: number; pawnId?: number } | undefined;
 let infoSession:{anchor:string;target:NonNullable<typeof subpage>;view:NativeInfoView;page?:NativePage}|undefined;
@@ -195,6 +196,15 @@ const billWorkers = new Map<string, BillWorkerOptions283>();
 let storageClipboard: StorageSettings | undefined;
 let storageNavigation: {target:string;search:string;expanded:Set<string>} | undefined;
 const lightCache = new LightEnvironmentCache();
+
+/** Fresh dossier contents on reopening; switching directly between selected
+ * people still retains the applicable primary tab, as Core's inspect pane. */
+function resetInspectorDetails():void{
+  inspectorInteractionRevision++;identityDialog378=undefined;healthPane='overview';
+  logFilter.all=false;logFilter.social=logFilter.combat=true;portraitClothed=true;
+  subpage=undefined;infoSession=undefined;billDrafts.clear();billWorkers.clear();storageNavigation=undefined;feedback='';resetCardScroll();
+}
+export function resetNativeInspectorSession():void{resetInspectorDetails();activeTab=null;selectionKey='';}
 
 function row(id: string, label: string, value?: string, hint?: string): NativeRow { return { id, label, value, hint }; }
 function tooltipText(tip: TooltipContent): string { return [tip.body, ...(tip.rows ?? []).map(fact => `${fact.label} : ${fact.value}`)].filter(Boolean).join(' · '); }
@@ -218,14 +228,17 @@ const needHelp = {
 function repaint(): void { const page = buildNativeInspector(owner.readState?.() ?? latest, owner); if (page) owner.showPage(page); owner.refresh(); }
 function control(id: string, label: string, action: (gesture?:NativeGesture) => unknown, disabled = false, active = false, hint?: string): NativeControl {
   const epoch = latest.epoch, mapId = latest.world && registeredMapId(latest.world), seed = latest.world?.seed;
-  const infoAnchor=id==='inspect-info'||id.startsWith('item-information-')||id.startsWith('anatomy-')?nativeInspectorSelectionKey(latest):undefined;
+  const anchor=nativeInspectorSelectionKey(latest),revision=inspectorInteractionRevision;
   return { id, label, disabled: disabled || latest.busy, active, hint: hint ?? label, onActivate: async gesture => {
     const current = owner.readState?.() ?? latest;
     if (disabled || current.busy) return;
     if (current.epoch !== epoch || current.world?.seed !== seed || (current.world && registeredMapId(current.world)) !== mapId) { feedback = 'La carte a changé. Sélectionnez à nouveau cet objet.'; repaint(); return; }
-    if(infoAnchor!==undefined&&nativeInspectorSelectionKey(current)!==infoAnchor)return;
+    if(revision!==inspectorInteractionRevision||nativeInspectorSelectionKey(current)!==anchor)return;
     latest = current;
-    feedback = ''; try { await action(gesture); } catch (cause) { feedback = cause instanceof Error ? cause.message : String(cause); } repaint();
+    feedback = '';let completedRevision=revision;
+    try { const result=action(gesture);completedRevision=inspectorInteractionRevision;await result; }
+    catch (cause) { if(completedRevision===inspectorInteractionRevision)feedback = cause instanceof Error ? cause.message : String(cause); }
+    if(completedRevision===inspectorInteractionRevision&&nativeInspectorSelectionKey(owner.readState?.()??latest)===anchor)repaint();
   } };
 }
 async function send(command: Command): Promise<unknown> {
@@ -245,14 +258,16 @@ function choices<T extends string | number>(id: string, label: string, value: T,
   return { id, label, value: labelOf(value), compact:true, controls: [select] };
 }
 function numberRow(id: string, label: string, value: number, min: number, max: number, change: (value: number) => unknown, disabled = false): NativeRow {
-  const epoch = latest.epoch, mapId = latest.world && registeredMapId(latest.world);
+  const epoch = latest.epoch, mapId = latest.world && registeredMapId(latest.world),anchor=nativeInspectorSelectionKey(latest),revision=inspectorInteractionRevision;
   const apply = async (text: string) => {
     const current = owner.readState?.() ?? latest;
     if (current.busy || disabled) return false;
+    if(revision!==inspectorInteractionRevision||nativeInspectorSelectionKey(current)!==anchor)return false;
     if (current.epoch !== epoch || (current.world && registeredMapId(current.world)) !== mapId) { feedback = 'La carte a changé. Sélectionnez à nouveau cet objet.'; repaint(); return false; }
     latest = current;
     const next = Number(text); if (!text.trim() || !Number.isSafeInteger(next) || next < min || next > max) { feedback = `Saisissez un entier de ${min} à ${max}.`; repaint(); return false; }
-    feedback = ''; try { await change(next); } catch (cause) { feedback = cause instanceof Error ? cause.message : String(cause); repaint(); return false; } repaint();
+    feedback = ''; try { await change(next); } catch (cause) { if(revision===inspectorInteractionRevision){feedback = cause instanceof Error ? cause.message : String(cause);repaint();}return false; }
+    if(revision===inspectorInteractionRevision&&nativeInspectorSelectionKey(owner.readState?.()??latest)===anchor)repaint();
   };
   return { id, label, value: String(value), input: { value: String(value), kind: 'number', onCommit: apply }, controls: [
     control(`${id}-less`, '−', () => change(value - 1), disabled || value <= min), control(`${id}-more`, '+', () => change(value + 1), disabled || value >= max),
@@ -339,20 +354,7 @@ function bioCard(world: World, pawn: Pawn, sex: 'male' | 'female', colonist: boo
   if(pawn.identity378?.title&&stories.length){const at=stories.length-1;stories[at]={...stories[at]!,chip:{...stories[at]!.chip,label:pawn.identity378.title,hint:`${pawn.identity378.title}\n\n${stories[at]!.chip.hint}`}};}
   return { name: pawn.name,buttons, description, faction, stories, traits, traitsHint, incapable, skills };
 }
-/** The events of the journal that concern this person, most recent first,
- * classified as the old journal did (social exchanges, fights, mental crises). */
-function personalEvents(world: World, pawn: Pawn): { index: number; event: World['events'][number]; kind: 'social' | 'combat' | 'mental' }[] {
-  const escaped = pawn.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), named = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu'), labels = Object.values(SOCIAL_LABELS);
-  const result: { index: number; event: World['events'][number]; kind: 'social' | 'combat' | 'mental' }[] = [];
-  for (const [index, event] of [...world.events].reverse().entries()) {
-    if (!named.test(event.message)) continue;
-    const lower = event.message.toLocaleLowerCase('fr-FR');
-    const mental = event.type === 'need' && ['errance triste', 'frénésie alimentaire', 'crise de destruction', 'fureur violente', 'colère meurtrière'].some(word => lower.includes(word));
-    const kind = mental ? 'mental' : labels.some(label => event.message.startsWith(`${label} entre `)) || ['a vexé', 'a insulté', 'bagarre'].some(word => lower.includes(word)) || event.type === 'need' && ['deviennent partenaires', 'repousse l’avance de', 'se sépare de'].some(word => lower.includes(word)) ? 'social' : ['tir', 'touché', 'blessé', 'attaque', 'frappé', 'combat'].some(word => lower.includes(word)) ? 'combat' : undefined;
-    if (kind) result.push({ index, event, kind });
-  }
-  return result;
-}
+const personalEvents=personalJournalEvents;
 /** Core `ITab_Pawn_Gear.TryDrawOverallArmor`: the worn pieces' ratings (halved
  * and capped at 1) weighted by each part's coverage, doubled, at most 200 %. */
 function overallArmor(pieces: readonly MaterialPile[]): Record<'sharp' | 'blunt' | 'heat', number> {
@@ -366,12 +368,12 @@ function overallArmor(pieces: readonly MaterialPile[]): Record<'sharp' | 'blunt'
 }
 function pawnPage(world: World, pawn: Pawn): NativePage {
   const colonist = isColonist(pawn) && !pawn.prisoner, alive = pawn.state !== 'dead';
-  if (!pawn.prisoner && activeTab === 'prisoner') activeTab = null;
+  if (activeTab&&!tabs.some(([tab])=>tab===activeTab&& (tab!=='prisoner'||!!pawn.prisoner))) activeTab=null;
   // Core `OpenTabType` is a class: a tab this person does not have stays remembered but shows nothing.
   const pawnTab: Tab | null = tabs.some(([tab]) => tab === activeTab) ? activeTab as Tab : null;
   const sex = appearanceOf(pawn, world.seed).sex, status = pawn.prisoner ? 'Prisonnier' : colonist ? 'Colon' : pawn.visitor ? 'Visiteur' : pawn.podRescue ? 'Naufragé' : 'Hors-la-loi';
   // Core InterfaceToggleTab: clicking the open tab closes it.
-  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { activeTab = activeTab === tab ? null : tab; resetCardScroll(); }, false, activeTab === tab, tabHints[tab])) }];
+  const rows: NativeRow[] = [{ id: 'pawn-tabs', label: '', region:'navigation', compact: true, controls: tabs.filter(([tab]) => tab !== 'prisoner' || pawn.prisoner).map(([tab, label]) => control(`pawn-tab-${tab}`, label, () => { setNativeInspectorTab(activeTab === tab ? 'none' : tab); }, false, activeTab === tab, tabHints[tab])) }];
   // The inspect pane (Core InspectPaneFiller): health, mood, timetable and
   // allowed-area gauges, then the inspect lines.
   const thresholds = breakThresholds(pawn), crises = Object.values(MENTAL_CRISIS_CATALOG).map(crisis => crisis.label.toLocaleLowerCase('fr-FR')).join(', ');
@@ -386,7 +388,9 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   }
   rows.push({ id: 'pawn-gauges', label: '', inspectPane: true, gauges });
   if (!colonist) rows.push({ ...row('pawn-status', '', status), inspectPane: true });
-  rows.push({ ...row('pawn-action', '', owner.pawnActivity?.(pawn.id) || coupleActivity285(world, pawn)?.label || specificWorkActivity(world, pawn) || queryPawnStatus(world, pawn).reason, `Activité · case ${pawn.x}, ${pawn.z}`), inspectPane: true });
+  const activity=owner.pawnActivity?.(pawn.id) || coupleActivity285(world, pawn)?.label || specificWorkActivity(world, pawn) || queryPawnStatus(world, pawn).reason;
+  const activityInk:NativeRow['inspectInk']=pawn.state==='dead'||pawn.state==='downed'||pawn.mental?.crisis?'negative':pawn.state==='hungry'||pawn.draft?'painSevere':activity==='Inoccupé'||pawn.state==='idle'?'subtle':pawn.state==='sleeping'||pawn.state==='resting'||pawn.state==='recreating'?'royal':pawn.state==='eating'?'positive':'richAction';
+  rows.push({ ...row('pawn-action', '', activity, `Activité · case ${pawn.x}, ${pawn.z}`),emphasis:activityInk==='subtle'?'muted':'normal',inspectPane:true,inspectInk:activityInk });
   // Schema 360: Core's Pawn.GetInspectString shows the inspiration and its time left.
   const inspiration360 = inspirationInspectLine360(world, pawn); if (inspiration360) rows.push({ ...row('pawn-inspiration', inspiration360.label, inspiration360.value, inspiration360.hint), inspectPane: true });
   if (colonist && alive) {const queue=queuedOrderLabels378(world,pawn);rows.push({ ...row('pawn-orders', 'Ordres', `${pawn.orders.active !== null||isForcedPersonalAnimalOrder378(pawn) ? 'Travail imposé · ' : ''}${queue.length} en file${pawn.priorityWork ? ` · Case ${pawn.priorityWork.cell.x}, ${pawn.priorityWork.cell.z}` : ''}`),...queue.length?{detail:queue.join(' → ')}:{}, inspectPane: true });}
@@ -538,7 +542,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       const combat = entry.kind === 'combat';
       if (combat && previous !== 'combat') { if (previous) lines.push({ kind: 'gap', height: 20 }); lines.push({ kind: 'header', text: `Combat · il y a ${((world.tick - entry.event.tick) / 250).toFixed(0)} h` }); }
       else if (!combat && previous === 'combat') lines.push({ kind: 'gap', height: 20 });
-      lines.push({ kind: 'entry', id: String(entry.index), text: entry.event.message, hint: `${({ social: 'Social', combat: 'Combat', mental: 'Crise mentale' })[entry.kind]} · Il y a ${((world.tick - entry.event.tick) / 250).toFixed(1)} h` });
+      lines.push({ kind: 'entry', id: String(entry.index), text: entry.event.message, icon:entry.icon, hint: `${({ social: 'Social', combat: 'Combat', mental: 'Crise mentale' })[entry.kind]} · Il y a ${((world.tick - entry.event.tick) / 250).toFixed(1)} h` });
       previous = combat ? 'combat' : 'other';
     }
     const toggle = (id: 'all' | 'social' | 'combat', label: string, x: number, width: number, hint: string) => ({ id, label, x, width, on: logFilter[id], control: control(`log-toggle-${id}`, label, () => { logFilter[id] = !logFilter[id]; resetCardScroll(); }, false, logFilter[id], hint) });
@@ -571,7 +575,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
   // Core's hostility response gizmo (also a column of Assignations).
   if (colonist && alive) { const hostility = choices('pawn-hostility', 'Réaction hostile', pawn.hostilityResponse ?? 'flee', ['flee', 'ignore', 'attack'] as const, response => send({ type: 'hostility-response', pawnId: pawn.id, response }), response => ({ flee: 'Fuir', ignore: 'Ignorer', attack: 'Attaquer' })[response]).controls![0]!; actions.push({ ...hostility, icon: 'target-melee', hint: `Réaction hostile : ${hostility.label}` }); }
   actions.push(control('inspect-info','i',()=>{subpage={kind:'info'};},false,false,'Informations : toutes les caractéristiques de ce personnage'));
-  if (pawnTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { activeTab = null; }), hint: 'Fermer l’onglet' });
+  if (pawnTab) actions.push({ ...control('inspect-tab-close', 'Fermer l’onglet', () => { setNativeInspectorTab('none'); }), hint: 'Fermer l’onglet' });
   const result: NativePage & { portrait?: { url: string; label: string } } = { id: `inspect-pawn-${pawn.id}-${pawnTab ?? 'pane'}`, title: pawn.name, rows, actions, layout: 'inspector' };
   if (pawnTab) result.inspectTab = { id: pawnTab, ...tabSizes[pawnTab] };
   result.portrait = { url: portraitDataUrl(appearanceOf(pawn, world.seed), apparelAppearance(portraitClothed ? wornApparel(world, pawn) : []), equippedWeapon(world, pawn)?.item, portraitExpressionOf(pawn), humanLimbVisualMask(pawn)), label: `Portrait de ${pawn.name}` };
@@ -821,10 +825,11 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
       rows.push(row('pile-quantity', 'Quantité', String(pile.quantity)), meterRow('pile-condition', 'Points de vie', Math.max(0, max - pileDamage(pile)), max, undefined, `${Math.max(0, max - pileDamage(pile))} / ${max}`), ...info.rows.map((fact, index) => ({...row(`pile-information-${index}`, `${fact.category} · ${fact.label}`, fact.value, fact.description),infoCategory:fact.category})));
       if(pile.book&&(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))){
         const readers=world.pawns.filter(p=>isColonist(p)&&!p.prisoner&&!p.visitor&&p.state!=='dead');
+        const readerChoices=new Map(readers.map(p=>[p.id,command(`book-read-${p.id}`,'Lire', {type:'read-book-295',pawnId:p.id,bookId:pile.id})]));
         const readerSelect=control('book-read-select','Choisir un lecteur',()=>undefined,!readers.length);
         readerSelect.select={value:'',options:[{value:'',label:'Choisir un lecteur',disabled:true},...readers.map(p=>{
           const reason=readingRefusal295(world,p,pile,true);return {value:String(p.id),label:p.name,hint:reason??'Prendre et lire ce roman',disabled:!!reason};
-        })],onChange:async value=>{const id=Number(value);if(!Number.isSafeInteger(id)||!readers.some(p=>p.id===id))return;await send({type:'read-book-295',pawnId:id,bookId:pile.id});}};
+        })],onChange:async value=>{const id=Number(value);if(!Number.isSafeInteger(id))return;await readerChoices.get(id)?.onActivate();}};
         rows.push({id:'book-read',label:'Lire ce roman',hint:'Ordre direct : la politique règle seulement la sélection automatique. Le lecteur doit atteindre et porter le même exemplaire.',controls:[readerSelect]});
       }
       if (pile.weapon || pile.apparel) {
@@ -882,8 +887,9 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
       rows.push(row('plan-size', 'Taille', `${plan.cells.length} case${plan.cells.length > 1 ? 's' : ''}`));
       if ((world.plans369?.plans.length ?? 0) > 1) rows.push(row('plan-total', 'Surface planifiée totale', `${totalPlanArea369(world)} cases`));
       const color = control('plan-color-select', 'Changer de couleur', () => undefined);
+      const colorChoices=new Map(PLAN_COLORS_369.map(value=>[value,command(`plan-color-${value}`,'Changer de couleur',{ type: 'plan-369', action: 'color', planId: plan.id, color: value })]));
       color.select = { value: plan.color, options: PLAN_COLORS_369.map(value => ({ value, label: PLAN_COLOR_DEFS_369[value].label })),
-        onChange: async value => { if (isPlanColor369(value) && value !== plan.color) await send({ type: 'plan-369', action: 'color', planId: plan.id, color: value }); } };
+        onChange: async value => { if (isPlanColor369(value) && value !== plan.color) await colorChoices.get(value)?.onActivate(); } };
       rows.push({ id: 'plan-color', label: 'Couleur', value: PLAN_COLOR_DEFS_369[plan.color].label, controls: [color] });
       actions.push(command('plan-hide', plan.hidden ? 'Afficher le plan' : 'Masquer le plan', { type: 'plan-369', action: 'hide', planId: plan.id, hidden: !plan.hidden }));
       if (owner.editPlan369) actions.push(control('plan-expand', 'Agrandir le plan', () => owner.editPlan369!(plan.id, false)), control('plan-shrink', 'Réduire le plan', () => owner.editPlan369!(plan.id, true)));
@@ -1138,6 +1144,7 @@ export function buildNativeInspector(state: NativeUiState, actions: NativeUiActi
   return page;
 }
 function buildNativeInspectorPage(state: NativeUiState, actions: NativeUiActions): NativePage | null {
+  if(identityDialog378&&nativeInspectorSelectionKey(state)!==selectionKey)resetInspectorDetails();
   if(identityDialog378){latest=state;owner=actions;return identityDialog378(state);}
   const target=subpage,world=state.world;
   if(!world||!target||!['info','item','anatomy'].includes(target.kind))return buildPane(state,actions);
@@ -1156,10 +1163,10 @@ function buildNativeInspectorPage(state: NativeUiState, actions: NativeUiActions
   page.textEntities=nativeTextEntitiesFor(world,state.campaign);session.page=page;return page;
 }
 function buildPane(state: NativeUiState, actions: NativeUiActions, informationOnly=false): NativePage | null {
-  latest = state; owner = actions; paneSpec = undefined; const world = state.world; if (!world) return null;
+  latest = state; owner = actions; paneSpec = undefined; const world = state.world; if (!world) {if(selectionKey||activeTab||subpage)resetNativeInspectorSession();return null;}
   const selected = (state.selectedObjects ?? []).filter(object => mapObjectExists(world, object));
   const key = nativeInspectorSelectionKey(state);
-  if (key !== selectionKey) { resetCardScroll(); subpage = undefined; infoSession=undefined; billDrafts.clear(); billWorkers.clear(); storageNavigation = undefined; feedback = ''; selectionKey = key; }
+  if (key !== selectionKey) { resetInspectorDetails();selectionKey = key; }
   let page: NativePage | null = null;
   if (state.selectedAnimalId !== undefined) page = animalPage(world, state.selectedAnimalId);
   else if (state.selectedMechanoidId !== undefined) page = mechPage(world, state.selectedMechanoidId);
@@ -1173,7 +1180,7 @@ function buildPane(state: NativeUiState, actions: NativeUiActions, informationOn
     const details = mapCellDetails(world, state.selectedCell, light);
     if (details) page = { id: 'inspect-cell', title: details.heading, subtitle: `${state.selectedCell.x}, ${state.selectedCell.z}`, rows: [...details.rows.map((detail, index) => row(`cell-fact-${index}`, detail.label, detail.value)), ...details.things.map((thing, index) => row(`cell-thing-${index}`, thing)), ...objects.map(object => ({ id: `cell-object-${object.kind}-${object.id}`, label: objectLabel(world, object), controls: owner.selectObject ? [control(`inspect-${object.kind}-${object.id}`, 'Inspecter', () => owner.selectObject!(object))] : undefined }))], layout: 'inspector' };
   }
-  if (!page) return null;
+  if (!page) {activeTab=null;return null;}
   if (page.layout !== 'storage') page.layout = 'inspector';
   page.width ??= page.id.startsWith('inspect-bills-') || page.id.startsWith('inspect-storage-') ? 630 : 500; page.height ??= 430;
   // The room-and-hygiene dossier of a person has no place in Core's Health or Needs
@@ -1186,13 +1193,16 @@ function buildPane(state: NativeUiState, actions: NativeUiActions, informationOn
   // Anything but a person: Core's inspect pane, tabs and gizmos around the same dossier rows.
   if (!page.rows.some(entry => entry.id === 'pawn-tabs')) {
     const parts = objectPaneParts(page.rows), current = currentPaneSpec();
+    // An unavailable tab is really closed, not a hidden preference that may
+    // unexpectedly revive when the player later returns to a former target.
+    if(!informationOnly&&activeTab&&!current?.tabs?.some(tab=>tab.id===activeTab))activeTab=null;
     page = composeThingPane({ page, spec: { gauges: current?.gauges ?? parts.gauges, lines: current?.lines ?? parts.lines, tabs: current?.tabs ?? [], consumed: current?.consumed }, activeTab:informationOnly?null:activeTab, control,
-      toggleTab: id => { activeTab = activeTab === id ? null : id; resetCardScroll(); }, openInfo: () => { subpage = { kind: 'info' }; } });
+      toggleTab: id => { setNativeInspectorTab(activeTab === id ? 'none' : id); }, openInfo: () => { subpage = { kind: 'info' }; } });
   }
   if (owner.clearSelection) {
     // Inspection repaint uses the host's custom page slot. Release that slot
     // as well as selection, without changing unrelated host close callbacks.
-    const clear=owner.clearSelection,closePage=owner.closePage,close=()=>{clear();closePage?.();};
+    const clear=owner.clearSelection,closePage=owner.closePage,close=()=>{resetNativeInspectorSession();clear();closePage?.();};
     page.actions ??= []; page.actions.push(control('inspect-close', 'Fermer', close)); page.onClose = close;
   }
   page.textEntities=nativeTextEntitiesFor(world,state.campaign);

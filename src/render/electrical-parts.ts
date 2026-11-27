@@ -10,6 +10,7 @@ import { footprintCells } from '../sim/definitions';
 import type { Structure, World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
 import type { Placement } from './primitives';
+import {WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from './wall-appliance';
 
 /** Parts share the prepared furniture batch. Light is a shared field, never
  * a PointLight or shadow map per appliance. */
@@ -73,9 +74,10 @@ export function electricalParts(world:World,cutaway=false,subjects:readonly Stru
         for(const dx of [-.92,0,.92])out.push({targetId:s.id,x:x+dx,z:z+dz,y:.538,sx:.025,sy:.009,sz:.72,color:0x82a5b8});
       }
     } else if(s.kind==='cooler') {
-      const h=cutaway?WORLD_SCALE.wallCutawayHeight:WORLD_SCALE.wallHeight,ry=s.orientation*Math.PI/2;
-      out.push({targetId:s.id,x:s.x,z:s.z,y:h/2,sx:1,sy:h,sz:.88,ry,color:0x8d9d98});
-      for(const sign of [-1,1])for(const y of [.25,.5,.75])out.push({targetId:s.id,x:s.x+Math.sin(ry)*.455*sign,z:s.z+Math.cos(ry)*.455*sign,y:y*h,sx:.68,sy:.075,sz:.055,ry,color:sign>0?0x559bb6:0xb77757});
+      if(cutaway)continue;
+      const h=WALL_APPLIANCE_TOP-WALL_APPLIANCE_BOTTOM,ry=s.orientation*Math.PI/2;
+      out.push({targetId:s.id,x:s.x,z:s.z,y:WALL_APPLIANCE_BOTTOM+h/2,sx:1,sy:h,sz:.88,ry,color:0x8d9d98});
+      for(const sign of [-1,1])for(const y of [.25,.5,.75])out.push({targetId:s.id,x:s.x+Math.sin(ry)*.455*sign,z:s.z+Math.cos(ry)*.455*sign,y:WALL_APPLIANCE_BOTTOM+y*h,sx:.68,sy:.055,sz:.055,ry,color:sign>0?0x559bb6:0xb77757});
     } else if(s.kind==='sun-lamp') {
       // Broad chalk reflector and two downward strips share the resident
       // furniture material; illumination comes from the common light field.

@@ -74,8 +74,9 @@ export function layoutHealthTab(spec:HealthSpec,measure:CardMeasure):NativeTabCa
     if(any)builder.line(inner.x-8,y,inner.width);
     y+=10;
     const row=(id:string,label:string,value:string,ink:string,hint:string)=>{
-      builder.label(inner.x+17,y,inner.width-34-10,label,{truncate:true});
-      builder.text(inner.x+17,y,inner.width-34-10,NATIVE_LINE.small,value,{align:'right',ink});
+      const width=inner.width-34-10,valueWidth=Math.min(width/2,measure(value,'small'));
+      builder.label(inner.x+17,y,Math.max(1,width-valueWidth-8),label,{truncate:true});
+      builder.text(inner.x+17+width-valueWidth,y,valueWidth,NATIVE_LINE.small,value,{align:'right',ink});
       builder.target({id,x:inner.x+17,y,w:inner.width-34-10,h:NATIVE_LINE.small,hint,highlight:true});y+=NATIVE_LINE.small;
     };
     if(spec.pain){row('health-pain','Douleur',spec.pain.label,spec.pain.ink,spec.pain.hint);y+=6;}
@@ -122,8 +123,24 @@ export function layoutHealthTab(spec:HealthSpec,measure:CardMeasure):NativeTabCa
     top+=layout.height;
   });
   if(spec.bleed){
-    builder.label(list.x,list.y+view.height,list.width,spec.bleed.text,{truncate:true});
+    builder.label(list.x,list.y+view.height,list.width,spec.bleed.text,{truncate:true,ink:NATIVE_INK.negative});
     builder.target({id:'health-bleed',x:list.x,y:list.y+view.height,w:list.width,h:NATIVE_LINE.small,hint:spec.bleed.hint,highlight:true});
+  }
+  // Core reserves a fixed 430-point card. Fit the actual summary and hediff
+  // rows here, retaining that maximum and the existing scroll viewport.
+  const summaryBottom=Math.max(inner.y,...builder.items.filter(item=>item.k!=='panel'&&!item.region&&item.x<summaryWidth&&item.y>=inner.y).map(item=>item.y+('h' in item?item.h:1)));
+  const listHeight=rows.reduce((sum,entry)=>sum+entry.height,0);
+  const fitted=Math.ceil(Math.min(S.height,Math.max(summaryBottom+9,list.y+Math.max(NATIVE_LINE.small,listHeight)+(spec.bleed?NATIVE_LINE.small:0)+10)));
+  const removed=S.height-fitted;
+  if(removed>0){
+    builder.height=fitted;
+    const panel=builder.items.find(item=>item.k==='panel');if(panel&&panel.k==='panel')panel.h-=removed;
+    const region=builder.regions.find(entry=>entry.id==='hediffs')!;region.h=Math.max(NATIVE_LINE.small,region.h-removed);
+    for(const item of builder.items)if(!item.region&&item.x===view.x){
+      if(!rows.length&&item.k==='text'&&item.text===spec.emptyText)item.h=region.h;
+      else if(spec.bleed&&item.k==='text'&&item.text===spec.bleed.text)item.y=list.y+region.h;
+    }
+    const bleedTarget=builder.targets.find(target=>target.id==='health-bleed');if(bleedTarget)bleedTarget.y=list.y+region.h;
   }
   return builder.card();
 }

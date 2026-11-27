@@ -13,6 +13,7 @@ import type { Structure, World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
 import { buildingMaterialColor } from './building-material-color';
 import { doorLeafTop } from './door-parts';
+import {isWallAppliance,wallApplianceSurroundMaterial,WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from './wall-appliance';
 
 /** Light top band of every wall run (stone cap or timber top plate). */
 export const WALL_CAP_HEIGHT = .1;
@@ -36,12 +37,13 @@ function indexOf(material: string | undefined): number {
   return index;
 }
 
-/** code: bit0 present, bits1-2 bottom (0 ground, 1 timber lintel, 2 masonry
- * lintel), bit3 timber family, bits4+ material index. */
-const encode = (bottom: 0 | 1 | 2, timber: boolean, material: number): number => 1 | bottom << 1 | (timber ? 8 : 0) | material << 4;
+/** code: bit0 present, bits1-2 form (0 wall, 1 timber lintel, 2 masonry
+ * lintel, 3 wall with raised appliance opening), bit3 timber, bits4+ material. */
+const encode = (bottom: 0 | 1 | 2 | 3, timber: boolean, material: number): number => 1 | bottom << 1 | (timber ? 8 : 0) | material << 4;
+const applianceCode=(code:number):boolean=>(code>>1&3)===3;
 export const wallCodeBottom = (code: number, cutaway: boolean): number => {
   const kind = code >> 1 & 3;
-  return kind === 0 ? 0 : kind === 1 ? (cutaway ? 0 : timberLintelBottom()) : (cutaway ? 0 : masonryLintelBottom());
+  return kind === 0 || kind === 3 ? 0 : kind === 1 ? (cutaway ? 0 : timberLintelBottom()) : (cutaway ? 0 : masonryLintelBottom());
 };
 export const wallCodeFamily = (code: number): number => code & 8 ? WALL_FAMILY_TIMBER : WALL_FAMILY_MASONRY;
 export const wallCodeMaterial = (code: number): number => code >> 4;
@@ -72,7 +74,7 @@ export interface WallGrid {
 export function readWallGrid(world: Pick<World, 'width' | 'height' | 'structures'>, cutaway: boolean): WallGrid {
   const { width, height } = world, codes = new Int32Array(width * height), ids = new Int32Array(width * height).fill(-1);
   const top = cutaway ? WORLD_SCALE.wallCutawayHeight : WORLD_SCALE.wallHeight;
-  const doors: Structure[] = [];
+  const doors: Structure[] = [],appliances:Structure[]=[];
   const material = new Map<number, Structure['material']>();
   for (const s of world.structures) {
     if (s.x < 0 || s.z < 0 || s.x >= width || s.z >= height) continue;
@@ -80,7 +82,16 @@ export function readWallGrid(world: Pick<World, 'width' | 'height' | 'structures
     if (s.kind === 'wall') {
       codes[at] = encode(0, s.material === 'wood', indexOf(s.material)); ids[at] = s.id; material.set(at, s.material);
     } else if (isRoomDoor(s.kind)) doors.push(s);
+    else if(isWallAppliance(s.kind))appliances.push(s);
   }
+  const applianceMaterials=new Map<number,Structure['material']>();
+  for(const appliance of appliances){
+    const at=appliance.z*width+appliance.x;
+    const surround=wallApplianceSurroundMaterial(appliance,(x,z)=>x<0||z<0||x>=width||z>=height?undefined:material.get(z*width+x));
+    codes[at]=encode(3,surround==='wood',indexOf(surround));ids[at]=appliance.id;
+    applianceMaterials.set(at,surround);
+  }
+  for(const [at,surround]of applianceMaterials)material.set(at,surround);
   if (!cutaway) for (const door of doors) {
     const at = door.z * width + door.x;
     if (codes[at]) continue;
@@ -142,9 +153,10 @@ function pushQuad(out: WallFaces, a: P, b: P, c: P, d: P, normal: P, color: numb
 
 /** Global cut heights: every side face is split at these values, so faces of
  * walls, lintels and caps always meet along identical edges. */
-export function wallBandHeights(top: number, cutaway: boolean): number[] {
+export function wallBandHeights(top: number, cutaway: boolean,appliances=false): number[] {
   const values = [0, top - WALL_CAP_HEIGHT, top];
   if (!cutaway) values.push(timberLintelBottom(), masonryLintelBottom());
+  if(!cutaway&&appliances)values.push(WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP);
   return [...new Set(values.filter(y => y >= 0 && y <= top))].sort((a, b) => a - b);
 }
 
@@ -159,11 +171,16 @@ const SIDES = [
 /** Faces of the network cells accepted by `include`, merged into runs. The
  * complete grid always decides exposure; `include` only selects ownership. */
 export function emitWallFaces(grid: WallGrid, include: (x: number, z: number) => boolean, x0: number, z0: number, x1: number, z1: number, out: WallFaces = emptyWallFaces()): WallFaces {
-  const { width, height, codes, top, cutaway } = grid, bands = wallBandHeights(top, cutaway), capY = top - WALL_CAP_HEIGHT;
+  const { width, height, codes, top, cutaway } = grid,capY = top - WALL_CAP_HEIGHT;
   const code = (x: number, z: number) => x < 0 || z < 0 || x >= width || z >= height ? 0 : codes[z * width + x]!;
   const lo = (c: number) => wallCodeBottom(c, cutaway);
   const seamOf = (c: number, cap: boolean) => wallCodeMaterial(c) * 2 + (cap ? 1 : 0) + (c & 8 ? 1000 : 0);
   x0 = Math.max(0, x0); z0 = Math.max(0, z0); x1 = Math.min(width, x1); z1 = Math.min(height, z1);
+  // Only regions touching an appliance gain these two cuts. Ordinary distant
+  // wall regions retain their original triangle count and preparation cost.
+  let hasAppliance=false;
+  if(!cutaway)for(let z=Math.max(0,z0-1);z<Math.min(height,z1+1)&&!hasAppliance;z++)for(let x=Math.max(0,x0-1);x<Math.min(width,x1+1);x++)if(applianceCode(code(x,z))){hasAppliance=true;break;}
+  const bands=wallBandHeights(top,cutaway,hasAppliance);
   // Tops and lintel undersides, one quad per cell.
   for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
     const c = code(x, z); if (!c || !include(x, z)) continue;
@@ -173,6 +190,10 @@ export function emitWallFaces(grid: WallGrid, include: (x: number, z: number) =>
     pushQuad(out, [x - .5, top, z - .5], [x + .5, top, z - .5], [x + .5, top, z + .5], [x - .5, top, z + .5], [0, 1, 0], cap, family + 2, seamOf(c, true), [[u0, v0, -1], [u1, v0, -1], [u1, v1, -1], [u0, v1, -1]]);
     const bottom = lo(c);
     if (bottom > 0) pushQuad(out, [x - .5, bottom, z - .5], [x + .5, bottom, z - .5], [x + .5, bottom, z + .5], [x - .5, bottom, z + .5], [0, -1, 0], shade(wallBodyColor(c), .82), family, seamOf(c, false), [[0, 0, -1], [1, 0, -1], [1, 1, -1], [0, 1, -1]]);
+    if(!cutaway&&applianceCode(c)){
+      for(const [y,normal] of [[WALL_APPLIANCE_BOTTOM,1],[WALL_APPLIANCE_TOP,-1]] as const)
+        pushQuad(out,[x-.5,y,z-.5],[x+.5,y,z-.5],[x+.5,y,z+.5],[x-.5,y,z+.5],[0,normal,0],wallBodyColor(c),family,seamOf(c,false),[[0,0,-1],[1,0,-1],[1,1,-1],[0,1,-1]]);
+    }
   }
   // Side runs: one quad per band per maximal run of equally exposed cells.
   for (const side of SIDES) {
@@ -190,6 +211,20 @@ export function emitWallFaces(grid: WallGrid, include: (x: number, z: number) =>
       // below the lintel only), with one material along the whole face.
       const face = (x: number, z: number): readonly [number, number, number] | undefined => {
         const c = code(x, z); if (!c) return;
+        if(hasAppliance){
+          const y=(yA+yB)/2,n=code(x+side.dx,z+side.dz);
+          let bottomY=lo(c),hi=top;
+          if(applianceCode(c)){
+            if(y>WALL_APPLIANCE_BOTTOM&&y<WALL_APPLIANCE_TOP)return;
+            if(y<WALL_APPLIANCE_BOTTOM)hi=WALL_APPLIANCE_BOTTOM;else bottomY=WALL_APPLIANCE_TOP;
+          }
+          if(y<bottomY||y>hi)return;
+          if(n){
+            if(applianceCode(n)&&y>WALL_APPLIANCE_BOTTOM&&y<WALL_APPLIANCE_TOP){bottomY=Math.max(bottomY,WALL_APPLIANCE_BOTTOM);hi=Math.min(hi,WALL_APPLIANCE_TOP);}
+            else {const nLo=lo(n);if(y>=nLo)return;hi=Math.min(hi,nLo);}
+          }
+          return hi>bottomY+1e-9?[c,bottomY,hi]:undefined;
+        }
         const n = code(x + side.dx, z + side.dz), hi = n ? lo(n) : top, bottomY = lo(c);
         return hi > bottomY + 1e-9 ? [c, bottomY, hi] : undefined;
       };

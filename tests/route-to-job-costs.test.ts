@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from '../src/sim/types.ts';
 import {expect,test} from 'vitest';
 import {routeToJob,routeToCell,routeCost,routeToBestCellByCostAndLength} from '../src/sim/pathfinding.ts';
 import type {CandidateAccess,DistanceField} from '../src/sim/navigation-types.ts';
@@ -5,7 +6,7 @@ import type {World} from '../src/sim/types.ts';
 
 test('job interaction chooses accumulated cost, keeps candidate ties and resolves lazy access once',()=>{
   // Only dimensions/schema are read: stops belong to this captured field.
-  const world={width:7,height:7,schemaVersion:379} as World;
+  const world={width:7,height:7,schemaVersion:SCHEMA_VERSION} as World;
   const parents=new Int32Array(49).fill(-2),costs=new Float64Array(49).fill(Infinity);
   parents[0]=-1;costs[0]=0;
   const enter=(index:number,parent:number,cost:number)=>{parents[index]=parent;costs[index]=cost;};
@@ -34,7 +35,7 @@ test('job interaction chooses accumulated cost, keeps candidate ties and resolve
 });
 
 test('multi-stop cleaning route matches individual routes, including length ties and lazy frontier order',()=>{
-  const world={width:7,height:7,schemaVersion:379} as World;
+  const world={width:7,height:7,schemaVersion:SCHEMA_VERSION} as World;
   const parents=new Int32Array(49).fill(-2),costs=new Float64Array(49).fill(Infinity);
   parents[0]=-1;costs[0]=0;
   const enter=(i:number,p:number,c:number)=>{parents[i]=p;costs[i]=c;};

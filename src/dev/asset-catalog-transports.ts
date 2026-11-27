@@ -36,7 +36,7 @@ export function createTransportAssetCatalog():CatalogCollection {
     [2,orbital,'transport:orbital','Capsule de livraison orbitale'],
   ] as const){
     const model=new THREE.Group();model.position.x=index*4;layer.mesh.frustumCulled=false;model.add(layer.group);group.add(model);
-    const bounds=closedBoxBounds(layer.mesh).translate(model.position),center=bounds.getCenter(new THREE.Vector3());items.push({id,label,status:'default',note:'Modèle actuel de la capsule, présentée fermée au sol. Version Origami spécifique non disponible.',bounds,position:new THREE.Vector3(center.x,bounds.max.y+.20,center.z)});
+    const bounds=closedBoxBounds(layer.mesh).translate(model.position),center=bounds.getCenter(new THREE.Vector3());items.push({id,label,status:'origami',note:'Capsule fermée au sol. Panneaux peints, renforts, grilles et marquage propre dans les deux styles.',bounds,position:new THREE.Vector3(center.x,bounds.max.y+.20,center.z)});
   }
   return {sections:[{id:'transports',label:'Transports',note:'Trois modèles de capsules existants, en pose fermée fixe. Les effets animés transitoires ne font pas partie de cet inventaire de modèles.',group,items}],dispose(){starting.dispose();rescue.dispose();orbital.dispose();group.clear();}};
 }

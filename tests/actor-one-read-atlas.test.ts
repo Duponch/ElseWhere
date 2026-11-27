@@ -36,6 +36,14 @@ test('real whole humans/rigid animals retain complete hidden model faces, source
 interface Binding{name:string;visibility:number;isSampledTexture?:boolean;isStorageBuffer?:boolean;texture?:THREE.Texture;attribute?:THREE.StorageBufferAttribute}
 interface BuilderPort{scene:THREE.Scene;camera:THREE.Camera;material:THREE.Material;lightsNode:THREE.LightsNode;build():void;vertexShader:string;fragmentShader:string;varyings:{name:string;needsInterpolation:boolean}[];getAttributesArray():{name:string;node?:{attribute?:THREE.BufferAttribute|THREE.InterleavedBufferAttribute}}[];getBindings():{bindings:Binding[]}[]}
 const Builder=THREE.WGSLNodeBuilder as unknown as new(o:THREE.Object3D,r:THREE.WebGPURenderer)=>BuilderPort;
+function encodingBranches(vertex:string){
+ const open=/if \( \( actorOneReadAssets\.\w+ > 0\.0 \) \) \{/.exec(vertex);
+ if(!open)throw Error('Encoded chart selection missing from actual WGSL');
+ const start=open.index+open[0].length;let depth=1,end=start;
+ while(depth&&end<vertex.length){if(vertex[end]==='{')depth++;if(vertex[end]==='}')depth--;end++;}
+ if(depth||!/^\s*else\s*\{/.test(vertex.slice(end)))throw Error('Authored Pastel chart must be the exclusive Else branch');
+ return{atlas:vertex.slice(start,end),pastel:vertex.slice(end,vertex.indexOf('varyings.v_actorOneReadUv',end))};
+}
 test('cold whole-actor final graph is one colour fetch with runtime-sized grown metadata; offline bake uses canonical new width/rough before affine publication',()=>{
  const context=new GraphicsStyleContext(preferences),flush=vi.spyOn(context,'flushPaint').mockImplementation(()=>{}),lighting=new EnvironmentLighting(),pawns=withGraphicsStyle(context,()=>new PawnLayer(lighting.configure)),world=animalCombatCamp(),renderer=new THREE.WebGPURenderer({canvas:{width:960,height:600,style:{}}as HTMLCanvasElement}),init=vi.spyOn(renderer,'init').mockImplementation(()=>{throw Error('No device');});renderer.hasFeature=()=>false;renderer.outputColorSpace=THREE.LinearSRGBColorSpace;Reflect.set(renderer.backend,'device',{features:new Set<string>(),limits:{maxUniformBufferBindingSize:65536}});Reflect.set(renderer.backend,'renderer',renderer);
  let surface:ActorTextureSurface|undefined,texture:THREE.DataArrayTexture|undefined,page:ReturnType<typeof createActorBakePage>|undefined,bakeMaterial:THREE.MeshBasicNodeMaterial|undefined;
@@ -45,8 +53,18 @@ test('cold whole-actor final graph is one colour fetch with runtime-sized grown 
   surface=new ActorTextureSurface({...s.surfaceOptions,context,sourceMaterial:port.sourceMaterial,faceCount:s.faceCount,configure:lighting.configure});surface.selectRepresentation('pure');const mat=surface.material,geometry=port.geometry,positionNode=mat.positionNode;
   texture=new THREE.DataArrayTexture(new Uint8Array(4),plan.plan.size,plan.plan.size,plan.plan.pages);texture.colorSpace=THREE.SRGBColorSpace;texture.flipY=false;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.wrapS=texture.wrapT=THREE.ClampToEdgeWrapping;
   const assets={texture,plan:plan.plan,cohorts:plan.addresses,assertCurrent:()=>{}};expect(compileActorAddressData(s.faceCount,assets).data.byteLength).toBeGreaterThan(64);const initial=build(new THREE.Mesh(geometry,mat),'actor-pure-first-P');surface.setAssets(assets);const grown=build(new THREE.Mesh(geometry,mat),'actor-pure-grown-G');surface.setAssets(undefined);expect(surface.material).toBe(mat);expect(mat.positionNode).toBe(positionNode);expect(mat.colorNode).not.toBe(port.sourceMaterial.colorNode);
-  for(const result of[initial,grown]){expect(result.bindings.filter(b=>b.isStorageBuffer&&(b.visibility&2)!==0)).toHaveLength(0);expect(result.b.fragmentShader).not.toContain('v_surfaceStroke');expect(result.b.vertexShader).toMatch(/value\s*:\s*array<\s*vec4<f32>\s*>/);const own=result.bindings.filter(b=>b.isSampledTexture&&(b.texture===texture||b.texture===surface!.pastel));expect(own).toHaveLength(1);}
-  const width=prepared.width.value,rough=prepared.irregularity.value;context.update({...context.preferences,style:'origami',edgeWidth:5,strokeImperfection:1});expect(prepared.width.value).toBe(width);expect(prepared.irregularity.value).toBe(rough);page=createActorBakePage(plan,0);bakeMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false,toneMapped:false});bakeMaterial.vertexNode=vec4(attribute('bakeClipPosition','vec3'),1);bakeMaterial.fragmentNode=actorBakeColourNode(plan);const baked=build(new THREE.Mesh(page.body,bakeMaterial),'actor-canonical-bake-new-settings');expect(baked.bindings.some(b=>b.isStorageBuffer&&b.attribute===port.model.strokes.buffer)).toBe(true);expect(baked.bindings.some(b=>b.isStorageBuffer&&b.attribute===prepared.buffer)).toBe(false);expect(baked.b.fragmentShader).not.toContain('cameraProjectionMatrixInverse');expect(init).not.toHaveBeenCalled();
+  for(const result of[initial,grown]){expect(result.bindings.filter(b=>b.isStorageBuffer&&(b.visibility&2)!==0)).toHaveLength(0);expect(result.b.fragmentShader).not.toContain('v_surfaceStroke');expect(result.b.vertexShader).toMatch(/value\s*:\s*array<\s*vec4<f32>\s*>/);const own=result.bindings.filter(b=>b.isSampledTexture&&(b.texture===texture||b.texture===surface!.pastel));expect(own).toHaveLength(1);
+   expect(result.b.fragmentShader.match(/textureSample\([^\n]*v_actorOneReadUv/g)).toHaveLength(1);
+   expect(result.b.fragmentShader).not.toContain('v_humanTailoringUv');
+   const branches=encodingBranches(result.b.vertexShader);
+   expect(branches.atlas).not.toContain('abs( normal.y )');
+   expect(branches.pastel).toContain('abs( normal.y )');
+   expect(branches.pastel).toContain('vec2<f32>( 256.0 )');
+  }
+  const width=prepared.width.value,rough=prepared.irregularity.value;context.update({...context.preferences,style:'origami',edgeWidth:5,strokeImperfection:1});expect(prepared.width.value).toBe(width);expect(prepared.irregularity.value).toBe(rough);page=createActorBakePage(plan,0);bakeMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false,toneMapped:false});bakeMaterial.vertexNode=vec4(attribute('bakeClipPosition','vec3'),1);bakeMaterial.fragmentNode=actorBakeColourNode(plan);const baked=build(new THREE.Mesh(page.body,bakeMaterial),'actor-canonical-bake-new-settings');expect(baked.bindings.some(b=>b.isStorageBuffer&&b.attribute===port.model.strokes.buffer)).toBe(true);expect(baked.bindings.some(b=>b.isStorageBuffer&&b.attribute===prepared.buffer)).toBe(false);expect(baked.b.fragmentShader).not.toContain('cameraProjectionMatrixInverse');
+  expect(baked.bindings.filter(b=>b.isSampledTexture&&b.texture===port.pastelTexture)).toHaveLength(1);
+  expect(baked.b.fragmentShader.match(/textureSample\([^\n]*v_humanTailoringUv/g)).toHaveLength(2);
+  expect(init).not.toHaveBeenCalled();
  }finally{page?.body.dispose();page?.charts.dispose();bakeMaterial?.dispose();surface?.dispose();texture?.dispose();pawns.dispose();lighting.dispose();context.dispose();flush.mockRestore();init.mockRestore();}
 },60_000);
 

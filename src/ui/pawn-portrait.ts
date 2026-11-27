@@ -15,6 +15,7 @@ import {isSpearItem272,spearColor272} from '../sim/spear-content-272';
 import {isLongswordItem270,longswordColor270} from '../sim/longsword-content-270';
 import {MACE_DYE269} from '../render/mace-parts269';
 import {isMaceItem269,maceColor269} from '../sim/mace-content-269';
+import {humanDetailChart,humanChartSvg,humanDetailUv} from '../render/human-tailoring';
 
 type ApparelLook = ReturnType<typeof apparelAppearance>;
 export type PortraitExpression = 'awake' | 'sleep' | 'dead';
@@ -24,9 +25,14 @@ export function portraitExpressionOf(pawn:Pick<Pawn,'state'|'medicalSleep'|'heal
   return pawn.state==='dead'?'dead':pawn.state==='sleeping'||pawn.medicalSleep||anestheticStage(pawn.health?.anesthetic?.severity??0)==='sedated'?'sleep':'awake';
 }
 type Vertex = readonly [number, number, number];
-type Face = { points: readonly [Vertex, Vertex, Vertex]; color: number; bone: number; dye: number };
+type Uv=readonly [number,number];
+type Face = { points: readonly [Vertex, Vertex, Vertex]; uv:readonly [Uv,Uv,Uv]; normal:Vertex; color: number; bone: number; dye: number };
 const CACHE_LIMIT = 256;
 const cache = new Map<string, string>();
+let personalizedTextures=true;
+/** The UI setting owns this value; cached portraits retain both variants. */
+export function setPortraitPersonalizedTextures(enabled:boolean):void{personalizedTextures=enabled;}
+export const portraitPersonalizedTexturesEnabled=():boolean=>personalizedTextures;
 let sourceFaces: Face[] | undefined;
 
 // A fixed orthographic view of the actual authored pawn mesh. Extract once;
@@ -35,7 +41,7 @@ function faces(): readonly Face[] {
   if (sourceFaces) return sourceFaces;
   const geometry = pawnGeometry(true,true,true,true,true);
   const pos = geometry.getAttribute('position');
-  const color = geometry.getAttribute('color'), bone = geometry.getAttribute('boneId'), dye = geometry.getAttribute('dye');
+  const color = geometry.getAttribute('color'), bone = geometry.getAttribute('boneId'), dye = geometry.getAttribute('dye'),uv=geometry.getAttribute('uv'),normal=geometry.getAttribute('normal');
   const result: Face[] = [];
   // The common reference rig includes independent triangles and tapered
   // prisms. Read the actual index stream without assuming pairs form quads.
@@ -47,7 +53,8 @@ function faces(): readonly Face[] {
     });
     const first=at(i);
     const linear = new THREE.Color().setRGB(color.getX(first), color.getY(first), color.getZ(first));
-    result.push({ points: points as [Vertex, Vertex, Vertex],
+    const uvs=[0,1,2].map(j=>{const vertex=at(i+j);return[uv.getX(vertex),uv.getY(vertex)] as Uv;});
+    result.push({ points: points as [Vertex, Vertex, Vertex],uv:uvs as [Uv,Uv,Uv],normal:[normal.getX(first),normal.getY(first),normal.getZ(first)],
       color: linear.getHex(), bone: bone.getX(first), dye: dye.getX(first) });
   }
   // A portrait requested inside an Origami construction scope may have caused
@@ -139,11 +146,23 @@ function project(point: Vertex): readonly [number, number, number] {
 const round = (n: number) => Number(n.toFixed(2));
 const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
 
+/** Affine UV-to-image transform for the existing triangle, independent of
+ * camera direction, jaw morphology and current skin/clothing pigment. */
+function portraitUvTransform(uv:Face['uv'],points:readonly (readonly[number,number,number])[]):string|undefined{
+  const [p,q,r]=uv,[a,b,c]=points as [Vertex,Vertex,Vertex];
+  const ux=q[0]-p[0],uy=q[1]-p[1],vx=r[0]-p[0],vy=r[1]-p[1],det=ux*vy-uy*vx;
+  if(Math.abs(det)<1e-8)return undefined;
+  const dx=b[0]-a[0],dy=b[1]-a[1],ex=c[0]-a[0],ey=c[1]-a[1];
+  const xx=(dx*vy-ex*uy)/det,yx=(dy*vy-ey*uy)/det,xy=(ex*ux-dx*vx)/det,yy=(ey*ux-dy*vx)/det;
+  return [xx,yx,xy,yy,a[0]-xx*p[0]-xy*p[1],a[1]-yx*p[0]-yy*p[1]].map(round).join(' ');
+}
+
 function makeSvg(appearance: PawnAppearance, look: ApparelLook, weaponItem: string | undefined, expression:PortraitExpression,limbMask:number): string {
   const variant = appearanceShape(appearance);
   const weaponDye = weaponVisual(weaponItem)?.dye;
   const polygons: { z: number; art: string }[] = [];
   const shaded = new Map<string, string>();
+  const painted=new Map<string,string>(),clips:string[]=[];
   for (const face of faces()) {
     if (!visible(face, variant, look, weaponDye, expression,limbMask)) continue;
     const placed = face.points.map(p => posedPoint(p, face.bone, variant, face.dye));
@@ -157,12 +176,24 @@ function makeSvg(appearance: PawnAppearance, look: ApparelLook, weaponItem: stri
     const key = `${base}|${round(light)}`;
     let fill = shaded.get(key);
     if (!fill) { fill = '#' + new THREE.Color(base).multiplyScalar(light).getHexString(); shaded.set(key, fill); }
-    polygons.push({ z: (points[0]![2] + points[1]![2] + points[2]![2]) / 3,
-      art: `<polygon points="${points.map(p => `${round(p[0])},${round(p[1])}`).join(' ')}" fill="${fill}" stroke="${fill}" stroke-width=".2"/>` });
+    const coordinates=points.map(p=>`${round(p[0])},${round(p[1])}`).join(' ');
+    let art=`<polygon points="${coordinates}" fill="${fill}" stroke="${fill}" stroke-width=".2"/>`;
+    const chart=humanDetailChart(face.dye,face.bone,look.silhouette,...face.points[0],...face.normal);
+    // Details below a few portrait pixels disappear naturally. Avoid separate
+    // clipped SVG paths for tiny eye/nose/trim triangles.
+    const projectedArea=Math.abs((points[1]![0]-points[0]![0])*(points[2]![1]-points[0]![1])-(points[2]![0]-points[0]![0])*(points[1]![1]-points[0]![1]))/2;
+    const transform=!personalizedTextures||chart==='plain'||projectedArea<8?undefined:portraitUvTransform(face.uv.map((uv,i)=>humanDetailUv(chart,uv,face.points[i]!,face.normal)) as [Uv,Uv,Uv],points);
+    if(transform){
+      if(!painted.has(chart))painted.set(chart,humanChartSvg(chart));
+      const clip=`paint-clip-${clips.length}`;
+      clips.push(`<clipPath id="${clip}"><polygon points="${coordinates}"/></clipPath>`);
+      art+=`<g clip-path="url(#${clip})"><use href="#paint-${chart}" transform="matrix(${transform})"/></g>`;
+    }
+    polygons.push({ z: (points[0]![2] + points[1]![2] + points[2]![2]) / 3,art });
   }
   polygons.sort((a, b) => a.z - b.z);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" data-source="pawn-geometry" data-head="${appearance.headType}" data-hair="${appearance.hair}" data-beard="${appearance.beard}" data-skin="${hex(appearance.skinColor)}" data-hair-color="${hex(appearance.hairColor)}" data-helmet="${look.helmet}" data-recon-helmet="${look.reconHelmet}"${look.simpleHelmet?` data-simple-helmet="true" data-helmet-color="${hex(look.simpleHelmetColor!)}"`:""}${look.plateArmor?` data-plate-armor="true"`:""} data-tuque="${look.tuque}" data-weapon="${weaponVisual(weaponItem)?.item ?? ''}" data-expression="${expression}"${limbMask?` data-limb-mask="${limbMask}"`:''}>
-  <defs><linearGradient id="paper" x2="0" y2="1"><stop stop-color="#f4eee0"/><stop offset="1" stop-color="#d9d0b9"/></linearGradient><clipPath id="crop"><rect width="96" height="96" rx="6"/></clipPath></defs>
+  <defs><linearGradient id="paper" x2="0" y2="1"><stop stop-color="#f4eee0"/><stop offset="1" stop-color="#d9d0b9"/></linearGradient><clipPath id="crop"><rect width="96" height="96" rx="6"/></clipPath>${[...painted].map(([name,marks])=>`<g id="paint-${name}">${marks}</g>`).join('')}${clips.join('')}</defs>
   <rect width="96" height="96" rx="6" fill="url(#paper)"/>
   <g clip-path="url(#crop)">${polygons.map(p => p.art).join('')}</g>
   </svg>`;
@@ -172,7 +203,7 @@ function makeSvg(appearance: PawnAppearance, look: ApparelLook, weaponItem: stri
 export function portraitDataUrl(appearance: PawnAppearance, look: ApparelLook, weaponItem?: string, expression:PortraitExpression='awake',limbMask=0): string {
   const key = [appearance.version, appearance.sex, appearance.bodyType, appearance.headType,
     appearance.hair, appearance.beard, appearance.skinColor, appearance.hairColor,
-    look.signature, look.color ?? '', look.vest, look.helmet, look.reconHelmet,look.tuque,look.hat353,look.hatColor353??'', look.silhouette, look.pants, weaponVisual(weaponItem)?.item ?? '',expression,limbMask].join('|');
+    look.signature, look.color ?? '', look.vest, look.helmet, look.reconHelmet,look.tuque,look.hat353,look.hatColor353??'', look.silhouette, look.pants, weaponVisual(weaponItem)?.item ?? '',expression,limbMask,personalizedTextures].join('|');
   const cached = cache.get(key);
   if (cached) return cached;
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(makeSvg(appearance, look, weaponItem, expression,limbMask))}`;

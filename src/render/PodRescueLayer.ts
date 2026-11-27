@@ -3,14 +3,14 @@ import { Fn, attribute, cos, float, mat4, normalLocal, positionLocal, sin, smoot
 import type { World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
 import { material } from './primitives';
-import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import { instancedBoxPatternUv } from './texture-variation';
+import { capsulePaintUv, createMechanicalSurfaceTexture, mechanicalPaint, mechanicalSurfacePixels } from './mechanical-surface-art';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
 import {currentGraphicsStyle} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {bindPersonalizedTexture} from './texture-personalization';
 
 export const POD_RESCUE_PARTS = 6;
 export const POD_RESCUE_FALL_HEIGHT = 24;
@@ -37,7 +37,8 @@ export class PodRescueLayer {
   private readonly yaw = uniform(0);
   private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
   private readonly base=this.surfaceModel.geometry;
-  private readonly paint = createStylizedSurfaceTexture();
+  private readonly paint=createMechanicalSurfaceTexture();
+  get surfaceTexture():THREE.Texture{return this.paint;}
   private readonly plain = material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private readonly painted = material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private key = '';
@@ -78,7 +79,8 @@ export class PodRescueLayer {
       surface.colorNode=attribute('boxColor','vec3');
     }
     // A distinct resident plain graph contains no pigment texture lookup.
-    this.painted.colorNode=attribute('boxColor','vec3').mul(texture(this.paint,instancedBoxPatternUv()).rgb);
+    const paintedPanel=texture(this.paint,capsulePaintUv(POD_RESCUE_PARTS,mechanicalPaint.rescue)).rgb;
+    this.painted.colorNode=attribute('boxColor','vec3').mul(paintedPanel);
     this.mesh=new BoxMesh(this.base,this.painted,POD_RESCUE_PARTS);
     this.mesh.name='civilian-rescue-pod';this.mesh.castShadow=true;this.mesh.receiveShadow=true;
     const sides=new THREE.InstancedBufferAttribute(new Float32Array(POD_RESCUE_PARTS),1);
@@ -91,8 +93,9 @@ export class PodRescueLayer {
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
+    bindPersonalizedTexture(context,this.paint,mechanicalSurfacePixels);
     this.painted.roughness=.88;this.painted.metalness=.02;
-    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),personalizedGouacheTransform:body=>body.mul(paintedPanel),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
 
   /** Renderer-only preview callers must synchronize after writing instance streams. */

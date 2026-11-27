@@ -12,6 +12,7 @@ import type { SiteOptions } from '../sim/site';
 import {designationMinCellPixels,designationVisibilityLabel} from './designation-visibility';
 import {itemLabelMinCellPixels,itemLabelVisibilityLabel} from './item-label-visibility';
 import {UI_FONT_CHOICES,DEFAULT_UI_FONT,type UiFontId} from './ui-fonts';
+import {UI_THEME_PRESETS} from '../ui3d/ui-theme';
 import {DEFAULT_LIGHTING_SETTINGS,LIGHTING_CONTROLS,parseLightingSettings,lightingPercentLabel,type LightingSettings} from '../render/lighting-settings';
 import {UI_ATLAS_URL} from './pictograms';
 import { randomSiteSeed } from './front-site';
@@ -48,6 +49,13 @@ export interface FrontMenuSave {
 }
 
 export interface FrontMenuOptions {
+  /** Closing a dialog opened from the pause menu returns to that menu,
+   * without releasing its simulation pause. */
+  onReturnToGameMenu?: () => void;
+  getUiTheme?:()=>import('../ui3d/ui-theme').UiTheme;
+  onUiThemeChange?:(theme:import('../ui3d/ui-theme').UiTheme)=>boolean;
+  getJournalBubblesEnabled?:()=>boolean;
+  onJournalBubblesEnabledChange?:(enabled:boolean)=>boolean;
   getGraphicsStylePreferences?:()=>GraphicsStylePreferences;
   onGraphicsStylePreferencesChange?:(value:GraphicsStylePreferences)=>boolean|Promise<boolean>;
   getGraphicsStyleMeasurement?:()=>string;
@@ -127,14 +135,19 @@ export interface FrontMenuOptions {
   onLoadConverted?: (save: string) => Promise<void>;
 }
 
+/** Presentation origin is independent of hasGame: the illustrated title menu
+ * can be visited with a suspended colony. */
+export type FrontMenuOrigin = 'home' | 'game';
+
 export interface FrontMenu {
-  showOptions?():void;
+  showOptions?(origin?:FrontMenuOrigin):void;
   showHome(hasGame?: boolean): void;
   setHasGame(hasGame: boolean): void;
   showCreation(): void;
-  showLoad(): void;
+  showLoad(origin?:FrontMenuOrigin): void;
   hide(): void;
   isOpen(): boolean;
+  isGameOverlay(): boolean;
   setBusy(busy: boolean, message?: string): void;
   showError(message: string): void;
 }
@@ -204,6 +217,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
   const status = find<HTMLParagraphElement>('.front-status');
   const pauseNote = find<HTMLSpanElement>('.front-pause-note');
   let page: Page = 'home';
+  let origin: FrontMenuOrigin = 'home';
   let hasGame = false;
   let busy = false;
   let operationPending = false;
@@ -285,6 +299,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     footer.replaceChildren();
     steps.replaceChildren();
     root.dataset.page = page;
+    root.dataset.origin = origin;
     eyebrow.textContent = page === 'home' ? 'UNE HISTOIRE À CONSTRUIRE' : page === 'tests' ? 'EXPLORER ET ESSAYER' : page === 'load' ? 'VOS COLONIES' : page === 'options' ? 'PRÉFÉRENCES LOCALES' : 'NOUVELLE PARTIE';
     title.textContent = { home: 'Elsewhere', scenario: 'Choisir un scénario', story: 'Choisir votre narrateur', world:'Créer un monde',site:'Choisir un lieu de départ',pawns:'Créer les personnages',load: 'Charger une partie', tests: 'Colonies de test', options: 'Options' }[page];
     if (page === 'home') renderHome();
@@ -315,7 +330,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     homeResume = hasGame ? resumeAction() : undefined;
     if (homeResume) nav.append(homeResume);
     homeStart = action('Nouvelle partie', showCreation, hasGame ? '' : 'front-primary');
-    nav.append(homeStart, action('Charger une partie', showLoad));
+    nav.append(homeStart, action('Charger une partie', () => showLoad()));
     if (options.onHelp) nav.append(action('Aide', () => {
       if (busy || operationPending) return;
       options.onHelp?.();
@@ -369,18 +384,23 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       const current=()=>normalizeGraphicsStylePreferences(options.getGraphicsStylePreferences!());
       const styleSetting=element('label','front-relief front-texture-setting'),style=element('select'),styleText=element('span');
       style.id='front-graphics-style';style.setAttribute('aria-label','Style graphique');
-      for(const [value,label] of [['default','Par défaut'],['origami','Origami']] as const){const entry=element('option','',label);entry.value=value;style.append(entry);}
+      for(const [value,label] of [['default','Pastel'],['origami','Gouache']] as const){const entry=element('option','',label);entry.value=value;style.append(entry);}
       styleText.append(element('strong','','Style graphique'),element('span','','Choix visuel conservé dans ce navigateur, indépendant des colonies.'));
       styleSetting.append(style,styleText);card.append(styleSetting);
+      const drawingsSetting=element('label','front-relief front-texture-setting'),drawings=element('input'),drawingsText=element('span');
+      drawings.type='checkbox';drawings.id='front-personalized-textures';drawings.setAttribute('aria-label','Dessins personnalisés');
+      drawingsText.append(element('strong','','Dessins personnalisés'),element('span','','Pelages, coutures et illustrations propres aux modèles. Le grain de base est conservé.'));
+      drawingsSetting.append(drawings,drawingsText);card.append(drawingsSetting);
       const controls=element('div','front-origami-settings');controls.setAttribute('role','group');controls.setAttribute('aria-label','Réglages Origami');card.append(controls);
       const sliders:{control:OrigamiStyleControl;slider:HTMLInputElement;output:HTMLOutputElement}[]=[];
-      const refresh=()=>{const settings=current();style.value=settings.style;controls.hidden=settings.style!=='origami';for(const {control,slider,output} of sliders){slider.value=String(settings[control.key]*origamiStyleDisplayScale(control));output.textContent=formatOrigamiStyleValue(control,settings[control.key]);}};
+      const refresh=()=>{const settings=current();style.value=settings.style;drawings.checked=settings.personalizedTextures;controls.hidden=settings.style!=='origami';for(const {control,slider,output} of sliders){slider.value=String(settings[control.key]*origamiStyleDisplayScale(control));output.textContent=formatOrigamiStyleValue(control,settings[control.key]);}};
       const apply=(patch:Partial<GraphicsStylePreferences>,origamiOnly=false)=>{
         if(root.hidden||page!=='options'||busy||operationPending||!card.isConnected)return;
         const settings=current();if(origamiOnly&&settings.style!=='origami')return;
         void run(async()=>{if(!await options.onGraphicsStylePreferencesChange!(normalizeGraphicsStylePreferences({...settings,...patch})))showError('Le choix s’applique maintenant, mais ce navigateur ne peut pas le conserver pour la prochaine visite.');},'Application du style graphique…').finally(refresh);
       };
       style.addEventListener('change',()=>{if(style.value==='default'||style.value==='origami')apply({style:style.value});else refresh();});
+      drawings.addEventListener('change',()=>apply({personalizedTextures:drawings.checked}));
       for(const control of ORIGAMI_STYLE_CONTROLS){
         const {key,label,min,max,step}=control,scale=origamiStyleDisplayScale(control);
         const setting=element('label','front-relief front-texture-setting front-volume-setting'),text=element('span'),slider=element('input'),output=element('output');
@@ -551,6 +571,15 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     fontSelect.value=options.getUiFont?.()??DEFAULT_UI_FONT;
     fontSelect.addEventListener('change',()=>{clearError();options.onUiFontChange?.(fontSelect.value as UiFontId);});
     fontSetting.append(fontText,fontSelect);card.append(fontSetting);
+    if(options.getUiTheme&&options.onUiThemeChange){
+      card.append(element('h2','','Couleurs de l’interface'));
+      const fields=new Map<'background'|'text',HTMLInputElement>();
+      const refresh=()=>{const current=options.getUiTheme!();for(const [key,input]of fields)input.value=current[key];};
+      const apply=(patch:Partial<import('../ui3d/ui-theme').UiTheme>)=>{clearError();if(!options.onUiThemeChange!({...options.getUiTheme!(),...patch}))showError('Le choix ne peut pas être conservé par ce navigateur.');refresh();};
+      for(const [key,label]of [['background','Fond des fenêtres'],['text','Couleur du texte']] as const){const setting=element('label','front-relief front-texture-setting'),input=element('input'),labelText=element('span');input.type='color';input.id=`front-ui-theme-${key}`;input.setAttribute('aria-label',label);labelText.append(element('strong','',label));input.addEventListener('change',()=>apply({[key]:input.value}));fields.set(key,input);setting.append(labelText,input);card.append(setting);}
+      const presets=element('div','front-actions');for(const preset of UI_THEME_PRESETS)presets.append(action(preset.label,()=>apply(preset.theme)));card.append(presets,element('p','front-small','Codes des couleurs : ocre pour les titres, personnes et actions ; vert pour les objets et états favorables ; bleu pour le repos ; orange pour les besoins pressants et la mobilisation ; rouge pour les alertes ; violet pour les valeurs ; encre atténuée pour les informations secondaires.'));refresh();
+    }
+    if(options.getJournalBubblesEnabled&&options.onJournalBubblesEnabledChange){const setting=element('label','front-relief front-texture-setting'),input=element('input'),copy=element('span');input.type='checkbox';input.checked=options.getJournalBubblesEnabled();input.id='front-journal-bubbles';copy.append(element('strong','','Bulles du journal des colons'),element('span','','Affiche brièvement les nouvelles entrées au-dessus des colons.'));input.addEventListener('change',()=>{clearError();if(!options.onJournalBubblesEnabledChange!(input.checked))showError('Le choix ne peut pas être conservé par ce navigateur.');});setting.append(input,copy);card.append(setting);}
     content.append(card);
     const performanceCard = element('section', 'front-card front-options presentation-settings');
     performanceCard.append(element('h2', '', 'Performances visuelles'));
@@ -647,7 +676,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       }
       content.append(developerCard);
     }
-    footer.append(action('Retour', () => navigate('home'), 'front-back'));
+    footer.append(action('Retour', backToMenu, 'front-back'));
   }
 
   function addNavigation(back: () => void, nextLabel?: string, next?: () => void): void {
@@ -842,7 +871,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       empty.append(atlasMark('front-empty-mark',0,3), element('h2', '', 'Aucune colonie enregistrée'), element('p', '', 'Vos sauvegardes apparaîtront ici après avoir commencé et enregistré une partie.'));
       content.append(empty);
     } else content.append(list);
-    addNavigation(() => navigate('home'));
+    addNavigation(backToMenu);
     footer.append(loadButton);
   }
 
@@ -884,6 +913,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
   function showHome(nextHasGame = hasGame): void {
     if (busy || operationPending) return;
     hasGame = nextHasGame;
+    origin = 'home';
     navigate('home');
   }
 
@@ -910,6 +940,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
 
   function showCreation(): void {
     if (busy || operationPending) return;
+    origin = 'home';
     difficultyChosen = false;
     reloadChosen = false;
     seed = '';
@@ -920,8 +951,24 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     navigate('scenario');
   }
 
-  function showLoad(): void {
+  function showLoad(nextOrigin: FrontMenuOrigin = 'home'): void {
+    if (busy || operationPending) return;
+    origin = nextOrigin;
     navigate('load');
+  }
+
+  function showOptions(nextOrigin: FrontMenuOrigin = 'home'): void {
+    if (busy || operationPending) return;
+    origin = nextOrigin;
+    navigate('options');
+  }
+
+  function backToMenu(): void {
+    if (busy || operationPending) return;
+    if (origin === 'game') {
+      hide();
+      options.onReturnToGameMenu?.();
+    } else navigate('home');
   }
 
   function hide(): void {
@@ -929,6 +976,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     disposeDialog?.();disposeDialog=undefined;
     disposePage?.();disposePage=undefined;pawnsPage=undefined;
     root.hidden = true;
+    origin = 'home';
     if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     previousFocus = null;
   }
@@ -943,7 +991,7 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
       else if(page==='world')navigate('story');
       else if (page === 'story') navigate('scenario');
       else if (page === 'tests') navigate('load');
-      else if (page !== 'home') navigate('home');
+      else if (page !== 'home') backToMenu();
       else if (hasGame) void run(options.onResume, 'Reprise de la colonie…');
     } else if (event.key === 'Tab') {
       const candidates = [...root.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex="0"]')].filter(node => node.getClientRects().length > 0);
@@ -965,5 +1013,5 @@ export function createFrontMenu(host: HTMLElement, options: FrontMenuOptions): F
     root.addEventListener(type, event => event.stopPropagation());
   }
 
-  return { showHome, setHasGame, showCreation, showOptions:()=>navigate('options'), showLoad, hide, isOpen: () => !root.hidden, setBusy, showError };
+  return { showHome, setHasGame, showCreation, showOptions, showLoad, hide, isOpen: () => !root.hidden, isGameOverlay:()=>!root.hidden&&origin==='game', setBusy, showError };
 }

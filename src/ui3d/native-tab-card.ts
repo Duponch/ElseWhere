@@ -1,4 +1,6 @@
 import type {NativeControl} from './native-contract';
+import type {JournalPictogram} from '../ui/journal-events';
+import {drawJournalPictogram} from '../ui/journal-pictograms';
 import {NATIVE_INK,NATIVE_LINE,NATIVE_TEXT,NATIVE_WINDOW,type NativeTextRole} from './native-ui-scale';
 
 /** The inner pages of the inspector tabs (RimWorld `ITab_Pawn_*`,
@@ -27,8 +29,8 @@ export interface CardBar extends CardBase {
   /** `CurInstantLevel`: a small triangle under the bar. */
   marker?:number;
 }
-export type CardGlyphKind='info'|'drop'|'ingest'|'bleed'|'tend'|'check'|'radio'|'copy';
-export interface CardGlyph extends CardBase {k:'glyph';glyph:CardGlyphKind;x:number;y:number;w:number;h:number;on?:boolean;disabled?:boolean}
+export type CardGlyphKind='info'|'drop'|'ingest'|'bleed'|'tend'|'check'|'radio'|'copy'|'journal';
+export interface CardGlyph extends CardBase {k:'glyph';glyph:CardGlyphKind;x:number;y:number;w:number;h:number;on?:boolean;disabled?:boolean;journalIcon?:JournalPictogram}
 export interface CardButton extends CardBase {k:'button';x:number;y:number;w:number;h:number;label:string;disabled?:boolean;active?:boolean;dropdown?:boolean;ink?:string}
 export type CardItem=CardText|CardFill|CardLine|CardPanel|CardBar|CardGlyph|CardButton;
 export interface CardTarget {id:string;x:number;y:number;w:number;h:number;hint?:string;control?:NativeControl;region?:string;highlight?:boolean}
@@ -84,7 +86,7 @@ export class CardBuilder {
   line(x:number,y:number,w:number,color:string=NATIVE_INK.line,region?:string):void{this.items.push({k:'line',x,y,w,color,region});}
   panel(x:number,y:number,w:number,h:number,region?:string):void{this.items.push({k:'panel',x,y,w,h,region});}
   bar(item:Omit<CardBar,'k'>):void{this.items.push({k:'bar',...item});}
-  glyph(glyph:CardGlyphKind,x:number,y:number,w:number,h:number,options:{on?:boolean;disabled?:boolean;region?:string}={}):void{this.items.push({k:'glyph',glyph,x,y,w,h,on:options.on,disabled:options.disabled,region:options.region});}
+  glyph(glyph:CardGlyphKind,x:number,y:number,w:number,h:number,options:{on?:boolean;disabled?:boolean;region?:string;journalIcon?:JournalPictogram}={}):void{this.items.push({k:'glyph',glyph,x,y,w,h,on:options.on,disabled:options.disabled,region:options.region,journalIcon:options.journalIcon});}
   button(x:number,y:number,w:number,h:number,label:string,options:{disabled?:boolean;active?:boolean;dropdown?:boolean;ink?:string;region?:string}={}):void{this.items.push({k:'button',x,y,w,h,label,disabled:options.disabled,active:options.active,dropdown:options.dropdown,ink:options.ink,region:options.region});}
   target(target:CardTarget):void{this.targets.push(target);}
   region(id:string,x:number,y:number,w:number,h:number,contentHeight:number):void{this.regions.push({id,x,y,w,h,contentHeight});}
@@ -111,14 +113,22 @@ export function nativeTabTargets(card:NativeTabCard):CardTarget[]{
   return result;
 }
 
-export interface CardPainter {font:(role:NativeTextRole,bold?:boolean)=>string;measure:CardMeasure;rng:()=>number}
+export interface CardPainter {font:(role:NativeTextRole,bold?:boolean)=>string;measure:CardMeasure;rng:()=>number;
+  /** Optional shared semantic painter for neutral prose. Explicit health,
+   * opinion and category colours remain authoritative. */
+  semanticText?:(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,role:NativeTextRole,bold:boolean)=>void}
 const BASELINE=.36;
 function paintText(ctx:CanvasRenderingContext2D,item:CardText,ox:number,oy:number,paint:CardPainter):void{
   ctx.font=paint.font(item.role,item.bold);ctx.fillStyle=item.ink;ctx.textAlign=item.align;
   const text=item.truncate?ellipsize(item.text,item.w,paint.measure,item.role,item.bold):item.text,size=NATIVE_TEXT[item.role];
   const y=item.v==='middle'?oy+item.y+item.h/2+size*BASELINE:item.v==='top'?oy+item.y+size*.95:oy+item.y+item.h-size*.2;
   const x=item.align==='left'?ox+item.x:item.align==='center'?ox+item.x+item.w/2:ox+item.x+item.w;
-  ctx.fillText(text,x,y,Math.max(1,item.w));
+  if(paint.semanticText&&item.ink===NATIVE_INK.text){
+    // Semantic runs are left-anchored; retain the card's alignment first.
+    const length=Math.min(item.w,paint.measure(text,item.role,item.bold));
+    const left=item.align==='center'?x-length/2:item.align==='right'?x-length:x;
+    paint.semanticText(ctx,text,left,y,Math.max(1,item.w),item.role,!!item.bold);
+  }else ctx.fillText(text,x,y,Math.max(1,item.w));
 }
 /** `Widgets.FillableBar` with Need.DrawOnGUI's ticks, divisions, arrows and
  * instant marker, on the paper: a frame of 3 when the bar is taller than 15
@@ -156,6 +166,7 @@ function paintBar(ctx:CanvasRenderingContext2D,bar:CardBar,ox:number,oy:number):
 /** Small pictograms of RimWorld's tab buttons, in Elsewhere's ink. */
 export function paintCardGlyph(ctx:CanvasRenderingContext2D,item:CardGlyph,ox:number,oy:number):void{
   const x=ox+item.x,y=oy+item.y,w=item.w,h=item.h,cx=x+w/2,cy=y+h/2,s=Math.min(w,h),ink=item.disabled?NATIVE_INK.disabled:NATIVE_INK.text;
+  if(item.glyph==='journal'){drawJournalPictogram(ctx,item.journalIcon??'command',cx,cy,s*.42,ink);return;}
   ctx.save();ctx.strokeStyle=ink;ctx.fillStyle=ink;ctx.lineWidth=1.6;ctx.lineJoin='round';ctx.lineCap='round';
   switch(item.glyph){
     case 'info':

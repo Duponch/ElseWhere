@@ -17,6 +17,10 @@
   isolation: isolate;
 }
 .front-menu[hidden] { display: none; }
+/* The same file/options dialogs have two origins. In game this remains a
+   modal hit surface, but the paused map (not the title artwork) is visible. */
+.front-menu[data-origin=game] { background: transparent; }
+.front-menu[data-origin=game] :is(.front-landscape,.front-shade,.front-top,.front-bottom) { display: none; }
 .front-menu {user-select:none;-webkit-user-select:none}
 .front-menu :is(input,textarea){user-select:text;-webkit-user-select:text}
 .front-menu * { box-sizing: border-box; }
@@ -375,6 +379,19 @@
 .front-menu .front-test-detail .front-test-metadata { color: var(--ink); font-weight: 700; }
 .front-menu .front-test-detail .front-test-focus, .front-menu .front-test-preservation { color: var(--muted-ink); border-color: var(--line); }
 .front-menu .front-test-instructions { color: var(--ink); }
+
+/* Custom palette covers compatibility HTML options and the save catalogue;
+   the photographic welcome backdrop stays independent. */
+:root[data-ui-theme] .front-frame,
+:root[data-ui-theme] .front-card,
+:root[data-ui-theme] .front-save,
+:root[data-ui-theme] .front-menu .front-test-save{background:var(--paper);border-color:var(--line);color:var(--ink)}
+:root[data-ui-theme] .front-save:has(input:checked),
+:root[data-ui-theme] .front-menu .front-test-save:has(input:checked),
+:root[data-ui-theme] .front-save:hover:not(.front-save-disabled),
+:root[data-ui-theme] .front-menu .front-test-save:hover:not(.front-save-disabled){background:var(--paper-deep);border-color:var(--accent)}
+:root[data-ui-theme] .front-menu .front-eyebrow,
+:root[data-ui-theme] .front-relief > span > span{color:var(--muted-ink)}
 @media (max-width: 850px) {
   .front-menu[data-page=home] .front-frame { margin-left: auto; }
 }

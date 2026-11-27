@@ -4,14 +4,14 @@ import { ORBITAL_DELIVERY_LIMIT } from '../sim/orbital-state';
 import type { World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
 import { material } from './primitives';
-import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import { instancedBoxPatternUv } from './texture-variation';
+import { capsulePaintUv, createMechanicalSurfaceTexture, mechanicalPaint, mechanicalSurfacePixels } from './mechanical-surface-art';
 import type { AnimationDetail } from './AnimationDetail';
 import { RetainedAnimation } from './RetainedAnimation';
 import {currentGraphicsStyle} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {bindPersonalizedTexture} from './texture-personalization';
 
 export const ORBITAL_CAPSULE_PARTS=6;
 export const ORBITAL_CAPSULE_HEIGHT=24;
@@ -32,7 +32,8 @@ export class OrbitalDeliveryLayer {
   readonly tick=uniform(0);
   private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
   private readonly base=this.surfaceModel.geometry;
-  private readonly paint=createStylizedSurfaceTexture();
+  private readonly paint=createMechanicalSurfaceTexture();
+  get surfaceTexture():THREE.Texture{return this.paint;}
   private readonly plain=material(0xffffff);
   private readonly painted=material(0xffffff);
   private key='';
@@ -54,7 +55,8 @@ export class OrbitalDeliveryLayer {
       configure?.(surface);surface.userData.rendererOwned=true;surface.positionNode=position;
       surface.colorNode=attribute('boxColor','vec3');
     }
-    this.painted.colorNode=attribute('boxColor','vec3').mul(texture(this.paint,instancedBoxPatternUv()).rgb);
+    const paintedPanel=texture(this.paint,capsulePaintUv(ORBITAL_CAPSULE_PARTS,mechanicalPaint.cargo)).rgb;
+    this.painted.colorNode=attribute('boxColor','vec3').mul(paintedPanel);
     this.mesh=new BoxMesh(this.base,this.painted,ORBITAL_DELIVERY_LIMIT*ORBITAL_CAPSULE_PARTS);
     this.mesh.name='orbital-trade-capsules';this.mesh.castShadow=true;this.mesh.receiveShadow=true;
     const timingBuffer=new THREE.InstancedBufferAttribute(new Float32Array(ORBITAL_DELIVERY_LIMIT*ORBITAL_CAPSULE_PARTS*3),3);
@@ -63,8 +65,9 @@ export class OrbitalDeliveryLayer {
     this.mesh.geometry.setAttribute('orbitalLid',new THREE.InstancedBufferAttribute(new Float32Array(ORBITAL_DELIVERY_LIMIT*ORBITAL_CAPSULE_PARTS),1));
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
+    bindPersonalizedTexture(context,this.paint,mechanicalSurfacePixels);
     this.painted.roughness=.88;this.painted.metalness=.02;
-    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),personalizedGouacheTransform:body=>body.mul(paintedPanel),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
   /** Renderer-only preview callers must synchronize after writing instance streams. */
   syncContours():void {}

@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three/webgpu';
-import {PrototypeCardboardArt,type CardboardPiece} from '../src/ui3d/prototype-art';
+import {PALETTE,PrototypeCardboardArt,type CardboardPiece} from '../src/ui3d/prototype-art';
 import {createNativeGuidance,GUIDANCE_READ_INTERVAL_MS} from '../src/ui3d/native-guidance-card';
 import {createGuidanceCardSession,isHelpShortcut,readGuidanceCard,startingArrivalPending} from '../src/ui/guidance-card';
 import {createFirstGesturesLearning,FIRST_GESTURES_STORAGE_KEY,LESSONS} from '../src/ui/first-gestures-learning';
@@ -54,6 +54,16 @@ function fixture(){
 }
 
 describe('native advice card · Aide en partie (interface)',()=>{
+  it('refreshes retained advice ink on a theme boundary without rereading gameplay or replacing its card',()=>{
+    const f=fixture(),previous={...PALETTE};
+    try{
+      f.session.newColony();f.state.world=deconstructionCamp(3);f.sync();
+      const panel=f.find('hud:guidance:card')!,version=panel.userData.texture.version,reads=f.sections.mock.calls.length;
+      Object.assign(PALETTE,{inkDark:'#f8f8f8',creamPaper:'#20242a',kraftLight:'#30343a'});f.card.refreshTheme();
+      expect(f.find('hud:guidance:card')).toBe(panel);expect(panel.userData.texture.version).toBeGreaterThan(version);
+      expect(Reflect.get(f.card,'panelInk')).toContain('#f8f8f8');expect(f.sections).toHaveBeenCalledTimes(reads);
+    }finally{Object.assign(PALETTE,previous);f.close();}
+  });
   it('appears after the starting pods open in a new colony, never during the descent',()=>{
     const f=fixture();try{
       expect(startingArrivalPending(undefined)).toBe(false);

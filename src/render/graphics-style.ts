@@ -17,6 +17,7 @@ import {bakeResidentPaintToSink} from './origami/reference-resident-paint-librar
 import {GAME_USED_BESTIARY_VIRTUAL_IDS,GAME_REQUIRED_VIRTUAL_IDS78} from './origami/game-paint-residency';
 import {referenceCoverageKey} from './origami/reference-coverage';
 import {bakeCheckpointPaintToSink,replayCheckpointMaskR8} from './origami/checkpoint-paint-baker';
+import {decorateAnimalGouachePigment,ANIMAL_GOUACHE_PANELS} from './animal-surface-paint';
 import {createGlobalReliefLod,installGlobalReliefLod,type GlobalReliefLod} from './origami/relief-lod';
 
 interface CoverageCheckpoint {readonly coverageSeed:number;readonly kraft:boolean;readonly signature:string}
@@ -26,6 +27,13 @@ let constructing:GraphicsStyleContext|undefined;
 export function currentGraphicsStyle():GraphicsStyleContext|undefined{return constructing;}
 export function withGraphicsStyle<T>(context:GraphicsStyleContext,create:()=>T):T{const previous=constructing;constructing=context;try{return create();}finally{constructing=previous;}}
 const LAYERS_PER_BANK=256,MAX_BANKS=8,PIXELS_PER_LAYER=512*512*4;
+const LEGACY_ANIMAL_DRAWINGS=new Set(['matGazelleFlank','best46:matGazelleFlank','matFoxSnout','best46:matFoxSnout']);
+function pigmentRgb(packed:Uint8Array):Uint8Array {
+ const rgb=new Uint8Array(packed.length/4*3);for(let pixel=0;pixel<packed.length/4;pixel++){const at=pixel*4,target=pixel*3;rgb[target]=packed[at]!;rgb[target+1]=packed[at+1]!;rgb[target+2]=packed[at+2]!;}return rgb;
+}
+function restorePigmentRgb(packed:Uint8Array,rgb:Uint8Array):void {
+ for(let pixel=0;pixel<packed.length/4;pixel++){const at=pixel*4,source=pixel*3;packed[at]=rgb[source]!;packed[at+1]=rgb[source+1]!;packed[at+2]=rgb[source+2]!;}
+}
 function arrayTexture(data:Uint8Array,depth:number,size=512):THREE.DataArrayTexture {
  const map=new THREE.DataArrayTexture(data,size,size,depth);map.format=THREE.RGBAFormat;map.colorSpace=THREE.SRGBColorSpace;
  map.flipY=false;map.wrapS=map.wrapT=THREE.RepeatWrapping;map.magFilter=THREE.LinearFilter;map.minFilter=THREE.LinearMipmapLinearFilter;map.generateMipmaps=true;map.needsUpdate=true;return map;
@@ -71,6 +79,28 @@ export class GraphicsStyleContext {
  private readonly activeBankCount=uniform(0).setGroup(renderGroup);private readonly genericFaceLayer=uniform(0).setGroup(renderGroup);
  private lastPaintVersion=-1;private admissionDepth=0;private repaintRequested=false;
  private atlasPaintEpoch=0;
+ private personalizedPaintEpoch=0;
+ /** The18 decorated animal originals plus four authored/neutral RGB pairs
+  * use at most19.5MiB (the historical paintings add6MiB).
+  * Alpha/bump, paper and coverage always stay in their original live arrays. */
+ private animalPigmentOriginals=new Map<number,{key:string;baseColor:string|undefined;rgb:Uint8Array;authoredRgb?:Uint8Array}>();
+ private animalPigmentsPersonalized=true;
+ private refreshPersonalizedAnimalPigments():void {
+  if(this.animalPigmentsPersonalized===this.personalizedTextures)return;
+  const touched=new Set<THREE.DataArrayTexture>();
+  for(const[layer,original]of this.animalPigmentOriginals){
+   const map=this.banks[Math.floor(layer/LAYERS_PER_BANK)]!;
+   const data=map.image.data as Uint8Array,slot=layer%LAYERS_PER_BANK,start=slot*PIXELS_PER_LAYER;
+   const packed=data.subarray(start,start+PIXELS_PER_LAYER);
+   restorePigmentRgb(packed,this.personalizedTextures&&original.authoredRgb?original.authoredRgb:original.rgb);
+   if(this.personalizedTextures&&!original.authoredRgb)decorateAnimalGouachePigment(original.key,original.baseColor,packed);
+   // DataArrayTexture's layer set accumulates pending writes until upload.
+   map.addLayerUpdate(slot);touched.add(map);
+  }
+  this.animalPigmentsPersonalized=this.personalizedTextures;
+  for(const map of touched)map.needsUpdate=true;
+  if(touched.size){this.personalizedPaintEpoch++;this.surfacePreparation.invalidate();}
+ }
  private protectedDemandDeclared=false;
  /** All game-static pigments are requested before the first Gouache flush,
   * ahead of dynamic human profiles. Physical assignments never move. A
@@ -84,6 +114,7 @@ export class GraphicsStyleContext {
  private edgePixelsPrepared=false;
  private readonly sharedSurfaceRefreshers=new Set<()=>void>();
  private readonly sharedPaintSettingsRefreshers=new Set<()=>void>();
+ private readonly personalizedTextureRefreshers=new Set<(enabled:boolean)=>void>();
  private bakedRefreshed=false;private coverageCheckpoints=new Map<number,CoverageCheckpoint>();
  private lastReplayMode:'none'|'full'|'mask'='none';
  private bakedFill=-1;private fillTimer?:ReturnType<typeof setTimeout>;
@@ -144,6 +175,8 @@ export class GraphicsStyleContext {
   this.lastPaintVersion=this.paintPool.version;
  }
  get origami():boolean{return this.preferences.style==='origami';}
+ get personalizedTextures():boolean{return this.preferences.personalizedTextures;}
+ get personalizedPaintCpuBytes():number{let bytes=0;for(const original of this.animalPigmentOriginals.values())bytes+=original.rgb.byteLength+(original.authoredRgb?.byteLength??0);return bytes;}
  get wearEnabled():boolean{return this.preferences.wear>0;}
  /** Feature changes rebuild nodes on the same material; image changes do not.
   * Callers release their registration when that material is disposed. */
@@ -151,8 +184,15 @@ export class GraphicsStyleContext {
  get preparedPaintRevision():number{return this.atlasPaintEpoch;}
  genericPaintSemanticKey():string{const source=PROTECTED_REFERENCE_PAINT_DESCRIPTORS[0]!,seed=this.bakedRefreshed?(source.refreshSeed??source.seed):source.seed;return JSON.stringify(['P0-separated512-v1',REFERENCE_PAINTER_SOURCE_SHA256,source.key,source.config,seed,this.preferences.contourImperfection]);}
  trackSharedPaintSettingsRefresh(refresh:()=>void):()=>void{this.sharedPaintSettingsRefreshers.add(refresh);return()=>{this.sharedPaintSettingsRefreshers.delete(refresh);};}
+ /** Settings-boundary listeners prepare pixels or replace optional material
+  * graphs. Nothing here is polled by the animation loop. */
+ trackPersonalizedTextures(refresh:(enabled:boolean)=>void):()=>void{
+  refresh(this.personalizedTextures);this.personalizedTextureRefreshers.add(refresh);
+  return()=>{this.personalizedTextureRefreshers.delete(refresh);};
+ }
  update(settings:GraphicsStylePreferences):void {
   const previousPaintSettings=JSON.stringify(this.preferences),next=normalizeGraphicsStylePreferences(settings);
+  const personalizedChanged=next.personalizedTextures!==this.preferences.personalizedTextures;
   const previousContourSpan=this.contourSpan.value;
   const key=graphicsStylePipelineKey(next),featuresChanged=key!==this.pipelineKey,reliefChanged=this.reliefEnabled!==(next.impasto>0);
   this.pipelineKey=key;this.reliefEnabled=next.impasto>0;
@@ -176,6 +216,10 @@ export class GraphicsStyleContext {
   for(const entry of this.brushGeometries.values())if(entry.width!==this.preferences.edgeWidth||entry.roughness!==this.preferences.strokeImperfection){this.refreshBrushGeometry(entry.geometry);entry.width=this.preferences.edgeWidth;entry.roughness=this.preferences.strokeImperfection;}
   if(this.wearEnabled&&this.contourSpan.value!==previousContourSpan)for(const geometry of this.wearGeometries)this.expandWear(geometry);for(const [object,kind]of this.edgeObjects)this.refreshEdgeObject(object,kind);
   if(this.bakedFill>=0&&this.bakedFill!==this.preferences.contourImperfection){if(this.fillTimer)clearTimeout(this.fillTimer);this.fillTimer=setTimeout(()=>{this.fillTimer=undefined;this.repaintRequested=true;this.flushPaint();},60);}
+  if(personalizedChanged){
+   this.refreshPersonalizedAnimalPigments();
+   for(const refresh of this.personalizedTextureRefreshers)refresh(this.personalizedTextures);
+  }
   if(featuresChanged)for(const refresh of this.sharedSurfaceRefreshers)refresh();
   if(previousPaintSettings!==JSON.stringify(this.preferences)){this.surfacePreparation.invalidate();for(const refresh of this.sharedPaintSettingsRefreshers)refresh();}
  }
@@ -243,10 +287,28 @@ export class GraphicsStyleContext {
    uploads.set(bank,{...shape,data});
   }
   const capturedFaces=new Set<number>(),scratch=new Uint8Array(PIXELS_PER_LAYER);
+  const nextAnimalOriginals=new Map(repaint?undefined:this.animalPigmentOriginals);
+  // Only four pre-existing paintings need an alternate source raster. Their
+  // unmodified authored pass below still owns bump/paper/coverage/checkpoints.
+  // Cache the alternate RGB once here, never repaint on an ordinary toggle.
+  const legacyEntries=plan.entries.filter(entry=>LEGACY_ANIMAL_DRAWINGS.has(entry.descriptor.key)),legacyNeutral=new Map<number,Uint8Array>();
+  if(legacyEntries.length)bakeCheckpointPaintToSink(legacyEntries.map(entry=>{
+   const descriptor=entry.descriptor,config={...descriptor.config};delete config.flankStripe;delete config.gradientTip;return{...descriptor,config};
+  }),fill,(index,color)=>{packReferencePaintPixels(color,undefined,512,512,1,scratch);legacyNeutral.set(legacyEntries[index]!.pigmentLayer,pigmentRgb(scratch));},{includeHeight:false});
   bakeCheckpointPaintToSink(plan.entries.map(entry=>entry.descriptor),fill,(index,color,bump,face)=>{
    const entry=plan.entries[index]!,bank=Math.floor(entry.pigmentLayer/LAYERS_PER_BANK),upload=uploads.get(bank);
    if(!upload)throw Error('Paint admission destination missing');
-   packReferencePaintPixels(color,bump,512,512,1,scratch);upload.data.set(scratch,(entry.pigmentLayer%LAYERS_PER_BANK)*PIXELS_PER_LAYER);
+   packReferencePaintPixels(color,bump,512,512,1,scratch);
+   if(LEGACY_ANIMAL_DRAWINGS.has(entry.descriptor.key)){
+    const rgb=legacyNeutral.get(entry.pigmentLayer);if(!rgb)throw Error('Historical animal drawing neutral raster missing');
+    nextAnimalOriginals.set(entry.pigmentLayer,{key:entry.descriptor.key,baseColor:entry.descriptor.config.baseColor,rgb,authoredRgb:pigmentRgb(scratch)});
+    if(!this.personalizedTextures)restorePigmentRgb(scratch,rgb);
+   }else if(ANIMAL_GOUACHE_PANELS[entry.descriptor.key]){
+    const rgb=pigmentRgb(scratch);
+    nextAnimalOriginals.set(entry.pigmentLayer,{key:entry.descriptor.key,baseColor:entry.descriptor.config.baseColor,rgb});
+    if(this.personalizedTextures)decorateAnimalGouachePigment(entry.descriptor.key,entry.descriptor.config.baseColor,scratch);
+   }
+   upload.data.set(scratch,(entry.pigmentLayer%LAYERS_PER_BANK)*PIXELS_PER_LAYER);
    const signature=referenceCoverageKey(entry.descriptor),existing=nextCheckpoints.get(entry.faceLayer);
    if(Number.isSafeInteger(face.coverageSeed)){
     if(existing&&(existing.coverageSeed!==face.coverageSeed||existing.signature!==signature))throw Error('Shared face checkpoint disagrees across RGB variants');
@@ -262,7 +324,8 @@ export class GraphicsStyleContext {
   // No live texture or lookup is changed before all Canvas/copy work succeeds.
   // Publication is synchronous between owner render calls, not a GPU fence.
   this.paintPool.commit(plan);
-  for(const [bank,{data,size,depth}]of uploads){const map=this.banks[bank]!;map.dispose();map.image={data,width:size,height:size,depth};map.needsUpdate=true;}
+  this.animalPigmentOriginals=nextAnimalOriginals;this.animalPigmentsPersonalized=this.personalizedTextures;
+  for(const [bank,{data,size,depth}]of uploads){const map=this.banks[bank]!;map.clearLayerUpdates();map.dispose();map.image={data,width:size,height:size,depth};map.needsUpdate=true;}
   if(faceDirty){
    this.paperArray!.dispose();this.paperArray!.image={data:paperPixels!,width:512,height:512,depth:plan.faceDepth};this.paperArray!.needsUpdate=true;
    this.coverageArray!.dispose();this.coverageArray!.image={data:coveragePixels!,width:512,height:512,depth:plan.faceDepth};this.coverageArray!.needsUpdate=true;
@@ -411,11 +474,11 @@ export class GraphicsStyleContext {
   if(!this.origami||this.reliefEnabled||this.wearEnabled)throw Error('Opaque atlas requires Origami with relief and wear disabled');
   if(this.fillTimer){clearTimeout(this.fillTimer);this.fillTimer=undefined;this.repaintRequested=true;}
   this.flushPaint();this.ensureEdgeMaps();
-  const epoch=this.atlasPaintEpoch,settings=JSON.stringify(this.preferences),alpha=this.edgeMaps!.alpha,data=alpha.image.data;
+  const epoch=this.atlasPaintEpoch,personalizedEpoch=this.personalizedPaintEpoch,settings=JSON.stringify(this.preferences),alpha=this.edgeMaps!.alpha,data=alpha.image.data;
   if(!(data instanceof Uint8Array))throw Error('Prepared brush alpha pixels missing');
-  const isCurrent=():boolean=>this.atlasPaintEpoch===epoch&&JSON.stringify(this.preferences)===settings&&this.edgeMaps?.alpha===alpha&&!this.fillTimer&&!this.repaintRequested;
+  const isCurrent=():boolean=>this.atlasPaintEpoch===epoch&&this.personalizedPaintEpoch===personalizedEpoch&&JSON.stringify(this.preferences)===settings&&this.edgeMaps?.alpha===alpha&&!this.fillTimer&&!this.repaintRequested;
   const assertCurrent=()=>{if(!isCurrent())throw new SurfacePreparationSuperseded('Prepared atlas paint changed before publication');};
-  return{fingerprint:`paint-v1:${epoch}:${settings}`,isCurrent,assertCurrent,paint:{readProfile:(id:number)=>{assertCurrent();return this.readPaintProfile(id);},edgeAlpha:{data,width:alpha.image.width,height:alpha.image.height},brushColorLinear:[this.brushColor.value.r,this.brushColor.value.g,this.brushColor.value.b] as const,lineOpacity:this.lineOpacity.value,strokeImperfection:this.strokeImperfection.value}};
+  return{fingerprint:`paint-v1:${epoch}:${personalizedEpoch}:${settings}`,isCurrent,assertCurrent,paint:{readProfile:(id:number)=>{assertCurrent();return this.readPaintProfile(id);},edgeAlpha:{data,width:alpha.image.width,height:alpha.image.height},brushColorLinear:[this.brushColor.value.r,this.brushColor.value.g,this.brushColor.value.b] as const,lineOpacity:this.lineOpacity.value,strokeImperfection:this.strokeImperfection.value}};
  }
  /** Diagnostic borrowed bytes; diagnostics never cause a bake. */
  debugPaintProfile(virtualId:number){return this.readPaintProfile(virtualId);}
@@ -433,7 +496,7 @@ export class GraphicsStyleContext {
  }
  debugPaintStorage(){if(!this.colorArray)throw Error('Paint is not prepared');return{banks:this.banks.map(texture=>({texture,data:texture.image.data as Uint8Array})),paper:{texture:this.paperArray!,data:this.paperArray!.image.data as Uint8Array},coverage:{texture:this.coverageArray!,data:this.coverageArray!.image.data as Uint8Array},lookup:{texture:this.faceProfilesTexture!,data:this.faceProfilesTexture!.image.data as Float32Array},rows:this.rowsData};}
  paintReplayState(){return{mode:this.lastReplayMode,refreshed:this.bakedRefreshed,checkpointCount:this.coverageCheckpoints.size,bakedFill:this.bakedFill};}
- dispose():void{this.surfacePreparation.dispose();this.preparedStrokes.dispose();this.sharedSurfaceRefreshers.clear();this.sharedPaintSettingsRefreshers.clear();this.paperHeightArray?.dispose();this.paperHeightArray=undefined;this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
+dispose():void{this.surfacePreparation.dispose();this.preparedStrokes.dispose();this.sharedSurfaceRefreshers.clear();this.sharedPaintSettingsRefreshers.clear();this.personalizedTextureRefreshers.clear();this.animalPigmentOriginals.clear();this.paperHeightArray?.dispose();this.paperHeightArray=undefined;this.coverageCheckpoints.clear();if(this.fillTimer)clearTimeout(this.fillTimer);for(const release of [...this.brushOwners.values()])release();this.brushGeometries.clear();for(const bank of this.banks)bank.dispose();this.banks.length=0;for(const map of Object.values(this.edgeMaps??{}))map?.dispose();this.paperArray?.dispose();this.coverageArray?.dispose();this.faceProfilesTexture?.dispose();this.rowsTexture?.dispose();this.paintPool.dispose();this.appearanceRows.clear();this.wearGeometries.clear();this.edgeObjects.clear();this.colorArray=undefined;this.edgeMaps=undefined;this.rowsTexture=undefined;this.rowsData=undefined;this.paperArray=undefined;this.coverageArray=undefined;this.faceProfilesTexture=undefined;}
 }
 
 /** Only textured pipelines call this. Exact profiles contain authored color;

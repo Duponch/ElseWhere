@@ -1,6 +1,6 @@
 import {afterEach,expect,test,vi} from 'vitest';
 import {createNativeFrontMenu} from '../src/ui3d/native-front';
-import type {FrontMenuOptions,FrontMenuSave} from '../src/ui/front-menu';
+import type {FrontMenuOptions,FrontMenuOrigin,FrontMenuSave} from '../src/ui/front-menu';
 import type {NativeControl,NativePage} from '../src/ui3d/native-contract';
 
 afterEach(()=>vi.unstubAllGlobals());
@@ -8,7 +8,7 @@ function fixture(initial:FrontMenuSave[]=[]){
   // Metadata-only service fixture. No World, save bytes, parser, Engine or DOM layout.
   vi.stubGlobal('window',{});
   const writes=vi.fn((_key:string,_value:unknown)=>true),yes=()=>true,no=()=>false,noop=async()=>{};
-  let saves=initial,page:NativePage|undefined;
+  let saves=initial,page:NativePage|undefined,origin:FrontMenuOrigin='home';
   const options:FrontMenuOptions={onStart:noop,onLoad:vi.fn(noop),onResume:noop,
     getTexturesEnabled:yes,onTexturesEnabledChange:value=>writes('textures',value),
     getGroundGrassEnabled:yes,onGroundGrassEnabledChange:value=>writes('grass',value),
@@ -21,16 +21,32 @@ function fixture(initial:FrontMenuSave[]=[]){
     getUiScale:()=>.75,onUiScaleChange:value=>writes('ui-scale',value),
     getAutosaveMinutes:()=>5,onAutosaveMinutesChange:value=>writes('autosave',value),
   };
-  const menu=createNativeFrontMenu(options,next=>{page=next??undefined;});
+  const menu=createNativeFrontMenu(options,(next,context)=>{page=next??undefined;origin=context;});
   const all=()=>[...(page?.rows.flatMap(row=>row.controls??[])??[]),...(page?.actions??[])];
   const control=(id:string):NativeControl=>{const value=all().find(value=>value.id===id);if(!value)throw Error('Missing '+id);return value;};
   const click=async(id:string)=>{const value=control(id);expect(value.disabled).not.toBe(true);await value.onActivate();};
-  return{menu,writes,options,control,click,setSaves:(next:FrontMenuSave[])=>{saves=next;},get page(){return page!;}};
+  return{menu,writes,options,control,click,setSaves:(next:FrontMenuSave[])=>{saves=next;},get page(){return page!;},get origin(){return origin;}};
 }
 const examples=():FrontMenuSave[]=>[
   {key:'alpha',label:'Éclaircies',detail:'Trois personnes · jour4 ·325×325',kind:'named',savedAt:1000},
   {key:'beta',label:'Bastion',detail:'Deux personnes · jour12 ·250×250',kind:'auto',savedAt:2000},
 ];
+
+test('Options and Load keep their opening context, while a suspended colony does not turn the true home into a game overlay',async()=>{
+  const f=fixture(examples()),returnToMenu=vi.fn();f.options.onReturnToGameMenu=returnToMenu;
+  f.menu.setHasGame(true);f.menu.showOptions!('game');
+  expect(f.origin).toBe('game');expect(f.menu.isGameOverlay()).toBe(true);expect(f.page).toMatchObject({id:'front-options',modal:true,closeOwnsNavigation:true});
+  await f.click('option-section-graphics');expect(f.origin).toBe('game');
+  await f.click('front-back');expect(f.menu.isOpen()).toBe(false);expect(returnToMenu).toHaveBeenCalledOnce();expect(f.menu.isGameOverlay()).toBe(false);
+  f.menu.showLoad('game');await f.click('test-colonies');
+  expect(f.page.id).toBe('front-tests');expect(f.origin).toBe('game');
+  f.page.onClose!();expect(f.page.id).toBe('front-load');expect(f.origin).toBe('game');
+  f.page.onClose!();expect(f.menu.isOpen()).toBe(false);expect(returnToMenu).toHaveBeenCalledTimes(2);
+  f.menu.showHome(true);expect(f.origin).toBe('home');expect(f.menu.isGameOverlay()).toBe(false);
+  await f.click('options');expect(f.page.id).toBe('front-options');expect(f.origin).toBe('home');
+  await f.click('front-back');expect(f.page.id).toBe('front-home');expect(returnToMenu).toHaveBeenCalledTimes(2);
+  await f.click('load-game');expect(f.page.id).toBe('front-load');expect(f.origin).toBe('home');
+});
 
 test('Options uses real local categories without changing preferences, then preserves actual controls and busy refusal',async()=>{
   const f=fixture();f.menu.showOptions!();

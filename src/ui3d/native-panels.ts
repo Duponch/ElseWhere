@@ -1,3 +1,4 @@
+import {journalPictogram} from '../ui/journal-events';
 import { storedPriority } from '../sim/work-types.ts';
 import {liveNativePage} from './native-page-refresh';
 import {CARPET_FLOORS_355,carpetColor355,isCarpetFloor355} from '../sim/carpet-355';
@@ -7,7 +8,7 @@ import {storytellerIncidents347,tutorialMode347} from '../sim/game-profile';
 import {isCorePhysicalSchema297} from '../sim/physical-schema-297.ts';
 import {READING_POLICIES_295,effectiveReadingPolicy295} from '../sim/reading-state-295';
 import type {NativeUiState,NativeUiActions,NativePage,NativeRow,NativeControl,NativeGesture} from './native-contract';
-import {buildNativeWorld,syncNativeWorldState,nativePaidAiSiteFacts298,focusNativePaidAiSite298,focusNativeTradeRequestDestination,nativeTradeRequestVisitors} from './native-world';
+import {buildNativeWorld,syncNativeWorldState,resetNativeWorldSession,nativePaidAiSiteFacts298,focusNativePaidAiSite298,focusNativeTradeRequestDestination,nativeTradeRequestVisitors} from './native-world';
 import {groupDisplayLabel} from '../ui/map-registry-adapter';
 import {effectiveCore297} from '../sim/core-phase-297';
 import {nativeArrivalRows} from './native-arrivals';
@@ -80,6 +81,7 @@ let host:NativeUiActions|undefined;
 let scheduleBrush:ScheduleAssignment='anything';
 let scheduleClipboard:ScheduleAssignment[]|undefined;
 let lastIdentity='',lastTick=-1;
+let panelSessionRevision=0;
 let dispatching=false;
 const categories:readonly [ArchitectCategory,string][]=[['temperature','Température'],['structure','Structure'],['floors','Sols'],['furniture','Mobilier'],['recreation','Loisirs'],['production','Production'],['power','Énergie'],['ship','Vaisseau']];
 const assignmentLabels:Record<ScheduleAssignment,string>={anything:'Temps libre',work:'Travail',sleep:'Dormir',recreation:'Loisir'};
@@ -197,8 +199,8 @@ function colonistTableSearch(kind:ColonistTableKind):string {
 }
 /** Local view callbacks never reuse the owner or scope captured by an older map. */
 function colonistTableGuard<T extends unknown[]>(action:(...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
- const key=colonistTableKey(latest!);
- return (...args)=>{const current=host?.readState?.()??latest;if(!current||colonistTableKey(current)!==key)throw Error('Ce tableau appartient à une autre carte.');if(current.busy)throw Error('Attendez la fin de l’opération courante.');latest=current;return action(...args);};
+ const key=colonistTableKey(latest!),revision=panelSessionRevision;
+ return (...args)=>{if(revision!==panelSessionRevision)return;const current=host?.readState?.()??latest;if(!current||colonistTableKey(current)!==key)throw Error('Ce tableau appartient à une autre carte.');if(current.busy)throw Error('Attendez la fin de l’opération courante.');latest=current;return action(...args);};
 }
 function colonistTableControl(id:string,label:string,onActivate:NativeControl['onActivate'],extra:Partial<NativeControl>={}):NativeControl {
  const control=button(id,label,onActivate,extra);
@@ -348,8 +350,8 @@ function animalTableView(kind:AnimalTableKind):AnimalTableView {
 }
 /** Every retained callback re-reads the real scope before exposing or ordering an actor. */
 function animalTableGuard<T extends unknown[]>(action:(...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
- const key=animalTableKey(latest!);
- return (...args)=>{const current=host?.readState?.()??latest;if(!current||animalTableKey(current)!==key||current.busy)return;latest=current;return action(...args);};
+ const key=animalTableKey(latest!),revision=panelSessionRevision;
+ return (...args)=>{if(revision!==panelSessionRevision)return;const current=host?.readState?.()??latest;if(!current||animalTableKey(current)!==key||current.busy)return;latest=current;return action(...args);};
 }
 function tableAnimal(kind:AnimalTableKind,id:number):TableAnimal {
  const world=currentWorld(),animal=currentAnimal(id);
@@ -459,8 +461,8 @@ function syncNarrativeView(state:NativeUiState):void {
 }
 /** View navigation and retained buttons borrow the current scope, never a captured World. */
 function narrativeGuard<T extends unknown[]>(action:(state:NativeUiState,...args:T)=>void|Promise<unknown>):(...args:T)=>void|Promise<unknown> {
- const identity=narrativeIdentity(latest!);
- return (...args)=>{const current=host?.readState?.()??latest;if(!current||current.busy||narrativeIdentity(current)!==identity)return;latest=current;return action(current,...args);};
+ const identity=narrativeIdentity(latest!),revision=panelSessionRevision;
+ return (...args)=>{if(revision!==panelSessionRevision)return;const current=host?.readState?.()??latest;if(!current||current.busy||narrativeIdentity(current)!==identity)return;latest=current;return action(current,...args);};
 }
 function narrativeButton(id:string,label:string,activate:(state:NativeUiState)=>void|Promise<unknown>,extra:Partial<NativeControl>={}):NativeControl {
  return button(id,label,extra.disabled?()=>{}:narrativeGuard(activate),extra);
@@ -515,7 +517,7 @@ function letterArchiveRows(source:NarrativeSource):NativeRow[] {
    narrativeButton(`archive-pin-${entry.id}`,pin?'Désépingler':'Épingler',async()=>{await host?.command({type:'archive-pin',id:entry.id,pinned:!pin});back();},{icon:'history-pin',active:pin,hint:pin?'Retirer l’épingle : l’entrée pourra quitter l’archive avec le temps.':'Garder cette entrée dans l’archive.'})];
   rows.push({...narrativeFact(`archive-${entry.id}`,'Jour '+(1+Math.floor(entry.tick/TICKS_PER_DAY)),letter?entry.title:entry.message,
    letter?LETTER_CLASSES_352[entry.cls].label+(stacked.has(entry.id)?' · dans la pile':''):'Ligne du journal épinglée'),labelWidth:90,controls,
-   historyEntry:{kind:letter?'letter':'journal',body:letter?entry.text:entry.message,...letter?{color:LETTER_CLASSES_352[entry.cls].color}:{}}});
+   historyEntry:{kind:letter?'letter':'journal',body:letter?entry.text:entry.message,...!letter?{icon:journalPictogram({tick:entry.tick,type:entry.journal,message:entry.message})}:{},...letter?{color:LETTER_CLASSES_352[entry.cls].color}:{}}});
  }
  if(!shown.length)rows.push(narrativeFact('history-letters-empty',narrativeView.historyPinnedOnly?'Aucune entrée épinglée.':'Aucune lettre reçue.'));
  return rows;
@@ -572,7 +574,7 @@ function historyPanel(state:NativeUiState):NativePage {
   narrativeFact('history-count','Événements',shown.length+' / '+matches.length+(needle?' correspondants':'')+' · '+events.length+' au total'));
  for(const index of shown){const event=events[index]!,pinned=pinnedLines.has(`${event.tick}|${event.type}|${event.message}`);
   messages.push({...narrativeFact('event-'+index,'Jour '+(1+Math.floor(event.tick/TICKS_PER_DAY)),event.message),labelWidth:90,
-   historyEntry:{kind:'journal',body:event.message},...letters352?{controls:[narrativeButton(`event-pin-${index}`,pinned?'Épinglée':'Épingler',async()=>{await host?.command({type:'journal-pin',tick:event.tick,journal:event.type,message:event.message});back();},{icon:'history-pin',active:pinned,disabled:pinned,hint:'Copier cette ligne dans l’archive des lettres, où elle reste.'})]}:{}});}
+   historyEntry:{kind:'journal',body:event.message,icon:journalPictogram(event)},...letters352?{controls:[narrativeButton(`event-pin-${index}`,pinned?'Épinglée':'Épingler',async()=>{await host?.command({type:'journal-pin',tick:event.tick,journal:event.type,message:event.message});back();},{icon:'history-pin',active:pinned,disabled:pinned,hint:'Copier cette ligne dans l’archive des lettres, où elle reste.'})]}:{}});}
  if(narrativeView.historyShowMessages&&!shown.length)messages.push(narrativeFact('history-empty',events.length?'Aucun événement ne correspond à la recherche.':'Aucun événement consigné.'));
  const selected=messages.find(row=>row.historyEntry&&row.id===narrativeView.historySelected)??messages.find(row=>row.historyEntry);
  narrativeView.historySelected=selected?.id;
@@ -911,6 +913,22 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
 
 
 /** Refresh confirmed readers while an owned native editor keeps its draft. */
+/** A genuine window close discards its local view, not orders already sent,
+ * copied schedules, world facts, or the currently armed map tool. */
+export function resetNativePanelSession(panel:NativeUiState['panel']):void{
+ if(!panel)return;panelSessionRevision++;
+ switch(panel){
+  case 'history':Object.assign(narrativeView,{historySearch:'',historyAll:false,historyPinnedOnly:false,historyTab:'messages',historySelected:undefined,historyShowLetters:true,historyShowMessages:true});break;
+  case 'quests':Object.assign(narrativeView,{questTab:undefined,questSelected:undefined,questSearch:'',questSelectionExplicit:false});narrativeView.tradeChoices.clear();break;
+  case 'menu':menuView.legacy=menuView.copies=false;break;
+  case 'work':colonistTableSearches.work='';workSort=undefined;break;
+  case 'assign':colonistTableSearches.assign='';break;
+  case 'schedule':colonistTableSearches.schedule='';scheduleBrush='anything';break;
+  case 'animals':case 'wildlife':Object.assign(animalTableViews[panel],{search:'',filter:'all',sort:'name',descending:false});break;
+  case 'research':resetNativeResearch();break;
+  case 'world':resetNativeWorldSession();break;
+ }
+}
 export function syncNativePanelState(state:NativeUiState,actions:NativeUiActions):void {
  latest=state;host=actions;
  syncNativeWorldState(state,actions);

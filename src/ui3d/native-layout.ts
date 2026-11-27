@@ -234,9 +234,9 @@ function bioRowBox(row:NativeRow,x:number,top:number,measure:TextMeasure):Native
 }
 /** One fixed inspector-tab card: its own rectangles, no flowing rows. */
 let cardMemo=new Map<object,NativeTabCard>();
-function cardLayoutOf(row:NativeRow,measure:TextMeasure):NativeTabCard {
+function cardLayoutOf(row:NativeRow,measure:TextMeasure,maxHeight?:number):NativeTabCard {
   let card=cardMemo.get(row.card!);
-  if(!card){card=layoutNativeTab(row.card!,(text,role,bold)=>measure(text,NATIVE_TEXT[role],!!bold));cardMemo.set(row.card!,card);}
+  if(!card){const spec=row.card!,bounded=spec.type==='gear'&&maxHeight!==undefined?{...spec,maxHeight:Math.min(spec.maxHeight,maxHeight)}:spec;card=layoutNativeTab(bounded,(text,role,bold)=>measure(text,NATIVE_TEXT[role],!!bold));cardMemo.set(row.card!,card);}
   return card;
 }
 function cardRowBox(row:NativeRow,x:number,top:number,measure:TextMeasure):NativeRowBox {
@@ -581,7 +581,7 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
   const gizmoLeft=paneWidth+I.gizmoStart,gizmoRoom=Math.max(I.gizmo,viewport.width-12-gizmoLeft-NATIVE_RIGHT_DOCK_WIDTH);
   const available=Math.max(1,viewport.height-bottom-12),tab=page.inspectTab;
   cardMemo=new Map();
-  const cardRow=tab?page.rows.find(row=>row.card&&!row.inspectPane):undefined,cardHeight=cardRow?cardLayoutOf(cardRow,measure).height:undefined;
+  const cardRow=tab?page.rows.find(row=>row.card&&!row.inspectPane):undefined,cardHeight=cardRow?cardLayoutOf(cardRow,measure,Math.max(40,available-lower)).height:undefined;
   // Rows of gizmos upwards; on a short screen, longer rows rather than off-screen ones.
   const maxRows=Math.max(1,Math.floor(Math.max(available,lower)/(I.gizmo+I.gizmoRowGap)));
   const perRow=Math.max(1,Math.floor((gizmoRoom+I.gizmoGap)/(I.gizmo+I.gizmoGap)),Math.ceil(gizmos.length/maxRows)),gizmoRows=Math.ceil(gizmos.length/perRow);
@@ -631,9 +631,10 @@ function inspectorPage(page:NativePage,viewport:{width:number;height:number},mea
     if(!row.inspectPane)continue;
     if(row.gauges){lineTop=inner.y+26+3;row.gauges.forEach((gauge,index)=>gauges.push({rowId:row.id,gauge,rect:{x:inner.x+index*(I.gaugeWidth+I.gaugeGap),y:lineTop,width:I.gaugeWidth,height:I.gaugeHeight}}));lineTop+=18;continue;}
     const text=row.label&&row.value?`${row.label} : ${row.value}`:row.value??row.label;
-    const wrapped=wrapNativeText(text,inner.width,(value,size)=>measure(value,size,false),NATIVE_TEXT.small),room=Math.floor((inner.y+inner.height-lineTop)/NATIVE_LEADING);
+    const inset=4,lineHeight=NATIVE_LINE.small,textWidth=inner.width-inset*2;
+    const wrapped=wrapNativeText(text,textWidth,(value,size)=>measure(value,size,false),NATIVE_TEXT.small),room=Math.floor((inner.y+inner.height-lineTop)/lineHeight);
     if(room<=0)break;const shown=wrapped.slice(0,room);
-    lines.push({row,rect:{x:inner.x,y:lineTop,width:inner.width,height:shown.length*NATIVE_LEADING},lines:shown});lineTop+=shown.length*NATIVE_LEADING;
+    lines.push({row,rect:{x:inner.x+inset,y:lineTop,width:textWidth,height:shown.length*lineHeight},lines:shown});lineTop+=shown.length*lineHeight;
   }
   const gearCard=cardRow&&tab?.id==='gear'?cardLayoutOf(cardRow,measure):undefined,gearRegion=gearCard?.regions[0];
   const portraitRect=gearCard&&gearRegion&&page.portrait?(appliedScroll(gearRegion)>0?undefined:(rect=>({x:sheet.x+rect.x,y:sheet.y+rect.y,width:rect.width,height:rect.height}))(gearPortraitRect(gearCard))):tab?.id==='gear'&&page.portrait?{x:sheetWidth-margin-92,y:sheet.y+margin,width:92,height:128}:undefined;

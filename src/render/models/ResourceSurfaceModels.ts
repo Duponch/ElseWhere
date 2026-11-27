@@ -6,6 +6,7 @@ import {ReferenceFloraLibrary} from '../origami/resource-flora';
 import {compileNaturalSurfaceModels} from '../surfaces/NaturalSurfaceModels';
 import {compileResourceLegacyCoverage,type ResourceLegacyCoverage,type ResourceLegacyModel} from '../surfaces/ResourceLegacyCoverage';
 import type {GraphicsStyleContext} from '../graphics-style';
+import {treeArtMotif,type NaturalPaintMotif} from '../natural-surface-art';
 
 export function createResourceSurfaceModels(trees:TreeModels,flora:ReferenceFloraLibrary){
  const source=new Map<string,THREE.BufferGeometry>([
@@ -23,6 +24,12 @@ export function createResourceSurfaceModels(trees:TreeModels,flora:ReferenceFlor
   bank=compileNaturalSurfaceModels(all);
   if(bank.stroke.faceCount>4096)throw Error('Resource surface vocabulary exceeds exact packed face domain');
   const bySource=new Map(all.map((g,i)=>[g,bank!.geometries[i]!])),byKind=new Map([...source.keys()].map((key,i)=>[key,bank!.geometries[i]!]));
+  const naturalMotifs:Readonly<Record<string,NaturalPaintMotif>>={trunk:'bark',rock:'wash',blade:'leaf',cactus:'cactus',bush:'oak-leaves',berry:'fruit',broadleaf:'oak-leaves',conical:'needle'};
+  for(const [kind,geometry] of byKind) geometry.userData.naturalPaintMotif=naturalMotifs[kind];
+  for(const variant of ['broadleaf','conical'] as const) for(const species of [...TREE_MODEL_SPECIES,undefined]){
+    for(const part of trees.get(species,variant).parts) bySource.get(part.geometry)!.userData.naturalPaintMotif=treeArtMotif(species,part.primitiveKind);
+  }
+  for(const part of flora.recipe('bush').parts) bySource.get(part.geometry)!.userData.naturalPaintMotif=part.fruit?'fruit':'oak-leaves';
   const maskModels:ResourceLegacyModel[]=[];
   for(const variant of ['broadleaf','conical']as const)for(const species of [...TREE_MODEL_SPECIES,undefined]){const layout=trees.get(species,variant).createAtlasLayout();for(const part of layout.canonicalParts){const mapped=bySource.get(part.geometry);if(!mapped)throw Error('Canonical tree fallback model was not mapped');maskModels.push({mapped,layout,triangleOffset:part.triangleOffset,triangleCount:part.geometry.getAttribute('position').count/3});}}
   coverage=compileResourceLegacyCoverage(maskModels,bank.stroke.faceCount);const masks=coverage;

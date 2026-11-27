@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { AnimationDetail } from './AnimationDetail';
 import {ActorAnimationCache,sampleActorRoot} from './ActorAnimationCache';
 import {sampleMechRig} from './actor-animation-sampling';
-import { attribute,cos,float,Fn,If,instanceIndex,mix,normalLocal,positionLocal,sin,uniform,vec3 } from 'three/tsl';
+import { attribute,cos,float,Fn,If,instanceIndex,mix,normalLocal,positionLocal,sin,texture,uniform,vec3 } from 'three/tsl';
 import { coreTimeSeconds,localTimeSeconds } from '../bridge/clock-rate';
 import type { Mechanoid } from '../sim/mechanoid-state';
 import { mechanoidVisualMask,mechanoidPartIndex } from '../sim/mechanoid-presentation';
@@ -29,6 +29,7 @@ import { headingAt,turnToward,TURN_TICKS,type TurnHeading } from './turn-present
 import {currentGraphicsStyle,type GraphicsStyleContext} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke,SURFACE_STROKE_UV} from './surfaces/NaturalSurfaceModels';
+import {createMechanicalSurfaceTexture} from './mechanical-surface-art';
 
 type VisualMech=Mechanoid&{pile?:MaterialPile;carrierId?:number};
 const GAIT_RATE=2*Math.PI/1.12;
@@ -44,6 +45,13 @@ class MechanicalRaceBatch {
   private readonly linkedRoot={x:0,y:0,z:0,yaw:0};
   private body?:THREE.Mesh;private selection?:THREE.Mesh;
   private surfaceModel?:OwnedStrokeModel;
+  private panelPaint?:THREE.DataTexture;
+  get surfaceTexture():THREE.Texture|undefined{return this.panelPaint;}
+  private plainColor?:THREE.Node<'vec3'>;
+  private paintedColor?:THREE.Node<'vec3'>;
+  private naturalColor?:THREE.Node<'vec3'>;
+  private releasePersonalized?:()=>void;
+  private texturesEnabled=true;
   private selected:ReadonlySet<number>=new Set();private source?:World;
   private records:VisualMech[]=[];private readonly keys=new Map<number,string>();
   private readonly phaseIndices297=new Map<number,number>();
@@ -113,7 +121,16 @@ class MechanicalRaceBatch {
     body.userData.mechKind=this.kind;
     const selection=pawnSelectionMesh(geometry,this);selection.name='Selected mechanical owners — shared trajectories';selection.visible=false;
     this.body=body;this.selection=selection;this.group.add(body,selection);
-    const surfaceAddress=attribute(SURFACE_STROKE_UV,'vec3');mat.colorNode=naturalStroke(this.style,this.surfaceModel.stroke,surfaceAddress.z,surfaceAddress.xy)(mat.colorNode as THREE.Node<'vec3'>);
+    // The packed stroke UV already contains the authored panel address.
+    // No extra vertex binding or instance stream is needed.
+    const surfaceAddress=attribute(SURFACE_STROKE_UV,'vec3');
+    this.panelPaint=createMechanicalSurfaceTexture();
+    this.plainColor=mat.colorNode as THREE.Node<'vec3'>;
+    const stroke=naturalStroke(this.style,this.surfaceModel.stroke,surfaceAddress.z,surfaceAddress.xy);
+    this.naturalColor=stroke(this.plainColor);
+    this.paintedColor=stroke(this.plainColor.mul(texture(this.panelPaint,surfaceAddress.xy).rgb));
+    this.releasePersonalized=this.style?.trackPersonalizedTextures(()=>this.selectSurface());
+    this.selectSurface();
   }
 
   setSelected(ids:ReadonlySet<number>):void {
@@ -216,9 +233,21 @@ class MechanicalRaceBatch {
       this.animationCache.setRoot(i,root,time,travelTime,travelTime,this.blend.value);sampleMechRig(this.animationCache,i,g,root,travelTime);this.animationCache.publish(i);
     }this.animationCache.flush();
   }
+  setTexturesEnabled(enabled:boolean):void {
+    if(this.texturesEnabled===enabled)return;
+    this.texturesEnabled=enabled;
+    this.selectSurface();
+  }
+  private selectSurface():void {
+    if(this.body&&this.plainColor&&this.paintedColor&&this.naturalColor){
+      const material=this.body.material as THREE.MeshStandardNodeMaterial;
+      material.colorNode=this.texturesEnabled?(this.style?.personalizedTextures===false?this.naturalColor:this.paintedColor):this.plainColor;
+      material.needsUpdate=true;
+    }
+  }
   prepare():()=>void {if(!this.body)return()=>{};const g=this.body.geometry as THREE.InstancedBufferGeometry,count=g.instanceCount;g.instanceCount=Math.max(1,count);return()=>{g.instanceCount=count;};}
   reset():void {this.dispose();this.animationCache.reset();this.source=undefined;this.records=[];this.keys.clear();this.headings.clear();this.gait.clear();this.carrierSlots.clear();}
-  dispose():void {this.surfaceModel?.dispose();this.surfaceModel=undefined;this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
+  dispose():void {this.releasePersonalized?.();this.releasePersonalized=undefined;this.surfaceModel?.dispose();this.surfaceModel=undefined;this.panelPaint?.dispose();this.panelPaint=undefined;this.plainColor=this.paintedColor=this.naturalColor=undefined;this.playback435.clear();this.animationCache.dispose();if(this.body){this.group.remove(this.body);this.body.geometry.dispose();(this.body.material as THREE.Material).dispose();}if(this.selection){this.group.remove(this.selection);this.selection.geometry.dispose();(this.selection.material as THREE.Material).dispose();}this.body=undefined;this.selection=undefined;}
 }
 
 /** At most three conditional race batches, each one body and one selection
@@ -227,11 +256,14 @@ export class MechanoidLayer {
   readonly group:THREE.Group;
   private readonly style=currentGraphicsStyle();
   private readonly batches=new Map<MechanoidKind,MechanicalRaceBatch>();
+  private texturesEnabled=true;
   private selected:ReadonlySet<number>=new Set();
   private source?:World;private pileSource?:readonly MaterialPile[];private corpsePiles:MaterialPile[]=[];
   private records=new Map<MechanoidKind,VisualMech[]>();
   constructor(private readonly configure?:(material:THREE.MeshStandardNodeMaterial)=>void,private readonly animationDetail=new AnimationDetail(),ownedGpuMatrices435=false){this.group=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();this.group.name='Mechanical bodies — conditional race batches';}
   setSelected(ids:ReadonlySet<number>):void {this.selected=ids;for(const batch of this.batches.values())batch.setSelected(ids);}
+  setTexturesEnabled(enabled:boolean):void {this.texturesEnabled=enabled;for(const batch of this.batches.values())batch.setTexturesEnabled(enabled);}
+  surfaceTextures():THREE.Texture[]{return [...this.batches.values()].flatMap(batch=>batch.surfaceTexture?[batch.surfaceTexture]:[]);}
   update(world:World,timeline:MotionTimeline|undefined,reset=false,pawns?:PawnLayer,actorScene?:CoreActorScene297):void {
     if(this.source!==world||reset){
       this.source=world;this.records=new Map();
@@ -241,7 +273,10 @@ export class MechanoidLayer {
       for(const pile of this.corpsePiles)add({id:pile.id,mechKind:pile.mechCorpse!.mechKind,state:'dead',health:pile.mechCorpse!.health,
         x:pile.owner.type==='ground'?pile.owner.x:0,z:pile.owner.type==='ground'?pile.owner.z:0,heading:pile.mechCorpse!.heading??0,path:[],moveCooldown:0,planCooldown:0,
         pile,carrierId:pile.owner.type==='pawn'?pile.owner.pawnId:pawns?.animalCorpseTransferCarrier(pile.id)});
-      for(const kind of this.records.keys())if(!this.batches.has(kind))this.batches.set(kind,new MechanicalRaceBatch(kind,this.group,this.animationDetail,this.configure,this.style));
+      for(const kind of this.records.keys())if(!this.batches.has(kind)){
+        const batch=new MechanicalRaceBatch(kind,this.group,this.animationDetail,this.configure,this.style);
+        batch.setTexturesEnabled(this.texturesEnabled);this.batches.set(kind,batch);
+      }
     }
     for(const [kind,batch] of this.batches){batch.update(world,timeline,this.records.get(kind)??[],reset,pawns,actorScene);batch.setSelected(this.selected);}
   }

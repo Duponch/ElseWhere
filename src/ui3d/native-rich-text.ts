@@ -1,3 +1,4 @@
+import {NATIVE_INK} from './native-ui-scale';
 /** Semantic ink only. These spans are painted on the page's existing canvas;
  * they never create a DOM node, geometry, material, texture or frame callback. */
 export type NativeTextKind='plain'|'person'|'item'|'action'|'value'|'warning';
@@ -13,9 +14,9 @@ export interface NativeTextLexicon {
   readonly entities:ReadonlyMap<string,Exclude<NativeTextKind,'plain'>>;
 }
 export const NATIVE_TEXT_STYLES:Readonly<Record<NativeTextKind,{color:string;bold:boolean}>>=Object.freeze({
-  plain:{color:'#261e18',bold:false},person:{color:'#365e77',bold:true},
-  item:{color:'#456444',bold:true},action:{color:'#86532f',bold:true},
-  value:{color:'#754e76',bold:true},warning:{color:'#9b3e32',bold:true},
+  plain:{get color(){return NATIVE_INK.text;},bold:false},person:{get color(){return NATIVE_INK.richPerson;},bold:true},
+  item:{get color(){return NATIVE_INK.richItem;},bold:true},action:{get color(){return NATIVE_INK.richAction;},bold:true},
+  value:{get color(){return NATIVE_INK.richValue;},bold:true},warning:{get color(){return NATIVE_INK.richWarning;},bold:true},
 });
 
 const actions=[

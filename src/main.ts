@@ -11,7 +11,7 @@ import {nativeTextEntitiesFor} from './ui3d/native-text-entities';
 import {createNativeFrontMenu} from './ui3d/native-front';
 import {browserRimWorldTexts} from './lore/rimworld-texts';
 import {onLoreTextsChange} from './lore/lore-text';
-import {buildNativePanel,buildNativeToolPalette,syncNativePanelState} from './ui3d/native-panels';
+import {buildNativePanel,buildNativeToolPalette,syncNativePanelState,resetNativePanelSession} from './ui3d/native-panels';
 import {buildNativeEncounter,buildNativeFactions,setNativeWorldTab,focusNativeCaravanTrade} from './ui3d/native-world';
 import {nativeOrderPage,cancelNativeOrderPage} from './ui3d/native-orders';
 import {nativeHelpPage} from './ui3d/native-help';
@@ -24,7 +24,13 @@ import {createNativeLocalTrade} from './ui3d/native-local-trade';
 import {createNativeFactionComms298} from './ui3d/native-faction-comms-298';
 import {buildNativeArrivals} from './ui3d/native-arrivals';
 import type {NativeDomainAlert} from './ui3d/native-domain-alerts';
-import {buildNativeInspector,setNativeInspectorTab} from './ui3d/native-inspector';
+import {buildNativeInspector,setNativeInspectorTab,resetNativeInspectorSession} from './ui3d/native-inspector';
+import {applyCardboardUiTheme} from './ui3d/prototype-art';
+import {applyNativeInkTheme} from './ui3d/native-ui-scale';
+import {applyDomUiTheme,parseUiTheme,normalizeUiTheme,UI_THEME_PREFERENCE_KEY,type UiTheme} from './ui3d/ui-theme';
+import {blueprintStorageSettings380} from './sim/blueprint-storage-380';
+import {journalPictogram} from './ui/journal-events';
+import {drawJournalPictogram} from './ui/journal-pictograms';
 import {NativeHudCards} from './ui3d/native-hud';
 import {NativeLetterStack} from './ui3d/native-letter-stack';
 import {LETTER_CLASSES_352,type Letter352} from './sim/letters-352';
@@ -89,7 +95,7 @@ import {toolCabinetInspection355} from './ui/tool-cabinet-inspection-355';
 import { createCommercialUI } from './ui/commercial-panel';
 import {appearanceOf} from './sim/pawn-appearance';
 import {humanLimbVisualMask} from './render/human-anatomy-presentation';
-import {portraitDataUrl,portraitExpressionOf} from './ui/pawn-portrait';
+import {portraitDataUrl,portraitExpressionOf,setPortraitPersonalizedTextures} from './ui/pawn-portrait';
 import {updatePawnAppearanceInspection} from './ui/pawn-appearance-inspection';
 import {pawnBaseColor} from './render/pawn-appearance-shape';
 import { createColonyEconomyUI } from './ui/colony-economy';
@@ -361,7 +367,7 @@ function selectedConstructionMaterial(tool:Tool):ConstructionMaterial|undefined 
   if(key!==nativeConstructionChoiceKey){nativeConstructionChoiceKey=key;nativeResolvedMaterial=nativeConstructionChoices.resolve(snapshot,tool);}
   return nativeResolvedMaterial;
 }
-let nativeRoofsVisible=false,nativeZonesVisible=true,nativePerspective=false;
+let nativeRoofsVisible=false,nativeZonesVisible=true,nativePerspective=false,nativeBedOwnersVisible=true;
 const nativeEnvironmentModes:NativeEnvironmentModes={room:false,beauty:false},nativeEnvironmentReader=new NativeEnvironmentStatsReader();
 let nativeEnvironmentBlocked=true,nativePublicationRevision=0,nativeEnvironmentKey='',nativeEnvironmentAt=0;
 let nativeCreationStorage:StorageControlSettings={priority:2,filters:{wood:true,food:true,unfinished:true,textile:true,apparel:true,weapon:true,medicine:true,neutroamine:true,chemfuel:true,shell:true,component:true,'advanced-component':true,steel:true,gold:true,uranium:true,plasteel:true,blocks:true,furniture:true,silver:true}};
@@ -729,11 +735,16 @@ let {texturesEnabled,groundGrassEnabled,dioramaEnabled,roomEnabled,decorOcclusio
   lighting:lightingSettings,shadows:shadowSettings,animation:animationSettings,style:graphicsStylePreferences,
   designationMinCellPixels:designationIconThreshold,itemLabelMinCellPixels:itemLabelThreshold}
   = readColonyGraphicsPreferences(key=>localStorage.getItem(key));
+setPortraitPersonalizedTextures(graphicsStylePreferences.personalizedTextures);
 let graphicsStyleChanging=false;
 const graphicsMeasurements=new Map<string,GraphicsStyleComparisonResult>();
 const graphicsSceneIds=new WeakMap<object,number>();let nextGraphicsSceneId=0;
 let uiFont = readUiFont();
 applyUiFont(uiFont);
+let uiTheme=parseUiTheme(localStorage.getItem(UI_THEME_PREFERENCE_KEY));
+applyNativeInkTheme(uiTheme);applyCardboardUiTheme(uiTheme);applyDomUiTheme(uiTheme);
+const JOURNAL_BUBBLES_PREFERENCE_KEY='elsewhere.journal-bubbles.v1';
+let journalBubblesEnabled=localStorage.getItem(JOURNAL_BUBBLES_PREFERENCE_KEY)!=='false';
 let soundEnabled = true;
 let soundVolume = 0.75;
 let musicEnabled = true;
@@ -838,6 +849,18 @@ function setUiFontPreference(value:UiFontId):void {
   uiFont=value; fontSelect.value=value; applyUiFont(value); saveUiFont(value);
   nativeUi?.setTextFont(UI_FONT_CHOICES.find(choice=>choice.id===value)!.family);
 }
+function setUiThemePreference(value:UiTheme):boolean{
+ const next=normalizeUiTheme(value);
+ if(next.background!==uiTheme.background||next.text!==uiTheme.text){
+  uiTheme=next;applyNativeInkTheme(next);const previous=applyCardboardUiTheme(next);applyDomUiTheme(next);
+  nativeHud?.refreshTheme();nativeGuidance?.refreshTheme();nativeUi?.refreshTheme(previous);
+ }
+ try{localStorage.setItem(UI_THEME_PREFERENCE_KEY,JSON.stringify(uiTheme));return true;}catch{return false;}
+}
+function setJournalBubblesPreference(enabled:boolean):boolean{
+ journalBubblesEnabled=enabled;renderer?.setJournalBubblesEnabled(enabled);
+ try{localStorage.setItem(JOURNAL_BUBBLES_PREFERENCE_KEY,String(enabled));return true;}catch{return false;}
+}
 const decorOcclusionToggle=el<HTMLInputElement>('decor-occlusion-enabled');
 decorOcclusionToggle.checked=decorOcclusionPreference;
 function setDecorOcclusionPreference(enabled:boolean):boolean {
@@ -928,19 +951,24 @@ async function setGraphicsStylePreferences(settings:GraphicsStylePreferences):Pr
  if(graphicsStyleChanging||graphicsRecovering||replacingWorld||presentationPreparation)throw new Error('La préparation de l’affichage est déjà en cours.');
  const next=normalizeGraphicsStylePreferences(settings),active=renderer;
  graphicsStyleChanging=true;syncStorageButtons();
- try{if(active)await active.setGraphicsStyleParameters(next);graphicsStylePreferences=next;}
+ try{if(active)await active.setGraphicsStyleParameters(next);const changed=next.personalizedTextures!==graphicsStylePreferences.personalizedTextures;graphicsStylePreferences=next;if(changed){setPortraitPersonalizedTextures(next.personalizedTextures);nativeHud?.refreshPortraitTexturePreference();if(snapshot)renderState();}}
  finally{graphicsStyleChanging=false;syncStorageButtons();updateIncident();}
  try{localStorage.setItem(GRAPHICS_STYLE_PREFERENCE_KEY,JSON.stringify(graphicsStylePreferences));return true;}catch{return false;}
 }
 function graphicsMeasurementText():string{
+ const label=(result:GraphicsStyleComparisonResult)=>`${result.context.preferences.style==='origami'?'Gouache':'Pastel'} · dessins ${result.context.preferences.personalizedTextures?'activés':'désactivés'}`;
  const rows=[...graphicsMeasurements.values()].map(result=>{
-  const style=result.context.preferences.style==='origami'?'Gouache':'Pastel';
+  const style=label(result);
   if(result.status!=='complete')return `${style} : mesure interrompue (${result.reason??result.status}).`;
   return `${style} : intervalle médian ${result.frameIntervalsMs?.median.toFixed(2)} ms, p95 ${result.frameIntervalsMs?.p95.toFixed(2)} ms ; soumission CPU ${result.cpuSubmitMs?.mean.toFixed(2)} ms ; ${Math.round(result.drawCalls?.mean??0)} appels, ${Math.round(result.triangles?.mean??0)} triangles. GPU non mesuré.`;
  });
  const values=[...graphicsMeasurements.values()].filter(value=>value.status==='complete');
-  if(values.length===2)rows.push(graphicsStyleComparisonsShareScene(values[0]!.context,values[1]!.context)?'Même scène, caméra et paramètres : mesures comparables dans cette session.':'Scène, caméra ou paramètres différents : refaire les deux mesures pour comparer.');
- return rows.join('\n')||'Mettez la colonie en pause. La mesure masque les Options et conserve votre caméra. Les résultats restent consultables ici pour les deux styles.';
+ for(let i=0;i<values.length;i++)for(let j=i+1;j<values.length;j++){
+  const a=values[i]!,b=values[j]!;
+  if(a.context.preferences.style!==b.context.preferences.style&&a.context.preferences.personalizedTextures!==b.context.preferences.personalizedTextures)continue;
+  rows.push(`${label(a)} / ${label(b)} : ${graphicsStyleComparisonsShareScene(a.context,b.context)?'même scène, mesures comparables.':'refaire les mesures avec la même scène, caméra et paramètres.'}`);
+ }
+ return rows.join('\n')||'Mettez la colonie en pause. La mesure masque les Options et conserve votre caméra. Les résultats sont conservés séparément pour chaque style, avec et sans dessins.';
 }
 async function measureGraphicsStyle():Promise<void>{
  const active=renderer,world=snapshot,epoch=campaignPresentationEpoch;
@@ -950,7 +978,7 @@ async function measureGraphicsStyle():Promise<void>{
  setPanel(null,true);frontMenu.hide();
  try{
    const result=await active.measureGraphicsStyle(`${epoch}:${id}:${world.seed}:${world.tick}`,{scope:'paused-colony',ui:'game-hud',tool,selectionKey,objectKey},()=>renderer===active&&snapshot===world&&currentSpeed===0&&campaignPresentationEpoch===epoch&&!frontMenu.isOpen()&&currentPanel===null&&currentTool===tool&&[...selection.ids].join(',')===selectionKey&&JSON.stringify(selectedObjects)===objectKey&&!graphicsStyleChanging&&!graphicsRecovering&&!replacingWorld);
-  graphicsMeasurements.set(result.context.preferences.style,result);
+  graphicsMeasurements.set(`${result.context.preferences.style}:${result.context.preferences.personalizedTextures}`,result);
  }finally{if(epoch===campaignPresentationEpoch&&currentPanel===null)setPanel(panel,true);}
 }
 const refreshPerformanceControls=bindRenderPerformanceControls(document.querySelector('#menu-panel')!,'game-',{
@@ -1014,7 +1042,7 @@ if(nativeMode){
     if(id==='factions'){if(!tutorialAllows({tag:'MainTab-Factions-Open'}))return;nativeCustomPage=buildNativeFactions(readNativeState(),nativeActions());nativeUi!.showPage(nativeCustomPage);tutorialNotify('MainTab-Factions-Open');return;}
     void attempt(()=>switchPanel(currentPanel===id?null:id));
   },onEscape:()=>{cancelNativeOrderPage();nativeCustomPage=undefined;renderer?.cancelSelection();renderer?.cancelDesignation();if(frontMenu.isOpen())return;setPanel(null);clearSelection();},
-    onHudInspectorDismiss:()=>{nativeHudHiddenInspectorKey=nativePawnInspectorKey();nativeCustomPage=undefined;nativeUi!.showPage(null);},onError:message=>notify(message,true),
+    onHudInspectorDismiss:()=>{resetNativeInspectorSession();nativeHudHiddenInspectorKey=nativePawnInspectorKey();nativeCustomPage=undefined;nativeUi!.showPage(null);},onError:message=>notify(message,true),
     onGesture:()=>{unlockAudioFromGesture();music.unlock();},
     onActivate:id=>{const cue=nativeActivationCue(id,{panel:currentPanel,palette:nativeToolPalette});if(cue)audio.playInterface(cue,1,cue==='ui.click');},
     // Schema 349: the tutorial's intro absorbs every input; an inspector tab
@@ -1206,6 +1234,7 @@ developerMode.subscribe(()=>{
   syncDevBar();devPanelHost.rebuild();
 });
 const frontOptions:FrontMenuOptions = {
+  onReturnToGameMenu:()=>{setPanel('menu');syncStorageButtons();},
   rimWorldTexts,
   developerPages:developerPagesForMode(import.meta.env.MODE),
   developerMode:{enabled:()=>developerMode.enabled(),set:enabled=>developerMode.setEnabled(enabled)},
@@ -1235,6 +1264,8 @@ const frontOptions:FrontMenuOptions = {
   getTexturesEnabled: () => texturesEnabled,
   getUiFont:()=>uiFont,
   onUiFontChange:setUiFontPreference,
+  getUiTheme:()=>({...uiTheme}),onUiThemeChange:setUiThemePreference,
+  getJournalBubblesEnabled:()=>journalBubblesEnabled,onJournalBubblesEnabledChange:setJournalBubblesPreference,
   getDecorOcclusion:()=>decorOcclusionPreference,
   onDecorOcclusionChange:setDecorOcclusionPreference,
   getDesignationMinCellPixels:()=>designationIconThreshold,
@@ -1281,10 +1312,10 @@ const frontOptions:FrontMenuOptions = {
     await changeSpeed(deferredResumeGuard.held?0:speed);
   },
 };
-const frontMenu=nativeUi?createNativeFrontMenu(frontOptions,page=>{
+const frontMenu=nativeUi?createNativeFrontMenu(frontOptions,(page,origin)=>{
   // While a colony opens, its loading screen covers the menu pages.
   if(launchProgress){paintLaunch();return;}
-  nativeUi!.setFrontVisible(page!==null);nativeHud?.setVisible(page===null&&!!snapshot);nativeGuidance?.setHudVisible(page===null&&!!snapshot);syncNativeGuidance();nativeUi!.showPage(page);
+  nativeUi!.setFrontVisible(page!==null,origin==='game');nativeHud?.setVisible(page===null&&!!snapshot);nativeGuidance?.setHudVisible(page===null&&!!snapshot);syncNativeGuidance();nativeUi!.showPage(page);
 }):createFrontMenu(frontHost,frontOptions);
 const nativeSaveManager=nativeUi?createNativeSaveManager({
   readSaves:()=>session.saves(),refresh:()=>session.refreshSaves(),save,saveNamed:(label,key,revision)=>session.saveNamed(label,key,revision),
@@ -1293,7 +1324,7 @@ const nativeSaveManager=nativeUi?createNativeSaveManager({
   blocked:()=>!saveStorageReady||replacingWorld||session.busy||simulationStopped||waitingRequests.size>0,
 }):undefined;
 async function openNativeSaveManager():Promise<void>{await pauseForMenu();await nativeSaveManager?.open();}
-async function openNativeOptions():Promise<void>{await pauseForMenu();frontMenu.setHasGame(session.hasWorld);frontMenu.showOptions?.();syncStorageButtons();}
+async function openNativeOptions():Promise<void>{await pauseForMenu();frontMenu.setHasGame(session.hasWorld);frontMenu.showOptions?.('game');syncStorageButtons();}
 function openNativeDomainAlert(alert:NativeDomainAlert):void {
   if(!nativeUi)return;
   if(alert.action.kind==='arrivals'){nativeCustomPage=buildNativeArrivals(readNativeState(),nativeActions());nativeUi.showPage(nativeCustomPage);}
@@ -1338,12 +1369,13 @@ function applyNativeViewControl(action:NativeHudViewAction):void {
   else if(action==='roofs'){nativeRoofsVisible=!nativeRoofsVisible;renderer?.setRoofsVisible(nativeRoofsVisible);}
   else if(action==='foliage'){foliageVisible=!foliageVisible;renderer?.setFoliageVisible(foliageVisible);}
   else if(action==='zones'){nativeZonesVisible=!nativeZonesVisible;renderer?.setZonesVisible(nativeZonesVisible);}
+  else if(action==='bed-owners'){nativeBedOwnersVisible=!nativeBedOwnersVisible;renderer?.setBedOwnerLabelsVisible(nativeBedOwnersVisible);}
   else if(action==='room-stats'){nativeEnvironmentModes.room=!nativeEnvironmentModes.room;}
   else if(action==='beauty'){nativeEnvironmentModes.beauty=!nativeEnvironmentModes.beauty;}
   else if(action==='camera'){nativePerspective=renderer?.toggleCameraMode()==='perspective';}
   else if(action==='home'){const pawn=snapshot?.pawns[0];if(pawn)renderer?.focusPawn(pawn.id);}
   // Core Checkbox_TurnedOn/Off for the view toggles (the walls cut away = on).
-  const toggled=action==='walls'?wallCutaway:action==='roofs'?nativeRoofsVisible:action==='foliage'?foliageVisible:action==='zones'?nativeZonesVisible:action==='room-stats'?nativeEnvironmentModes.room:action==='beauty'?nativeEnvironmentModes.beauty:undefined;
+  const toggled=action==='walls'?wallCutaway:action==='roofs'?nativeRoofsVisible:action==='foliage'?foliageVisible:action==='zones'?nativeZonesVisible:action==='room-stats'?nativeEnvironmentModes.room:action==='beauty'?nativeEnvironmentModes.beauty:action==='bed-owners'?nativeBedOwnersVisible:undefined;
   if(toggled!==undefined)audio.playInterface(toggled?'ui.toggle-on':'ui.toggle-off');
   refreshNativeUi();
   if(action==='room-stats'||action==='beauty'){if(!nativeEnvironmentModes.room&&!nativeEnvironmentModes.beauty)clearNativeEnvironmentStats(true);else updateNativeEnvironmentStats(true);}
@@ -1405,7 +1437,7 @@ function refreshNativeUi():void {
   if(snapshot){nativeHud?.setSelection([...selection.ids]);nativeHud?.update(snapshot,currentSpeed,renderer?.stats.fps??0);}
   syncNativeLetters();
   nativeGuidance?.setHudVisible(!!snapshot&&!frontMenu.isOpen()&&!launchProgress);syncNativeGuidance();
-  nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso',roomStats:nativeEnvironmentModes.room,beauty:nativeEnvironmentModes.beauty});
+  nativeHud?.setViewState({walls:wallCutaway?'coupés':'hauts',roofs:nativeRoofsVisible,foliage:foliageVisible,zones:nativeZonesVisible,camera:nativePerspective?'perspective':'iso',roomStats:nativeEnvironmentModes.room,beauty:nativeEnvironmentModes.beauty,bedOwners:nativeBedOwnersVisible});
   updateNativeEnvironmentStats();
   if(launchProgress){paintLaunch();return;}
   const state=readNativeState(),actions=nativeActions(),terminalPage=nativeShipTerminal298?.update(state);
@@ -1447,12 +1479,13 @@ async function pauseForMenu(): Promise<void> {
 }
 async function openFront(page: 'home' | 'create' | 'load'): Promise<void> {
   if (session.busy || replacingWorld) return;
+  const fromGameMenu=page==='load'&&currentPanel==='menu'&&!frontMenu.isOpen()&&session.hasWorld&&!simulationStopped&&!graphicsFault&&!waitingRequests.size;
   client.cancelShipCountdown298('front');
   await pauseForMenu();
   if(page==='load')await session.refreshSaves();
   frontMenu.setHasGame(session.hasWorld);
   if (page === 'create') frontMenu.showCreation();
-  else if (page === 'load') frontMenu.showLoad();
+  else if (page === 'load') frontMenu.showLoad(fromGameMenu?'game':'home');
   else frontMenu.showHome(session.hasWorld);
   setPanel(null); syncStorageButtons();
 }
@@ -1559,7 +1592,7 @@ function endLaunch():void {
   if(!renderer&&!(client.hasActiveMap&&snapshot))shell.hidden=true;
   if(campaignOnly&&earlyRenderer){const unused=earlyRenderer;earlyRenderer=undefined;void unused.then(view=>view.dispose(),()=>{});}
   legacyLaunchPanel?.remove();legacyLaunchPanel=undefined;
-  if(nativeUi){nativeUi.setFrontVisible(frontMenu.isOpen());refreshNativeUi();}
+  if(nativeUi){nativeUi.setFrontVisible(frontMenu.isOpen(),frontMenu.isGameOverlay());refreshNativeUi();}
   if(client.hasActiveMap&&snapshot)startUiPrewarm();
 }
 function reportLaunch(stage:LaunchStage,completed=0,total=1,phase?:string):void {
@@ -1664,7 +1697,7 @@ function setPanel(panel: Panel, preserveTool = false) {
     cancelNativeOrderPage();
     nativeToolPalette=undefined;
     if(!snapshot&&campaignOnly&&panel===null)panel='world';
-    const previous=currentPanel;currentPanel=panel;nativeCustomPage=undefined;
+    const previous=currentPanel;if(previous!==panel&&!preserveTool)resetNativePanelSession(previous);currentPanel=panel;nativeCustomPage=undefined;
     if(previous==='menu'&&panel!=='menu'&&menuResumeSpeed!==undefined&&!replacingWorld&&!frontMenu.isOpen()){
       const speed=menuResumeSpeed;menuResumeSpeed=undefined;void attempt(()=>client.setSpeed(deferredResumeGuard.held?0:speed));
     }
@@ -1931,6 +1964,7 @@ function designateArea(action: AreaAction, from: Cell, to: Cell) {
   });
 }
 function clearSelection() {
+  resetNativeInspectorSession();
   nativeHudHiddenInspectorKey=undefined;
   selection.clear();renderer?.setSelectedPawns(selection.ids);orderMenu.close();
   selectedPawn = undefined; selectedCell = undefined;selectedObject=undefined;selectedObjects=[];renderer?.setSelectedObject(undefined);
@@ -2060,25 +2094,26 @@ function rebuildInspector() {
     }
     const storageCell = selectedObject?.kind==='stockpile'?snapshot?.stockpiles.find(item => item.id===selectedObject!.id):undefined;
     const shelf = selectedObject?.kind==='structure'?snapshot?.structures.find(item=>item.id===selectedObject!.id&&isShelfKind(item.kind)):undefined;
-    const storage = storageCell??shelf?.shelf?.settings;
+    const blueprintStorage=snapshot&&selectedObject?.kind==='job'?blueprintStorageSettings380(snapshot,selectedObject.id):undefined;
+    const storage = storageCell??shelf?.shelf?.settings??blueprintStorage;
     if(storage){
       panel.classList.add('stockpile-inspector-host');
-      const stockpileId=storageCell?.id,structureId=shelf?.id,storageEpoch=campaignPresentationEpoch,
+      const stockpileId=storageCell?.id,structureId=shelf?.id,jobId=blueprintStorage?selectedObject!.id:undefined,storageEpoch=campaignPresentationEpoch,
         storageMap=campaignUIFacts(snapshot!)?.activeMapId??0;let pending=0,needsRollback=false;
       const storageCurrent=()=>!!snapshot&&client.hasActiveMap&&storageEpoch===campaignPresentationEpoch
         &&(campaignUIFacts(snapshot)?.activeMapId??0)===storageMap&&!replacingWorld&&!session.busy&&!simulationStopped
-        &&selectedObject?.kind===(structureId!==undefined?'structure':'stockpile')
-        &&selectedObject.id===(structureId??stockpileId);
+        &&selectedObject?.kind===(jobId!==undefined?'job':structureId!==undefined?'structure':'stockpile')
+        &&selectedObject.id===(jobId??structureId??stockpileId);
       const sendSettings=(settings:StorageControlSettings)=>{
         if(!storageCurrent()||selectedLinkedStorage?.pending)return;
         pending++;selectedStoragePending=pending;
         void attempt(async()=>{
-          try{await client.command(structureId!==undefined?{type:'shelf-policy',structureId,settings}:{type:'stockpile-policy',stockpileId:stockpileId!,settings});}
+          try{await client.command(jobId!==undefined?{type:'blueprint-storage-policy',jobId,settings}:structureId!==undefined?{type:'shelf-policy',structureId,settings}:{type:'stockpile-policy',stockpileId:stockpileId!,settings});}
           catch(error){needsRollback=true;throw error;}
-          finally{pending--;if(selectedStorageControls===controls){selectedStoragePending=pending;const current=structureId!==undefined?snapshot?.structures.find(s=>s.id===structureId)?.shelf?.settings:snapshot?.stockpiles.find(cell=>cell.id===stockpileId);if(!pending&&current){controls.show(current,needsRollback);needsRollback=false;}renderState();}}
+          finally{pending--;if(selectedStorageControls===controls){selectedStoragePending=pending;const current=jobId!==undefined&&snapshot?blueprintStorageSettings380(snapshot,jobId):structureId!==undefined?snapshot?.structures.find(s=>s.id===structureId)?.shelf?.settings:snapshot?.stockpiles.find(cell=>cell.id===stockpileId);if(!pending&&current){controls.show(current,needsRollback);needsRollback=false;}renderState();}}
         });
       };
-      const controls=mountStorageControls(el('selected-stockpile-items'),storage,sendSettings,shelf?shelfControlOptions:undefined);selectedStorageControls=controls;
+      const controls=mountStorageControls(el('selected-stockpile-items'),storage,sendSettings,shelf||blueprintStorage?shelfControlOptions:undefined);selectedStorageControls=controls;
       if(shelf)controls.element.dataset.shelfControls=String(shelf.id);
       if(shelf&&isSchema286OrLater(snapshot?.schemaVersion)){
         const linked=createLinkedStorageControls286({
@@ -2096,7 +2131,7 @@ function rebuildInspector() {
         selectedLinkedStorage=linked;panel.querySelector('#cell-storage')?.prepend(linked.element);linked.update();
       }
       const commands=storageCell?zoneActions('stockpile',stockpileZoneId(storageCell)):document.createElement('div');
-      if(shelf)commands.className='zone-actions';
+      if(shelf||blueprintStorage)commands.className='zone-actions';
       const copy=document.createElement('button');copy.type='button';copy.textContent='Copier les réglages';copy.dataset.zoneAction='copy';
       copy.onclick=()=>{storageClipboard=structuredClone(controls.read());rebuildInspector();renderState();};commands.append(copy);
       const paste=document.createElement('button');paste.type='button';paste.textContent='Coller les réglages';paste.dataset.zoneAction='paste';paste.disabled=!storageClipboard;
@@ -2402,7 +2437,7 @@ function renderState() {
       const structure = selectedObject.kind==='structure'?world.structures.find(item=>item.id===selectedObject!.id):undefined;
       const job = selectedObject.kind==='job'?world.jobs.find(item=>item.id===selectedObject!.id):structure||selectedObject.kind==='packed'?world.jobs.find(item=>item.furniture?.structureId===selectedObject!.id):undefined;
       const storageCell = selectedObject.kind==='stockpile'?world.stockpiles.find(item=>item.id===selectedObject!.id):undefined;
-      const storage = storageCell??(structure&&isShelfKind(structure.kind)?structure.shelf?.settings:undefined);
+      const storage = storageCell??(structure&&isShelfKind(structure.kind)?structure.shelf?.settings:undefined)??(selectedObject.kind==='job'?blueprintStorageSettings380(world,selectedObject.id):undefined);
       const pile = selectedObject.kind==='pile'?world.piles.find(item=>item.id===selectedObject!.id):undefined;
       const piles = pile?[pile]:[];
       const packed=selectedObject.kind==='packed'?world.packed.find(p=>p.building.id===selectedObject!.id&&p.owner.type==='ground'):undefined;
@@ -2544,13 +2579,14 @@ function renderState() {
   const pending = world.jobs.filter(job => job.status === 'pending').length;
   el('job-count').textContent = world.jobs.length ? `${world.jobs.length} ordre(s) · ${pending} en attente` : 'Aucun ordre en cours';
   const entries = world.events.slice(-30).reverse();
-  const historySignature=JSON.stringify(entries.map(entry=>[entry.tick,entry.message]));
+  const historySignature=JSON.stringify(entries.map(entry=>[entry.tick,entry.type,entry.message]));
   if(historySignature!==lastColonyHistorySignature){
     lastColonyHistorySignature=historySignature;
     el('journal-items').replaceChildren(...entries.map(entry => {
       const item = document.createElement('p'), time = document.createElement('span'); time.className = 'event-time';
+      const icon=document.createElement('canvas');icon.width=icon.height=40;icon.className='colony-journal-picto';icon.setAttribute('aria-hidden','true');const ink=icon.getContext('2d');if(ink)drawJournalPictogram(ink,journalPictogram(entry),20,20,16);
       time.textContent = `J${1 + Math.floor(entry.tick / TICKS_PER_DAY)} · `;
-      item.append(time, document.createTextNode(entry.message)); return item;
+      item.append(icon,time, document.createTextNode(entry.message)); return item;
     }));
     if (!entries.length) el('journal-items').textContent = 'Trois survivants. Une nouvelle histoire.';
   }
@@ -3221,6 +3257,8 @@ async function prepareWorldView(): Promise<void> {
     if(nativeUi){renderer.setWallCutaway(wallCutaway);renderer.setFoliageVisible(foliageVisible);renderer.setRoofsVisible(nativeRoofsVisible);renderer.setZonesVisible(nativeZonesVisible);if(nativePerspective)renderer.toggleCameraMode();}
     renderer.setDesignationMinCellPixels(designationIconThreshold);
     renderer.setItemLabelMinCellPixels(itemLabelThreshold);
+    renderer.setBedOwnerLabelsVisible(nativeBedOwnersVisible);
+    renderer.setJournalBubblesEnabled(journalBubblesEnabled);
     renderer.onAudioFrame = view => {
       lastAudioCamera=view.camera;
       audio.updateCamera(view.camera);

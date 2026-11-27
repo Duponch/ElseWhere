@@ -2,6 +2,8 @@ import * as THREE from 'three/webgpu';
 import {Fn,attribute,float,mat4,normalLocal,storage,texture,transformNormal,uint,varying,vec2,vec4,vertexIndex} from 'three/tsl';
 import {createItemGeometry,ITEM_SHAPES,type ItemShape} from './item-geometry';
 import {PATTERN_SPAN} from './texture-variation';
+import {itemSurfaceTile} from './item-surface-design';
+import {surfaceDesignOverrideNode,surfaceDesignUvNode,surfaceDesignFaceSpanNode} from './painted-surface-atlas';
 
 /** Exact primitive meshes, not a union of whole item assemblies. Every
  * slot has the same vertex count; the remaining whole triangles collapse at0. */
@@ -18,6 +20,7 @@ export class ItemMeshAtlas {
   private readonly positionUv:THREE.Node<'vec4'>;
   private readonly normalUv:THREE.Node<'vec4'>;
   private readonly stroke:THREE.Node<'vec4'>;
+  private readonly decorated:boolean;
 
   constructor(borrowedModels?:readonly THREE.BufferGeometry[]){
     if(borrowedModels&&borrowedModels.length!==this.shapes.length)throw Error('Complete shared item model vocabulary required');
@@ -25,6 +28,7 @@ export class ItemMeshAtlas {
     this.vertexCounts=Object.freeze(sources.map(source=>source.index?.count??source.getAttribute('position').count));
     this.verticesPerSlot=Math.max(...this.vertexCounts);
     const stride=borrowedModels?12:8,values=new Float32Array(this.shapes.length*this.verticesPerSlot*stride);
+    this.decorated=borrowedModels!==undefined;
     let radius=0;
     sources.forEach((source,slot)=>{
       this.slots.set(this.shapes[slot],slot);
@@ -35,7 +39,7 @@ export class ItemMeshAtlas {
         const vertex=index?index.getX(i):i,x=position.getX(vertex),y=position.getY(vertex),z=position.getZ(vertex);
         const face=source.getAttribute('surfaceStrokeFace'),strokeUv=source.getAttribute('surfaceStrokeUv');
         values.set([x,y,z,uv.getX(vertex),normal.getX(vertex),normal.getY(vertex),normal.getZ(vertex),uv.getY(vertex)],offset);
-        if(borrowedModels)values.set([face?.getX(vertex)??0,strokeUv?.getX(vertex)??uv.getX(vertex),strokeUv?.getY(vertex)??uv.getY(vertex),0],offset+8);
+        if(borrowedModels)values.set([face?.getX(vertex)??0,strokeUv?.getX(vertex)??uv.getX(vertex),strokeUv?.getY(vertex)??uv.getY(vertex),itemSurfaceTile(this.shapes[slot],normal.getX(vertex),normal.getY(vertex),normal.getZ(vertex))],offset+8);
         radius=Math.max(radius,Math.hypot(x,y,z));
       }
       if(!borrowedModels)source.dispose();
@@ -75,15 +79,23 @@ export class ItemMeshAtlas {
   strokeUvNode():THREE.Node<'vec2'>{return this.stroke.yz;}
 
   /** The original mapped Pastel UV, shared with the prepared representation. */
-  patternUvNode():THREE.Node<'vec2'>{
+  patternUvNode(physicalSpan=surfaceDesignFaceSpanNode(this.normalUv.xyz)):THREE.Node<'vec2'>{
     const positionUv=this.positionUv,normalUv=this.normalUv;
-      const seed=attribute('itemPatternIndex','float'),sx=attribute('boxMatrix0','vec4').xyz.length(),sy=attribute('boxMatrix1','vec4').xyz.length(),sz=attribute('boxMatrix2','vec4').xyz.length();
-      const facing=normalUv.xyz.abs(),u=sx.mul(facing.x.oneMinus()).add(sz.mul(facing.x)),v=sy.mul(facing.y.oneMinus()).add(sz.mul(facing.y)),longest=u.max(v).max(1e-6);
-      const span=vec2(u,v).div(longest).mul(PATTERN_SPAN),phase=vec2(seed.mul(.61803398875).fract(),seed.mul(.41421356237).fract()).mul(1-PATTERN_SPAN);
+      const seed=attribute('itemPatternIndex','float'),longest=physicalSpan.x.max(physicalSpan.y).max(1e-6);
+      const span=physicalSpan.div(longest).mul(PATTERN_SPAN),phase=vec2(seed.mul(.61803398875).fract(),seed.mul(.41421356237).fract()).mul(1-PATTERN_SPAN);
       return varying(vec2(positionUv.w,normalUv.w).sub(.5).mul(span).add(float(PATTERN_SPAN*.5)).add(phase));
   }
 
-  configure(material:THREE.NodeMaterial,surface?:THREE.Texture):void {
+  /** A semantic chart rides the unused W of the resident stroke record.
+   * Generic shapes keep the exact historical pattern crop. This arithmetic
+   * stays in the vertex graph and both encodings borrow the same address. */
+  surfaceDesignUvNode():THREE.Node<'vec2'>{
+    const tile=this.decorated?surfaceDesignOverrideNode():float(0);
+    const span=surfaceDesignFaceSpanNode(this.normalUv.xyz);
+    return surfaceDesignUvNode(tile.greaterThan(0).select(tile,this.stroke.w),vec2(this.positionUv.w,this.normalUv.w),this.patternUvNode(span),span);
+  }
+
+  configure(material:THREE.NodeMaterial,surface?:THREE.Texture,decorated=false):void {
     const positionUv=this.positionUv,normalUv=this.normalUv;
     material.positionNode=Fn(()=>{
       const transform=mat4(attribute('boxMatrix0','vec4'),attribute('boxMatrix1','vec4'),attribute('boxMatrix2','vec4'),attribute('boxMatrix3','vec4')).toVar();
@@ -92,7 +104,7 @@ export class ItemMeshAtlas {
     })();
     material.colorNode=attribute('boxColor','vec3');
     if(surface){
-      material.colorNode=attribute('boxColor','vec3').mul(texture(surface,this.patternUvNode()).rgb);
+      material.colorNode=attribute('boxColor','vec3').mul(texture(surface,decorated?this.surfaceDesignUvNode():this.patternUvNode()).rgb);
     }
   }
 

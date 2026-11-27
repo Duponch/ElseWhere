@@ -8,6 +8,7 @@ import type { World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
 import { doorOrientations, isRoomDoor } from '../sim/door-rules';
 import { doorLeafTop } from './door-parts';
+import {isWallAppliance,wallApplianceSurroundMaterial,WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from './wall-appliance';
 import { timberPatternUv } from './timber-pattern-uv';
 import { woodFiberDetail } from './stylized-surfaces';
 import type { Placement } from './primitives';
@@ -137,13 +138,19 @@ export type TimberPlacement=Placement&{tint:number};
  * connected edges; subjects restrict the produced objects without removing that
  * context or constructing any GPU materials. */
 export function timberCladdingParts(world:World,cutaway:boolean,subjects:readonly World['structures'][number][]=world.structures):{walls:TimberPlacement[];eaves:TimberPlacement[]} {
-    const walls=world.structures.filter(s=>s.kind==='wall'&&s.material==='wood');
+    const candidates=world.structures.filter(s=>isWallAppliance(s.kind)),nearAppliances=new Set<number>();
+    for(const s of candidates){const dx=s.orientation%2===0?1:0,dz=1-dx;nearAppliances.add((s.z+dz)*world.width+s.x+dx);nearAppliances.add((s.z-dz)*world.width+s.x-dx);}
+    const wallMaterials=new Map<number,World['structures'][number]['material']>();
+    const walls=world.structures.filter(s=>{if(s.kind!=='wall')return false;const cell=s.z*world.width+s.x;if(nearAppliances.has(cell))wallMaterials.set(cell,s.material);return s.material==='wood';});
     const doors=walls.length?world.structures.filter(s=>isRoomDoor(s.kind)):[];
     const axes=doors.length?doorOrientations(world):new Map<number,0|1>();
     const at=(x:number,z:number)=>`${x}:${z}`;
     const wood=new Set(walls.map(s=>at(s.x,s.z)));
+    const appliances=candidates.filter(s=>wallApplianceSurroundMaterial(s,(x,z)=>x<0||z<0||x>=world.width||z>=world.height?undefined:wallMaterials.get(z*world.width+x))==='wood');
+    for(const s of appliances)wood.add(at(s.x,s.z));
     type RimCell={id:number;x:number;z:number;axis:'all'|'horizontal'|'vertical'};
     const cells:RimCell[]=walls.map(s=>({id:s.id,x:s.x,z:s.z,axis:'all'}));
+    cells.push(...appliances.map(s=>({id:s.id,x:s.x,z:s.z,axis:'all' as const})));
     const timberDoors:typeof doors=[];
     for(const door of doors) {
       const horizontal=wood.has(at(door.x-1,door.z))&&wood.has(at(door.x+1,door.z));
@@ -156,7 +163,7 @@ export function timberCladdingParts(world:World,cutaway:boolean,subjects:readonl
     const occupied=new Set(cells.map(c=>at(c.x,c.z)));
     // Timber trim must stop against masonry too. Otherwise a mixed-material
     // seam retains a supposedly exposed edge rail inside the neighboring cap.
-    const solidBoundaries=new Set(world.structures.filter(s=>s.kind==='wall'||isRoomDoor(s.kind)).map(s=>at(s.x,s.z)));
+    const solidBoundaries=new Set(world.structures.filter(s=>s.kind==='wall'||isRoomDoor(s.kind)||isWallAppliance(s.kind)).map(s=>at(s.x,s.z)));
     type Side='north'|'south'|'east'|'west';
     const offset:Record<Side,readonly [number,number]>={north:[0,1],south:[0,-1],east:[1,0],west:[-1,0]};
     const sides:Side[]=['north','south','east','west'];
@@ -190,6 +197,11 @@ export function timberCladdingParts(world:World,cutaway:boolean,subjects:readonl
     const selected=new Set(subjects.map(s=>s.id));
     const wallParts:TimberPlacement[]=[],eaveParts:TimberPlacement[]=[];
     const height=cutaway?WORLD_SCALE.wallCutawayHeight:WORLD_SCALE.wallHeight;
+    for(const s of appliances)if(selected.has(s.id)){
+      const ry=s.orientation*Math.PI/2;
+      wallParts.push({key:s.id,x:s.x,z:s.z,y:0,sx:1,sy:Math.min(height,WALL_APPLIANCE_BOTTOM),sz:1,ry,tint:1});
+      if(height>WALL_APPLIANCE_TOP)wallParts.push({key:s.id,x:s.x,z:s.z,y:WALL_APPLIANCE_TOP,sx:1,sy:height-WALL_APPLIANCE_TOP,sz:1,ry,tint:1});
+    }
     for(const wall of walls)if(selected.has(wall.id)) {
       const tint=1+((((wall.x*73856093)^(wall.z*19349663)^(wall.id*83492791))>>>0)%13-6)*.007;
       const alongZ=occupied.has(at(wall.x,wall.z-1))||occupied.has(at(wall.x,wall.z+1));

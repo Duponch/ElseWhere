@@ -30,7 +30,8 @@ export const SPECIES_COATS:Readonly<Record<string,readonly CoatRule[]>>=Object.f
   megaspider:[{part:'mandible',to:'matChitinSpider',color:'#3f4a54'},{pigment:'matChitinSpider',to:'matSlothEarth',color:'#9a7d5e'}],
   // Fawn wool; the cream wool stays on the new topknot.
   alpaca:[{part:'topknot',to:'matAlpacaWool',color:'#e3cfb4'},{pigment:'matAlpacaWool',to:'matCougarTawny',color:'#b4946d'}],
-  capybara:[{pigment:'matCapybaraBrown',to:'matTortoiseShell',color:'#6d5431'}],
+  // Dark, warm fur rather than the shell pigment now decorated with scutes.
+  capybara:[{pigment:'matCapybaraBrown',to:'matGrizzlyBrown',color:'#6d5431'}],
   // Grey-brown coat and pale neck ruff, unlike the auburn deer and elk.
   caribou:[{pigment:'matDeerAuburn',to:'matDonkeyDun',color:'#7f7566'},{pigment:'matDeerMane',to:'matCreamWhiteGouache',color:'#d8d0c0'}],
   'snow-hare':[{pigment:'matHareSand',to:'matSnowWhiteGouache',color:'#e2e2de'}],

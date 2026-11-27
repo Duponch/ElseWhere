@@ -10,18 +10,16 @@ import type {Placement} from './primitives';
  * Presentation only: the World is never written. */
 export const PLAN_TINT_OPACITY_369=PLAN_OVERLAY_ALPHA_369;
 
-/** Exact and cheap: one numeric pass over the plan cells, no string per cell. */
+/** Literal fallback for renderers without the confirmed-intention reader.
+ * Closed MAIN compares reusable primitive ranges instead, so it never pays
+ * this serialization on stable frames. A hash alone cannot prove equality. */
 export function planOverlaySignature369(world:Pick<World,'plans369'|'width'|'height'>):string {
  const state=world.plans369;if(!state)return '';
- let hash=2166136261;
- const mix=(v:number)=>{hash=Math.imul(hash^v,16777619)>>>0;};
  const parts:string[]=[`${world.width}x${world.height}`];
  for(const plan of state.plans){
-  parts.push(`${plan.id}:${plan.color}:${plan.hidden?1:0}:${plan.cells.length}`);
-  for(const cell of plan.cells)mix(cell);
-  mix(-1);
+  parts.push(`${plan.id}:${plan.color}:${plan.hidden?1:0}:${plan.cells.join(',')}`);
  }
- return parts.join(';')+`#${hash}`;
+ return parts.join(';');
 }
 /** One tint texel per visible planned cell, in the plan's colour. */
 export function planOverlayPlacements369(world:Pick<World,'plans369'|'width'|'height'>):Placement[] {

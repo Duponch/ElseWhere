@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import { bedSlotBodyCenter,bedSlotCell } from '../sim/bed-slots';
 import { buildingMaterialColor } from './building-material-color';
 import { WORLD_SCALE } from '../world/scale';
@@ -15,7 +16,7 @@ export function doubleBedPartsForStructure(bed:Structure):Placement[] {
   const parts:Placement[]=[
     {x,z,y:WORLD_SCALE.bedFrameHeight/2+.04,sx:width,sy:WORLD_SCALE.bedFrameHeight,sz:length,color,ry},
     {x,z,y:WORLD_SCALE.bedSurfaceHeight-.045,sx:width-.06,sy:.14,sz:length-.10,color:0xe5d8b7,ry},
-    {x:x+Math.sin(ry)*.22,z:z+Math.cos(ry)*.22,y:WORLD_SCALE.bedSurfaceHeight+.038,sx:width-.07,sy:.045,sz:length*.60,color:0x7a9c99,ry},
+    {x:x+Math.sin(ry)*.22,z:z+Math.cos(ry)*.22,y:WORLD_SCALE.bedSurfaceHeight+.038,sx:width-.07,sy:.045,sz:length*.60,color:bedSheetColor(bed),ry},
     {x:x-Math.sin(ry)*(length/2-.05),z:z-Math.cos(ry)*(length/2-.05),y:.35,sx:width,sy:.63,sz:.08,color,ry},
   ];
   for(const slot of [0,1] as const){const head=bedSlotCell(bed,slot)!;

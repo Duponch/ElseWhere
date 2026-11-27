@@ -14,7 +14,7 @@ const manifestPath = resolve(repo, 'public/assets/audio/manifest.json');
 const sfxDir = resolve(repo, 'public/assets/audio/sfx');
 
 function usage() {
-  console.log('Usage: node scripts/audio/generate-sfx.mjs [--id mining.hit] [--take 2] [--generate | --publish]');
+  console.log('Usage: node scripts/audio/generate-sfx.mjs [--id mining.hit] [--take 2] [--generate [--retake] | --publish]');
   console.log('Without an action: read-only plan and manifest check. Generation is one ID (and one take) per invocation.');
 }
 
@@ -31,6 +31,7 @@ function parseArgs(args) {
   let take = 1;
   let generate = false;
   let publish = false;
+  let retake = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--id' && !id) id = args[++i];
     else if (args[i] === '--take') {
@@ -39,6 +40,7 @@ function parseArgs(args) {
     }
     else if (args[i] === '--generate') generate = true;
     else if (args[i] === '--publish') publish = true;
+    else if (args[i] === '--retake') retake = true;
     else if (args[i] === '--dry-run') continue;
     else if (args[i] === '--help') { usage(); process.exit(0); }
     else throw new Error(`Unknown or duplicate argument: ${args[i]}`);
@@ -46,7 +48,8 @@ function parseArgs(args) {
   if (generate && publish) throw new Error('Choose --generate or --publish');
   if ((generate || publish) && !id) throw new Error('An action requires one --id');
   if (take !== 1 && !generate) throw new Error('--take only applies to --generate');
-  return { id, take, generate, publish };
+  if(retake&&!generate)throw new Error('--retake requires --generate and a new candidate filename');
+  return { id, take, generate, publish, retake };
 }
 
 export function assertPlan(plan) {
@@ -134,7 +137,7 @@ export async function assertPublishedCue(cueId, item, published, log) {
 }
 
 async function main() {
-  const { id, take, generate, publish } = parseArgs(process.argv.slice(2));
+  const { id, take, generate, publish, retake } = parseArgs(process.argv.slice(2));
   const plan = JSON.parse(await readFile(planPath, 'utf8'));
   const log = JSON.parse(await readFile(logPath, 'utf8'));
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -153,9 +156,10 @@ async function main() {
     console.log(`${cueId}: ${status}; ${item.durationSeconds}s; loop=${item.loop}; estimated ${Math.ceil(item.durationSeconds * 20)}–${Math.ceil(item.durationSeconds * 40)} credits`);
   }
   if (!generate && !publish) return;
-  if (manifest.events[id]) throw new Error(`${id} already published; review it before generating a new variant`);
+  if (manifest.events[id]&&!retake) throw new Error(`${id} already published; review it before generating a new variant and use --retake for a new filename`);
   const item = plan.events[id];
   const filename = takeFilename(item.filename, take);
+  if(retake&&(log.generations.some(entry=>entry.filename===filename)||manifest.events[id]?.variants.some(variant=>variant.src.endsWith('/'+filename))))throw new Error(`${filename} is an existing or historical take; choose a new filename without replacing the published sound`);
   const destination = resolve(sfxDir, filename);
   const existing = await stat(destination).catch(() => null);
   if (generate && existing) throw new Error(`${filename} already exists; audition or rename the candidate before regeneration`);

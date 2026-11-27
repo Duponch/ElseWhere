@@ -38,7 +38,7 @@ export const furnitureZoneSlack = (count: number): number => Math.max(8, Math.ce
 export function furnitureStructureValues(s: Structure): readonly unknown[] | undefined {
   const plant = s.flower?.plant, fuel = s.fuel, hitPoints = plant?.hitPoints, growth = plant?.growth, ticks = fuel?.ticks;
   for (const v of [hitPoints, growth, ticks]) if (v !== undefined && v !== null && typeof v !== 'number') return undefined;
-  return [s.id, s.kind, s.material, s.x, s.z, s.orientation, s.footprint, s.medical, s.grave?.corpseId,
+  return [s.id, s.kind, s.material, s.x, s.z, s.orientation, s.footprint, s.medical, s.prisoner, s.grave?.corpseId,
     !!plant, plant ? plant.hitPoints > 0 : undefined, plant ? Math.floor(plant.growth * 4) : undefined,
     s.power?.on, s.power?.parentId, s.power?.switchOn, !!s.breakdown, s.breakdown?.brokenAt ?? '', fuel ? fuel.ticks > 0 : '', s.vent?.open,
     s.kind === 'cryptosleep-casket' ? !!s.cryptosleep?.human : s.kind === 'ship-cryptosleep-casket' ? !!s.shipCryptosleep277?.occupant : undefined,

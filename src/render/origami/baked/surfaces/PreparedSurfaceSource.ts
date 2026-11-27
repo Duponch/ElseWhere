@@ -12,6 +12,10 @@ export interface CanonicalPreparedSourceOptions {
  /** Exact original renderer options; caller proves that its post-paint
   * transform is a multiplicative runtime tint, independent of stroke RGB. */
  readonly bodyOptions:()=>SharedPaintSurfaceOptions;
+ /** Optional tint-independent detail baked into the unit pigment, before
+  * ink. Runtime actor tint/lighting remains factored out. */
+ readonly unitGouacheTransform?:(unitBody:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
+ readonly unitPersonalizedGouacheTransform?:(unitBody:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
  readonly faceId?:THREE.Node<'float'>;readonly strokeUv?:THREE.Node<'vec2'>;
  readonly unitBodyProven:true;readonly profileDomain?:'static78-separable';assertCurrent():void;
 }
@@ -20,7 +24,7 @@ export function canonicalPreparedSurfaceSource(options:CanonicalPreparedSourceOp
  const c=options.context,faceId=options.faceId??attribute(SURFACE_STROKE_FACE,'float'),strokeUv=options.strokeUv??attribute(SURFACE_STROKE_UV,'vec2');
  return{key:options.key,context:c,stroke:options.stroke,assertCurrent:assert,buildTerms:surfacePosition=>{
   const original=options.bodyOptions();if(original.context!==c||!options.unitBodyProven)throw Error('Actual Source body/tint factorization required');
-  const body=sharedPaintColorNode({...original,base:vec3(1),pastel:vec3(1),gouacheTransform:undefined,stroke:undefined,pigmentUv:undefined,surfacePosition});
+  const body=sharedPaintColorNode({...original,base:vec3(1),pastel:vec3(1),gouacheTransform:options.unitGouacheTransform,personalizedGouacheTransform:options.unitPersonalizedGouacheTransform,stroke:undefined,pigmentUv:undefined,surfacePosition});
   const ink=queryFaceStrokeCoverage({table:options.stroke,faceId,faceUv:strokeUv,surfacePosition,enabled:c.surfaceEncoding,opacity:c.lineOpacity,width:c.edgeWidth,irregularity:c.strokeImperfection,brushColor:c.brushColor.rgb,samplePigment:(uv,dx,dy)=>c.sampleStrokePigment(uv,dx,dy),sampleDry:(uv,dx,dy)=>c.sampleStrokeDry(uv,dx,dy)});
   return{body,ink};
  }};

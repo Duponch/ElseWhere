@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import { footprintCells } from '../sim/definitions';
 import type { World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
@@ -22,7 +23,7 @@ export function hospitalBedParts(world:World):Placement[] {
     for(const x of [-1,1])for(const z of [-1,1])add(x*(width/2-.09),.16,z*(length/2-.14),.09,.32,.09,frame);
     // Mattress top coincides with the shared physical resting pose at 0.5.
     add(0,surface-.06,0,width-.08,.12,length-.12,0xe5dec8);
-    add(0,surface+.017,.18,width-.10,.03,length-.62,0xb0cfbf);
+    add(0,surface+.017,.18,width-.10,.03,length-.62,bedSheetColor(bed));
     add(0,surface+.05,-length*.33,width-.23,.10,.27,0xf0e9d6);
     add(0,.35,-length/2+.07,width-.02,.70,.08,frame);
     add(0,.31,length/2-.07,width-.02,.54,.08,frame);

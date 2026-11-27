@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { attribute, cameraPosition, cameraProjectionMatrix, cameraViewMatrix, positionGeometry, texture, uniform, uv, vec2, vec4 } from 'three/tsl';
 import { perspectiveDetailRange, screenSpriteScale } from './map-overlay-detail';
+import {JOURNAL_PICTOGRAMS,type JournalPictogram} from '../ui/journal-events';
+import {drawJournalPictogram} from '../ui/journal-pictograms';
 
 export interface MapLabelEntry {
   readonly x: number;
@@ -12,6 +14,9 @@ export interface MapLabelEntry {
   readonly color?:number;
   /** CSS pixels below the anchor, fixed when the label data changes. */
   readonly offsetY?: number;
+  /** Dedicated bounded journal pool only; ordinary inventory labels ignore it. */
+  readonly ownerId?:number;
+  readonly icon?:JournalPictogram;
 }
 
 const GLYPH_WIDTH = 20;
@@ -22,15 +27,17 @@ const ATLAS_RATIO = 2;
 // labels, and a visible fallback. It never grows with quantities or camera DPR.
 const GLYPHS = [...Array.from({ length: 95 }, (_, index) => String.fromCharCode(32 + index)),
   ...'àâäçéèêëîïôöùûüÿœÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸŒ’–—'];
-const ATLAS_ROWS = Math.ceil(GLYPHS.length / ATLAS_COLUMNS);
+const BUBBLE_BACKGROUND='\ue000',BUBBLE_TAIL='\ue001';
+const journalGlyph=(icon:JournalPictogram)=>String.fromCharCode(0xe010+JOURNAL_PICTOGRAMS.indexOf(icon));
 interface Glyph { index: number; advance: number }
 
-function makeAtlas(): { map: THREE.Texture; glyphs: ReadonlyMap<string, Glyph> } {
+function makeAtlas(bubbles=false): { map: THREE.Texture; glyphs: ReadonlyMap<string, Glyph>;rows:number } {
+  const characters=bubbles?[...GLYPHS,BUBBLE_BACKGROUND,BUBBLE_TAIL,...JOURNAL_PICTOGRAMS.map(journalGlyph)]:GLYPHS,rows=Math.ceil(characters.length/ATLAS_COLUMNS);
   const canvas = typeof document !== 'undefined' ? document.createElement('canvas')
     : typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(1, 1) : undefined;
   if (canvas) {
     canvas.width = ATLAS_COLUMNS * GLYPH_WIDTH * ATLAS_RATIO;
-    canvas.height = ATLAS_ROWS * GLYPH_HEIGHT * ATLAS_RATIO;
+    canvas.height = rows * GLYPH_HEIGHT * ATLAS_RATIO;
   }
   const context = canvas?.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null | undefined;
   const glyphs = new Map<string, Glyph>();
@@ -42,11 +49,22 @@ function makeAtlas(): { map: THREE.Texture; glyphs: ReadonlyMap<string, Glyph> }
     context.strokeStyle = 'rgba(24, 29, 27, .85)';
     context.fillStyle = '#fff4d9';
   }
-  GLYPHS.forEach((character, index) => {
+  characters.forEach((character, index) => {
     glyphs.set(character, { index, advance: context ? context.measureText(character).width : 7 });
     if (!context) return;
     const x = (index % ATLAS_COLUMNS + .5) * GLYPH_WIDTH;
     const y = (Math.floor(index / ATLAS_COLUMNS) + .5) * GLYPH_HEIGHT;
+    if(bubbles){
+      if(character===BUBBLE_BACKGROUND||character===BUBBLE_TAIL){
+        context.save();context.fillStyle='#f4ead4';context.strokeStyle='#64523f';context.lineWidth=1;
+        context.beginPath();
+        if(character===BUBBLE_BACKGROUND){context.roundRect(x-9,y-11,18,22,3);}else{context.moveTo(x-5,y-9);context.lineTo(x,y+5);context.lineTo(x+5,y-9);}
+        context.fill();context.stroke();context.restore();return;
+      }
+      const icon=JOURNAL_PICTOGRAMS.find(icon=>journalGlyph(icon)===character);
+      if(icon){drawJournalPictogram(context as CanvasRenderingContext2D,icon,x,y,8);return;}
+      context.save();context.fillStyle='#44392f';context.fillText(character,x,y);context.restore();return;
+    }
     context.strokeText(character, x, y); context.fillText(character, x, y);
   });
   // Pure Node consumers can construct/dispose the batch without a DOM. This
@@ -57,10 +75,10 @@ function makeAtlas(): { map: THREE.Texture; glyphs: ReadonlyMap<string, Glyph> }
   map.minFilter = map.magFilter = THREE.LinearFilter;
   map.generateMipmaps = false;
   map.needsUpdate = true;
-  return { map, glyphs };
+  return { map, glyphs,rows };
 }
 
-function geometryFor(capacity: number,tinted=false): THREE.InstancedBufferGeometry {
+function geometryFor(capacity: number,tinted=false,bubbles=false): THREE.InstancedBufferGeometry {
   const geometry = new THREE.InstancedBufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute([-.5, -.5, 0, .5, -.5, 0, -.5, .5, 0, .5, .5, 0], 3));
   geometry.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
@@ -70,6 +88,7 @@ function geometryFor(capacity: number,tinted=false): THREE.InstancedBufferGeomet
   geometry.setAttribute('labelOffset', new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2).setUsage(THREE.StaticDrawUsage));
   geometry.setAttribute('labelGlyph', new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.StaticDrawUsage));
   if(tinted)geometry.setAttribute('labelTint',new THREE.InstancedBufferAttribute(new Float32Array(capacity*3),3).setUsage(THREE.StaticDrawUsage));
+  if(bubbles)geometry.setAttribute('labelSize',new THREE.InstancedBufferAttribute(new Float32Array(capacity*2),2).setUsage(THREE.StaticDrawUsage));
   geometry.instanceCount = 0;
   return geometry;
 }
@@ -79,7 +98,7 @@ function geometryFor(capacity: number,tinted=false): THREE.InstancedBufferGeomet
  * text behind opaque geometry at the label's physical anchor depth. */
 export class MapLabelBatch {
   readonly mesh: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.MeshBasicNodeMaterial>;
-  private readonly atlas = makeAtlas();
+  private readonly atlas:ReturnType<typeof makeAtlas>;
   private readonly screenScale = uniform(1);
   private readonly detailDistance = uniform(0);
   private readonly distanceLimited = uniform(1);
@@ -91,9 +110,12 @@ export class MapLabelBatch {
   private allowed = false;
   private disposed = false;
   private readonly tinted:boolean;
+  private readonly bubbles:boolean;
+  private bubbleRanges:{entry:MapLabelEntry;start:number;count:number;x:number;y:number;z:number}[]=[];
 
-  constructor(options:{tinted?:boolean;aboveWorld?:boolean}={}) {
+  constructor(options:{tinted?:boolean;aboveWorld?:boolean;journalBubbles?:boolean}={}) {
     this.tinted=!!options.tinted;
+    this.bubbles=!!options.journalBubbles;this.atlas=makeAtlas(this.bubbles);
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthTest: !options.aboveWorld, depthWrite: false, alphaTest: .01, fog: false, toneMapped: false });
     material.lights = false;
     // Entries already passed knownPile/knownPosition. The generic material
@@ -104,7 +126,7 @@ export class MapLabelBatch {
     const depth = anchorView.z.negate();
     const inRange = this.distanceLimited.lessThan(.5)
       .or(cameraPosition.sub(anchor).length().lessThan(this.detailDistance)).and(depth.greaterThan(0));
-    const offset = positionGeometry.xy.mul(vec2(GLYPH_WIDTH, GLYPH_HEIGHT))
+    const offset = positionGeometry.xy.mul(this.bubbles?attribute('labelSize','vec2'):vec2(GLYPH_WIDTH, GLYPH_HEIGHT))
       .add(attribute('labelOffset', 'vec2')).mul(this.screenScale)
       .mul(this.perspectiveScale.greaterThan(.5).select(depth, 1)).mul(inRange.select(1, 0));
     // SpriteNodeMaterial r186's positionNode replaces only the world anchor;
@@ -113,10 +135,10 @@ export class MapLabelBatch {
     material.vertexNode = cameraProjectionMatrix.mul(vec4(anchorView.xy.add(offset), anchorView.zw));
     const glyph = attribute('labelGlyph', 'float');
     const atlasUv = vec2(uv().x.add(glyph.mod(ATLAS_COLUMNS)).div(ATLAS_COLUMNS),
-      uv().y.add(glyph.div(ATLAS_COLUMNS).floor().negate().add(ATLAS_ROWS - 1)).div(ATLAS_ROWS));
+      uv().y.add(glyph.div(ATLAS_COLUMNS).floor().negate().add(this.atlas.rows - 1)).div(this.atlas.rows));
     const ink=texture(this.atlas.map,atlasUv);
     material.colorNode=this.tinted?vec4(ink.rgb.mul(attribute('labelTint','vec3')),ink.a):ink;
-    this.mesh = new THREE.Mesh(geometryFor(this.capacity,this.tinted), material);
+    this.mesh = new THREE.Mesh(geometryFor(this.capacity,this.tinted,this.bubbles), material);
     this.mesh.name = 'map-label-glyphs';
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 6;
@@ -125,6 +147,7 @@ export class MapLabelBatch {
 
   update(entries: readonly MapLabelEntry[]): void {
     if (this.disposed) return;
+    if(this.bubbles){this.updateSpeech(entries);return;}
     this.revision++;
     this.mesh.geometry.instanceCount = this.instanceCount;
     this.mesh.visible = this.instanceCount > 0 && this.allowed;
@@ -169,6 +192,61 @@ export class MapLabelBatch {
     this.instanceCount = count;
     this.mesh.geometry.instanceCount = count;
     this.mesh.visible = count > 0 && this.allowed;
+  }
+
+  /** A separate mode of this resident glyph owner. The background, tail and
+   * semantic icon are cells in the same fixed atlas and the same draw. */
+  private updateSpeech(entries:readonly MapLabelEntry[]):void {
+    this.revision++;
+    const fallback=this.atlas.glyphs.get('?')!,widthOf=(text:string)=>Array.from(text).reduce((sum,c)=>sum+(this.atlas.glyphs.get(c)??fallback).advance,0);
+    const records=entries.map(entry=>{
+      const lines:string[]=[];let line='';
+      for(let word of entry.label.replace(/\s+/g,' ').trim().split(' ')){
+        while(widthOf(word)>224){
+          if(line){lines.push(line);line='';}
+          let part='';for(const c of word){if(part&&widthOf(part+c)>224)break;part+=c;}
+          lines.push(part);word=word.slice(part.length);
+        }
+        if(line&&widthOf(line+' '+word)>224){lines.push(line);line=word;}else line+=(line?' ':'')+word;
+      }
+      if(line)lines.push(line);
+      if(lines.length>3){lines.length=3;lines[2]=lines[2]!.replace(/\s+\S*$/,'')+'…';}
+      return{entry,lines,width:Math.max(60,...lines.map(widthOf))+38,height:Math.max(1,lines.length)*16+12};
+    });
+    const count=records.reduce((sum,r)=>sum+3+r.lines.reduce((n,line)=>n+Array.from(line).filter(c=>c!==' ').length,0),0);
+    if(count>this.capacity){this.capacity=2**Math.ceil(Math.log2(count));const old=this.mesh.geometry;this.mesh.geometry=geometryFor(this.capacity,false,true);old.dispose();}
+    const geometry=this.mesh.geometry,anchors=geometry.getAttribute('labelAnchor'),offsets=geometry.getAttribute('labelOffset'),glyphs=geometry.getAttribute('labelGlyph'),sizes=geometry.getAttribute('labelSize');
+    let index=0;this.bubbleRanges=[];
+    for(const{entry,lines,width,height}of records){
+      const start=index,base=-(entry.offsetY??-12);
+      const add=(character:string,x:number,y:number,w=GLYPH_WIDTH,h=GLYPH_HEIGHT)=>{anchors.setXYZ(index,entry.x,entry.y,entry.z);offsets.setXY(index,x,y);glyphs.setX(index,(this.atlas.glyphs.get(character)??fallback).index);sizes.setXY(index,w,h);index++;};
+      add(BUBBLE_BACKGROUND,0,base+height/2,width+3,height+3);
+      add(BUBBLE_TAIL,-4,base-3,18,18);
+      add(journalGlyph(entry.icon??'chat'),-width/2+15,base+height-14,20,24);
+      for(let row=0;row<lines.length;row++){
+        let x=-width/2+30;
+        for(const c of lines[row]!){const advance=(this.atlas.glyphs.get(c)??fallback).advance;if(c!==' ')add(c,x+advance/2,base+height-14-row*16);x+=advance;}
+      }
+      this.bubbleRanges.push({entry,start,count:index-start,x:entry.x,y:entry.y,z:entry.z});
+    }
+    this.instanceCount=index;geometry.instanceCount=index;this.mesh.visible=index>0&&this.allowed;
+    if(index)for(const a of[anchors,offsets,glyphs,sizes])a.needsUpdate=true;
+  }
+
+  /** Only the bounded, currently displayed pool is visited. Text layout,
+   * events and the pawn population are never searched during animation. */
+  syncSpeechAnchors(read:(ownerId:number)=>Readonly<{x:number;y:number;z:number}>|null):void {
+    if(!this.bubbles||!this.instanceCount||this.disposed)return;
+    const attribute=this.mesh.geometry.getAttribute('labelAnchor') as THREE.InstancedBufferAttribute;let changed=false;
+    attribute.clearUpdateRanges();
+    for(const range of this.bubbleRanges){
+      const anchor=range.entry.ownerId===undefined?range.entry:read(range.entry.ownerId),x=anchor?.x??0,y=anchor?.y??-1e7,z=anchor?.z??0;
+      if(range.x===x&&range.y===y&&range.z===z)continue;
+      range.x=x;range.y=y;range.z=z;changed=true;
+      for(let i=range.start;i<range.start+range.count;i++)attribute.setXYZ(i,x,y,z);
+      attribute.addUpdateRange(range.start*3,range.count*3);
+    }
+    if(changed)attribute.needsUpdate=true;
   }
 
   present(camera: THREE.OrthographicCamera | THREE.PerspectiveCamera, viewportHeight: number, cellPixels: number, minCellPixels: number): void {

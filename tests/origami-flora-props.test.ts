@@ -225,7 +225,7 @@ test('medical bedding and appliance indicators follow the existing real status',
   const on = origamiFurnitureParts(w);
   const indicator = (p: Placement[]) => p.find(p => p.targetId === heater.id && p.sy === .22)!;
   expect(indicator(off).color).not.toBe(indicator(on).color);
-  expect(on.some(p => p.targetId === bed.id && p.color === 0x91c2d2)).toBe(true);
+  expect(on.some(p => p.targetId === bed.id && p.color === 0x639fe2)).toBe(true);
   heater.power.switchOn = false;
   expect(indicator(origamiFurnitureParts(w)).color).toBe(indicator(off).color);
 });

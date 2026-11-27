@@ -88,7 +88,7 @@ test('the real scene route-only update does not rebuild unchanged jobs, zones, s
   }) as unknown as {presentConfirmedIntents():void};
   try{
     scene.presentConfirmedIntents();expect(path).toHaveBeenCalledOnce();
-    expect(path).toHaveBeenCalledWith(intents.routes,world,expect.any(Set),feedbackSource);
+    expect(path).toHaveBeenCalledWith(intents.routes,world,expect.any(Set),feedbackSource,undefined);
     scene.presentConfirmedIntents();expect(path).toHaveBeenCalledOnce();
   }finally{feedbackSource.dispose();}
 });

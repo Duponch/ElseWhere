@@ -62,7 +62,7 @@ export class ResourcePreparedAtlas {
   });
   this.models=new ResourcePreparedModels(variant=>this.owner.registerVariant(variant));
   try{
-   this.material=this.owner.addTarget({sourceMaterial:options.sourceMaterial,pastelTexture:options.pastel,...resourceResolvedTextureInputs(context,this.treeLayerCount),resources:{get textures(){const mask=options.sourceCoverageTexture?.();return mask?[mask]:[];},objectUniforms:[this.treeLayerCount]}});
+   this.material=this.owner.addTarget({sourceMaterial:options.sourceMaterial,pastelTexture:options.pastel,pastelSize:options.pastel.image.width===256?256:64,...resourceResolvedTextureInputs(context,this.treeLayerCount),resources:{get textures(){const mask=options.sourceCoverageTexture?.();return mask?[mask]:[];},objectUniforms:[this.treeLayerCount]}});
   }catch(error){const errors=[error];try{this.models.dispose();}catch(cleanup){errors.push(cleanup);}try{this.owner.dispose();}catch(cleanup){errors.push(cleanup);}try{this.resolved.dispose();}catch(cleanup){errors.push(cleanup);}throw errors.length===1?error:new AggregateError(errors,'Resource prepared adapter construction cleanup');}
  }
  /** Existing merge writer only. Anonymous trees return -1 and retain Source. */

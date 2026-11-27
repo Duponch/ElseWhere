@@ -42,3 +42,11 @@ test('invalid indices, absent suffix, resize and reset fall back to the full sig
   source.push(flower(3));expect(b.readConfirmed(source,'','',[])).toBe(a.read(source,'',''));
   source.reverse();expect(b.readConfirmed(source,'','',undefined,true)).toBe(a.read(source,'','',true));
 });
+
+test('bed prisoner role invalidates both literal and confirmed presentation while stable unrelated fields retain the key',()=>{
+  const a=new StructurePresentationSignature(),b=new ConfirmedStructurePresentationSignature(),bed:Structure={id:1,kind:'bed',x:4,z:4,orientation:0,footprint:'standard',material:'wood'},source=[bed];
+  const normal=a.read(source,'','');expect(b.readConfirmed(source,'','')).toBe(normal);a.ackFurnitureBuild();b.ackFurnitureBuild();
+  bed.prisoner=true;const prison=a.read(source,'','');expect(prison).not.toBe(normal);expect(b.readConfirmed(source,'','',[0])).toBe(prison);expect(b.changedKinds()?.has('bed')).toBe(true);
+  bed.medical=true;const medicalPrison=a.read(source,'','');expect(medicalPrison).not.toBe(prison);expect(b.readConfirmed(source,'','',[0])).toBe(medicalPrison);
+  delete bed.prisoner;const medical=a.read(source,'','');expect(medical).not.toBe(medicalPrison);expect(b.read(source,'','')).toBe(medical);
+});

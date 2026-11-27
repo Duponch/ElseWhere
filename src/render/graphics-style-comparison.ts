@@ -68,10 +68,12 @@ function contextKey(context:GraphicsStyleComparisonContext):string {
 export function graphicsStyleComparisonsShareScene(left:GraphicsStyleComparisonContext,right:GraphicsStyleComparisonContext):boolean {
  try{
   const a=contextKey(left),b=contextKey(right);
-  if(left.preferences.style===right.preferences.style)return a===b;
+  if(left.preferences.style===right.preferences.style&&left.preferences.personalizedTextures===right.preferences.personalizedTextures)return a===b;
+  if(left.preferences.style!==right.preferences.style&&left.preferences.personalizedTextures!==right.preferences.personalizedTextures)return false;
   const shared=(context:GraphicsStyleComparisonContext)=>{
-   const {preferences:_preferences,settings,...scene}=context;
+   const {preferences,settings,...scene}=context;
    const {origamiBaked:_renderState,...commonSettings}=settings;
+   if(left.preferences.style===right.preferences.style){const {personalizedTextures:_drawings,...otherPreferences}=preferences;return canonical({...scene,preferences:otherPreferences,settings:commonSettings});}
    return canonical({...scene,settings:commonSettings});
   };
   return shared(left)===shared(right);

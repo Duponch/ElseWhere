@@ -5,6 +5,7 @@ import {isSmithingApparel267} from '../sim/smithing-apparel-267';
 import {itemCargoKind} from './item-presentation';
 import {TEXTILE_APPAREL_ITEMS308,type TextileApparelItem308} from '../sim/textile-apparel-308';
 import type { World,MaterialPile } from '../sim/types';
+import {TSHIRT_PAINT_OUTFIT} from './human-tailoring';
 
 /** One snapshot projection for map and portraits; no render-owned inventory. */
 export function apparelProjection(world:World):ReadonlyMap<number,readonly MaterialPile[]> {
@@ -30,7 +31,7 @@ export function apparelAppearance(pieces:readonly MaterialPile[]=[]) {
     reconHelmet:pieces.some(p=>p.item==='recon-helmet'),tuque:tuque?(tuque.item==='cloth-tuque'?1:2):0,
     // Schema 353: cowboy hat 1, bowler hat 2, in its material's colour.
     hat353:hat?(APPAREL[hat.item as ApparelItem].family==='cowboy-hat'?1:2):0,hatColor353:hat?APPAREL[hat.item as ApparelItem].color:undefined,
-    silhouette:plate?6:recon?5:outer?(definition!.family==='parka'||definition!.family==='jacket'?4:3):tribal?2:shirt?1:0,
+    silhouette:plate?6:recon?5:outer?(definition!.family==='parka'||definition!.family==='jacket'?4:3):tribal?2:shirt?(definition?.family==='tshirt'?TSHIRT_PAINT_OUTFIT:1):0,
     pants:pants?(pants.item==='flak-pants'?(pants.apparel?.birthColor?(pants.apparel.birthColor.r===Math.fround(.62)?9:10):8):(['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(legacyPantsMaterial308(APPAREL[pants.item as ApparelItem].material??'cloth'))+1)):0,
     ...(vest?.apparel?.birthColor&&!outer?{vestTintCode:packStartingApparelTint256(vest.apparel.birthColor),vestTintColor:startingApparelTintHex256(vest.apparel.birthColor)}:{}),
     color:definition?.color,signature:pieces.map(p=>p.item+(p.apparel?.birthColor?':'+Object.values(p.apparel.birthColor).join(','):'')).sort().join(' '),description:pieces.map(apparelLabel).join(', ')||'Aucun vêtement équipé'};

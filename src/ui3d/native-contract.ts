@@ -1,4 +1,5 @@
 import type {World,Command,Cell,Orientation} from '../sim/types';
+import type {JournalPictogram} from '../ui/journal-events';
 import type {CampaignSummary} from '../sim/world-map-state';
 import type {Panel,Tool,ArchitectCategory} from '../ui/layout';
 import type {SavedColony} from '../ui/game-session';
@@ -77,7 +78,7 @@ export interface NativeRow {
   region?:'navigation'|'catalogue'|'details'|'graph'|'toolbar';
   controlStyle?:NativeControlStyle;
   graphNode?:{x:number;y:number;width:number;height:number;points:number;cost:number;state:'done'|'active'|'locked'|'available';searchMatch?:boolean};
-  historyEntry?:{kind:'letter'|'journal';body:string;color?:string};
+  historyEntry?:{kind:'letter'|'journal';body:string;color?:string;icon?:JournalPictogram};
   historyGraph?:{sample:string;complete:boolean;total:number;bars:readonly {label:string;value:number;color:string}[]};
   /** Real save metadata; the adjacent load control keeps its repository guard. */
   fileEntry?:{date:string;kind:string;index:number;manage?:boolean};
@@ -116,6 +117,8 @@ export interface NativeRow {
   /** A line of the inspect pane (Core `InspectPaneUtility`, 432 × 165) rather
    * than of the open inspector tab. */
   inspectPane?:true;
+  /** Semantic activity ink, resolved against the chosen interface theme. */
+  inspectInk?:'text'|'subtle'|'richAction'|'royal'|'positive'|'negative'|'painSevere';
   /** Inspect pane gauges (Core `InspectPaneFiller`: 93 × 16, 6 apart). A gauge
    * with a select opens it on click (allowed area). */
   gauges?:readonly {id:string;label:string;fill:number;color:string;hint:string;select?:NativeControl['select']}[];

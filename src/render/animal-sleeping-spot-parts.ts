@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import type { World } from '../sim/types';
 import type { Placement } from './primitives';
 
@@ -5,7 +6,7 @@ import type { Placement } from './primitives';
 export function animalSleepingSpotParts(world:World):Placement[] {
   const parts:Placement[]=[];
   for(const s of world.structures)if(s.kind==='animal-sleeping-spot'){
-    const color=s.medical?0x72b9c4:0xdacdac;
+    const color=bedSheetColor(s);
     for(const x of [-1,1])for(const z of [-1,1]){
       parts.push({targetId:s.id,x:s.x+x*.30,z:s.z+z*.42,y:.032,sx:.27,sy:.022,sz:.045,color},
         {targetId:s.id,x:s.x+x*.42,z:s.z+z*.30,y:.032,sx:.045,sy:.022,sz:.27,color});

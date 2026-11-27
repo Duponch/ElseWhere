@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import type { Placement } from './primitives';
 import { PATTERN_SPAN,physicalPatternSpan } from './texture-variation';
+import {naturalArtUv,naturalArtUsesPhysicalMetric,naturalVertexTone,type NaturalPaintMotif} from './natural-surface-art';
+import {physicalSurfaceArtworkUv} from './surface-art-uv';
 const scratchColor = new THREE.Color();
 const scratchReferenceColor = new THREE.Color();
 // Painted stone facets use the existing RGB vertex stream; the shared
@@ -116,17 +118,30 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
     // only on the template and the item scale, so equal scales share them.
     const count=pos.count,P=components(pos,3),N=components(normal,3),UV=uv?components(uv,2):undefined;
     const BU=sourceBakedUv?components(sourceBakedUv,3):undefined,RF=surfaceUvs?components(rawFace!,2):undefined,SU=surfaceUvs?components(strokeUv!,2):undefined,SF=strokeFace?components(strokeFace,1):undefined;
+    const motif=packedSurface?geometry.userData.naturalPaintMotif as NaturalPaintMotif|undefined:undefined;
+    const artworkMin=motif?naturalArtUv(motif,0,0):undefined,artworkMax=motif?naturalArtUv(motif,1,1):undefined;
+    let authoredUv:Float32Array|undefined,naturalTones:Float32Array|undefined;
+    if(motif&&motif!=='wash'&&UV&&artworkMin&&artworkMax){
+      authoredUv=new Float32Array(count*2);naturalTones=new Float32Array(count);
+      for(let v=0;v<count;v++){
+        const u=UV[v*2]!,t=UV[v*2+1]!;
+        authoredUv[v*2]=artworkMin[0]+Math.min(1,Math.max(0,u))*(artworkMax[0]-artworkMin[0]);
+        authoredUv[v*2+1]=artworkMin[1]+Math.min(1,Math.max(0,t))*(artworkMax[1]-artworkMin[1]);
+        naturalTones[v]=naturalVertexTone(motif,u,t);
+      }
+    }
     const SPW=sourcePaint?components(sourcePaint,4):undefined,SE=sourceExpand?components(sourceExpand,3):undefined;
     const sourceIndex=geometry.index?components(geometry.index,1):undefined,indexLength=sourceIndex?sourceIndex.length:count;
     const lengthsByScale=new Map<string,Float64Array>();
+    const artworkByScale=new Map<string,Float32Array>();
     for (const item of items) {
       const preparedId=prepared?.identity(geometry,item)??-1;
       const firstIndex = index,firstVertex=vertex;
       // These vertices are baked only when a spatial chunk changes. Encode a
       // stable, resource-specific pigment crop in the existing UV stream.
       const pigmentKey=item.key??(Math.floor(item.x*257)^Math.floor(item.z*131));
-      const phaseU=includeUv?noise(pigmentKey,Math.floor(item.x),191)*(1-PATTERN_SPAN):0;
-      const phaseV=includeUv?noise(pigmentKey,Math.floor(item.z),311)*(1-PATTERN_SPAN):0;
+      const phaseU=includeUv&&!authoredUv?noise(pigmentKey,Math.floor(item.x),191)*(1-PATTERN_SPAN):0;
+      const phaseV=includeUv&&!authoredUv?noise(pigmentKey,Math.floor(item.z),311)*(1-PATTERN_SPAN):0;
       const sx = item.sx ?? 1, sy = item.sy ?? 1, sz = item.sz ?? 1;
       const cosine = Math.cos(item.ry ?? 0), sine = Math.sin(item.ry ?? 0);
       scratchColor.setHex(item.color ?? 0xffffff);
@@ -135,6 +150,8 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
       let facetX=NaN,facetZ=NaN,facetTint:readonly [number,number,number]=STONE_FACET_TINTS[0];
       const scaleKey=`${sx}|${sy}|${sz}`;let lengths=lengthsByScale.get(scaleKey);
       if(!lengths){lengths=new Float64Array(count);for(let i=0;i<count;i++)lengths[i]=Math.hypot(N[i*3]!/sx,N[i*3+1]!/sy,N[i*3+2]!/sz);lengthsByScale.set(scaleKey,lengths);}
+      let physicalArtwork:Float32Array|undefined;
+      if(motif&&naturalArtUsesPhysicalMetric(motif)&&UV){physicalArtwork=artworkByScale.get(scaleKey);if(!physicalArtwork){physicalArtwork=physicalSurfaceArtworkUv(geometry,sx,sy,sz);artworkByScale.set(scaleKey,physicalArtwork);}}
       for (let i = 0; i < count; i++) {
         if(preparedIds)preparedIds[vertex+i]=preparedId;
         const i3=i*3,x = P[i3]! * sx, z = P[i3+2]! * sz;
@@ -162,16 +179,29 @@ export function mergedInstances(group: THREE.Group, parts: { geometry: THREE.Buf
           const nx=Math.round(N[i3]!*127),nz=Math.round(N[i3+2]!*127);
           if(nx!==facetX||nz!==facetZ){facetTint=STONE_FACET_TINTS[Math.min(5,Math.floor(noise(nx,nz,pigmentKey+701)*6))]!;facetX=nx;facetZ=nz;}
           colors[offset]=scratchColor.r*facetTint[0];colors[offset+1]=scratchColor.g*facetTint[1];colors[offset+2]=scratchColor.b*facetTint[2];
+        } else if(naturalTones) {
+          const tone=naturalTones[i]!;
+          colors[offset] = scratchColor.r*tone; colors[offset + 1] = scratchColor.g*tone; colors[offset + 2] = scratchColor.b*tone;
         } else {
           colors[offset] = scratchColor.r; colors[offset + 1] = scratchColor.g; colors[offset + 2] = scratchColor.b;
         }
         if(uvs){
           const uvOffset=(vertex+i)*2;
-          if(faceUv||item.rawGeometry){uvs[uvOffset]=UV?.[i*2]??0;uvs[uvOffset+1]=UV?.[i*2+1]??0;}
+          if(physicalArtwork&&artworkMin&&artworkMax){
+            const u=physicalArtwork[i*2]!,v=physicalArtwork[i*2+1]!,wash=motif==='wash';
+            const art=naturalArtUv(motif!,wash?u*PATTERN_SPAN+phaseU:u,wash?v*PATTERN_SPAN+phaseV:v);
+            uvs[uvOffset]=art[0];uvs[uvOffset+1]=art[1];
+          }
+          else if(authoredUv){uvs[uvOffset]=authoredUv[i*2]!;uvs[uvOffset+1]=authoredUv[i*2+1]!;}
+          else if(faceUv||item.rawGeometry){uvs[uvOffset]=UV?.[i*2]??0;uvs[uvOffset+1]=UV?.[i*2+1]??0;}
           else{
             const [spanU,spanV]=physicalPatternSpan(sx,sy,sz,N[i3]!,N[i3+1]!);
             uvs[uvOffset]=((UV?.[i*2]??0)-.5)*spanU+PATTERN_SPAN*.5+phaseU;
             uvs[uvOffset+1]=((UV?.[i*2+1]??0)-.5)*spanV+PATTERN_SPAN*.5+phaseV;
+          }
+          if(!physicalArtwork&&!authoredUv&&artworkMin&&artworkMax){
+            uvs[uvOffset]=artworkMin[0]+Math.min(1,Math.max(0,uvs[uvOffset]!))*(artworkMax[0]-artworkMin[0]);
+            uvs[uvOffset+1]=artworkMin[1]+Math.min(1,Math.max(0,uvs[uvOffset+1]!))*(artworkMax[1]-artworkMin[1]);
           }
         }
       }

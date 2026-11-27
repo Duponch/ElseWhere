@@ -1,5 +1,31 @@
 {
   "version": 1,
+  "runtimeTreatments": [
+    {
+      "id": "ambient.night-insects",
+      "key": "night-insects-g1122-softening-20261127",
+      "status": "temporary-runtime-treatment",
+      "sources": [
+        {"filename": "ambient-night-insects-g1122-take-1.mp3", "sha256": "7d6e17444dd9dc975f75c38684d527fb17d47663495d09b116b369a7696a1b57"},
+        {"filename": "ambient-night-insects-g1122-take-2.mp3", "sha256": "bffa6564c535ad17b63798ae6048a0a8ade1079c15d36da489a05b984851e7fe"}
+      ],
+      "processing": {
+        "tool": "Web Audio BiquadFilterNode",
+        "implementation": "src/audio/AudioDirector.ts continuous voice creation",
+        "type": "lowpass",
+        "frequencyHz": 1500,
+        "QDecibels": -6,
+        "equivalentLinearQ": 0.501187,
+        "loopBoundary": "Filter created once per continuous voice, state retained across every buffer wrap; no trim, endpoint fade, buffer rewrite or re-encode.",
+        "targetSourceRmsDbfsBeforeFilter": -48,
+        "sourceGains": [0.056234, 0.024351],
+        "decodedCacheExtraBytes": 0
+      },
+      "provenance": "Local playback treatment of the unchanged historical ElevenLabs g1122 takes. No replacement MP3 was generated, downloaded, decoded or encoded by this treatment. New g1127 candidates are not published here.",
+      "listeningValidation": "pending",
+      "filteredOutputPcmMeasurement": "unavailable in this local session"
+    }
+  ],
   "derivations": [
     {
       "id": "mining.hit",

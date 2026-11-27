@@ -58,6 +58,7 @@ export class ColonyRenderer extends SceneRenderCore {
   prepareEnvironmentForCompile():()=>void{return this.environmentOverlay?.prepareForCompile()??(()=>{});}
   disposeEnvironment():void{this.environmentOverlay?.dispose();this.environmentOverlay=undefined;}
   setItemLabelMinCellPixels(value:number):void {this.mapLabels.setMinCellPixels(value);}
+  setBedOwnerLabelsVisible(visible:boolean):void {this.mapLabels.setBedOwnerLabelsVisible(visible);}
   /** Native game pages may keep their command context while the player looks
    * around it. The ordinary/legacy input owner keeps its existing behavior. */
   protected cameraOnlyInput():boolean{return false;}

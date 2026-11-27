@@ -1961,7 +1961,7 @@
       "loop": true,
       "spatial": false,
       "gain": 1,
-      "calibrationFamily": "ambience"
+      "calibrationFamily": "ambience-soft"
     },
     "weather.wind-clear": {
       "filename": "weather-wind-clear-g1122-take-1.mp3",

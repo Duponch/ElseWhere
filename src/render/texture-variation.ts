@@ -1,4 +1,5 @@
 import { attribute, float, instanceIndex, uv, varying, vec2 } from 'three/tsl';
+import type * as THREE from 'three/webgpu';
 
 // Crop different regions of the same painted map. Staying inside [0, 1]
 // avoids a visible wrapping seam on the broad faces of planks and furniture.
@@ -29,16 +30,22 @@ export function instancedPatternUv() {
 /** The existing box transform already contains its physical scale. Derive
  * face spans in the vertex stage; no instance attribute or fragment sample is
  * added, and the same untextured pipeline is still selected when disabled. */
-export function instancedBoxPatternUv() {
-  const seed=float(instanceIndex);
+export function instancedBoxFaceSpan(normal:THREE.Node<'vec3'>=attribute('normal','vec3')):THREE.Node<'vec2'> {
   const sx=attribute('boxMatrix0','vec4').xyz.length();
   const sy=attribute('boxMatrix1','vec4').xyz.length();
   const sz=attribute('boxMatrix2','vec4').xyz.length();
-  const facing=attribute('normal','vec3').abs();
+  const facing=normal.abs();
   const u=sx.mul(facing.x.oneMinus()).add(sz.mul(facing.x));
   const v=sy.mul(facing.y.oneMinus()).add(sz.mul(facing.y));
-  const longest=u.max(v).max(1e-6);
-  const span=vec2(u,v).div(longest).mul(PATTERN_SPAN);
+  // Keep this expression lazy. A global VarNode here is initialized when
+  // Three queries a fragment output's type and would pull item vertex storage
+  // into a dead fragment load, even though the final UV itself is varying.
+  return vec2(u,v);
+}
+export function instancedBoxPatternUv(physicalSpan:THREE.Node<'vec2'>=instancedBoxFaceSpan()) {
+  const seed=float(instanceIndex);
+  const longest=physicalSpan.x.max(physicalSpan.y).max(1e-6);
+  const span=physicalSpan.div(longest).mul(PATTERN_SPAN);
   const phase=vec2(seed.mul(0.61803398875).fract(),seed.mul(0.41421356237).fract()).mul(PHASE_SPAN);
   return varying(uv().sub(.5).mul(span).add(PATTERN_SPAN*.5).add(phase));
 }

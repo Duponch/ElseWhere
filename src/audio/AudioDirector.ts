@@ -102,7 +102,7 @@ export function parseAudioManifest(input: unknown): AudioManifest {
   return { version: 1, events };
 }
 
-interface Voice { source: AudioBufferSourceNode; gain: GainNode; panner: PannerNode | null; kind: string; variantGain: number; x?: number; z?: number; interface?: boolean }
+interface Voice { source: AudioBufferSourceNode; gain: GainNode; panner: PannerNode | null; filter?: BiquadFilterNode; kind: string; variantGain: number; x?: number; z?: number; interface?: boolean }
 
 /** Plays short world sounds on the confirmed presentation clock. No World state. */
 export class AudioDirector {
@@ -813,6 +813,7 @@ export class AudioDirector {
     for (const [id, active] of this.continuous) if (active === voice) this.continuous.delete(id);
     voice.source.onended = null;
     voice.source.disconnect();
+    voice.filter?.disconnect();
     voice.panner?.disconnect();
     voice.gain.disconnect();
   }
@@ -868,10 +869,18 @@ export class AudioDirector {
         }
         const gain = context.createGain();
         gain.gain.value = 0;
-        if (panner) { node.connect(panner); panner.connect(gain); }
-        else node.connect(gain);
+        // Temporary local treatment of the two historical high insect takes.
+        // A single non-resonant audio-thread filter keeps its state across the
+        // loop boundary; no fades, PCM copies, per-frame work or cache growth.
+        // Newly generated replacements must not inherit this treatment.
+        const filter=source.kind==='ambient.night-insects'&&/\/ambient-night-insects-g1122-take-[12]\.mp3$/.test(variant.src)?context.createBiquadFilter():undefined;
+        // Web Audio lowpass Q uses dB: -6 dB is linear Q≈0.5, without a
+        // resonant bump at the cutoff (unlike a positive 0.5 dB setting).
+        if(filter){filter.type='lowpass';filter.frequency.value=1500;filter.Q.value=-6;node.connect(filter);filter.connect(panner??gain);}
+        else node.connect(panner??gain);
+        if(panner)panner.connect(gain);
         gain.connect(master);
-        voice = { source: node, panner, gain, kind: source.kind, variantGain: variant.gain };
+        voice = { source: node, panner, filter, gain, kind: source.kind, variantGain: variant.gain };
         const playingVoice = voice;
         node.onended = () => this.releaseVoice(playingVoice);
         this.voices.add(voice);

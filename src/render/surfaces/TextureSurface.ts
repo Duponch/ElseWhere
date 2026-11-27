@@ -83,9 +83,21 @@ export function createTextureSurface(initial:TextureSurfaceAssets,options:Textur
  * explicitly keep their native256-square map. Source crops stay in UV.
  * CPU/GPU nominal bytes are32768/43688 for64,524288/699048 for256.
  * The returned texture is owned by the caller, independently of the source. */
-export function copyPastelTextureToArray(source:THREE.DataTexture,size:64|256=64):THREE.DataArrayTexture {
+export type PastelTextureSize=64|256|512;
+export function copyPastelTextureToArray(source:THREE.DataTexture,size:PastelTextureSize=64):THREE.DataArrayTexture {
  const image=source.image;
- if((size!==64&&size!==256)||image.width!==size||image.height!==size||!(image.data instanceof Uint8Array)||image.data.length!==size*size*4||source.format!==THREE.RGBAFormat||source.type!==THREE.UnsignedByteType||source.colorSpace!==THREE.NoColorSpace||source.flipY||source.magFilter!==THREE.LinearFilter||source.minFilter!==THREE.LinearMipmapLinearFilter||!source.generateMipmaps||source.mipmaps.length)throw Error('Exact unflipped '+size+'-square RGBA8 NoColorSpace pastel source required');
+ if((size!==64&&size!==256&&size!==512)||image.width!==size||image.height!==size||!(image.data instanceof Uint8Array)||image.data.length!==size*size*4||source.format!==THREE.RGBAFormat||source.type!==THREE.UnsignedByteType||source.colorSpace!==THREE.NoColorSpace||source.flipY||source.magFilter!==THREE.LinearFilter||source.minFilter!==THREE.LinearMipmapLinearFilter||!source.generateMipmaps||source.mipmaps.length)throw Error('Exact unflipped '+size+'-square RGBA8 NoColorSpace pastel source required');
  const data=new Uint8Array(image.data.length*2);data.set(image.data);data.set(image.data,image.data.length);
  const out=new THREE.DataArrayTexture(data,size,size,2);out.colorSpace=source.colorSpace;out.wrapS=source.wrapS;out.wrapT=source.wrapT;out.magFilter=source.magFilter;out.minFilter=source.minFilter;out.generateMipmaps=true;out.flipY=false;out.anisotropy=source.anisotropy;out.needsUpdate=true;return out;
+}
+
+/** Update the existing, exact two-layer copy on a graphics setting change.
+ * No new GPU texture, buffer, or conversion is needed. */
+export function refreshPastelTextureCopy(source:THREE.DataTexture,target:THREE.DataArrayTexture):void {
+ const image=source.image,destination=target.image;
+ if(!(image.data instanceof Uint8Array)||!(destination.data instanceof Uint8Array)
+   ||destination.width!==image.width||destination.height!==image.height||destination.depth!==2
+   ||destination.data.length!==image.data.length*2)throw Error('Pastel copy dimensions changed');
+ destination.data.set(image.data);destination.data.set(image.data,image.data.length);
+ target.needsUpdate=true;
 }

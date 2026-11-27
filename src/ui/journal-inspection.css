@@ -6,7 +6,7 @@
 #pawn-journal-rows>li{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:start;gap:9px;padding:10px 8px;margin:0;font-size:14px;line-height:1.45}
 #pawn-journal-rows>li:nth-child(even){background:color-mix(in srgb,var(--paper-deep) 65%,transparent)}
 #pawn-journal-rows>li[hidden]{display:none}
-.pawn-journal-icon{display:block;width:17px;height:17px;margin-top:2px;border:2px solid var(--forest);border-radius:5px 5px 5px 1px;transform:rotate(-8deg)}
-.pawn-journal-icon-combat{border-radius:50%;border-color:var(--accent);transform:none}
+.pawn-journal-icon{display:block;width:26px;height:26px;margin-top:2px}
 #pawn-journal-empty[hidden]{display:none}
 #pawn-journal .pawn-journal-limit{padding-top:12px;margin:14px 0 0;border-top:1px solid var(--line);color:var(--muted-ink);font-size:13px;line-height:1.4}
+.colony-journal-picto{width:20px;height:20px;vertical-align:middle;margin-right:7px;object-fit:contain}

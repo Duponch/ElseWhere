@@ -5,6 +5,7 @@ import {afterEach,expect,test,vi} from 'vitest';
 import {BufferAttribute,Group,InstancedBufferGeometry,Mesh,MeshStandardNodeMaterial,OrthographicCamera,Vector3} from 'three/webgpu';
 import {SceneRenderCore} from '../src/render/SceneRenderCore';
 import {ResourceLayer} from '../src/render/ResourceLayer';
+import {PlantClusterLayer} from '../src/render/PlantClusterLayer';
 import {WildlifeLayer,animalGraphicsComparisonState} from '../src/render/WildlifeLayer';
 import {ResourceTargetTint} from '../src/render/resource-target-tint';
 import {ANIMAL_SPECIES_IDS} from '../src/sim/animal-species';
@@ -25,13 +26,14 @@ function catalogFixture(){
       graphicsComparisonState(active:boolean){return animalGraphicsComparisonState(this.species,this.mesh,active,this.textures,this.blood,source,this.ribbons,this.binding);}};
     return row;
   });
-  const wildlife=Object.assign(Object.create(WildlifeLayer.prototype),{rigs:rows,activeRigs:[...rows],bakedEligible:true,bakedGeneration:7,bakedPending:false,bakedClosed:false}) as WildlifeLayer;
+  const wildlife=Object.assign(Object.create(WildlifeLayer.prototype),{rigs:rows,activeRigs:[...rows],surfaceRevision:7,surfaceClosed:false}) as WildlifeLayer;
   const fullWildlife=vi.spyOn(wildlife,'bakedStatus').mockImplementation(()=>{throw Error('Detailed Native status must not be built for a measurement frame');});
   const catalog={revision:3,assertCurrent:vi.fn()},treeSurface={material:material(),plainMaterial:material()};
   const resourceGeometry=geometry();resourceGeometry.setAttribute('color',new BufferAttribute(new Float32Array([1,1,1,1,1,1,1,1,1]),3));
   const resourceMesh=new Mesh(resourceGeometry,treeSurface.material),resourceGroup=new Group();resourceGroup.add(resourceMesh);resourceMesh.userData.resourceRanges={ranges:[{id:1001,start:0,count:3,vertexStart:0,vertexCount:3}]};
   const chunks=new Map([['0:0',{group:resourceGroup}]]),census=vi.spyOn(chunks,'values');
-  const resources=Object.assign(Object.create(ResourceLayer.prototype),{treeRecipeEpoch:4,treeDemandEpoch:2,graphicsComparisonRevision:8,treeSpeciesKey:'["oak","poplar"]',treeCatalog:catalog,treeSurface,texturesEnabled:true,foliageVisible:true,chunks,targetPreviewIds:new Set<number>(),targetTint:new ResourceTargetTint(),resourceChunks:new Map([[1001,'0:0']]),sharedTreeMeshes:new WeakSet([resourceMesh])}) as ResourceLayer;
+  const resources=Object.assign(Object.create(ResourceLayer.prototype),{treeRecipeEpoch:4,treeDemandEpoch:2,graphicsComparisonRevision:8,treeSpeciesKey:'["oak","poplar"]',treeCatalog:catalog,treeSurface,bodyTextured:material(),windTextured:material(),texturesEnabled:true,foliageVisible:true,chunks,targetPreviewIds:new Set<number>(),targetTint:new ResourceTargetTint(),resourceChunks:new Map([[1001,'0:0']]),sharedTreeMeshes:new WeakSet([resourceMesh])}) as ResourceLayer;
+  const plantGeometry=geometry(),plants=Object.assign(Object.create(PlantClusterLayer.prototype),{geometry:plantGeometry,mesh:new Mesh(plantGeometry,material()),slots:new Map(),texturesEnabled:true,plantAtlasBins:{version:0}}) as PlantClusterLayer;
   const fullTrees=vi.spyOn(resources,'bakedTreeStatus').mockImplementation(()=>{throw Error('Detailed tree census must remain outside the comparator');});
   const camera=new OrthographicCamera(-16,16,16,-16,.1,1000);camera.position.set(20,25,20);
   const core=Object.assign(Object.create(SceneRenderCore.prototype),{
@@ -39,7 +41,7 @@ function catalogFixture(){
     // passed to setWorld, admitted to Core, read by simulation or rendered.
     world:{},received:{speed:0},disposed:false,fatalError:undefined,preparing:false,presentationStopped:false,
     graphicsStyle:{preferences:{...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style:'origami',impasto:0,wear:0}},
-    wildlife,resources,rig:{mode:'orthographic',span:32,camera,controls:{target:new Vector3(0,0,0)}},
+    wildlife,resources,plants,rig:{mode:'orthographic',span:32,camera,controls:{target:new Vector3(0,0,0)}},
     viewportWidth:1280,viewportHeight:900,backend:'WebGPU',renderer:{getPixelRatio:()=>1},
     texturesEnabled:true,grassVisible:true,roomEnabled:true,dioramaEnabled:false,
     lightingSettings:{sun:1,moon:1,ambient:1},shadowSettings:{frequency:60,resolution:2048},animationDetail:{settings:{enabled:true,nearPixels:24,farPixels:8,middleHz:12}},
@@ -67,7 +69,7 @@ test('the public Core measurement admits53 compact owners and cancels exact rend
       ['clinical/source branch',()=>{const old={blood:first.blood,ribbons:first.ribbons,material:first.mesh.material};first.blood=true;first.ribbons=true;first.mesh.material=f.source;return()=>{first.blood=old.blood;first.ribbons=old.ribbons;first.mesh.material=old.material;};}],
       ['same-state geometry owner',()=>{const old=first.mesh.geometry,next=f.geometry();first.mesh.geometry=first.binding.geometry=next;return()=>{first.mesh.geometry=first.binding.geometry=old;};}],
       ['same-state material owner',()=>{const old=first.mesh.material,next=f.material();next.userData.origamiBakedBloodFree=true;first.mesh.material=first.binding.material=next;return()=>{first.mesh.material=first.binding.material=old;};}],
-      ['animal generation',()=>{const old=Reflect.get(f.wildlife,'bakedGeneration');Reflect.set(f.wildlife,'bakedGeneration',old+1);return()=>{Reflect.set(f.wildlife,'bakedGeneration',old);};}],
+      ['animal generation',()=>{const old=Reflect.get(f.wildlife,'surfaceRevision');Reflect.set(f.wildlife,'surfaceRevision',old+1);return()=>{Reflect.set(f.wildlife,'surfaceRevision',old);};}],
       ['active cohort',()=>{Reflect.set(f.wildlife,'activeRigs',f.rows.slice(1));return()=>{Reflect.set(f.wildlife,'activeRigs',[...f.rows]);};}],
       ['tree publication',()=>{const old=Reflect.get(f.resources,'treeRecipeEpoch');Reflect.set(f.resources,'treeRecipeEpoch',old+1);return()=>{Reflect.set(f.resources,'treeRecipeEpoch',old);};}],
       ['tree catalog revision',()=>{f.catalog.revision++;return()=>{f.catalog.revision--;};}],
@@ -87,6 +89,12 @@ test('the public Core measurement admits53 compact owners and cancels exact rend
 function pairContext(style:'default'|'origami'):GraphicsStyleComparisonContext {
   return{preferences:{...DEFAULT_GRAPHICS_STYLE_PREFERENCES,style,...style==='origami'?{impasto:0,wear:0}:{}},sceneFingerprint:'world-owner:7/revision:12',camera:{position:[3,4,5],target:[0,0,0],projection:[1,0,0,1],zoom:1},viewport:{width:1280,height:900,pixelRatio:1},backend:'WebGPU',settings:{requested:{scope:'paused-colony',ui:'game-hud',tool:'select',selectionKey:'1,2',objectKey:'[]'},origamiBaked:style==='origami'?{generation:4,rigs:[['deer','geometry-A','material-A',55]],treeRevision:3}:{generation:0,rigs:[],treeRevision:null},renderer:{textures:true,lighting:{sun:1},shadows:{frequency:60,resolution:2048},animations:{enabled:true}}}};
 }
+test('same-style drawings on/off are a fair pair only with otherwise identical settings',()=>{
+ const on=pairContext('origami'),off=structuredClone(on);off.preferences.personalizedTextures=false;
+ expect(graphicsStyleComparisonsShareScene(on,off)).toBe(true);
+ const shifted=structuredClone(off);shifted.preferences.edgeWidth+=.1;expect(graphicsStyleComparisonsShareScene(on,shifted)).toBe(false);
+ const different=pairContext('default');different.preferences.personalizedTextures=false;expect(graphicsStyleComparisonsShareScene(on,different)).toBe(false);
+});
 test('pair reporting excludes only cross-style preferences/binding identity while the collector and every shared scene parameter remain strict',()=>{
   const origami=pairContext('origami'),legacy=pairContext('default');
   const complete=(context:GraphicsStyleComparisonContext)=>{const run=createGraphicsStyleComparison(context,0);run.sample({nowMs:1000,context,visible:true,drawCalls:1,triangles:1});run.sample({nowMs:1020,context,visible:true,drawCalls:1,triangles:1});return run.finish(6000,context,true);};

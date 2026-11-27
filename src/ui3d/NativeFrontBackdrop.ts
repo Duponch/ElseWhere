@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {FRONT_MENU_BACKGROUND_URL} from '../ui/front-menu-background';
 
-/** An unlit, camera-fixed illustration behind the launch menus. It never joins
- * the game renderer's overlay: hiding the front screens hides this mesh too. */
+/** An unlit, camera-fixed illustration behind the title/launch menus. It never
+ * joins the game overlay or covers a front dialog opened over a colony. */
 export class NativeFrontBackdrop {
   private readonly material = new THREE.MeshBasicMaterial({depthTest:false,depthWrite:false,toneMapped:false});
   readonly mesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1),this.material);

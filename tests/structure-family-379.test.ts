@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from '../src/sim/types.ts';
 import {expect,test} from 'vitest';
 import {structureFamily379,damagedStructures379,structureDamageChanged379} from '../src/sim/structure-family-379.ts';
 import {appendStructureEntries} from '../src/sim/structure-navigation.ts';
@@ -7,7 +8,7 @@ import {setTerrainWriteCacheVerification,verifyTerrainWriteCaches} from '../src/
 import type {Structure,World} from '../src/sim/types.ts';
 
 const stool=(id:number,x:number):Structure=>({id,kind:'stool',x,z:2,orientation:0,footprint:'standard',material:'wood'});
-const fixture=():World=>({schemaVersion:379,width:8,height:8,tiles:Array.from({length:64},()=>({terrain:'grass'})),structures:[stool(1,1),{...stool(2,2),kind:'wall'},stool(3,3)],rng:1}) as World;
+const fixture=():World=>({schemaVersion:SCHEMA_VERSION,width:8,height:8,tiles:Array.from({length:64},()=>({terrain:'grass'})),structures:[stool(1,1),{...stool(2,2),kind:'wall'},stool(3,3)],rng:1}) as World;
 const stoolKind=(kind:Structure['kind'])=>kind==='stool';
 
 test('resident families retain canonical order, append proofs, old lists and cold membership fallback',()=>{

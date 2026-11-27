@@ -83,8 +83,7 @@ import { adjacentTable } from '../sim/dining';
 import { CARRY_CAPACITY, footprintCells } from '../sim/definitions';
 import { PAWN_MODEL_SCALE, WORLD_SCALE } from '../world/scale';
 import { clearGroup, material } from './primitives';
-import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import { pawnSurfaceShade,pawnSurfaceUvNode,pawnSurfaceShadeFromSample } from './actor-surface';
+import { createHumanTailoringTexture,humanTailoringUvNode,humanTailoringSample,humanPastelShade } from './human-tailoring';
 import { CargoHandoffs,type CargoAnchor } from './cargo-handoff';
 import { bodyBloodPigment,bodyBloodWord } from './body-blood';
 import type { AnimalCorpseCarrier } from './animal-corpse-carrier';
@@ -353,7 +352,7 @@ export class PawnLayer {
   /** Schema 353: cowboy and bowler hat parts, added once a hat is worn. */
   private hatGeometry353=false;
   private readonly retiredPawnGeometries:THREE.BufferGeometry[]=[];
-  private readonly surfaceTexture = createStylizedSurfaceTexture();
+  private readonly surfaceTexture = createHumanTailoringTexture();
   private plainMaterial: THREE.MeshStandardNodeMaterial | null = null;
   private texturedMaterial: THREE.MeshStandardNodeMaterial | null = null;
   private nativePlainMaterial: THREE.MeshStandardNodeMaterial | null = null;
@@ -491,7 +490,7 @@ export class PawnLayer {
   actorAtlasStatus(){return this.bodyAtlas?.status();}
   bodySurfaceBakeSource(){
     if(!this.humanModel||!this.pawnMesh||!this.texturedMaterial||!this.humanBodyBakeOptions||!this.humanPastelFromSample)return undefined;
-    const model=this.humanModel;return{model,createGeometry:()=>model.createGeometry(),geometry:this.pawnMesh.geometry as THREE.InstancedBufferGeometry,sourceMaterial:this.texturedMaterial,nativeMaterial:this.nativeTexturedMaterial,buildOptions:this.humanBodyBakeOptions,morphPosition:()=>pawnMorph(positionLocal,true).mul(PAWN_MODEL_SCALE),pastelTexture:this.surfaceTexture,pastelUv:pawnSurfaceUvNode(),pastelFromSample:this.humanPastelFromSample};
+    const model=this.humanModel;return{model,createGeometry:()=>model.createGeometry(),geometry:this.pawnMesh.geometry as THREE.InstancedBufferGeometry,sourceMaterial:this.texturedMaterial,nativeMaterial:this.nativeTexturedMaterial,buildOptions:this.humanBodyBakeOptions,morphPosition:()=>pawnMorph(positionLocal,true).mul(PAWN_MODEL_SCALE),pastelTexture:this.surfaceTexture,pastelUv:humanTailoringUvNode(),pastelFromSample:this.humanPastelFromSample};
   }
   /** Call only while the owner suspends frames and prepares scene visibility.
    * compileAsync skips shadows; prepareShadow must request a real shadow pass.
@@ -945,7 +944,7 @@ export class PawnLayer {
     const textured = material(0xffffff);
     this.configure?.(actorExplorationMaterial256(textured));
     textured.positionNode = mat.positionNode;
-    textured.colorNode = baseColor.mul(pawnSurfaceShade(this.surfaceTexture));
+    textured.colorNode = baseColor.mul(humanPastelShade(humanTailoringSample(this.surfaceTexture)));
     let bodySurfaceOptions:SharedPaintSurfaceOptions|undefined;
     if(this.graphics&&origamiTraits){
       const profiles=origamiProfiles!,bone=origamiTraits.x,dye=origamiTraits.y;
@@ -974,8 +973,8 @@ export class PawnLayer {
         const common={faceId,headers,faceUv,surfacePosition,enabled:context.surfaceEncoding.mul(context.lineOpacity),opacity:context.lineOpacity,brushColor:context.brushColor.rgb,samplePigment:(u:THREE.Node<'vec2'>,x:THREE.Node<'vec2'>,y:THREE.Node<'vec2'>)=>context.sampleStrokePigment(u,x,y),sampleDry:(u:THREE.Node<'vec2'>,x:THREE.Node<'vec2'>,y:THREE.Node<'vec2'>)=>context.sampleStrokeDry(u,x,y)};
         return prepared?(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner:prepared}):(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table,width:context.edgeWidth,irregularity:context.strokeImperfection});
       };
-      this.humanPastelFromSample=sample=>baseColor.mul(pawnSurfaceShadeFromSample(sample));
-      bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(pawnSurfaceShade(this.surfaceTexture)),faceUv,profile:origamiTraits.w,includeGeneric:false,gouacheTransform:transformPaint,stroke:buildStroke()};applySharedPaintSurface(textured,bodySurfaceOptions);
+      this.humanPastelFromSample=sample=>baseColor.mul(humanPastelShade(sample));
+      bodySurfaceOptions={context,base:baseColor,pastel:baseColor.mul(humanPastelShade(humanTailoringSample(this.surfaceTexture))),faceUv,profile:origamiTraits.w,includeGeneric:false,personalizedGouacheTransform:paint=>paint.mul(humanTailoringSample(this.surfaceTexture).g),gouacheTransform:transformPaint,stroke:buildStroke()};applySharedPaintSurface(textured,bodySurfaceOptions);
       this.humanBodyBakeOptions=surfacePosition=>({...bodySurfaceOptions!,surfacePosition,stroke:buildStroke(surfacePosition,true)});
       this.refreshHumanBodySurface=()=>{bodySurfaceOptions={...bodySurfaceOptions!,stroke:buildStroke()};for(const material of[this.texturedMaterial,this.nativeTexturedMaterial])if(material){applySharedPaintSurface(material,bodySurfaceOptions);material.needsUpdate=true;}};
     }

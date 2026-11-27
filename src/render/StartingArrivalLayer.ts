@@ -4,13 +4,13 @@ import { Fn,attribute,cos,float,mat4,normalLocal,positionLocal,sin,smoothstep,te
 import type { Cell,World } from '../sim/types';
 import { BoxMesh } from './BoxMesh';
 import { material } from './primitives';
-import { createStylizedSurfaceTexture } from './stylized-surfaces';
-import { instancedBoxPatternUv } from './texture-variation';
+import { capsulePaintUv, createMechanicalSurfaceTexture, mechanicalPaint, mechanicalSurfacePixels } from './mechanical-surface-art';
 import type { AnimationDetail } from './AnimationDetail';
 import {currentGraphicsStyle} from './graphics-style';
 import {OwnedStrokeModel} from './surfaces/OwnedStrokeModel';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
 import {applySharedPaintSurface} from './surfaces/SharedPaintSurface';
+import {bindPersonalizedTexture} from './texture-personalization';
 
 export const STARTING_ARRIVAL_CAPSULES=3;
 export const STARTING_ARRIVAL_PARTS=8;
@@ -44,7 +44,8 @@ export class StartingArrivalLayer {
   private readonly coreOpenings=new Map<string,{cell:Cell;openedAt:number}>();
   private readonly surfaceModel=new OwnedStrokeModel(new THREE.BoxGeometry(1,1,1));
   private readonly base=this.surfaceModel.geometry;
-  private readonly paint=createStylizedSurfaceTexture();
+  private readonly paint=createMechanicalSurfaceTexture();
+  get surfaceTexture():THREE.Texture{return this.paint;}
   private readonly plain=material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private readonly painted=material(0xffffff,{transparent:true,depthWrite:false,forceSinglePass:true});
   private key='';
@@ -82,7 +83,8 @@ export class StartingArrivalLayer {
       configure?.(surface);surface.userData.rendererOwned=true;surface.positionNode=position;
       surface.colorNode=attribute('boxColor','vec3');surface.opacityNode=float(1).sub(basis.x);
     }
-    this.painted.colorNode=attribute('boxColor','vec3').mul(texture(this.paint,instancedBoxPatternUv()).rgb);
+    const paintedPanel=texture(this.paint,capsulePaintUv(STARTING_ARRIVAL_PARTS,mechanicalPaint.landing)).rgb;
+    this.painted.colorNode=attribute('boxColor','vec3').mul(paintedPanel);
     const capacity=STARTING_ARRIVAL_CAPSULES*STARTING_ARRIVAL_PARTS;
     this.mesh=new BoxMesh(this.base,this.painted,capacity);this.mesh.name='starting-arrival-capsules';
     this.mesh.castShadow=true;this.mesh.receiveShadow=true;
@@ -98,8 +100,9 @@ export class StartingArrivalLayer {
     this.mesh.instanceMatrix.needsUpdate=this.mesh.colorBuffer.needsUpdate=sides.needsUpdate=true;
     this.mesh.activeCount=0;this.group.add(this.mesh);
     const context=currentGraphicsStyle();
+    bindPersonalizedTexture(context,this.paint,mechanicalSurfacePixels);
     this.painted.roughness=.88;this.painted.metalness=.02;
-    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),stroke:naturalStroke(context,this.surfaceModel.stroke)});
+    applySharedPaintSurface(this.painted,{context,base:attribute('boxColor','vec3'),pastel:this.painted.colorNode as THREE.Node<'vec3'>,faceUv:uv(),personalizedGouacheTransform:body=>body.mul(paintedPanel),stroke:naturalStroke(context,this.surfaceModel.stroke)});
   }
 
   /** Renderer-only preview callers must synchronize after writing instance streams. */

@@ -8,6 +8,8 @@ import { MapLabelBatch } from './MapLabelBatch';
 import {DEFAULT_ITEM_LABEL_MIN_CELL_PIXELS,itemLabelMinCellPixels} from '../ui/item-label-visibility';
 import {pileIdentitySurfacesFromCells,pileShelfCells,pileSurfaces,type PileShelfCell,type PileSurface} from './pile-surfaces';
 import {packedLabelAnchor,pileLabelAnchor} from './map-label-anchors';
+import {bedOwnerLabelEntries} from './bed-owner-labels';
+import type {MapLabelEntry} from './MapLabelBatch';
 
 export const PILE_LABEL_MIN_CELL_PIXELS = DEFAULT_ITEM_LABEL_MIN_CELL_PIXELS;
 
@@ -76,6 +78,10 @@ export class MapLabelsOverlay {
   private sourcePiles: World['piles'] | undefined;
   private sourcePacked: World['packed'] | undefined;
   private sourceStructures:World['structures']|undefined;
+  private sourcePawns:World['pawns']|undefined;
+  private bedLabels:readonly MapLabelEntry[]=[];
+  private bedLabelsVisible=true;
+  private bedLabelsDirty=false;
   private supportCells:ReadonlyMap<number,PileSurface>=new Map();
   private shelfCells:ReadonlyMap<number,PileShelfCell>=new Map();
   private sourceWorld:World|undefined;
@@ -85,12 +91,18 @@ export class MapLabelsOverlay {
   private chunks: { entries: { x: number; y:number; z: number; label: string;pileId?:number;shelf?:boolean;offsetY:number }[] }[] = [];
   private minCellPixels=PILE_LABEL_MIN_CELL_PIXELS;
   setMinCellPixels(value:number):void {this.minCellPixels=itemLabelMinCellPixels(value);}
+  setBedOwnerLabelsVisible(visible:boolean):void {if(this.bedLabelsVisible!==visible){this.bedLabelsVisible=visible;this.bedLabelsDirty=true;}}
 
   constructor(_host?: HTMLElement) {}
 
   prepareForCompile():()=>void {return this.batch.prepareForCompile();}
 
   private index(world: World,explorationRevision?:number): boolean {
+    // Stable camera frames consume only uniforms. These are the actual
+    // immutable MAIN sources; changed publications still pass the full checks.
+    if(!this.bedLabelsDirty&&this.sourceWorld===world&&this.sourcePiles===world.piles&&this.sourcePacked===world.packed
+      &&this.sourceStructures===world.structures&&this.sourcePawns===world.pawns&&this.sourceWidth===world.width
+      &&this.explorationRevision===explorationRevision)return false;
     // Structure snapshots are immutable in the private MAIN. Compare the real
     // support geometry only when that source changes, never on camera motion.
     let supportsChanged=false;
@@ -101,8 +113,13 @@ export class MapLabelsOverlay {
     }
     const enabled=explorationEnabled256(world);
     const sameExploration=this.explorationEnabled===enabled&&(!enabled||(explorationRevision===undefined?this.sourceWorld===world:this.explorationRevision===explorationRevision));
+    const nextBeds=this.bedLabelsVisible?bedOwnerLabelEntries(world):[];
+    const sameBeds=this.bedLabels.length===nextBeds.length&&this.bedLabels.every((before,i)=>{
+      const after=nextBeds[i]!;return before.x===after.x&&before.y===after.y&&before.z===after.z&&before.label===after.label&&before.offsetY===after.offsetY;
+    });
     const unchanged = sameExploration && this.sourceWidth === world.width &&
-      !supportsChanged&&samePileLabels(this.sourcePiles, world.piles,this.shelfCells.size>0) && samePackedLabels(this.sourcePacked, world.packed);
+      !supportsChanged&&sameBeds&&samePileLabels(this.sourcePiles, world.piles,this.shelfCells.size>0) && samePackedLabels(this.sourcePacked, world.packed);
+    this.bedLabels=nextBeds;this.bedLabelsDirty=false;this.sourcePawns=world.pawns;
     this.sourceWorld=world;this.explorationEnabled=enabled;this.explorationRevision=explorationRevision;
     this.sourcePiles = world.piles; this.sourcePacked = world.packed; this.sourceWidth = world.width;
     this.sourceStructures=world.structures;
@@ -134,7 +151,7 @@ export class MapLabelsOverlay {
       add(anchor.x,anchor.z,label,anchor.y);
     }
     this.chunks = [...chunks.values()];
-    this.batch.update(this.chunks.flatMap(chunk=>chunk.entries));
+    this.batch.update([...this.chunks.flatMap(chunk=>chunk.entries),...this.bedLabels]);
     return true;
   }
 

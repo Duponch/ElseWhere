@@ -5,7 +5,7 @@ import type { World } from '../src/sim/types';
 import type { NativePage, NativeUiActions, NativeUiState } from '../src/ui3d/native-contract';
 import { buildNativeInspector, setNativeInspectorTab } from '../src/ui3d/native-inspector';
 import { NATIVE_INSPECT, NATIVE_UI, layoutNativePage } from '../src/ui3d/native-layout';
-import { NATIVE_CHIP, NATIVE_GAP, NATIVE_LINE, NATIVE_TEXT, NATIVE_WINDOW } from '../src/ui3d/native-ui-scale';
+import { NATIVE_CHIP, NATIVE_GAP, NATIVE_LINE, NATIVE_TEXT, NATIVE_WINDOW, NATIVE_FONT_WEIGHT, nativeFont } from '../src/ui3d/native-ui-scale';
 import { NATIVE_BIO_SIZE, layoutNativeBioCard, nativeElementStack, nativeElementStackVertical, type NativeBioCard } from '../src/ui3d/native-bio-card';
 import { BACKGROUND_SKILL_IDS } from '../src/sim/colonist-backgrounds';
 
@@ -22,6 +22,8 @@ describe('one interface scale in RimWorld points (Text, GenUI, Window)', () => {
     expect(NATIVE_CHIP).toMatchObject({ height: 22, rowMargin: 4, itemMargin: 5, textPad: 10 });
     expect(NATIVE_UI).toMatchObject({ body: NATIVE_TEXT.small, small: NATIVE_TEXT.small, title: NATIVE_TEXT.medium, line: NATIVE_LINE.small, padding: 18, gap: 10 });
     expect(NATIVE_TEXT.tiny).toBeLessThan(NATIVE_TEXT.small); expect(NATIVE_TEXT.small).toBeLessThan(NATIVE_TEXT.medium);
+    expect(nativeFont('small','"Comfortaa"')).toBe(`${NATIVE_FONT_WEIGHT.regular} 13px "Comfortaa"`);
+    expect(nativeFont('small','"Comfortaa"',true)).toBe(`${NATIVE_FONT_WEIGHT.bold} 13px "Comfortaa"`);
   });
 
   it('refuses a literal text size in the native page builders, layout and painters', () => {

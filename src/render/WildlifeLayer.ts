@@ -35,7 +35,8 @@ import type { MotionTimeline } from './MotionTimeline';
 import { furnitureSurfaces } from './furniture-motion';
 import { travelHeight } from './furniture-motion';
 import { pawnSelectionMesh } from './PawnSelectionLayer';
-import { animalCoat,createAnimalCoatTexture } from './animal-surface-paint';
+import { animalCoat,createAnimalCoatTexture,createAnimalCoatPixels,type AnimalCoat } from './animal-surface-paint';
+import {bindPersonalizedTexture} from './texture-personalization';
 import { ANIMAL_SPECIES_IDS } from '../sim/animal-species';
 import { GaitPhaseTracker,animalGaitRadiansPerUnit } from './gait-presentation';
 import { ARRIVAL_TAIL_END,ARRIVAL_TAIL_REPLAN,MeleeRecoilTracker,type ConfirmedStrikeRosters,addMeleeLunge,arrivalTailPhase,arrivalTailTarget,capJolt } from './actor-motion-accents';
@@ -46,6 +47,8 @@ import { autoSlaughterTargets } from '../sim/auto-slaughter';
 import {wildlifePresentationGroups,type VisualAnimal} from './wildlife-presentation-groups';
 import type { PawnLayer } from './PawnLayer';
 import {animalSlaughterMarker,animalSlaughterMarkerMaterial,AnimalSlaughterMarkerStyle} from './AnimalSlaughterMarker';
+import {animalDesignationHeadAnchor} from './AnimalDesignationAnchor';
+import {knownPosition256} from '../ui/exploration-readers-256';
 import type {SceneTextureLoader} from './scene-render-ports';
 import { growPawnBuffers } from './pawn-buffers';
 import {WildlifeBodyScale,WildlifeFrameState} from './wildlife-frame-state';
@@ -86,7 +89,6 @@ class WildlifeBodyProgram {
     const presentationTime=binder.uniform(rig=>rig.presentationTime,first.presentationTime),blend=binder.uniform(rig=>rig.blend.value,first.blend.value);
     const gaitRate=binder.uniform(rig=>rig.gaitRate,first.gaitRate),bodyCenter=binder.uniform(rig=>rig.bodyCenter,first.bodyCenter),restFloor=binder.uniform(rig=>rig.restFloor,first.restFloor),bloodScale=binder.uniform(rig=>rig.bloodScale,first.bloodScale);
     const coat=binder.texture(rig=>rig.coatTexture,first.coatTexture),clock={travelTime,blend,animationCache:cache};
-    this.slaughter=animalSlaughterMarkerMaterial(clock,style,binder.uniform(rig=>rig.slaughterHeight,first.slaughterHeight),binder);
     this.fireShape=fireShape;this.fire=sharedAttachedFireMaterial(clock,.6,detail,fireShape,binder);
     const mat=material(0xffffff);configure?.(actorExplorationMaterial256(mat));
     // The packed paint word replaces the original RGB input in this pipeline;
@@ -103,6 +105,10 @@ class WildlifeBodyProgram {
     const idleProfile={graze:binder.uniform(rig=>rig.idle.graze,first.idle.graze),peck:binder.uniform(rig=>rig.idle.peck,first.idle.peck),
       tailAmplitude:binder.uniform(rig=>rig.idle.tailAmplitude,first.idle.tailAmplitude),tailRate:binder.uniform(rig=>rig.idle.tailRate,first.idle.tailRate),
       shake:binder.uniform(rig=>rig.idle.shake,first.idle.shake),ruffle:binder.uniform(rig=>rig.idle.ruffle,first.idle.ruffle),look:binder.uniform(rig=>rig.idle.look,first.idle.look)};
+    const boundPoint=(read:(rig:SpeciesRig)=>THREE.Vector3)=>vec3(binder.uniform(rig=>read(rig).x,read(first).x),binder.uniform(rig=>read(rig).y,read(first).y),binder.uniform(rig=>read(rig).z,read(first).z));
+    const headPoint=boundPoint(rig=>rig.designationHead),headPivot=boundPoint(rig=>rig.designationPivot);
+    this.slaughter=animalSlaughterMarkerMaterial(clock,style,binder.uniform(rig=>rig.slaughterHeight,first.slaughterHeight),binder,
+      ()=>animalDesignationHeadAnchor({clock,cache,time:presentationTime,rate:gaitRate,point:headPoint,pivot:headPivot,bodyCenter,restFloor,headCell:8+Math.max(0,bones.indexOf(3)),profile:idleProfile}));
     mat.positionNode=Fn(()=>{
       // Writes the drawn species' resources into this shared graph.
       binder.toStack();
@@ -228,7 +234,7 @@ class WildlifeBodyProgram {
       const owner={source:prepared.source,irregularity:binder.uniform(rig=>rig.strokeIrregularity,first.strokeIrregularity),assertReady:()=>prepared.assertReady(),readRow:(row:THREE.Node<'int'>)=>strokes.element(row)} as unknown as AffineStrokeOwner;
       return(body:THREE.Node<'vec3'>)=>createPreparedAffineStrokeNode(body,{...common,owner});
     };
-    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
+    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor.mul(sample.a.mul(1.08)).add(sample.rgb));
     const bodyOptions:SharedPaintSurfaceOptions={context:graphics,base:baseColor,pastel:pastelFromSample(texture(coat,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,stroke:buildStroke()};applySharedPaintSurface(textured,bodyOptions);
     this.plain=mat;this.textured=textured;
   }
@@ -338,6 +344,8 @@ class SpeciesRig {
   readonly idle:AnimalIdleProfile;
   /** Per-species values and resources read by the shared body program. */
   readonly bodyCenter:number;readonly restFloor:number;readonly bloodScale:number;readonly coatTexture:THREE.DataTexture;readonly slaughterHeight:number;
+  readonly designationHead=new THREE.Vector3();readonly designationPivot=new THREE.Vector3();
+  private huntTargets:ReadonlySet<number>=new Set();private quotaTargets:ReadonlySet<number>=new Set();
   private readonly strokeOwner:AffineStrokeOwner|undefined;
   private readonly bodyProgram:WildlifeBodyProgram;
   get presentationTime():number {return this.time.value;}
@@ -365,6 +373,9 @@ class SpeciesRig {
     this.restingHeight=bounds.max.x+restFloor;
     this.restingRadius=Math.max(Math.abs(bodyCenter-bounds.min.y),Math.abs(bodyCenter-bounds.max.y),Math.abs(bounds.min.z),Math.abs(bounds.max.z))+.1;
     this.slaughterHeight=bounds.max.y;this.bodyCenter=bodyCenter;this.restFloor=restFloor;this.bloodScale=species==='hare'||species==='snow-hare'?2:1;this.coatTexture=surfaceTexture;
+    const headBounds=new THREE.Box3(),headPoint=new THREE.Vector3(),position=geometry.getAttribute('position'),pivot=geometry.getAttribute('bindPivot');let headFound=false;
+    for(let i=0;i<part.count;i++)if(part.getX(i)===3){headBounds.expandByPoint(headPoint.fromBufferAttribute(position,i));if(!headFound)this.designationPivot.fromBufferAttribute(pivot,i);headFound=true;}
+    if(headFound){headBounds.getCenter(this.designationHead);this.designationHead.y=headBounds.max.y;}else this.designationHead.set(0,bounds.max.y,0);
     this.strokeOwner=graphics.preparedStrokes.acquire(model.strokes);
     const program=programs.acquire(this,graphics,this.sampledBones,this.strokeOwner,attachedFireShape(geometry));this.bodyProgram=program;
     this.plainMaterial=program.plain;this.texturedMaterial=program.textured;
@@ -378,7 +389,7 @@ class SpeciesRig {
       const table=model.strokes,headers=faceStrokeVertexHeaders({table,faceId,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity},'v_animalStrokeHeader'),common={faceId,headers,faceUv:surfaceUv.xy,surfacePosition,enabled:graphics.surfaceEncoding.mul(graphics.lineOpacity),opacity:graphics.lineOpacity,brushColor:graphics.brushColor.rgb,samplePigment:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokePigment(coordinates,dx,dy),sampleDry:(coordinates:THREE.Node<'vec2'>,dx:THREE.Node<'vec2'>,dy:THREE.Node<'vec2'>)=>graphics.sampleStrokeDry(coordinates,dx,dy)};
       return(body:THREE.Node<'vec3'>)=>createFaceStrokeNode(body,{...common,table:model.strokes,width:graphics.edgeWidth,irregularity:graphics.strokeImperfection});
     };
-    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor).mul(sample.r.mul(.8).add(.28));
+    const pastelFromSample=(sample:THREE.Node<'vec4'>)=>withBlood(baseColor.mul(sample.a.mul(1.08)).add(sample.rgb));
     this.pastelSourceTexture=surfaceTexture;this.pastelFromSample=pastelFromSample;
     this.bodyBakeOptions=surfacePosition=>({context:graphics,base:baseColor,pastel:pastelFromSample(texture(surfaceTexture,surfaceUv.zw)),faceUv:surfaceUv.xy,profile,pigmentDomain:'game-static78',includeGeneric:true,gouacheTransform:withBlood,surfacePosition,stroke:canonicalStroke(surfacePosition)});
     this.mesh=new THREE.Mesh(geometry,this.texturedMaterial);program.binder.attach(this.mesh,this);this.bodyAtlas=new ActorAtlasOwner({key:'animal-full-body:'+this.species+':'+this.mesh.uuid,kind:'animal',context:graphics,readPort:()=>this.bodySurfaceBakeSource(),ownerCount:()=>(this.mesh.geometry as THREE.InstancedBufferGeometry).instanceCount,changed:()=>this.selectSurfaceMaterial(),configure:material=>{configure?.(actorExplorationMaterial256(material));}});this.selectSurfaceMaterial();this.mesh.name=`Wild ${this.species} — GPU rig`;this.mesh.frustumCulled=false;this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.flames=attachedFireMesh(this.mesh.geometry,this,.6,this.animationDetail,program.fire);program.binder.attach(this.flames,this);
@@ -514,7 +525,19 @@ class SpeciesRig {
   adoptPhase297(world:World,animals:readonly NonNullable<World['wildlife']>['animals'][number][]):void {
     const indices:number[]=[];
     for(const animal of animals){const i=this.phaseIndices297.get(animal.id);if(i===undefined)continue;this.animals[i]=animal;this.keys.invalidate(animal.id);indices.push(i);}
-    this.source=world;this.playback435.adoptPhase297(world,this.animals,indices);
+    this.source=world;this.playback435.adoptPhase297(world,this.animals,indices);this.refreshDesignationFlags(world,indices);
+  }
+  private refreshDesignationFlags(world:World,indices?:readonly number[]):void {
+    const markers=this.slaughter.geometry as THREE.InstancedBufferGeometry,flags=markers.getAttribute('aSlaughter') as THREE.InstancedBufferAttribute;let dirty=false;
+    const update=(index:number)=>{const a=this.animals[index]!;
+      const live=a.state!=='dead'&&!a.corpsePile;
+      const value=live&&(a.domestic?.slaughter===true||this.quotaTargets.has(a.id))?1:live&&!a.domestic&&this.huntTargets.has(a.id)&&knownPosition256(world,a)?2:0;
+      if(flags.getX(index)!==value){flags.setX(index,value);dirty=true;}
+    };
+    if(indices)for(const index of indices)update(index);else for(let i=0;i<this.animals.length;i++)update(i);
+    if(indices&&!dirty)return;
+    if(dirty)flags.needsUpdate=true;markers.instanceCount=this.animals.length;
+    let any=false;for(let i=0;i<this.animals.length&&!any;i++)any=flags.getX(i)>0;this.slaughter.visible=any;
   }
   private ensureSpring297(count:number):void {
     if(count<=this.springCapacity297)return;const capacity=2**Math.ceil(Math.log2(Math.max(1,count)));
@@ -580,18 +603,14 @@ class SpeciesRig {
   updateClock(tick:number,pawns?:PawnLayer):void {
     this.time.value=pawns?.time.value??localTimeSeconds(tick)%(2*Math.PI);this.blend.value=pawns?.blend.value??1;
   }
-  update(world:World,group:VisualAnimal[],burning:ReadonlyMap<number,number>,timeline:MotionTimeline|undefined,surfaces:ReadonlyMap<number,number>,pileSurface:ReadonlyMap<number,PileSurface>,reset=false,pawns?:PawnLayer,quotaTargets:ReadonlySet<number>=new Set(),pileIdentities?:ReadonlyMap<number,PileSurface>,actorScene?:CoreActorScene297,dt297=0,speed297=0):boolean {
+  update(world:World,group:VisualAnimal[],burning:ReadonlyMap<number,number>,timeline:MotionTimeline|undefined,surfaces:ReadonlyMap<number,number>,pileSurface:ReadonlyMap<number,PileSurface>,reset=false,pawns?:PawnLayer,quotaTargets:ReadonlySet<number>=new Set(),pileIdentities?:ReadonlyMap<number,PileSurface>,actorScene?:CoreActorScene297,dt297=0,speed297=0,huntTargets:ReadonlySet<number>=new Set()):boolean {
     const changed=this.source!==world;
     if(changed||reset)this.revision++;
     if(reset){this.headings.clear();this.keys.clear();this.gait.clear();this.resetSpring297();}
     if(changed){this.source=world;this.keys.clear();this.animals=group;this.phaseIndices297.clear();for(let i=0;i<group.length;i++)this.phaseIndices297.set(group[i]!.id,i);this.surfaces=surfaces;this.mesh.visible=group.length>0;
       if(this.animals.length>this.mesh.geometry.getAttribute('aFrom').count){this.clearOrigamiPartUnions();growPawnBuffers([this.mesh,this.flames,this.selection,this.slaughter],this.animals.length,(geometry,mesh)=>{if(mesh===this.mesh)this.retiredSurfaceGeometries.push(geometry);else geometry.dispose();});this.installOrigamiPartUnions();this.syncOrigamiInstances();}
       this.setSelected(this.selected);
-      const markers=this.slaughter.geometry as THREE.InstancedBufferGeometry,flags=markers.getAttribute('aSlaughter') as THREE.InstancedBufferAttribute;
-      let any=false,dirty=false;
-      this.animals.forEach((animal,index)=>{const enabled=animal.state!=='dead'&&(animal.domestic?.slaughter===true||quotaTargets.has(animal.id)),value=enabled?1:0;
-        if(flags.getX(index)!==value){flags.setX(index,value);dirty=true;}any||=enabled;});
-      if(dirty)flags.needsUpdate=true;markers.instanceCount=this.animals.length;this.slaughter.visible=any;
+      this.huntTargets=huntTargets;this.quotaTargets=quotaTargets;this.refreshDesignationFlags(world);
       const present=new Set(this.animals.map(a=>a.id));for(const id of this.headings.keys())if(!present.has(id)){this.headings.delete(id);this.gait.delete(id);}
     }
     const tick=timeline?.tick??world.tick,origin=Math.floor(tick/1024)*1024;
@@ -766,6 +785,7 @@ class SpeciesRig {
 export class WildlifeLayer {
   readonly mesh:THREE.Group;readonly flames:THREE.Group;readonly travelTime=uniform(0).setGroup(renderGroup);
   private readonly surfaceTextures={soft:createAnimalCoatTexture('soft'),short:createAnimalCoatTexture('short'),shaggy:createAnimalCoatTexture('shaggy')};
+  private readonly releasePersonalizedTextures:(()=>void)[]=[];
   private texturesEnabled=true;
   private readonly models=new AnimalModels();
   private readonly bodyPrograms:WildlifeBodyPrograms;
@@ -775,6 +795,7 @@ export class WildlifeLayer {
   private readonly ownsGraphicsContext:boolean;
   private readonly markerStyle:AnimalSlaughterMarkerStyle;
   private rigs:SpeciesRig[];private source?:World;private surfaces:ReadonlyMap<number,number>=new Map();private pileSurface:ReadonlyMap<number,PileSurface>=new Map();private pileIdentities:ReadonlyMap<number,PileSurface>=new Map();private quotaTargets:ReadonlySet<number>=new Set();
+  private huntTargets:ReadonlySet<number>=new Set();
   private activeRigs:SpeciesRig[]=[];
   private surfaceRevision=0;
   private surfaceClosed=false;
@@ -786,6 +807,10 @@ export class WildlifeLayer {
   constructor(configure?:(m:THREE.MeshStandardNodeMaterial)=>void,loadTexture?:SceneTextureLoader,animationDetail=new AnimationDetail(),ownedGpuMatrices435=false){
     this.mesh=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();this.flames=ownedGpuMatrices435?new WorldCoordinateGroup():new THREE.Group();
     const graphics=currentGraphicsStyle();this.graphicsContext=graphics??new GraphicsStyleContext();this.ownsGraphicsContext=!graphics;
+    for(const coat of Object.keys(this.surfaceTextures) as AnimalCoat[]){
+      const map=this.surfaceTextures[coat],painted=map.image.data as Uint8Array;let neutral:Uint8Array|undefined;
+      this.releasePersonalizedTextures.push(bindPersonalizedTexture(this.graphicsContext,map,enabled=>enabled?painted:(neutral??=createAnimalCoatPixels(coat,false))));
+    }
     this.markerStyle=new AnimalSlaughterMarkerStyle(loadTexture);
     this.bodyPrograms=new WildlifeBodyPrograms(this.travelTime,animationDetail,configure,this.markerStyle);
     this.rigs=withGraphicsStyle(this.graphicsContext,()=>ANIMAL_SPECIES_IDS.map(species=>new SpeciesRig(this.travelTime,species,this.surfaceTextures[animalCoat(species)],this.markerStyle,animationDetail,configure,this.models,this.bodyPrograms)));
@@ -829,7 +854,7 @@ export class WildlifeLayer {
       const present=new Set(active);for(const rig of this.activeRigs)if(!present.has(rig))rig.deactivate();
       this.activeRigs=active;
       this.rigById.clear();for(const rig of active)for(const animal of this.groups.get(rig.species)!)this.rigById.set(animal.id,rig);
-      this.surfaces=furnitureSurfaces(world);this.pileSurface=pileSurfaces(world);this.pileIdentities=pileIdentitySurfaces(world);this.quotaTargets=autoSlaughterTargets(world);
+      this.surfaces=furnitureSurfaces(world);this.pileSurface=pileSurfaces(world);this.pileIdentities=pileIdentitySurfaces(world);this.quotaTargets=autoSlaughterTargets(world);this.huntTargets=new Set(world.hunting?.targets??[]);
       this.burning=new Map((world.fires?.items??[]).filter(f=>f.attachedAnimalId!==undefined).map(f=>[f.attachedAnimalId!,f.size]));
     }
     const tick=timeline?.tick??world.tick,origin=Math.floor(tick/1024)*1024;
@@ -838,7 +863,7 @@ export class WildlifeLayer {
     // including during compile preparation; only active rigs prepare actors.
     for(const rig of this.rigs)rig.updateClock(tick,pawns);
     if(isCorePhysicalSchema297(Number(world.schemaVersion))){const attackers=strikeRosters?.read(world,actorScene);if(!attackers||attackers.length)this.observeMeleeHits(world,actorScene,attackers);}
-    for(const rig of this.activeRigs)rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297);
+    for(const rig of this.activeRigs)rig.update(world,this.groups.get(rig.species)!,this.burning,timeline,this.surfaces,this.pileSurface,reset,pawns,this.quotaTargets,this.pileIdentities,actorScene,dt297,speed297,this.huntTargets);
   }
   adoptPhase297(world:World,indices:readonly number[],actorScene?:CoreActorScene297,changedActorIds?:ReadonlySet<number>):void {
     const population=actorScene?.animals??world.wildlife?.animals??[],dirty=new Set(indices);
@@ -866,6 +891,7 @@ export class WildlifeLayer {
       (r.selection.material as THREE.Material).dispose();
     }
     this.bodyPrograms.dispose();
+    for(const release of this.releasePersonalizedTextures)release();this.releasePersonalizedTextures.length=0;
     for(const texture of Object.values(this.surfaceTextures))texture.dispose();
     this.markerStyle.dispose();this.models.dispose();if(this.ownsGraphicsContext)this.graphicsContext.dispose();
   }

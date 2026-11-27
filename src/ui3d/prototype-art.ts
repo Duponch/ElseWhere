@@ -1,5 +1,6 @@
 import {drawPicto,drawPictoInBox} from '../ui/picto-artwork';
 import * as THREE from 'three/webgpu';
+import {isDefaultUiTheme,readableUiInk,uiColorLuminance,uiTintedSurface,type UiTheme} from './ui-theme';
 
 /** Literal artwork from the user's diorama_carton_hud_3d_three_js_webgpu(3).html.
  * Canvas is only a procedural paint surface; placement and interaction are meshes.
@@ -77,13 +78,16 @@ export interface CardboardPiece extends THREE.Group {
   redraw(drawFn?: CardboardDraw, bgColor?: string): void;
   setActive(active: boolean, bgColor?: string): void;
 }
-export const PALETTE = {
+const DEFAULT_PALETTE = {
   edgeCream: 0xf2e9d2,     // Tranche franche et mate du carton découpé (comme les montagnes)
   wallKraft: 0xc59e72,     // Carton du mur de fond
   kraftBase: '#c69d6e',    // Carton brut sous la peinture
   kraftDark: '#9d764c',
   kraftLight: '#dfC5a2',
   creamPaper: '#f3ead6',
+  sheetPaper: '#f1e7cf',
+  inputPaper: '#fff9eb',
+  labelPaper: '#f4ecda',
   sageMountain: '#8fa185', // Gouache vert sauge
   pineDark: '#47684b',
   pineMid: '#688358',
@@ -95,6 +99,20 @@ export const PALETTE = {
   inkDark: '#261e18',      // Feutre noir/brun
   tapeHex: 0xeadfc2
 };
+export const PALETTE={...DEFAULT_PALETTE};
+export type CardboardUiPalette=typeof PALETTE;
+const UI_PAPER_ROLES=['sheetPaper','inputPaper','labelPaper','creamPaper','kraftBase','kraftLight','kraftDark','sageMountain','ochre','terracotta','slateBlue','berryPurple'] as const;
+type UiPaperRole=typeof UI_PAPER_ROLES[number];
+const uiPaperRole=(color:string,palette=PALETTE)=>UI_PAPER_ROLES.find(key=>palette[key]===color);
+let cardboardThemeRevision=0;
+let cardboardThemeCustom=false;
+export const customCardboardTheme=():boolean=>cardboardThemeCustom;
+/** Change paint roles, not scenery or 3D materials. Called only for UI settings. */
+export function applyCardboardUiTheme(theme:UiTheme):CardboardUiPalette {
+ const previous={...PALETTE};cardboardThemeRevision++;Object.assign(PALETTE,DEFAULT_PALETTE);cardboardThemeCustom=!isDefaultUiTheme(theme);if(!cardboardThemeCustom)return previous;
+ const bg=theme.background,ink=readableUiInk(theme.text,bg),tint=(color:string,amount:number)=>uiTintedSurface(bg,ink,color,amount);
+ Object.assign(PALETTE,{creamPaper:bg,sheetPaper:bg,inputPaper:tint(ink,.06),labelPaper:bg,inkDark:ink,kraftBase:tint(ink,.18),kraftLight:tint(ink,.10),kraftDark:tint(ink,.28),sageMountain:tint(DEFAULT_PALETTE.sageMountain,.50),ochre:tint(DEFAULT_PALETTE.ochre,.47),terracotta:tint(DEFAULT_PALETTE.terracotta,.45),slateBlue:tint(DEFAULT_PALETTE.slateBlue,.44),berryPurple:tint(DEFAULT_PALETTE.berryPurple,.40)});return previous;
+}
 
 interface RandomStream {():number;clone():RandomStream}
 function randomStream(seed:number):RandomStream {
@@ -283,6 +301,10 @@ export function drawHandBlob(ctx: CanvasRenderingContext2D, cx: number, cy: numb
 
 // Peint une vraie surface en carton kraft recouverte de coups de pinceau à la gouache irréguliers
 export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number, hPx: number, bgColor: string, drawCallback: CardboardDraw | undefined, hasBorder = true, seed = 1, rng:()=>number = seededRandom(seed * 313 + 7), surface?:'panel') {
+  // The same light pigment that is almost imperceptible on cream paper is a
+  // large grey blotch on dark paper. Keep the old artwork for the default
+  // palette; on dark customized surfaces keep the grain near the chosen ink.
+  const darkPaper=cardboardThemeCustom&&uiColorLuminance(bgColor)<.18;
   ctx.clearRect(0, 0, wPx, hPx);
 
   // 1. Fond de carton kraft brut (qui restera visible sur les bords mal peints !)
@@ -290,13 +312,13 @@ export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number,
   ctx.fillRect(0, 0, wPx, hPx);
 
   // Ondulations internes du carton kraft + fibres de papier recyclé
-  ctx.fillStyle = 'rgba(75, 45, 18, 0.06)';
+  ctx.fillStyle = darkPaper?'rgba(0,0,0,0.035)':'rgba(75, 45, 18, 0.06)';
   for (let y = 0; y < hPx; y += 6) {
     ctx.fillRect(0, y + (rng() - 0.5) * 2, wPx, 2.2);
   }
   const specks = Math.min(700, Math.floor((wPx * hPx) / 130));
   for (let i = 0; i < specks; i++) {
-    ctx.fillStyle = (i % 3 === 0) ? 'rgba(48, 28, 12, 0.11)' : 'rgba(255, 246, 225, 0.09)';
+    ctx.fillStyle = (i % 3 === 0) ? (darkPaper?'rgba(0,0,0,0.05)':'rgba(48, 28, 12, 0.11)') : (darkPaper?'rgba(255,246,225,0.025)':'rgba(255, 246, 225, 0.09)');
     ctx.fillRect(rng() * wPx, rng() * hPx, 2 + rng() * 4, 1.5 + rng() * 2);
   }
 
@@ -327,7 +349,7 @@ export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number,
   // 3. Variations de dilution de la gouache (auréoles plus claires / plus sombres et traces de poils)
   const pigmentCount=surface?Math.min(42,Math.max(7,Math.ceil(wPx*hPx/80000))):7;
   for (let b = 0; b < pigmentCount; b++) {
-    ctx.fillStyle = (b % 2 === 0) ? 'rgba(255, 248, 230, 0.08)' : surface?'rgba(74, 48, 25, 0.025)':'rgba(35, 20, 10, 0.07)';
+    ctx.fillStyle = (b % 2 === 0) ? (darkPaper?'rgba(255,248,230,0.018)':'rgba(255, 248, 230, 0.08)') : darkPaper?'rgba(0,0,0,0.04)':surface?'rgba(74, 48, 25, 0.025)':'rgba(35, 20, 10, 0.07)';
     drawHandBlob(
       ctx,
       wPx * (0.15 + rng() * 0.7),
@@ -341,7 +363,7 @@ export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number,
   }
 
   // Stries de poils de pinceau sec
-  ctx.strokeStyle = 'rgba(255, 248, 230, 0.08)';
+  ctx.strokeStyle = darkPaper?'rgba(255,248,230,0.02)':'rgba(255, 248, 230, 0.08)';
   ctx.lineWidth = 1.6;
   for (let i = 0; i < 14; i++) {
     const by = rng() * hPx;
@@ -353,7 +375,7 @@ export function paintCardboardCanvas(ctx: CanvasRenderingContext2D, wPx: number,
 
   // Petites éclaboussures de peinture
   for (let sp = 0; sp < 10; sp++) {
-    ctx.fillStyle = (sp % 2 === 0) ? 'rgba(38, 26, 18, 0.16)' : 'rgba(250, 242, 222, 0.22)';
+    ctx.fillStyle = (sp % 2 === 0) ? (darkPaper?'rgba(0,0,0,0.07)':'rgba(38, 26, 18, 0.16)') : (darkPaper?'rgba(250,242,222,0.055)':'rgba(250, 242, 222, 0.22)');
     ctx.beginPath();
     ctx.arc(rng() * wPx, rng() * hPx, 1.2 + rng() * 3.2, 0, Math.PI * 2);
     ctx.fill();
@@ -446,7 +468,7 @@ export function createCardboardPiece({
   let inkRandom:RandomStream|undefined;
   const paint=(draw:CardboardDraw|undefined,bg:string)=>{
     if(paper&&cacheBackground){
-      const key=JSON.stringify([wPx,hPx,seed,bg,hasBorder,surface]);
+      const key=JSON.stringify([wPx,hPx,seed,bg,hasBorder,surface,cardboardThemeRevision]);
       if(backgroundKey!==key){
         background??=paintCanvas();background.width=wPx;background.height=hPx;
         const backgroundCtx=background.getContext('2d',{alpha:false});
@@ -468,8 +490,10 @@ export function createCardboardPiece({
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
 
-  // Gouache 100% mate (roughness: 0.99, metalness: 0)
-  const frontMat = paper?new THREE.MeshStandardMaterial({
+  // Ink and paper on a reading sheet are authored display colours: the
+  // surrounding stage lights must not wash out text or a user's dark theme.
+  // The actual cardboard extrusion, edge material and shadow remain physical.
+  const frontMat = paper&&surface==='panel'?new THREE.MeshBasicMaterial({map:texture,toneMapped:false}):paper?new THREE.MeshStandardMaterial({
     map: texture,
     roughness: 0.99,
     metalness: 0.0
@@ -597,6 +621,7 @@ export class PrototypeCardboardArt {
     depthWrite: false
   });
   private readonly pieces = new Set<CardboardPiece>();
+  private readonly themeRoles=new WeakMap<CardboardPiece,UiPaperRole>();
   private readonly hitMeshes: THREE.Mesh[] = [];
   /** Shared cut-shape geometries, never disposed with a piece. */
   private readonly sharedGeometries = new Map<string, CardboardGeometry>();
@@ -615,10 +640,22 @@ export class PrototypeCardboardArt {
 
   get interactiveMeshes(): readonly THREE.Mesh[] { return this.hitMeshes; }
 
+  /** Existing pieces retain their geometry, identities and hit targets. A theme
+   * boundary is the one time we repaint them, including parked page pieces. */
+  refreshTheme(previous:CardboardUiPalette):void{
+    for(const piece of this.pieces){
+      if(piece.userData.hitOnly)continue;
+      const retained=this.themeRoles.get(piece),role=retained&&previous[retained]===piece.userData.bgColor?retained:uiPaperRole(piece.userData.bgColor,previous);
+      piece.redraw(piece.userData.drawFn,role?PALETTE[role]:piece.userData.bgColor);
+      if(role)this.themeRoles.set(piece,role);else this.themeRoles.delete(piece);
+    }
+  }
+
   createPiece(options: CardboardPieceOptions): CardboardPiece {
     const piece = createCardboardPiece(options, this.cardboardEdgeMat, this.shadowMat, this.geometryCache);
+    const role=uiPaperRole(piece.userData.bgColor);if(role)this.themeRoles.set(piece,role);
     const redraw=piece.userData.redraw,setBase=piece.userData.setBaseTransform;
-    piece.userData.redraw=(...args)=>{redraw(...args);this.revision++;this.resourceRevision++;};
+    piece.userData.redraw=(...args)=>{const bg=args[1];if(bg!==undefined&&bg!==piece.userData.bgColor){const role=uiPaperRole(bg);if(role)this.themeRoles.set(piece,role);else this.themeRoles.delete(piece);}redraw(...args);this.revision++;this.resourceRevision++;};
     piece.userData.setBaseTransform=(...args)=>{setBase(...args);this.revision++;};
     this.pieces.add(piece);
     this.hitMeshes.push(...(piece.userData.interactiveMeshes ?? []));
@@ -641,12 +678,12 @@ export class PrototypeCardboardArt {
       // Keep the label's seeded paint identical after removing its icon disk.
       for (let point = 0; point < 14; point++) rng();
       const iconWidth = wPx - 24, iconHeight = hPx - 62;
-      drawPictoInBox(ctx, cfg.id, 12 + iconWidth * .12, 10 + iconHeight * .12, iconWidth * .76, iconHeight * .76, '#261e18');
+      drawPictoInBox(ctx, cfg.id, 12 + iconWidth * .12, 10 + iconHeight * .12, iconWidth * .76, iconHeight * .76, cardboardThemeCustom?readableUiInk(PALETTE.inkDark,cfg.color):PALETTE.inkDark);
       ctx.save();
       ctx.translate(wPx / 2, hPx - 27);
       ctx.rotate((idx % 2 === 0 ? -0.035 : 0.035));
-      drawHandRect(ctx, -wPx * 0.44, -15, wPx * 0.88, 30, '#f4ecda', '#261e18', 2.5, rng);
-      ctx.fillStyle = '#261e18';
+      drawHandRect(ctx, -wPx * 0.44, -15, wPx * 0.88, 30, PALETTE.labelPaper, PALETTE.inkDark, 2.5, rng);
+      ctx.fillStyle = PALETTE.inkDark;
       ctx.font = 'bold '+labelSize+'px "Comic Sans MS", "Chalkboard SE", Georgia, serif';
       ctx.textAlign = 'center';
       ctx.fillText(cfg.label, 0, 6);

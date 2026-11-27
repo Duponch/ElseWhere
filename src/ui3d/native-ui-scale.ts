@@ -1,3 +1,4 @@
+import {isDefaultUiTheme,mixUiColor,readableUiInk,uiInkWash,uiTintedSurface,type UiTheme} from './ui-theme';
 /** One scale for the whole native interface, in RimWorld interface points
  * (`Text`, `GenUI`, `Window`, `Widgets`, `CharacterCardUtility`,
  * `InspectPaneUtility`). A point is a logical pixel; the player's interface
@@ -12,6 +13,11 @@
  * Elsewhere's default font (Comfortaa, wider and with a taller x-height), the
  * same x-height and cap height are reached at 13 and 20 px. */
 export const NATIVE_TEXT={tiny:10,small:13,medium:20} as const;
+/** The hand-drawn fonts need a stronger regular stroke at the real UI scale:
+ * thin, antialiased glyphs on paper lose contrast when the native canvas is
+ * filtered by the linear GPU compositor. Weight is shared by measurement and
+ * paint, and changes neither the logical points nor the retained render pass. */
+export const NATIVE_FONT_WEIGHT={regular:600,bold:700} as const;
 export type NativeTextRole=keyof typeof NATIVE_TEXT;
 /** Line heights reserved by RimWorld: `Text.SmallFontHeight` is 22; Tiny and
  * Medium are the rectangles the game reserves for them (18 and 30). */
@@ -28,7 +34,7 @@ export const NATIVE_CHIP={height:22,rowMargin:4,itemMargin:5,textPad:10,textInse
  * its cream paper and brown ink, so each role keeps its meaning and contrast
  * rather than its RGB value (yellow section title → ochre ink, white 10 % chip
  * → a 10 % ink wash framed by a hand line, grey 0.5 « none » → faded ink). */
-export const NATIVE_INK={
+const DEFAULT_NATIVE_INK={
   text:'#3a2c1d',
   /** `ColoredText.TipSectionTitleColor` (0.9, 0.9, 0.3): ochre ink, darkened so
    * that it reads on the cream paper (every text role below keeps at least
@@ -80,6 +86,17 @@ export const NATIVE_INK={
   gaugeHealth:'#bdb39c',
   gaugeMood:'#9fc4bc',
   gaugeHunger:'#b89c5a',
+  richPerson:'#795121',richItem:'#456444',richAction:'#86532f',richValue:'#754e76',richWarning:'#9b3e32',
 } as const;
+export const NATIVE_INK:{-readonly [K in keyof typeof DEFAULT_NATIVE_INK]:string}={...DEFAULT_NATIVE_INK};
+export function applyNativeInkTheme(theme:UiTheme):void{
+ Object.assign(NATIVE_INK,DEFAULT_NATIVE_INK);if(isDefaultUiTheme(theme))return;
+ const bg=theme.background,ink=readableUiInk(theme.text,bg),subtle=readableUiInk(mixUiColor(ink,bg,.22),bg);
+ const surface=(tint:string,t:number)=>uiTintedSurface(bg,ink,tint,t),wash=(alpha:number)=>uiInkWash(ink,alpha);
+ const roles=['sectionTitle','royal','positive','negative','painMedium','painSevere','good','red','enhanced','richPerson','richItem','richAction','richValue','richWarning'] as const;
+ for(const role of roles)NATIVE_INK[role]=readableUiInk(DEFAULT_NATIVE_INK[role],bg);
+ Object.assign(NATIVE_INK,{text:ink,subtle,none:subtle,disabled:subtle,relation:subtle,separator:subtle,line:wash(.45),barFrame:ink,barBack:surface(ink,.16),tickPassed:ink,tickAhead:subtle,marker:ink,arrow:ink,panelFill:wash(.06),panelEdge:wash(.5),buttonFill:surface(ink,.1),buttonActive:surface('#d9993e',.28),buttonEdge:wash(.7),scrollTrack:wash(.14),scrollThumb:wash(.5),rowAlt:wash(.07),chipFill:wash(.10),chipEdge:wash(.42),highlight:uiInkWash(readableUiInk('#b07a28',bg),.16),highlightPlane:readableUiInk('#b07a28',bg),skillFill:wash(.16),gaugeBack:surface(ink,.15),gaugeHealth:surface('#bdb39c',.55),gaugeMood:surface('#9fc4bc',.55),gaugeHunger:surface('#b89c5a',.55)});
+}
 /** The canvas font of a role in the current family. */
-export function nativeFont(role:NativeTextRole,family:string,bold=false):string{return `${bold?'bold ':''}${NATIVE_TEXT[role]}px ${family}`;}
+export function nativeFontPx(size:number,family:string,bold=false):string{return `${bold?NATIVE_FONT_WEIGHT.bold:NATIVE_FONT_WEIGHT.regular} ${size}px ${family}`;}
+export function nativeFont(role:NativeTextRole,family:string,bold=false):string{return nativeFontPx(NATIVE_TEXT[role],family,bold);}

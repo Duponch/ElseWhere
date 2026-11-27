@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import {attribute} from 'three/tsl';
+import {attribute,texture} from 'three/tsl';
 import {PawnLayer} from '../render/PawnLayer';
 import {WildlifeLayer} from '../render/WildlifeLayer';
 import {AnimationDetail} from '../render/AnimationDetail';
@@ -20,12 +20,14 @@ import {POSE_DEAD} from '../bridge/actor-phase-dependencies-297';
 import {scytherGeometry} from '../render/scyther-geometry';
 import {OwnedStrokeModel} from '../render/surfaces/OwnedStrokeModel';
 import {naturalStroke} from '../render/surfaces/NaturalSurfaceModels';
+import {createMechanicalSurfaceTexture} from '../render/mechanical-surface-art';
 import {encodeOrigamiEquipment} from '../render/origami/equipment-pose';
 import {rangedMechGeometry} from '../render/ranged-mech-geometry';
 import {material} from '../render/primitives';
 import {mechanoidDefinition,type MechanoidKind} from '../sim/mechanoid-definition';
 import {mechanoidPartIndex} from '../sim/mechanoid-presentation';
 import type {CatalogCollection,CatalogItem,CatalogSection,CatalogStatus} from './asset-catalog-types';
+import {TSHIRT_PAINT_OUTFIT} from '../render/human-tailoring';
 
 type Stream=THREE.BufferAttribute|THREE.InterleavedBufferAttribute;
 type RaceRig={species:typeof ANIMAL_SPECIES_IDS[number];mesh:THREE.Mesh<THREE.InstancedBufferGeometry>;animationCache:{ensureCapacity(count:number):void};time:{value:number};blend:{value:number};origamiLines?:THREE.Mesh;origamiWear?:THREE.Mesh};
@@ -59,8 +61,9 @@ function clothingPreview(id:ApparelItem,index:number):HumanPreview {
   const definition=APPAREL[id],result=baseHuman(`apparel:${id}`,`Vêtement · ${definition.label}`,index),family=definition.family;
   result.tint=definition.color;
   if(family==='tribalwear')result.silhouette=2;
+  else if(family==='tshirt')result.silhouette=TSHIRT_PAINT_OUTFIT;
   else if(family==='duster')result.silhouette=3;
-  else if(family==='parka')result.silhouette=4;
+  else if(family==='parka'||family==='jacket')result.silhouette=4;
   else if(family==='pants')result.pants=Math.max(1,['cloth','light-leather','plainleather','bluefur','camelhide','muffalo-wool','foxfur'].indexOf(definition.material??'cloth')+1);
   else if(family==='tuque'){result.flags=id==='muffalo-wool-tuque'?8:6;result.hat=id==='muffalo-wool-tuque'?0xb3c0ba:definition.color;}
   else if(family==='cowboy-hat'||family==='bowler-hat'){result.flags=family==='cowboy-hat'?12:14;result.hat=definition.color;}
@@ -157,17 +160,20 @@ function animalSection(context:GraphicsStyleContext,dead:boolean):{section:Catal
  * equations; no unexported race class or fake World is needed. */
 function mechanicalSection(context:GraphicsStyleContext):{section:CatalogSection;dispose():void} {
   const group=new THREE.Group(),items:CatalogItem[]=[],kinds:MechanoidKind[]=['scyther','lancer','pikeman'];group.name='Machines — recettes existantes';
-  const models:OwnedStrokeModel[]=[],bodies:THREE.Mesh[]=[];
+  const models:OwnedStrokeModel[]=[],bodies:THREE.Mesh[]=[],panelPaint=createMechanicalSurfaceTexture();
   for(const [index,kind]of kinds.entries())for(const dead of [false,true]){
     const geometry=kind==='scyther'?scytherGeometry(1,part=>mechanoidPartIndex(kind,part)):rangedMechGeometry(kind,1,part=>mechanoidPartIndex(kind,part));
     const position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal');
     if(dead)for(let i=0;i<position.count;i++){const x=position.getX(i),y=position.getY(i),nx=normal.getX(i),ny=normal.getY(i);position.setXYZ(i,1.12-y,x+.70,position.getZ(i));normal.setXYZ(i,-ny,nx,normal.getZ(i));}
-    const model=new OwnedStrokeModel(geometry);models.push(model);const mat=material(0xffffff,{metalness:.24,roughness:.74});mat.colorNode=naturalStroke(context,model.stroke)(attribute('color','vec3'));
+    const model=new OwnedStrokeModel(geometry);models.push(model);const mat=material(0xffffff,{metalness:.24,roughness:.74});
+    const stroke=naturalStroke(context,model.stroke),base=attribute('color','vec3'),plain=stroke(base),painted=stroke(base.mul(texture(panelPaint,attribute('surfaceStrokeUv','vec2')).rgb));
+    const release=context.trackPersonalizedTextures(enabled=>{mat.colorNode=enabled?painted:plain;mat.needsUpdate=true;});
+    mat.addEventListener('dispose',release);
     const mesh=new THREE.Mesh(model.geometry,mat);mesh.position.set(index*4.5,0,dead?5:0);mesh.name=`${dead?'Carcasse':'Machine'} · ${kind}`;group.add(mesh);
     bodies.push(mesh);
     const bounds=model.geometry.boundingBox!.clone().translate(mesh.position);items.push(item(`machine:${kind}:${dead?'corpse':'live'}`,`${dead?'Carcasse · ':''}${mechanoidDefinition(kind).label}`,'default',bounds,'Modèle mécanique commun aux textures Pastel et Gouache, debout ou couché.'));
   }
-  return {section:{id:'machines',label:group.name,group,items},dispose(){for(const mesh of bodies)(mesh.material as THREE.Material).dispose();for(const model of models)model.dispose();group.clear();}};
+  return {section:{id:'machines',label:group.name,group,items},dispose(){for(const mesh of bodies)(mesh.material as THREE.Material).dispose();for(const model of models)model.dispose();panelPaint.dispose();group.clear();}};
 }
 
 export function createActorCatalog(context:GraphicsStyleContext):CatalogCollection {

@@ -11,7 +11,7 @@ import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
 import {WorldCoordinateGroup} from '../src/render/WorldCoordinateGroup';
 import {CARGO_HANDOFF_TICKS} from '../src/render/cargo-handoff';
 import {itemCargoKind} from '../src/render/item-presentation';
-import {TICKS_PER_SECOND} from '../src/sim/types';
+import {SCHEMA_VERSION,TICKS_PER_SECOND} from '../src/sim/types';
 
 const edge=(start=100,end=104):PresentationSegment=>({from:{x:10,z:10},to:{x:11,z:10},start,end});
 function fixture():World{
@@ -108,7 +108,7 @@ test('mechanical playback retains confirmed positions and fractions across the l
 });
 
 test('closed immutable histories schedule only real endpoint/dependency changes and preserve all physical actor stream bytes',()=>{
- const seed=fixture();seed.schemaVersion=379;seed.tick=108;const human=seed.pawns[0]!,stationary=structuredClone(human);stationary.id=seed.nextId++;Object.assign(stationary,{x:8,z:8,state:'idle',motion:null});seed.pawns.push(stationary);
+ const seed=fixture();seed.schemaVersion=SCHEMA_VERSION;seed.tick=108;const human=seed.pawns[0]!,stationary=structuredClone(human);stationary.id=seed.nextId++;Object.assign(stationary,{x:8,z:8,state:'idle',motion:null});seed.pawns.push(stationary);
  const hare={id:seed.nextId++,species:'hare' as const,sex:'female' as const,ageTicks:100000,x:11,z:10,food:.2,rest:1,state:'moving' as const,path:[],nextDecision:200,motion:edge()};
  const still={...hare,id:seed.nextId++,state:'idle' as const,motion:undefined,x:8,z:8};
  seed.wildlife={profile:'temperate-hares-v1',rng:43,animals:[hare,still],eatenPlants:0,eatenNutrition:0,eatenItems:0};

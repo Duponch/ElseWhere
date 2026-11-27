@@ -1,6 +1,7 @@
 import type {NativeControl} from './native-contract';
 import {NATIVE_CHIP,NATIVE_INK,NATIVE_LINE,NATIVE_TEXT,type NativeTextRole} from './native-ui-scale';
 import {drawHandRect} from './prototype-art';
+import {NATIVE_TEXT_STYLES} from './native-rich-text';
 
 /** The Bio card (RimWorld `CharacterCardUtility.DrawCharacterCard`, the
  * « Personnage » inspector tab and the new-game pawn page). Pure layout first:
@@ -193,7 +194,7 @@ export function drawNativePassion(ctx:CanvasRenderingContext2D,x:number,y:number
 export function paintNativeBioCard(ctx:CanvasRenderingContext2D,layout:NativeBioLayout,card:NativeBioCard,ox:number,oy:number,paint:BioPainter):void{
   const middle=(rect:BioRect,role:NativeTextRole='small')=>oy+rect.y+rect.height/2+NATIVE_TEXT[role]*.36;
   ctx.save();ctx.textAlign='left';
-  if(layout.name&&card.name!==undefined){ctx.font=paint.font('medium');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(card.name,ox,oy+NATIVE_TEXT.medium+2,layout.name.width);}
+  if(layout.name&&card.name!==undefined){ctx.font=paint.font('medium');ctx.fillStyle=NATIVE_TEXT_STYLES.person.color;ctx.fillText(card.name,ox,oy+NATIVE_TEXT.medium+2,layout.name.width);}
   ctx.font=paint.font('small');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(layout.description.label,ox+layout.description.rect.x,middle(layout.description.rect));
   const chip=(box:BioChipBox,color:string|null)=>{
     const r=box.rect;drawHandRect(ctx,ox+r.x,oy+r.y,r.width,r.height,NATIVE_INK.chipFill,NATIVE_INK.chipEdge,.8,paint.rng);
@@ -209,9 +210,9 @@ export function paintNativeBioCard(ctx:CanvasRenderingContext2D,layout:NativeBio
     ctx.strokeStyle=NATIVE_INK.text;ctx.lineWidth=1;ctx.stroke();
     ctx.fillStyle=NATIVE_INK.text;ctx.fillText(ellipsis(layout.faction.item.label,r.width-r.height-10,paint.measure),ox+r.x+r.height+5,middle(r));
   }
-  for(const label of layout.storyLabels){ctx.font=paint.font('small');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(label.text,ox+label.rect.x,middle(label.rect),88);}
+  for(const label of layout.storyLabels){ctx.font=paint.font('small',true);ctx.fillStyle=NATIVE_INK.sectionTitle;ctx.fillText(label.text,ox+label.rect.x,middle(label.rect),88);}
   for(const box of layout.chips)chip(box,box.item.ink==='subtle'?NATIVE_INK.subtle:box.item.ink==='royal'?NATIVE_INK.royal:NATIVE_INK.text);
-  for(const title of layout.titles){ctx.font=paint.font('small');ctx.fillStyle=NATIVE_INK.sectionTitle;ctx.fillText(title.text,ox+title.rect.x,oy+title.rect.y+NATIVE_LINE.small/2+NATIVE_TEXT.small*.36);}
+  for(const title of layout.titles){ctx.font=paint.font('small',true);ctx.fillStyle=NATIVE_INK.sectionTitle;ctx.fillText(title.text,ox+title.rect.x,oy+title.rect.y+NATIVE_LINE.small/2+NATIVE_TEXT.small*.36,title.rect.width);}
   for(const none of layout.nones){ctx.font=paint.font('small');ctx.fillStyle=NATIVE_INK.none;ctx.fillText('Aucun',ox+none.x,oy+none.y+NATIVE_LINE.small/2+NATIVE_TEXT.small*.36);}
   for(const skill of layout.skills){
     ctx.font=paint.font('small');ctx.fillStyle=skill.item.disabled?NATIVE_INK.disabled:NATIVE_INK.text;

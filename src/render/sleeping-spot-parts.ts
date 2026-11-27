@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import { bedSlotBodyCenter } from '../sim/bed-slots';
 import type { Structure,World } from '../sim/types';
 import type { Placement } from './primitives';
@@ -8,7 +9,7 @@ export function sleepingSpotPartsForStructure(spot:Structure):Placement[] {
   if(spot.kind!=='sleeping-spot')return [];
   const center=bedSlotBodyCenter(spot,0);if(!center)return [];
   const ry=spot.orientation*Math.PI/2,c=Math.cos(ry),s=Math.sin(ry);
-  const color=spot.medical?0x72b9c4:0xdacdac;
+  const color=bedSheetColor(spot);
   const part=(x:number,z:number,sx:number,sz:number):Placement=>({targetId:spot.id,
     x:center.x+x*c+z*s,z:center.z+z*c-x*s,y:.018,sx,sy:.016,sz,color,ry});
   const parts:Placement[]=[];
@@ -25,7 +26,7 @@ export function doubleSleepingSpotPartsForStructure(spot:Structure):Placement[] 
   if(spot.kind!=='double-sleeping-spot')return [];
   const a=bedSlotBodyCenter(spot,0),b=bedSlotBodyCenter(spot,1);if(!a||!b)return [];
   const cx=(a.x+b.x)/2,cz=(a.z+b.z)/2,ry=spot.orientation*Math.PI/2,c=Math.cos(ry),s=Math.sin(ry);
-  const color=spot.medical?0x72b9c4:0xdacdac;
+  const color=bedSheetColor(spot);
   const part=(x:number,z:number,sx:number,sz:number):Placement=>({targetId:spot.id,x:cx+x*c+z*s,z:cz+z*c-x*s,y:.018,sx,sy:.016,sz,color,ry});
   const parts:Placement[]=[];
   for(const x of [-1,1])for(const z of [-1,1])parts.push(part(x*.74,z*.88,.34,.045),part(x*.90,z*.73,.045,.30));

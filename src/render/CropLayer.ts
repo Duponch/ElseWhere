@@ -19,11 +19,13 @@ import {compileNaturalSurfaceModels,interleaveNaturalSurfaceFields,naturalStroke
 import {PreparedSurfaceOwner,PREPARED_SURFACE_VARIANT} from './origami/baked/surfaces/PreparedSurfaceOwner';
 import {canonicalPreparedSurfaceSource} from './origami/baked/surfaces/PreparedSurfaceSource';
 import {preparedNaturalModel,preparedDiagonalVariant} from './origami/baked/surfaces/PreparedSurfaceVariants';
-import {createStylizedSurfaceTexture} from './stylized-surfaces';
+import {createNaturalSurfaceArtwork,naturalSurfaceArtworkPixels,naturalArtUv,naturalVertexTone,NATURAL_ART_SIZE,type NaturalPaintMotif} from './natural-surface-art';
+import {bindPersonalizedTexture} from './texture-personalization';
+import {physicalSurfaceArtworkUv} from './surface-art-uv';
 import {CropInstanceViews} from './crop-instance-views';
 
 /** Dedicated resident instancing: sowing never rebuilds forest/rock geometry. */
-export function cropGeometry(kind:ResidentCropKind):THREE.BufferGeometry {
+export function cropGeometry(kind:ResidentCropKind,painted=false):THREE.BufferGeometry {
   let parts:THREE.BufferGeometry[];
   if(kind==='corn') {
     const stalk=new THREE.CylinderGeometry(.045,.065,1.5,5).translate(0,.75,0);
@@ -68,10 +70,41 @@ export function cropGeometry(kind:ResidentCropKind):THREE.BufferGeometry {
       ?new THREE.ConeGeometry(.11,.8,3).translate(x,.4,(i%2)*.22-.1)
       :new THREE.OctahedronGeometry(.22).scale(1,1.25,1).translate(x,.36+(i%2)*.15,(i%2)*.26-.13));
   }
+  if(painted){
+    // Paint coordinates for the visible surface; the ordinary UVs stay
+    // available to the independent Gouache chart/brush compiler until setup.
+    for(let i=0;i<parts.length;i++){
+      const geometry=parts[i]!,raw=geometry.getAttribute('uv'),motif=cropPartMotif(kind,i);
+      const art=new Float32Array(raw.count*2),tones=new Float32Array(raw.count);
+      const scale=kind==='devilstrand'&&i%2===1?.78:kind==='corn'&&i===0?.84:kind==='hops'&&motif==='hop-cone'?1:.96;
+      for(let v=0;v<raw.count;v++){
+        const u=raw.getX(v),t=raw.getY(v),coordinate=naturalArtUv(motif,u,t);
+        art.set(coordinate,v*2);
+        const tone=naturalVertexTone(motif,u,t)*scale;
+        tones[v]=tone;
+      }
+      geometry.setAttribute('cropArtworkUv',new THREE.BufferAttribute(art,2));
+      // The single-component temporary coordinate is not a face partition;
+      // the stroke compiler must see the original coplanar face membership.
+      geometry.setAttribute('cropArtworkToneUv',new THREE.BufferAttribute(tones,1));
+    }
+  }
   const geometry=mergeGeometries(parts);
   parts.forEach(g=>g.dispose());
   if(!geometry)throw new Error(`Could not assemble crop geometry: ${kind}`);
   return geometry;
+}
+
+function cropPartMotif(kind:ResidentCropKind,part:number):NaturalPaintMotif{
+  switch(kind){
+    case 'corn':return part===0?'grass':part===3?'seed':'leaf';
+    case 'hops':return part===0?'grass':part===4||part===6||part===8?'hop-cone':'leaf';
+    case 'devilstrand':return part%2===0?'grass':'mushroom';
+    case 'haygrass':return 'grass';
+    case 'rice':return 'seed';
+    case 'cotton':return 'cotton';
+    default:return 'leaf';
+  }
 }
 
 type CropCapture={x:number;z:number;growth:number;leafless:boolean;blighted:boolean;supported:boolean};
@@ -109,7 +142,7 @@ class CropBatch {
     if(kind==='haygrass'){this.green.setHex(0x80934e);this.ripe.setHex(0xc6b56b);}
     this.geometry=sharedGeometry??cropGeometry(kind);this.ownsGeometry=!sharedGeometry;
     this.residentBounds=new CropResidentBounds(this.geometry);
-    this.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.geometry.getAttribute('position').count * 3).fill(1), 3));
+    if(!this.geometry.hasAttribute('color'))this.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(this.geometry.getAttribute('position').count * 3).fill(1), 3));
     this.mesh = this.createMesh(128); this.group.add(this.mesh);
     void graphicsStyle;
   }
@@ -316,6 +349,7 @@ export class CropLayer {
   private readonly surfaceModels:NaturalSurfaceModels|undefined;
   private readonly sharedTextured:THREE.NodeMaterial|undefined;
   private readonly ownedPastel:THREE.DataTexture|undefined;
+  private releasePersonalizedTexture:()=>void=()=>{};
   readonly preparedSurface:PreparedSurfaceOwner|undefined;
   private readonly sourceTextured:THREE.NodeMaterial|undefined;
   private readonly preparedVariants=new Map<ResidentCropKind,PreparedCropSurface>();
@@ -327,20 +361,36 @@ export class CropLayer {
   private readonly views:CropInstanceViews|undefined;
   constructor(private readonly plainMaterial:THREE.Material,private readonly texturedMaterial:THREE.Material=plainMaterial,pastelSource?:THREE.Texture){
     if(this.graphicsStyle&&texturedMaterial instanceof THREE.NodeMaterial){
-      const originals=RESIDENT_CROP_KINDS.map(kind=>cropGeometry(kind));
+      const originals=RESIDENT_CROP_KINDS.map(kind=>cropGeometry(kind,true));
       try{this.surfaceModels=compileNaturalSurfaceModels(originals);}finally{for(const geometry of originals)geometry.dispose();}
       // Vertex layout belongs to the common model, even if a custom Pastel
       // texture refuses atlas admission. Prepare it before the first draw.
-      for(const geometry of this.surfaceModels.geometries)interleaveNaturalSurfaceFields(geometry);
+      for(const geometry of this.surfaceModels.geometries){
+        const artwork=geometry.getAttribute('cropArtworkUv'),physical=physicalSurfaceArtworkUv(geometry),min=naturalArtUv('grass',0,0),max=naturalArtUv('grass',1,1);
+        // Only generic stem/blade pigment uses a physical crop. Deliberately
+        // shaped leaves, seed heads, hop cones and caps keep their whole art.
+        for(let i=0;i<artwork.count;i++)if(artwork.getX(i)>=min[0]-1e-7&&artwork.getX(i)<=max[0]+1e-7&&artwork.getY(i)>=min[1]-1e-7&&artwork.getY(i)<=max[1]+1e-7){const coordinate=naturalArtUv('grass',physical[i*2]!,physical[i*2+1]!);artwork.setXY(i,...coordinate);}
+        geometry.setAttribute('uv',artwork);
+        geometry.deleteAttribute('cropArtworkUv');
+        const tone=geometry.getAttribute('cropArtworkToneUv'),colors=new Float32Array(tone.count*3);
+        for(let i=0;i<tone.count;i++){const value=tone.getX(i);colors[i*3]=colors[i*3+1]=colors[i*3+2]=value;}
+        geometry.deleteAttribute('cropArtworkToneUv');
+        geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));
+        interleaveNaturalSurfaceFields(geometry);
+      }
       this.sharedTextured=new THREE.MeshLambertNodeMaterial({flatShading:true});this.sharedTextured.userData.rendererOwned=true;
-      const borrowed=pastelSource??Reflect.get(texturedMaterial,'map') as THREE.Texture|undefined,pastel=borrowed??(this.ownedPastel=createStylizedSurfaceTexture('vegetation')),stroke=naturalStroke(this.graphicsStyle,this.surfaceModels.stroke);
-      const options={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),gouacheTransform:(body:THREE.Node<'vec3'>)=>body.mul(instanceColor),stroke:(body:THREE.Node<'vec3'>)=>stroke(body).div(instanceColor.max(vec3(.000001)))};applySharedPaintSurface(this.sharedTextured,options);
-      if(pastel instanceof THREE.DataTexture&&pastel.image.width===64&&pastel.image.height===64){
+      const borrowed=pastelSource??Reflect.get(texturedMaterial,'map') as THREE.Texture|undefined,pastel=this.ownedPastel=createNaturalSurfaceArtwork(borrowed),stroke=naturalStroke(this.graphicsStyle,this.surfaceModels.stroke);
+      this.releasePersonalizedTexture=bindPersonalizedTexture(this.graphicsStyle,pastel,enabled=>naturalSurfaceArtworkPixels(borrowed,enabled));
+      // The prepared Gouache atlas incorporates these drawn stems and veins
+      // before ink. Its rare close-up Source route uses the same artwork.
+      const drawnPigment=(body:THREE.Node<'vec3'>)=>body.mul(texture(pastel,uv()).rgb.mul(.62).add(.38));
+      const options={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:attribute(SURFACE_STROKE_UV,'vec2'),personalizedGouacheTransform:drawnPigment,gouacheTransform:(body:THREE.Node<'vec3'>)=>body.mul(instanceColor),stroke:(body:THREE.Node<'vec3'>)=>stroke(body).div(instanceColor.max(vec3(.000001)))};applySharedPaintSurface(this.sharedTextured,options);
+      if(pastel instanceof THREE.DataTexture){
         const models=this.surfaceModels,context=this.graphicsStyle;
-        const source=canonicalPreparedSurfaceSource({key:'resident-crop-vocabulary-v1',context,stroke:models.stroke,bodyOptions:()=>options,unitBodyProven:true,assertCurrent:()=>models.stroke.assertCurrent()});
-        this.preparedSurface=new PreparedSurfaceOwner({key:'resident-crops:'+this.group.uuid,context,source:()=>source,changed:()=>{}});
+        const source=canonicalPreparedSurfaceSource({key:'resident-crop-vocabulary-v2',context,stroke:models.stroke,bodyOptions:()=>options,unitBodyProven:true,unitPersonalizedGouacheTransform:drawnPigment,assertCurrent:()=>models.stroke.assertCurrent()});
+        this.preparedSurface=new PreparedSurfaceOwner({key:'resident-crops:'+this.group.uuid,context,source:()=>source,changed:()=>{},personalized:true});
         for(let i=0;i<RESIDENT_CROP_KINDS.length;i++){const kind=RESIDENT_CROP_KINDS[i]!,model=preparedNaturalModel('resident-crop:'+kind,models.geometries[i]!,models.stroke),normal=this.preparedSurface.registerVariant(preparedDiagonalVariant(model,1,1,1)),leafless=this.preparedSurface.registerVariant(preparedDiagonalVariant(model,1,.4,1));this.preparedVariants.set(kind,{owner:this.preparedSurface,normal,leafless});}
-        this.sourceTextured=this.sharedTextured;this.sharedTextured=this.preparedSurface.addTarget({sourceMaterial:this.sharedTextured,pastelTexture:pastel,pastelUv:uv(),pastelFromSample:sample=>attribute('color','vec3').mul(sample.rgb),tint:attribute('color','vec3'),inkTint:instanceColor.max(vec3(.000001)).reciprocal(),faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2')});
+        this.sourceTextured=this.sharedTextured;this.sharedTextured=this.preparedSurface.addTarget({sourceMaterial:this.sharedTextured,pastelTexture:pastel,pastelSize:NATURAL_ART_SIZE,pastelUv:uv(),pastelFromSample:sample=>attribute('color','vec3').mul(sample.rgb),tint:attribute('color','vec3'),inkTint:instanceColor.max(vec3(.000001)).reciprocal(),faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2')});
       }
     }
     if([this.plainMaterial,this.texturedMaterial,this.sharedTextured].every(material=>!material||material instanceof THREE.NodeMaterial))this.views=new CropInstanceViews();
@@ -377,5 +427,5 @@ export class CropLayer {
     if(!this.devilstrandBatch&&crops.devilstrand.length){createdDevilstrand=this.devilstrandBatch=this.createBatch('devilstrand');this.batches.push(createdDevilstrand);}
     for(const batch of this.batches)batch.update(world,reset||batch===created||batch===createdDevilstrand,crops[batch.kind],hydroponicCells,readGrowth);
   }
-  dispose():void {this.preparedSurface?.attachGpuRetirement(this.surfaceModels?.geometries??[]);this.preparedSurface?.dispose();this.prepared.clear();for(const batch of this.batches)batch.dispose();this.views?.dispose();if(this.sourceTextured)this.sourceTextured.dispose();else this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
+  dispose():void {this.releasePersonalizedTexture();this.preparedSurface?.attachGpuRetirement(this.surfaceModels?.geometries??[]);this.preparedSurface?.dispose();this.prepared.clear();for(const batch of this.batches)batch.dispose();this.views?.dispose();if(this.sourceTextured)this.sourceTextured.dispose();else this.sharedTextured?.dispose();this.surfaceModels?.dispose();this.ownedPastel?.dispose();}
 }

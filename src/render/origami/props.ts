@@ -1,3 +1,4 @@
+import {bedSheetColor} from '../bed-sheet-color';
 import type { Structure, World } from '../../sim/types';
 import { footprintCells } from '../../sim/definitions';
 import { isPowerActive } from '../../sim/power-rules';
@@ -44,9 +45,9 @@ export function origamiFurnitureParts(world: World): Placement[] {
       add(0, .325, 0, width + .025, .035, length + .025, trim);
       add(0, WORLD_SCALE.bedSurfaceHeight - .045, 0, width - .06, .14, length - .1, cream);
       add(0, WORLD_SCALE.bedSurfaceHeight + .031, length * .12,
-        width - .055, .018, length * .60, s.medical ? 0x91c2d2 : 0x9c5e4b);
+        width - .055, .018, length * .60, bedSheetColor(s));
       add(0, WORLD_SCALE.bedSurfaceHeight + .047, length * .33,
-        width - .05, .02, length * .10, s.medical ? 0xc2d8d4 : 0xc39367);
+        width - .05, .02, length * .10, bedSheetColor(s));
       add(0, WORLD_SCALE.bedSurfaceHeight + .07, -length * .33, .6, .12, .27, cream);
       for (const sign of [-1, 1]) {
         add(0, sign < 0 ? .35 : .24, sign * (length / 2 - .05), width, sign < 0 ? .63 : .40, .08, body);
@@ -60,8 +61,8 @@ export function origamiFurnitureParts(world: World): Placement[] {
         for(const dz of [-.43,.43])add(0, y - .012, dz, width, .045, .025, trim);
       }
       for (const dx of [-width / 2 + .045, width / 2 - .045]) {
-        add(dx, .74, 0, .07, 1.48, .84, body);
-        for(const dz of [-.43,.43])add(dx, .74, dz, .085, 1.48, .025, trim);
+        add(dx, .96, 0, .07, 1.92, .84, body);
+        for(const dz of [-.43,.43])add(dx, .96, dz, .085, 1.92, .025, trim);
       }
       // Storage is accessible from either long side; no rear closing board.
     } else if (s.kind === 'table' || s.kind === 'stool' || s.kind === 'table-square' || s.kind === 'table-long' || s.kind === 'table-large') {

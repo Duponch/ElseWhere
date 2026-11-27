@@ -469,3 +469,12 @@ dialog.object-information .object-information-finish{border:2px solid var(--ink)
 .render-performance-settings .presentation-setting :is(select,input[type=range]){flex:none;width:150px;max-width:40%}
 .render-performance-settings .presentation-setting output{font-size:12px;font-weight:700}
 .render-performance-presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+/* General surfaces follow the current document theme; status colours and
+   outlined map lettering keep their established visual meaning. */
+:root[data-ui-theme],:root[data-ui-theme] *{scrollbar-color:var(--muted-ink) transparent}
+:root[data-ui-theme] ::-webkit-scrollbar-thumb{background-color:var(--muted-ink)}
+:root[data-ui-theme] #app .time-panel .site-readout{color:var(--ink);background:var(--paper-deep)}
+:root[data-ui-theme] #app .storage-settings select{color:var(--ink);background:var(--paper-white)}
+:root[data-ui-theme] #app .storage-core-indicator input:indeterminate+span:before{color:var(--accent)}
+:root[data-ui-theme] button.active:hover:not(:disabled),:root[data-ui-theme] button[aria-pressed=true]:hover:not(:disabled){background:var(--sky-soft);color:var(--ink)}
+:root[data-ui-theme] #app .front-menu button.front-primary:hover:not(:disabled),:root[data-ui-theme] dialog.trade-dialog #trade-confirm:hover:not(:disabled){background:var(--leaf-soft);color:var(--ink)}

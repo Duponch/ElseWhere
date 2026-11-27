@@ -80,7 +80,7 @@ test('installation retains legacy footprint, original material and planted conte
   const bedPreview = constructionPreviewParts(world, [{ kind: 'bed', x: 9, z: 9, orientation: 1, material: 'steel', furniture: bed }]);
   const frame = bedPreview.boxes.find(part => part.sy === WORLD_SCALE.bedFrameHeight)!;
   expect(frame).toMatchObject({ x: 9, z: 9, sz: .93, ry: Math.PI / 2 });
-  expect(bedPreview.boxes.some(part => part.color === 0x91c2d2)).toBe(true);
+  expect(bedPreview.boxes.some(part => part.color === 0x639fe2)).toBe(true);
   const potPreview = constructionPreviewParts(world, [{ kind: 'flower-pot', x: 10, z: 11, material: 'steel', furniture: pot }]);
   expect(potPreview.boxes).toEqual(keyed(habitatParts({ ...world, structures: [{ ...pot, x: 10, z: 11 }] }), 0));
   expect(world).toEqual(before);

@@ -77,6 +77,22 @@ describe('Needs tab (NeedsCardUtility, Need.DrawOnGUI)', () => {
     expect([small.width, small.height]).toEqual([225, 140]);
     expect(NEEDS_FULL).toMatchObject({ width: 580, height: 520, column: 225 });
   });
+  it('removes empty space without squeezing needs when thoughts appear or expire',()=>{
+    const short=layoutNeedsTab({...spec,thoughts:spec.thoughts.slice(0,2)},measure);
+    expect(short.height).toBeLessThan(520);
+    expect(short.height).toBe(Math.ceil(find(short,'need:outdoors').y+find(short,'need:outdoors').h));
+    expect(short.targets.filter(target=>target.id.startsWith('need:'))).toEqual(card.targets.filter(target=>target.id.startsWith('need:')));
+    expect(short.regions[0]!.y+short.regions[0]!.h).toBe(short.height-10);
+    for(const thought of short.targets.filter(target=>target.region==='thoughts'))expect(thought.y+thought.h).toBeLessThanOrEqual(short.regions[0]!.h);
+    expect(short.items.find(item=>item.k==='text'&&item.text==='food')).toMatchObject({ink:NATIVE_INK.sectionTitle});
+  });
+  it('keeps every minor need reachable even when their 30-point minimum exceeds the sheet cap',()=>{
+    const long=layoutNeedsTab({type:'needs',needs:Array.from({length:24},(_,i)=>need(String(i),{major:false})),thoughts:[]},measure);
+    const region=long.regions.find(entry=>entry.id==='needs')!;
+    expect(long.height).toBe(520);expect(region.contentHeight).toBe(720);
+    expect(setCardScroll(long,'needs',9999)).toBe(true);
+    expect(nativeTabTargets(long).find(target=>target.id==='need:23')).toBeDefined();resetCardScroll();
+  });
   it('scrolls a region by the offset the card keeps, and clips its targets to the viewport', () => {
     resetCardScroll();
     const region = card.regions[0]!;
@@ -100,8 +116,8 @@ describe('Health tab (HealthCardUtility)', () => {
     entries: [{ id: 'whole-body', items: [{ id: 'blood', label: 'Perte de sang (12 %)', count: 1, bleeding: true, tended: false, hint: 'b' }], info: control('anatomy') }, { id: 'left-arm', part: { label: 'Bras gauche', ink: NATIVE_INK.painMedium, hint: 'arm' }, info: control('anatomy-arm'), items: [{ id: 'i1', label: 'Coupure', count: 1, bleeding: false, tended: true, hint: 'i1' }, { id: 'i2', label: 'Contusion', count: 1, bleeding: false, tended: false, hint: 'i2' }] }],
     bleed: { text: 'Saignement : 10 %/jour', hint: 'bleed' }, emptyText: '(Aucun problème de santé)' };
   const card = layoutHealthTab(spec, measure);
-  it('is 630 × 430 with a left summary of 37.5 % under two tabs, and the list contracted by 10 on the right', () => {
-    expect([card.width, card.height]).toEqual([HEALTH_SIZE.width, HEALTH_SIZE.height]);
+  it('keeps the Core width and tab geometry while fitting the summary and lesions below 430', () => {
+    expect(card.width).toBe(HEALTH_SIZE.width);expect(card.height).toBeLessThan(HEALTH_SIZE.height);
     const panel = card.items.find(item => item.k === 'panel')!;
     expect(panel).toMatchObject({ x: 0, y: 31, w: 236 });
     const buttons = card.items.filter(item => item.k === 'button' && !item.dropdown);
@@ -109,7 +125,7 @@ describe('Health tab (HealthCardUtility)', () => {
     expect(find(card, 'health-tab:0')).toMatchObject({ x: 0, w: 123, h: 31 });
     expect(find(card, 'health-tab:1').x).toBe(113);
     const region = card.regions[0]!;
-    expect(region).toMatchObject({ id: 'hediffs', x: 246, y: 30, w: 374, h: 390 - 22 });
+    expect(region).toMatchObject({ id: 'hediffs', x: 246, y: 30, w: 374, h: card.height-40-22 });
   });
   it('lists the settings in rows of 23, then the pain and capacity rows of 22 at x = 17', () => {
     // Content starts 9 inside the panel, 4 down; each setting row is 23 high, 4 apart (10 after the checkbox).
@@ -123,7 +139,7 @@ describe('Health tab (HealthCardUtility)', () => {
   it('shows the whole body first, parts with their icons (info, bleeding, tended), alternating bands and the bleeding line', () => {
     const bands = card.items.filter(item => item.k === 'fill' && item.region === 'hediffs'); expect(bands).toHaveLength(1);
     expect(card.items.filter(item => item.k === 'glyph').map(item => item.k === 'glyph' && item.glyph)).toEqual(expect.arrayContaining(['info', 'bleed', 'tend']));
-    const bleed = find(card, 'health-bleed'); expect(bleed).toMatchObject({ x: 246, h: 22, y: 30 + 368 });
+    const bleed = find(card, 'health-bleed'); expect(bleed).toMatchObject({ x: 246, h: 22, y: card.height-10-22 });
     expect(find(card, 'info:left-arm').control!.id).toBe('anatomy-arm');
     expect(find(card, 'hediff:i1').y).toBe(22 + 0); // after the whole-body row of 22
   });
@@ -136,6 +152,13 @@ describe('Health tab (HealthCardUtility)', () => {
   it('colours the efficiency estimates and the pain wording like Core', () => {
     expect(efficiencyInk(0)).toBe(NATIVE_INK.red); expect(efficiencyInk(1)).toBe(NATIVE_INK.good); expect(efficiencyInk(1.2)).toBe(NATIVE_INK.enhanced); expect(efficiencyInk(.5)).toBe(NATIVE_INK.subtle);
     expect(painLabel(0).ink).toBe(NATIVE_INK.good); expect(painLabel(.1).ink).toBe(NATIVE_INK.relation); expect(painLabel(.3).ink).toBe(NATIVE_INK.painMedium); expect(painLabel(.6).ink).toBe(NATIVE_INK.painSevere); expect(painLabel(.9).ink).toBe(NATIVE_INK.red);
+  });
+  it('gives long capacity labels a separate lane and retains scroll for long lesion lists',()=>{
+    const long=layoutHealthTab({...spec,capacities:[{id:'long',label:'Filtration sanguine',value:'100 %',ink:NATIVE_INK.good,hint:'h'}],entries:Array.from({length:40},(_,i)=>({...spec.entries[0]!,id:String(i)}))},measure);
+    const value=long.items.find(item=>item.k==='text'&&item.text==='100 %')!,label=long.items.find(item=>item.k==='text'&&item.text==='Filtration sanguine')!;
+    expect(label.x+('w' in label?label.w:0)).toBeLessThanOrEqual(value.x-8);
+    const region=long.regions.find(entry=>entry.id==='hediffs')!;expect(region.contentHeight).toBeGreaterThan(region.h);
+    expect(long.height).toBe(HEALTH_SIZE.height);
   });
 });
 
@@ -170,6 +193,14 @@ describe('Gear tab (ITab_Pawn_Gear)', () => {
     expect(find(portrait, 'gear-clothing')).toMatchObject({ x: 440 - 16 - 92, w: 92 });
     expect(find(portrait, 'gear-mass').w).toBe(440 - 16 - 100);
   });
+  it('fits sparse possessions and keeps their buttons clear of the portrait',()=>{
+    const sparse=layoutGearTab({...spec,armor:[],portrait:{control:control('clothes'),visible:true},sections:[{id:'equipment',label:'Équipement',rows:[row('one',{drop:control('drop-one')})]}],maxHeight:300},measure);
+    expect(sparse.height).toBeLessThan(300);expect(sparse.height).toBeGreaterThanOrEqual(162+40);
+    const portraitLeft=440-16-92;
+    for(const target of sparse.targets.filter(target=>target.id!=='gear-clothing'))if(target.y<162)expect(target.x+target.w).toBeLessThanOrEqual(portraitLeft);
+    const long=layoutGearTab({...spec,sections:[{id:'inventory',label:'Inventaire',rows:Array.from({length:40},(_,i)=>row(String(i)))}],maxHeight:300},measure);
+    expect(long.height).toBe(300);expect(long.regions[0]!.contentHeight).toBeGreaterThan(long.regions[0]!.h);
+  });
 });
 
 describe('Social and Log tabs (SocialCardUtility, InteractionCardUtility, ITab_Pawn_Log)', () => {
@@ -180,14 +211,14 @@ describe('Social and Log tabs (SocialCardUtility, InteractionCardUtility, ITab_P
     const narrow = socialColumnWidths(200); expect(narrow.mine).toBe(25); expect(narrow.his).toBe(35);
     expect(opinionInk(5)).toBe(NATIVE_INK.relation); expect(opinionInk(-30)).toBe(NATIVE_INK.red); expect(opinionInk(30)).toBe(NATIVE_INK.good); expect(signedInteger(12)).toBe('+12'); expect(signedInteger(-3)).toBe('-3'); expect(signedInteger(0)).toBe('0');
   });
-  it('is 540 × 510: the list takes 63 % of the area, the log the rest after a gap of 17, a rule in the middle', () => {
+  it('fits short relation and interaction lists, with the Core width and 17-point divider gap', () => {
     const spec: SocialSpec = { type: 'social', rows: [{ id: '1', relations: 'Parent', name: 'Anne', mine: 20, his: -15, situation: 'Présent', hint: 'h', select: control('pick') }], interactions: [{ id: 'a', text: 'Anne a insulté Bob', faded: false, hint: 'h' }] };
     const card = layoutSocialTab(spec, measure);
-    expect([card.width, card.height]).toEqual([SOCIAL_SIZE.width, SOCIAL_SIZE.height]);
+    expect(card.width).toBe(SOCIAL_SIZE.width);expect(card.height).toBeLessThan(SOCIAL_SIZE.height);
     const [relations, log] = card.regions;
-    expect(relations).toMatchObject({ id: 'relations', x: 10, y: 25, w: 520 }); expect(relations!.h).toBeCloseTo(475 * .63, 6);
-    expect(log!.y).toBeCloseTo(25 + 475 * .63 + 17, 6); expect(log!.y + log!.h).toBeCloseTo(500, 6);
-    const rule = card.items.find(item => item.k === 'line')!; expect(rule.y).toBe(Math.round((25 + 475 * .63 + log!.y) / 2));
+    expect(relations).toMatchObject({ id: 'relations', x: 10, y: 25, w: 520, h:25 });
+    expect(log!.y).toBe(25+25+17);expect(log!.y+log!.h).toBe(card.height-10);
+    const rule = card.items.find(item => item.k === 'line')!; expect(rule.y).toBe(Math.round(25+25+17/2));
     // Rows of 22 + 3, text from x = 5, the interaction text at x = 29.
     expect(find(card, 'social:1')).toMatchObject({ y: 0, h: 25, w: 520 }); expect(find(card, 'social:1').control!.id).toBe('pick');
     expect(card.items.filter(item => item.k === 'text' && item.region === 'interactions')[0]).toMatchObject({ x: 29 });
@@ -238,8 +269,8 @@ describe('the inspector builds each tab as one card at its RimWorld size', () =>
       const page = inspector(world, tab).page;
       expect(page.rows.filter(row => row.id !== 'pawn-tabs' && !row.inspectPane).map(row => row.id)).toEqual(['tab-card']);
       const box = boxOf(page), row = box.rows.find(entry => entry.row.id === 'tab-card')!;
-      expect([row.x, row.width, row.height]).toEqual([0, size[0], size[1]]);
-      expect(box.inspectorParts!.sheet).toMatchObject({ width: size[0], height: size[1] });
+      expect([row.x, row.width]).toEqual([0,size[0]]);expect(row.height).toBeLessThanOrEqual(size[1]);expect(row.height).toBeGreaterThan(0);
+      expect(box.inspectorParts!.sheet).toMatchObject({ width: size[0], height: row.height });
       expect(box.contentHeight).toBeLessThanOrEqual(box.body.height + 0.01);
     }
   });
@@ -276,7 +307,14 @@ describe('the inspector builds each tab as one card at its RimWorld size', () =>
     expect(rows.every(entry => entry.info && /^item-information-/.test(entry.info.id))).toBe(true);
     expect(spec.sections.find(section => section.id === 'apparel')!.rows.every(entry => entry.drop?.id.startsWith('remove-apparel-'))).toBe(true);
     expect(boxOf(page).portraitRect).toMatchObject({ width: 92, height: 128 });
-    expect(boxOf(page).inspectorParts!.sheet.height).toBeGreaterThanOrEqual(450);
+    expect(boxOf(page).inspectorParts!.sheet.height).toBeGreaterThanOrEqual(162+40);
+  });
+  it('bounds the Gear list to the actual open-sheet height on a short screen',()=>{
+    const page=inspector(world,'gear').page,spec=cardOf(page) as GearSpec;
+    spec.sections=[{id:'inventory',label:'Inventaire',rows:Array.from({length:40},(_,i)=>({id:String(i),label:'Objet '+i,hint:'h',info:control('info-'+i)}))}];
+    const box=layoutNativePage(page,{width:1440,height:650},false,pageMeasure),card=box.rows.find(row=>row.card)!.card!,region=card.regions[0]!;
+    expect(card.height).toBe(box.inspectorParts!.sheet.height);expect(region.contentHeight).toBeGreaterThan(region.h);
+    expect(box.contentHeight).toBeLessThanOrEqual(box.body.height);
   });
   it('keeps Social: relations with their situation, opinions and the sorted interaction log', () => {
     const spec = cardOf(inspector(world, 'social').page) as SocialSpec;

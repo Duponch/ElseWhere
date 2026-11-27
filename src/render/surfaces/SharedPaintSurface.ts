@@ -30,6 +30,9 @@ export interface SharedPaintSurfaceOptions {
  readonly coverage?:(faceUv:THREE.Node<'vec2'>,faceProfile:THREE.Node<'float'>,probe?:'x'|'y')=>THREE.Node<'float'>;
  /** Clinical recoloring belongs to the body, before the painted stroke. */
  readonly gouacheTransform?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
+ /** Optional authored detail, applied before clinical/multiplier transforms.
+  * When disabled it is absent from the compiled Source program. */
+ readonly personalizedGouacheTransform?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
  readonly stroke?:(body:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
 }
 
@@ -44,6 +47,7 @@ function paintInputs(options:SharedPaintSurfaceOptions){
 function surfaceColor(options:SharedPaintSurfaceOptions,inputs:ReturnType<typeof paintInputs>):THREE.Node<'vec3'>{
  const context=options.context!,sample=context.facePaintNode(inputs.pigment,inputs.raw,inputs.ids.x,inputs.ids.y,context.reliefEnabled,true,inputs.genericOnly,inputs.gameStaticBank0,options.coverage?.(inputs.raw,inputs.ids.y)).toVar();
  let body:THREE.Node<'vec3'>=options.profile&&options.includeGeneric===false?sample.rgb:sample.rgb.mul(inputs.ids.x.equal(GENERIC_REFERENCE_PROFILE).select(options.base,vec3(1)));
+ if(context.personalizedTextures&&options.personalizedGouacheTransform)body=options.personalizedGouacheTransform(body);
  if(options.gouacheTransform)body=options.gouacheTransform(body);
  return options.stroke?options.stroke(body):body;
 }
@@ -88,9 +92,16 @@ export function applySharedPaintSurface(material:THREE.NodeMaterial,options:Shar
  previous?.release();
  if(!options.context){installed.delete(material);return;}
  const entry={options,release:()=>{}};
- const unsubscribe=options.context.trackSharedSurfaceRefresh(()=>{configureSharedPaintSurface(material,entry.options);material.needsUpdate=true;});
+ const refresh=()=>{configureSharedPaintSurface(material,entry.options);material.needsUpdate=true;};
+ const unsubscribe=options.context.trackSharedSurfaceRefresh(refresh);
+ let personalized=options.context.personalizedTextures;
+ const unsubscribePersonalization=options.context.trackPersonalizedTextures(enabled=>{
+  if(enabled===personalized)return;
+  personalized=enabled;
+  if(entry.options.personalizedGouacheTransform)refresh();
+ });
  const dispose=()=>{if(installed.get(material)!==entry)return;entry.release();installed.delete(material);};
- entry.release=()=>{unsubscribe();material.removeEventListener('dispose',dispose);};
+ entry.release=()=>{unsubscribe();unsubscribePersonalization();material.removeEventListener('dispose',dispose);};
  installed.set(material,entry);
  material.addEventListener('dispose',dispose);
 }

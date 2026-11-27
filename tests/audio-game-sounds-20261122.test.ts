@@ -101,6 +101,15 @@ describe('Core sound tables', () => {
 });
 
 describe('published takes', () => {
+  it('documents temporary softening as local playback treatment of unchanged historical files',()=>{
+    const log=JSON.parse(readFileSync(resolve(repo,'scripts/audio/processing-log.json'),'utf8')) as {runtimeTreatments:{id:string;sources:{filename:string;sha256:string}[];processing:{decodedCacheExtraBytes:number;targetSourceRmsDbfsBeforeFilter:number}}[]};
+    const treatment=log.runtimeTreatments.find(row=>row.id==='ambient.night-insects')!;
+    expect(treatment.sources).toHaveLength(2);expect(treatment.processing.decodedCacheExtraBytes).toBe(0);
+    expect(treatment.processing.targetSourceRmsDbfsBeforeFilter).toBe(-48);
+    for(const row of treatment.sources){const bytes=readFileSync(resolve(repo,'public/assets/audio/sfx',row.filename));expect(createHash('sha256').update(bytes).digest('hex')).toBe(row.sha256);}
+    expect(plan.events['ambient.night-insects']!.filename).toBe('ambient-night-insects-g1122-take-1.mp3');
+    expect(manifest.events['ambient.night-insects']!.variants.every(row=>row.src.includes('-g1122-'))).toBe(true);
+  });
   it('plans every game cue and loop, and publishes every take that passed its measurement', () => {
     const planned = new Map(GAME_PLAN);
     const rejected = (JSON.parse(readFileSync(resolve(repo, 'scripts/audio/pcm-balance-g1122.json'), 'utf8')) as { rejectedTakes: { id: string }[] }).rejectedTakes;
@@ -329,7 +338,7 @@ describe('cues from real events', () => {
 describe('director voice limits', () => {
   afterEach(() => vi.unstubAllGlobals());
   class Param { value = 0; setValueAtTime(v: number): void { this.value = v; } setTargetAtTime(v: number): void { this.value = v; } cancelScheduledValues(): void {} }
-  class Node { connect(): void {} disconnect(): void {} }
+  class Node { connections:Node[]=[];disconnections=0;connect(target?:Node): void {if(target)this.connections.push(target);} disconnect(): void {this.disconnections++;} }
   class Source extends Node {
     buffer: unknown; playbackRate = { value: 1 }; onended: (() => void) | null = null; starts = 0; gainNode?: { gain: Param };
     start(): void { this.starts++; } stop(): void {}
@@ -337,10 +346,12 @@ describe('director voice limits', () => {
   class FakeContext {
     static latest: FakeContext;
     state = 'running'; currentTime = 0; destination = new Node(); sources: Source[] = []; gains: { gain: Param }[] = [];
+    filters:(Node&{type:string;frequency:Param;Q:Param})[]=[];
     listener = { positionX: new Param(), positionY: new Param(), positionZ: new Param(), forwardX: new Param(), forwardY: new Param(), forwardZ: new Param() };
     constructor() { FakeContext.latest = this; }
     createGain() { const gain = Object.assign(new Node(), { gain: new Param() }); this.gains.push(gain); return gain; }
     createBufferSource() { const source = new Source(); this.sources.push(source); return source; }
+    createBiquadFilter(){const filter=Object.assign(new Node(),{type:'lowpass',frequency:new Param(),Q:new Param()});this.filters.push(filter);return filter;}
     createPanner() { return Object.assign(new Node(), { positionX: new Param(), positionY: new Param(), positionZ: new Param() }); }
     // 0.5 s of 48 kHz stereo: 192 000 bytes of decoded PCM per take.
     decodeAudioData(): Promise<object> { return Promise.resolve({ duration: 0.5, length: 24_000, numberOfChannels: 2 }); }
@@ -377,6 +388,26 @@ describe('director voice limits', () => {
   const started = (context: FakeContext) => context.sources.filter(source => source.starts > 0);
   const cue = (kind: string, i: number, extra: Partial<AudioCue> = {}): AudioCue =>
     ({ id: `${kind}:${i}`, tick: 1, kind: kind as AudioCue['kind'], x: 16 + (i % 5) * 6, z: 16 + Math.floor(i / 5) * 6, ...extra });
+
+  it('softens only historical night insect loops once, preserves their buffers and releases the continuous filter',async()=>{
+    const {audio,context}=await director();
+    try{
+      await audio.prefetch(['ambient.night-insects','weather.wind-clear']);
+      const before=audio.decodedMemory.bytes;
+      audio.setContinuousSources([{id:'ambient:night-insects',kind:'ambient.night-insects',x:16,z:16,gain:1},{id:'wind',kind:'weather.wind-clear',x:16,z:16,gain:1}]);
+      audio.update({presentedTick:1,paused:false,hidden:false});
+      expect(context.filters).toHaveLength(1);
+      const filter=context.filters[0]!;
+      expect(filter.type).toBe('lowpass');expect(filter.frequency.value).toBe(1500);expect(filter.Q.value).toBe(-6);
+      expect(started(context).filter(s=>s.connections.includes(filter))).toHaveLength(1);
+      const sources=started(context).length;
+      for(let tick=2;tick<20;tick++)audio.update({presentedTick:tick,paused:false,hidden:false});
+      expect(context.filters).toHaveLength(1);expect(started(context)).toHaveLength(sources);
+      expect(audio.decodedMemory.bytes).toBe(before);
+      expect(filter.disconnections).toBe(0);
+      audio.dispose();expect(filter.disconnections).toBe(1);
+    }finally{audio.dispose();}
+  });
 
   it('plays nothing muted, and caps a grazing herd, a chorus of calls and many meals', async () => {
     const { audio, context } = await director();

@@ -1,8 +1,10 @@
 import {HUD_DISTANCE,nativeHudCamera,lightNativeHud,nativeManagementDock,placeBottomRight} from './native-hud-viewport';
 import * as THREE from 'three/webgpu';
 import {PAWN_TABLE,workLabelDown} from './native-pawn-table';
-import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandRect,drawMarkerLine,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
+import {PrototypeCardboardArt,MANAGEMENT_BUTTONS,PALETTE,drawHandRect,drawMarkerLine,customCardboardTheme,type CardboardPiece,type CardboardDraw,type CardboardPieceOptions} from './prototype-art';
 import {drawNativeActionIcon,drawNativeActionIconInBox} from './native-action-icons';
+import {drawJournalPictogram} from '../ui/journal-pictograms';
+import {readableUiInk,uiTintedSurface} from './ui-theme';
 import {applyNativeHudButtonPose} from './native-hud-art';
 import {applyNativeMapToolHover} from './native-map-tool-hover';
 import {createNativeTextLexicon,tokenizeNativeText,NATIVE_TEXT_STYLES,type NativeTextLexicon,type NativeTextEntity,type NativeTextSpan} from './native-rich-text';
@@ -20,7 +22,7 @@ import {setNativeCursor} from '../ui/native-cardboard-cursors';
 import {SHIP_FRAME_MAXIMUM_DELTA_298} from '../bridge/ship-countdown-wire-298';
 import {FLOAT_MENU,TOOLTIP_BOX,tooltipBoxSize,floatMenuOpacity,floatMenuVanishes,pressOutsideFloatMenu,mouseAttachedTipPosition,tipTextAction,TOOLTIP_DELAY_MS} from './native-float-menu';
 import {retainNativeOpacityMaterials,applyNativeOpacity,type NativeOpacityMaterial} from './native-piece-opacity';
-import {NATIVE_LINE,NATIVE_TEXT,NATIVE_INK,NATIVE_WINDOW,type NativeTextRole} from './native-ui-scale';
+import {NATIVE_LINE,NATIVE_TEXT,NATIVE_INK,NATIVE_WINDOW,nativeFontPx,type NativeTextRole} from './native-ui-scale';
 import {NATIVE_RESEARCH} from './native-research-metrics';
 import {historyColumns,NATIVE_FACTIONS,NATIVE_HISTORY} from './native-main-tab-metrics';
 import {NATIVE_CREATION,nativeFileColumns} from './native-front-metrics';
@@ -77,7 +79,10 @@ export class NativeStage {
   readonly anchors={topLeft:new THREE.Group(),topCenter:new THREE.Group(),topRight:new THREE.Group(),
     bottomLeft:new THREE.Group(),bottomCenter:new THREE.Group(),bottomRight:new THREE.Group(),drawerAnchor:new THREE.Group()};
   readonly ready:Promise<void>;
-  private readonly ownRenderer=new THREE.WebGPURenderer({alpha:false,antialias:true,powerPreference:'high-performance'});
+  // The exclusive front surface is opaque at the title screen and transparent
+  // over an adopted map. Keep its independent UI frame loop during graphics
+  // preparation; the shared world renderer must not be asked to draw then.
+  private readonly ownRenderer=new THREE.WebGPURenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
   private readonly standby=new NativeRendererStandby(this.ownRenderer);
   private readonly raycaster=new THREE.Raycaster();
   private readonly pointer=new THREE.Vector2();
@@ -167,6 +172,7 @@ export class NativeStage {
   private worldVisible=false;
   private standalone=true;
   private frontVisible=true;
+  private frontOverGame=false;
   private width=0;
   private height=0;
   private visW=1;
@@ -279,7 +285,7 @@ export class NativeStage {
     this.listen(document,'pointermove',event=>this.pointerMove(event as PointerEvent),true);
     this.listen(document,'pointerdown',event=>this.pointerDown(event as PointerEvent),true);
     this.listen(document,'pointerup',event=>this.pointerUp(event as PointerEvent),true);
-    this.listen(document,'pointercancel',()=>this.cancelPress(),true);
+    this.listen(document,'pointercancel',event=>this.cancelPointer((event as PointerEvent).pointerId),true);
     this.listen(window,'blur',()=>{this.cancelPress();this.setPointerOverUi(true);this.hover(null);setNativeCursor(document.documentElement,undefined);});
     this.listen(document,'keydown',event=>this.keyDown(event as KeyboardEvent),true);
     this.listen(document,'wheel',event=>this.wheel(event as WheelEvent),{capture:true,passive:false});
@@ -330,14 +336,21 @@ export class NativeStage {
     if(this.worldVisible===visible)return;this.sceneRevision++;
     if(!visible)this.closeFloatMenu();
     this.worldVisible=visible;this.standalone=!visible;
+    this.updateFrontBackground();
     this.updateOwnSurface();
     this.anchors.bottomCenter.visible=!this.frontVisible;this.toolsDock.visible=visible&&!this.frontVisible;this.updateDevBarVisibility();this.updateWorldReadoutVisibility();this.syncEnvironmentHover();this.invalidate();
   }
-  setFrontVisible(visible:boolean):void{
-    if(this.frontVisible===visible)return;this.sceneRevision++;
+  setFrontVisible(visible:boolean,overGame=false):void{
+    overGame=visible&&overGame;
+    if(this.frontVisible===visible&&this.frontOverGame===overGame)return;this.sceneRevision++;
     if(visible)this.closeFloatMenu();
-    this.frontVisible=visible;this.frontBackdrop.setVisible(visible);if(visible)this.resetShipCurtain298(false);this.updateOwnSurface();
+    this.frontVisible=visible;this.frontOverGame=overGame;this.updateFrontBackground();if(visible)this.resetShipCurtain298(false);this.updateOwnSurface();
     this.anchors.bottomCenter.visible=!visible;this.toolsDock.visible=this.worldVisible&&!visible;this.updateDevBarVisibility();this.resize();this.rebuildPage(true);this.updateWorldReadoutVisibility();this.syncEnvironmentHover();this.invalidate();
+  }
+  private updateFrontBackground():void{
+    const transparent=this.frontVisible&&this.frontOverGame&&this.worldVisible;
+    this.frontBackdrop.setVisible(this.frontVisible&&!this.frontOverGame);
+    this.ownRenderer.setClearColor(transparent?0x000000:0xd8cbb8,transparent?0:1);
   }
   private updateOwnSurface():void{
     this.resetCountdownFrame298();
@@ -413,7 +426,7 @@ export class NativeStage {
     }
     const contentChanged=page?.contentKey!==this.page?.contentKey,navigationChanged=page?.navigationKey!==this.page?.navigationKey,detailsChanged=page?.detailsKey!==this.page?.detailsKey;
     const same=page?.id===this.page?.id,ownerChanged=page?.visual?.surface!==this.page?.visual?.surface||page?.visual?.roads!==this.page?.visual?.roads;
-    this.page=page;if(!same){this.cancelPress();this.hover(null);this.scroll=0;this.regionOffsets.navigation=this.regionOffsets.details=this.regionOffsets.graph=this.regionOffsets.toolbar=this.graphX=this.paletteX=this.setupDetailsX=0;this.researchFocusKey=this.infoFocusKey=undefined;this.closeDropdown();}else if(contentChanged){this.cancelPress();this.scroll=0;this.infoFocusKey=undefined;}
+    this.page=page;if(!same){this.activationSerial++;this.cancelPress();this.hover(null);this.focusIndex=-1;this.scroll=0;this.regionOffsets.navigation=this.regionOffsets.details=this.regionOffsets.graph=this.regionOffsets.toolbar=this.graphX=this.paletteX=this.setupDetailsX=0;this.researchFocusKey=this.infoFocusKey=undefined;this.closeDropdown();}else if(contentChanged){this.cancelPress();this.scroll=0;this.infoFocusKey=undefined;}
     if(navigationChanged&&page?.navigationKey!==undefined)this.regionOffsets.navigation=0;
     if(page?.detailsKey!==undefined&&(detailsChanged||contentChanged)){this.regionOffsets.details=0;this.setupDetailsX=0;}
     this.toolsDock.children.forEach((object,index)=>{const piece=object as CardboardPiece,active=page?.palette===(index===0?'orders':'zones');if(piece.userData.active!==active)piece.setActive(active,active?PALETTE.ochre:PALETTE.sageMountain);});
@@ -434,13 +447,18 @@ export class NativeStage {
     const repaint=()=>{if(this.closed||request!==this.fontRequest)return;this.textFontRevision++;this.rebuildPage(true);this.rebuildFloatMenu();this.notice?.redraw();this.hintPiece?.redraw();this.refreshWorldReadout();this.refreshEnvironmentStats();this.editRepaint?.();this.invalidate();};
     repaint();
     const fonts=document.fonts;if(!fonts)return;
-    const regular=`400 20px ${JSON.stringify(name)}`,bold=`700 20px ${JSON.stringify(name)}`;
+    const regular=nativeFontPx(NATIVE_TEXT.medium,JSON.stringify(name)),bold=nativeFontPx(NATIVE_TEXT.medium,JSON.stringify(name),true);
     if(!fonts.check(regular)||!fonts.check(bold))void Promise.all([fonts.load(regular,'Éléonore, cœur, œuf, ça, où, Noël.'),fonts.load(bold,'Éléonore, cœur, œuf, ça, où, Noël.')]).then(repaint).catch(()=>{});
+  }
+  refreshTheme(previous:import('./prototype-art').CardboardUiPalette):void{
+    if(this.closed)return;
+    this.art.refreshTheme(previous);this.textFontRevision++;
+    this.rebuildPage(true);this.rebuildFloatMenu();this.notice?.redraw();this.hintPiece?.redraw();this.refreshWorldReadout();this.refreshEnvironmentStats();this.editRepaint?.();this.overlayCache.invalidate();this.sceneRevision++;this.invalidate();
   }
   /** Every text is drawn in a role of the interface scale (native-ui-scale.ts);
    * `scale` only follows a painted texture's own resolution or a glyph. */
   private font(role:NativeTextRole,bold=false,scale=1):string{return this.fontPx(NATIVE_TEXT[role]*scale,bold);}
-  private fontPx(size:number,bold=false):string{return `${bold?'bold ':''}${size}px ${this.textFontFamily}`;}
+  private fontPx(size:number,bold=false):string{return nativeFontPx(size,this.textFontFamily,bold);}
   setWorldReadout(lines:readonly string[]|null):void{
     const next=lines?.filter(line=>line.trim().length)??[];
     if(JSON.stringify(next)!==JSON.stringify(this.worldReadoutLines)){this.worldReadoutLines=[...next];this.worldReadoutScroll=0;this.refreshWorldReadout();}
@@ -899,7 +917,7 @@ export class NativeStage {
     if(this.editor&&event.target===this.editor)return;
     if(this.regionDrag){const drag=this.regionDrag;if(drag.pointerId!==event.pointerId)return;const value=THREE.MathUtils.clamp(drag.offset+((drag.axis==='x'?event.clientX:event.clientY)/this.displayScale-drag.start)/Math.max(1,drag.travel)*drag.max,0,drag.max);if(drag.axis==='x')this.setHorizontalOffset(drag.region,value);else this.setRegionOffset(drag.region,value);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
     if(this.scrollbarDrag){const drag=this.scrollbarDrag;if(drag.pointerId!==event.pointerId)return;this.scroll=THREE.MathUtils.clamp(drag.scroll+(event.clientY/this.displayScale-drag.startY)/Math.max(1,drag.travel)*drag.max,0,drag.max);this.rebuildPage(true);this.swallow(event);this.invalidate();return;}
-    if(this.paintDrag){const hit=this.hit(event.clientX,event.clientY),paint=hit?.control?.paint;if(paint?.group===this.paintDrag.group){this.paintDrag.indices.add(paint.index);hit!.piece.userData.pressVal=.7;this.moving.add(hit!.piece);this.invalidate();}this.swallow(event);return;}
+    if(this.paintDrag){if(this.paintDrag.pointerId!==event.pointerId){this.swallow(event);return;}const hit=this.hit(event.clientX,event.clientY),paint=hit?.control?.paint;if(paint?.group===this.paintDrag.group){this.paintDrag.indices.add(paint.index);hit!.piece.userData.pressVal=.7;this.moving.add(hit!.piece);this.invalidate();}this.swallow(event);return;}
     if(this.worldPress?.pointerId===event.pointerId&&this.worldPress.button!==0&&event.buttons!==0){this.setPointerOverUi(false);this.clearHint();this.hover(null);return;}
     if(this.dropdown){const hit=this.hit(event.clientX,event.clientY);this.setPointerOverUi(true);this.updateHint(hit,event.clientX,event.clientY);this.hover(this.dropdown.pieces.includes(hit?.piece!)?hit!.piece:null);this.swallow(event);return;}
     if(this.worldPress?.pointerId===event.pointerId&&event.buttons!==0){this.setPointerOverUi(false);this.clearHint();this.hover(null);return;}
@@ -1005,6 +1023,7 @@ export class NativeStage {
   }
   private pointerDown(event:PointerEvent):void{
     if(this.editor&&event.target===this.editor)return;
+    if(event.isPrimary===false){if(this.frontVisible||this.page?.modal||this.hit(event.clientX,event.clientY))this.swallow(event);return;}
     if(this.floatMenuOutside(event)){this.swallow(event);return;}
     const menu=this.floatMenu,menuBox=menu?.box;
     if(menu&&menuBox){
@@ -1083,9 +1102,9 @@ export class NativeStage {
   private pointerUp(event:PointerEvent):void{
     if(this.dismissedPointer===event.pointerId){this.dismissedPointer=undefined;this.swallow(event);return;}
     if(this.floatMenuDrag){if(this.floatMenuDrag.pointerId===event.pointerId)this.floatMenuDrag=undefined;this.swallow(event);return;}
-    if(this.regionDrag){this.regionDrag=undefined;this.updatePointerCursor(this.hit(event.clientX,event.clientY));this.swallow(event);return;}
-    if(this.scrollbarDrag){this.scrollbarDrag=undefined;this.updatePointerCursor(this.hit(event.clientX,event.clientY));this.swallow(event);return;}
-    if(this.paintDrag){const drag=this.paintDrag;this.paintDrag=undefined;this.swallow(event);if(drag.pointerId===event.pointerId){const values=[...drag.indices],from=Math.min(...values),to=Math.max(...values);void Promise.resolve(drag.onPaint(Array.from({length:to-from+1},(_,i)=>from+i))).catch(error=>this.options.onError(String(error)));}return;}
+    if(this.regionDrag){if(this.regionDrag.pointerId===event.pointerId){this.regionDrag=undefined;this.updatePointerCursor(this.hit(event.clientX,event.clientY));}this.swallow(event);return;}
+    if(this.scrollbarDrag){if(this.scrollbarDrag.pointerId===event.pointerId){this.scrollbarDrag=undefined;this.updatePointerCursor(this.hit(event.clientX,event.clientY));}this.swallow(event);return;}
+    if(this.paintDrag){const drag=this.paintDrag;this.swallow(event);if(drag.pointerId===event.pointerId){this.paintDrag=undefined;const values=[...drag.indices],from=Math.min(...values),to=Math.max(...values);void Promise.resolve(drag.onPaint(Array.from({length:to-from+1},(_,i)=>from+i))).catch(error=>this.options.onError(String(error)));}return;}
     if(this.worldPress?.pointerId===event.pointerId){
       const world=this.worldPress;this.worldPress=undefined;this.syncEnvironmentHover();
       this.updatePointerCursor();
@@ -1094,11 +1113,11 @@ export class NativeStage {
       }
       return;
     }
-    if(this.globeDrag){const drag=this.globeDrag;this.globeDrag=undefined;this.swallow(event);
+    if(this.globeDrag){const drag=this.globeDrag;this.swallow(event);if(drag.pointerId!==event.pointerId)return;this.globeDrag=undefined;
       if(drag.pointerId===event.pointerId&&Math.hypot(event.clientX-drag.startX,event.clientY-drag.startY)<6){
         this.globeHit(event.clientX,event.clientY);this.globe?.pick(this.raycaster);this.invalidate();}return;
     }
-    const down=this.down;if(!down){if(this.frontVisible||this.page?.modal)this.swallow(event);return;}
+    const down=this.down;if(!down){if(this.frontVisible||this.page?.modal)this.swallow(event);return;}if(down.pointerId!==event.pointerId){this.swallow(event);return;}
     this.down=null;this.swallow(event);let hit=this.hit(event.clientX,event.clientY);
     if(down.pointerId!==event.pointerId||Math.hypot(event.clientX-down.x,event.clientY-down.y)>12)return;
     if(hit?.piece!==down.piece&&down.pageId===this.page?.id&&down.layout===this.pageBox&&this.acquiredHitLive(down.piece)&&!this.insetControls.has(down.piece)&&down.pose.intersects(this.raycaster))hit=this.hits.get(down.piece.userData.mesh)??{piece:down.piece};
@@ -1111,6 +1130,7 @@ export class NativeStage {
   private belongsToPage(hit:Hit|undefined):boolean{if(!hit)return false;if(this.dropdown?.pieces.includes(hit.piece))return true;for(let parent:THREE.Object3D|null=hit.piece;parent;parent=parent.parent)if(parent===this.pageGroup)return true;return false;}
   private dismissPage():void{const page=this.page;if(!page||page.closable===false)return;this.activationSerial++;this.closeDropdown();this.clearHint();try{page.onClose?.();if((!this.frontVisible||!page.onClose)&&!(page.closeOwnsNavigation&&page.onClose))this.options.onEscape();}catch(error){this.options.onError(String(error));}}
   private cancelPress():void{this.down=null;this.dismissedPointer=undefined;this.globeDrag=undefined;this.scrollbarDrag=undefined;this.regionDrag=undefined;this.floatMenuDrag=undefined;this.paintDrag=undefined;if(this.worldPress)this.options.onCancelWorldInteraction?.();this.worldPress=undefined;}
+  private cancelPointer(pointerId:number):void{const active=this.down??this.regionDrag??this.scrollbarDrag??this.paintDrag??this.floatMenuDrag??this.globeDrag??this.worldPress;if(!active||active.pointerId===pointerId)this.cancelPress();}
   private globeHit(x:number,y:number):number|null{
     if(!this.globe?.visible||!this.page?.visual)return null;
     const box=this.pageBox,r=box?.visualRect;if(this.page.setupProfile==='site'&&box&&r){const px=x/this.displayScale-box.x,py=y/this.displayScale-box.y;if(px<r.x||px>r.x+r.width||py<r.y||py>r.y+r.height)return null;}
@@ -1195,6 +1215,8 @@ export class NativeStage {
     const count=Math.floor((state.box.height-10)/25);if(state.index<state.offset)state.offset=state.index;else if(state.index>=state.offset+count)state.offset=state.index-count+1;this.rebuildDropdown();
   }
   private keyDown(event:KeyboardEvent):void{
+    // A held key must not close a parent or menu restored by its first press.
+    if(event.key==='Escape'&&event.repeat){this.swallow(event);return;}
     if(this.floatMenu){
       if(event.key==='Escape'){this.swallow(event);this.closeFloatMenu();return;}
       if(event.key==='Tab'||event.key==='ArrowDown'||event.key==='ArrowUp'){
@@ -1432,7 +1454,7 @@ export class NativeStage {
       // and illustrated backdrop are free in their own resident layers.
       const panel=(id:string,r:NativeRect,ink:string,draw:CardboardDraw)=>{
         const piece=this.pagePiece(id,{w:r.width*k,h:r.height*k,cacheBackground:true,surface:'panel',uvPadding:1,bevel:.038,
-          textureWidth:Math.min(4096,Math.ceil(r.width*2)),textureHeight:Math.min(4096,Math.ceil(r.height*2)),bgColor:'#f1e7cf',seed:2003,depth:.046,interactive:true,
+          textureWidth:Math.min(4096,Math.ceil(r.width*2)),textureHeight:Math.min(4096,Math.ceil(r.height*2)),bgColor:PALETTE.sheetPaper,seed:2003,depth:.046,interactive:true,
           drawFn:(ctx,wp,hp,rng)=>{ctx.save();ctx.scale(wp/r.width,hp/r.height);ctx.translate(-r.x,-r.y);draw(ctx,wp,hp,rng);ctx.restore();}},ink,(r.x+r.width/2-box.width/2)*k,(box.height/2-r.y-r.height/2)*k,0);
         piece.userData.nativeStatic=true;this.pageGroup.add(piece);return piece;
       };
@@ -1444,7 +1466,7 @@ export class NativeStage {
       const details=box.regions.details;if(details&&details.width>0&&details.height>0)this.pageBackdrop=panel('page:'+page.id,details,signature,(ctx,_w,_h,rng)=>paintRows(ctx,rng));
       if(page.closable!==false)this.control(this.closeControl(),w/2-.25,h/2-.23,.32,.32,.07);
     }else if(box.layout!=='palette'&&sheet.height>0){
-    const background=this.pagePiece('page:'+page.id,{w:sheet.width*k,h:sheet.height*k,cacheBackground:true,surface:'panel',uvPadding:1,bevel:.038,textureWidth:Math.ceil(sheet.width*2),textureHeight:Math.ceil(sheet.height*2),bgColor:'#f1e7cf',seed:2003,depth:.046,interactive:true,
+    const background=this.pagePiece('page:'+page.id,{w:sheet.width*k,h:sheet.height*k,cacheBackground:true,surface:'panel',uvPadding:1,bevel:.038,textureWidth:Math.ceil(sheet.width*2),textureHeight:Math.ceil(sheet.height*2),bgColor:PALETTE.sheetPaper,seed:2003,depth:.046,interactive:true,
       drawFn:(ctx,wp,hp,rng)=>{
         ctx.save();ctx.scale(wp/sheet.width,hp/sheet.height);ctx.translate(-sheet.x,-sheet.y);ctx.textAlign='left';ctx.fillStyle=PALETTE.inkDark;ctx.font=this.font('medium');
         if(box.infoParts){
@@ -1456,7 +1478,7 @@ export class NativeStage {
         ctx.fillText(title,margin,27,box.width-margin*2-(page.portrait&&!box.portraitRect?74:28));
         drawMarkerLine(ctx,margin,35,Math.min(box.width-48,margin+this.measure(title,NATIVE_TEXT.medium)+22),35,'#b58b4a',1.3,rng);
         }
-        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font('small');ctx.fillStyle='#66583f';wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait&&!box.portraitRect?62:0),this.measure,NATIVE_TEXT.small).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
+        if(page.subtitle&&!box.inspectorParts){ctx.font=this.font('small');ctx.fillStyle=NATIVE_INK.subtle;wrapNativeText(page.subtitle,box.width-margin*2-(page.portrait&&!box.portraitRect?62:0),this.measure,NATIVE_TEXT.small).slice(0,2).forEach((line,index)=>ctx.fillText(line,margin,55+index*17));}
         if(box.layout==='info'&&box.regions.catalogue&&box.regions.details){const right=box.regions.details;ctx.fillStyle=NATIVE_INK.panelFill;ctx.fillRect(right.x-4,right.y-4,right.width+8,right.height+8);}
         paintRows(ctx,rng);
         this.drawResearchLinks(ctx,box,rng);
@@ -1517,7 +1539,7 @@ export class NativeStage {
         // In a Bio card the field fills the name zone, left of its buttons (x 395).
         const rightControls=controls.length?controls.length*28+6:0,inputW=r.inputRect?.width??(r.bio?(r.bio.buttons[0]?.rect.x??r.width)-16:Math.max(70,r.width-r.labelWidth-rightControls-8)),inputH=r.inputRect?.height??25;
         const inputX=r.inputRect?r.inputRect.x-this.horizontalOffset(row.region):r.x+r.labelWidth+8,inputY=r.inputRect?box.header+r.inputRect.y-offset:top+15-inputH/2;
-        const piece=this.pagePiece(row.id,{w:inputW*k,h:inputH*k,uvPadding:1,textureWidth:Math.ceil(inputW*2),textureHeight:Math.ceil(inputH*2),bgColor:'#fff9eb',seed:3007,depth:.018,interactive:true,
+        const piece=this.pagePiece(row.id,{w:inputW*k,h:inputH*k,uvPadding:1,textureWidth:Math.ceil(inputW*2),textureHeight:Math.ceil(inputH*2),bgColor:PALETTE.inputPaper,seed:3007,depth:.018,interactive:true,
           drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/inputW,hp/inputH);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');ctx.fillText(row.input!.value||row.input!.placeholder||'',7,inputH/2+4.5,inputW-14);ctx.restore();}},JSON.stringify([row.input.value,row.input.placeholder,this.textFontRevision]),(inputX+inputW/2-box.width/2)*k,(box.height/2-inputY-inputH/2)*k,.08,undefined,row.input);
         piece.userData.nativeRegion=row.region;group.add(piece);
       }
@@ -1557,17 +1579,18 @@ export class NativeStage {
    * lines carry hit planes (tooltip, or the allowed area's list). */
   private drawInspectPane(page:NativePage,box:NativePageBox):void{
     const parts=box.inspectorParts!,pane=parts.summary,k=.01;
-    const ink=JSON.stringify([page.title,parts.gauges?.map(({gauge})=>[gauge.label,Math.round(gauge.fill*200),gauge.color]),parts.lines?.map(line=>line.lines),this.textFontRevision]);
+    const ink=JSON.stringify([page.title,parts.gauges?.map(({gauge})=>[gauge.label,Math.round(gauge.fill*200),gauge.color]),parts.lines?.map(line=>[line.lines,line.row.emphasis,line.row.inspectInk]),this.textFontRevision,NATIVE_INK.text,NATIVE_INK.subtle,NATIVE_TEXT_STYLES.person.color]);
     this.pagePiece('page:summary',{w:pane.width*k,h:pane.height*k,uvPadding:1,depth:.046,bevel:.038,surface:'panel',bgColor:PALETTE.creamPaper,seed:2080,cacheBackground:true,textureWidth:Math.ceil(pane.width*2),textureHeight:Math.ceil(pane.height*2),drawFn:(ctx,wp,hp,rng)=>{
       ctx.save();ctx.scale(wp/pane.width,hp/pane.height);ctx.translate(-pane.x,-pane.y);ctx.textAlign='left';
-      if(parts.name){ctx.font=this.font('medium');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(page.title,parts.name.x,parts.name.y+NATIVE_TEXT.medium,parts.name.width);}
+      if(parts.name)this.semanticText(ctx,page.title,parts.name.x,parts.name.y+NATIVE_TEXT.medium,parts.name.width,NATIVE_TEXT.medium);
       for(const {gauge,rect} of parts.gauges??[]){
+        const color=customCardboardTheme()?uiTintedSurface(PALETTE.creamPaper,NATIVE_INK.text,gauge.color,.48):gauge.color;
         ctx.fillStyle=NATIVE_INK.gaugeBack;ctx.fillRect(rect.x,rect.y,rect.width,rect.height);
-        ctx.fillStyle=gauge.color;ctx.fillRect(rect.x,rect.y,rect.width*THREE.MathUtils.clamp(gauge.fill,0,1),rect.height);
+        ctx.fillStyle=color;ctx.fillRect(rect.x,rect.y,rect.width*THREE.MathUtils.clamp(gauge.fill,0,1),rect.height);
         drawHandRect(ctx,rect.x,rect.y,rect.width,rect.height,null,PALETTE.inkDark,.8,rng);
-        ctx.font=this.font('tiny');ctx.textAlign='center';ctx.fillStyle=NATIVE_INK.text;ctx.fillText(gauge.label,rect.x+rect.width/2,rect.y+rect.height/2+NATIVE_TEXT.tiny*.36,rect.width-4);ctx.textAlign='left';
+        ctx.font=this.font('tiny',true);ctx.textAlign='center';ctx.fillStyle=readableUiInk(NATIVE_INK.text,color);ctx.fillText(gauge.label,rect.x+rect.width/2,rect.y+rect.height/2+NATIVE_TEXT.tiny*.36,rect.width-4);ctx.textAlign='left';
       }
-      for(const line of parts.lines??[])line.lines.forEach((text,index)=>this.semanticText(ctx,text,line.rect.x,line.rect.y+index*NATIVE_LEADING+NATIVE_TEXT.small,line.rect.width,NATIVE_TEXT.small));
+      for(const line of parts.lines??[]){const action=line.row.id==='pawn-action';line.lines.forEach((text,index)=>this.semanticText(ctx,text,line.rect.x,line.rect.y+index*NATIVE_LINE.small+NATIVE_LINE.small/2+NATIVE_TEXT.small*.36,line.rect.width,NATIVE_TEXT.small,action,line.row.inspectInk?NATIVE_INK[line.row.inspectInk]:line.row.emphasis==='muted'?NATIVE_INK.subtle:NATIVE_INK.text,action));}
       ctx.restore();
     }},ink,(pane.x+pane.width/2-box.width/2)*k,(box.height/2-pane.y-pane.height/2)*k,.025).userData.nativeStatic=true;
     const target=(id:string,rect:NativeRect,hint:string,control?:NativeControl)=>{
@@ -1611,8 +1634,10 @@ export class NativeStage {
     const card=this.pageBox?.rows.find(row=>row.card)?.card;if(!card)return false;
     const unit=event.deltaMode===1?18:event.deltaMode===2?this.height:1,region=card.regions.find(entry=>entry.id===id);if(!region)return false;
     const current=Math.min(cardScroll(id),Math.max(0,region.contentHeight-region.h));
-    if(setCardScroll(card,id,current+event.deltaY*unit)){this.hover(null);this.rebuildPage(true);this.invalidate();}else if(this.pageBox?.layout==='info')return false;
-    return true;
+    if(setCardScroll(card,id,current+event.deltaY*unit)){this.hover(null);this.rebuildPage(true);this.invalidate();return true;}
+    // A fitting list, or the end of a nested list, leaves the wheel to its
+    // page. Short screens must still reach the rest of an oversized card.
+    return false;
   }
   private showRowHighlight(piece:CardboardPiece|null):void{
     const parent=piece?.parent;
@@ -1657,7 +1682,7 @@ export class NativeStage {
       if(leader)this.semanticText(ctx,faction.leaderTitle+' : '+leader,textX,top+65,w,NATIVE_TEXT.small);
       ctx.fillStyle='rgba(103,76,38,.17)';ctx.fillRect(r.x,top+r.height-1,nameWidth,1);return;
     }
-    if(r.row.columns){ctx.fillStyle='#4d5c46';ctx.font=this.font('small',true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,this.pageBox?.matrixSpec?top+r.height/2+4:top+28,nameWidth);}
+    if(r.row.columns){ctx.fillStyle=NATIVE_INK.sectionTitle;ctx.font=this.font('small',true);ctx.textAlign='left';ctx.fillText(r.row.label,r.x,this.pageBox?.matrixSpec?top+r.height/2+4:top+28,nameWidth);}
     else if(r.matrix)this.semanticText(ctx,r.row.label,r.x,top+r.height/2+4,nameWidth,NATIVE_UI.body,true);
   }
   private drawPageRow(ctx:CanvasRenderingContext2D,r:NativeRowBox,top:number,rng:()=>number,box:NativePageBox):void{
@@ -1670,7 +1695,7 @@ export class NativeStage {
       if(this.measure(label,size,false)>available){const chars=Array.from(row.label);while(chars.length&&this.measure(chars.join('')+'…'+marker,size,false)>available)chars.pop();label=chars.join('')+'…'+marker;}
       ctx.font=this.font('small');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(label,left,top+r.height/2+size*.32,available);return;
     }
-    if(row.infoHeading){ctx.fillStyle=NATIVE_INK.separator;ctx.font=this.font('small',true);r.labelLines.forEach((text,index)=>ctx.fillText(text,r.x+2,top+16+index*line,Math.max(1,r.width-4)));ctx.fillStyle=NATIVE_INK.line;ctx.fillRect(r.x,top+r.height-2,r.width,1);return;}
+    if(row.infoHeading){ctx.fillStyle=NATIVE_INK.sectionTitle;ctx.font=this.font('small',true);r.labelLines.forEach((text,index)=>ctx.fillText(text,r.x+2,top+16+index*line,Math.max(1,r.width-4)));ctx.fillStyle=NATIVE_INK.line;ctx.fillRect(r.x,top+r.height-2,r.width,1);return;}
     if(row.infoEntry){
       const entry=row.infoEntry;if(entry.selected||entry.match==='match'){ctx.fillStyle=entry.selected?NATIVE_INK.buttonActive:NATIVE_INK.highlight;ctx.fillRect(r.x,top,r.width,r.height);}
       ctx.fillStyle=entry.match==='muted'?NATIVE_INK.disabled:NATIVE_INK.text;ctx.font=this.font('small',entry.selected||entry.match==='match');
@@ -1749,7 +1774,7 @@ export class NativeStage {
     if(row.historyEntry){
       const c=historyColumns(r.width);
       ctx.font=this.font('small');ctx.fillStyle=NATIVE_INK.text;ctx.fillText(row.label,r.x+c.dateX+2,top+NATIVE_HISTORY.rowHeight/2+4,Math.max(1,c.date-4));
-      if(row.historyEntry.kind==='journal')drawNativeActionIcon(ctx,'historique',r.x+c.iconX+c.icon/2,top+NATIVE_HISTORY.rowHeight/2,Math.min(9,c.icon/3),NATIVE_INK.subtle,PALETTE.creamPaper);
+      if(row.historyEntry.kind==='journal')drawJournalPictogram(ctx,row.historyEntry.icon??'command',r.x+c.iconX+c.icon/2,top+NATIVE_HISTORY.rowHeight/2,Math.min(9,c.icon/3),NATIVE_INK.subtle);
       return;
     }
     if(row.historyGraph){
@@ -1768,7 +1793,7 @@ export class NativeStage {
       ctx.textAlign='left';ctx.font=this.font('small');ctx.fillStyle=NATIVE_INK.subtle;ctx.fillText('Dernier relevé uniquement · aucun historique temporel enregistré',x,top+r.height-20,inner);
       return;
     }
-    if(r.card&&row.card){paintNativeTabCard(ctx,r.card,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),rng});return;}
+    if(r.card&&row.card){paintNativeTabCard(ctx,r.card,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),semanticText:(context,text,x,y,width,role,bold)=>this.semanticText(context,text,x,y,width,NATIVE_TEXT[role],bold),rng});return;}
     if(r.bio&&row.bio){paintNativeBioCard(ctx,r.bio,row.bio,r.x,top,{font:(role,bold)=>this.font(role,bold),measure:(text,role,bold)=>this.measure(text,NATIVE_TEXT[role],!!bold),rng});return;}
     if(row.tree){
       const left=r.x+Math.max(0,row.tree.depth)*17+28;
@@ -1793,7 +1818,7 @@ export class NativeStage {
     if(row.meter){
       const meter=row.meter,labelWidth=Math.min(r.width*.45,138),barX=r.x+labelWidth,barW=Math.max(40,r.width-labelWidth-8),fraction=THREE.MathUtils.clamp(meter.value/(meter.max??1),0,1);
       this.semanticText(ctx,row.label,r.x,top+18,labelWidth-5,body);
-      if(meter.passion){ctx.fillStyle='#b45c29';ctx.font=this.font('tiny',true);ctx.fillText('♥'.repeat(meter.passion),r.x+labelWidth-24,top+24);}
+      if(meter.passion){ctx.fillStyle=NATIVE_INK.painSevere;ctx.font=this.font('tiny',true);ctx.fillText('♥'.repeat(meter.passion),r.x+labelWidth-24,top+24);}
       drawHandRect(ctx,barX,top+6,barW,16,'#e5d4b2','#51402c',1,rng);
       if(fraction>0)drawHandRect(ctx,barX+.8,top+6.8,Math.max(.5,(barW-1.6)*fraction),14.4,meter.color??'#63885d',null,.5,rng);
       ctx.fillStyle=ink;ctx.font=this.font('small',true);ctx.textAlign='center';ctx.strokeStyle='#f8edda';ctx.lineWidth=2;ctx.strokeText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.fillText(meter.label??row.value??'',barX+barW/2,top+19,barW-4);ctx.textAlign='left';
@@ -1801,17 +1826,18 @@ export class NativeStage {
       return;
     }
     const baseline=top+(record?21:18),labelWidth=row.value||row.input?r.labelWidth-5:r.textWidth;
-    if(row.label)r.labelLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,baseline+i*line,labelWidth-3,body,row.emphasis==='heading'||row.presentation==='summary'||record&&!!row.value));
-    if(row.value)r.valueLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+r.labelWidth+6,baseline+i*line,r.textWidth-r.labelWidth-8,body));
+    const plainInk=row.emphasis==='heading'?NATIVE_INK.sectionTitle:row.emphasis==='muted'?NATIVE_INK.subtle:NATIVE_INK.text;
+    if(row.label)r.labelLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,baseline+i*line,labelWidth-3,body,row.emphasis==='heading'||row.presentation==='summary'||record&&!!row.value,plainInk));
+    if(row.value)r.valueLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+r.labelWidth+6,baseline+i*line,r.textWidth-r.labelWidth-8,body,false,plainInk));
     if(r.detailLines.length){const y=baseline+Math.max(r.labelLines.length,r.valueLines.length,1)*line+2;r.detailLines.forEach((text,i)=>this.semanticText(ctx,text,r.x+3,y+i*18,r.textWidth-5,NATIVE_TEXT.small));}
     if(row.emphasis==='heading'){ctx.strokeStyle='rgba(103,76,38,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(r.x,top+r.height-4);ctx.lineTo(r.x+r.width,top+r.height-4);ctx.stroke();}
   }
-  private semanticText(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,size:number,bold=false):void{
+  private semanticText(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,size:number,bold=false,plainInk?:string,center=false):void{
     if(!text||width<=0)return;let spans=this.semanticInk.get(text);
     if(!spans){spans=tokenizeNativeText(text,this.textLexicon);if(this.semanticInk.size>=1024)this.semanticInk.delete(this.semanticInk.keys().next().value!);this.semanticInk.set(text,spans);}
     const measured=spans.reduce((sum,span)=>sum+this.measure(span.text,size,bold||NATIVE_TEXT_STYLES[span.kind].bold),0);
-    ctx.save();ctx.textAlign='left';ctx.translate(x,y);ctx.scale(Math.min(1,width/Math.max(1,measured)),1);let offset=0;
-    for(const span of spans){const style=NATIVE_TEXT_STYLES[span.kind];ctx.font=this.fontPx(size,bold||style.bold);ctx.fillStyle=style.color;ctx.fillText(span.text,offset,0);offset+=this.measure(span.text,size,bold||style.bold);}
+    ctx.save();ctx.textAlign='left';ctx.translate(x+(center?Math.max(0,(width-measured)/2):0),y);ctx.scale(Math.min(1,width/Math.max(1,measured)),1);let offset=0;
+    for(const span of spans){const style=NATIVE_TEXT_STYLES[span.kind];ctx.font=this.fontPx(size,bold||style.bold);ctx.fillStyle=span.kind==='plain'&&plainInk?plainInk:style.color;ctx.fillText(span.text,offset,0);offset+=this.measure(span.text,size,bold||style.bold);}
     ctx.restore();
   }
   private wrap(ctx:CanvasRenderingContext2D,text:string,x:number,y:number,width:number,lineHeight:number,maxLines=20):number{
@@ -1823,9 +1849,10 @@ export class NativeStage {
   private control(control:NativeControl,x:number,y:number,w:number,h:number,z:number,style:NativeControlStyle=control.presentation??'button',node?:NativeRow['graphNode'],inset?:NativeControl):CardboardPiece{
     const cssW=w*100,cssH=h*100,workCell=/^work-\d+-/.test(control.id)&&(!!control.select||!!control.onSecondary);
     const portrait=style==='candidate'&&control.portraitUrl?this.portraitImage(control.portraitUrl):undefined,portraitReady=!!portrait?.complete&&!!portrait.naturalWidth;
+    const background=control.glyph||style==='radio'&&!control.disabled||(style==='option'||style==='history-row')&&!control.active&&!control.disabled?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain;
     const draw:CardboardDraw=(ctx,wp,hp,rng)=>{
-      ctx.save();ctx.scale(wp/cssW,hp/cssH);ctx.fillStyle=control.disabled?'#8b7b60':PALETTE.inkDark;ctx.textAlign='center';
-      const ink=control.disabled?'#776c55':PALETTE.inkDark;
+      const ink=readableUiInk(control.disabled?NATIVE_INK.disabled:PALETTE.inkDark,background);
+      ctx.save();ctx.scale(wp/cssW,hp/cssH);ctx.fillStyle=ink;ctx.textAlign='center';
       const icon=(cx:number,cy:number,r:number)=>drawNativeActionIcon(ctx,control.icon??(control.label==='▶'?'play':control.id),cx,cy,r,ink,PALETTE.creamPaper);
       if(control.glyph){
         const cx=cssW/2,cy=cssH/2;
@@ -1836,7 +1863,7 @@ export class NativeStage {
           ctx.closePath();ctx.fill();
         }else{
           drawHandRect(ctx,cx-8,cy-8,16,16,PALETTE.creamPaper,ink,1,rng);
-          ctx.strokeStyle=control.disabled?ink:control.glyph==='allow'?PALETTE.pineDark:control.glyph==='forbid'?PALETTE.terracotta:PALETTE.ochre;
+          ctx.strokeStyle=control.disabled?ink:control.glyph==='allow'?NATIVE_INK.positive:control.glyph==='forbid'?NATIVE_INK.negative:NATIVE_INK.sectionTitle;
           ctx.lineWidth=2.4;ctx.lineCap='round';ctx.beginPath();
           if(control.glyph==='allow'){ctx.moveTo(cx-5,cy);ctx.lineTo(cx-1,cy+4);ctx.lineTo(cx+6,cy-5);}
           else if(control.glyph==='forbid'){ctx.moveTo(cx-4,cy-4);ctx.lineTo(cx+4,cy+4);ctx.moveTo(cx+4,cy-4);ctx.lineTo(cx-4,cy+4);}
@@ -1863,7 +1890,7 @@ export class NativeStage {
       }else if(style==='card'){
         ctx.textAlign='left';const cardInk=nativeCardInk(control,cssW,this.measure,!!inset);let baseline=30;
         const paint=(lines:string[],bold:boolean)=>{ctx.font=this.font('small',bold);for(const line of lines){ctx.fillText(line,18,baseline);baseline+=NATIVE_LEADING;}};
-        paint(cardInk.title,true);if(cardInk.caption.length){baseline+=4;paint(cardInk.caption,false);}if(cardInk.description.length){baseline+=4;ctx.fillStyle='#625139';paint(cardInk.description,false);}
+        paint(cardInk.title,true);if(cardInk.caption.length){baseline+=4;paint(cardInk.caption,false);}if(cardInk.description.length){baseline+=4;ctx.fillStyle=NATIVE_INK.subtle;paint(cardInk.description,false);}
         if(inset){drawHandRect(ctx,cssW-54,14,38,38,PALETTE.creamPaper,ink,1.2,rng);drawNativeActionIcon(ctx,inset.icon??inset.id,cssW-35,33,12,inset.disabled?'#8b7b60':ink,PALETTE.creamPaper);}
       }else if(style==='icon'){
         if(control.icon==='history-pin'){
@@ -1908,7 +1935,7 @@ export class NativeStage {
         const barWidth=cssW-38,filled=barWidth*THREE.MathUtils.clamp(node.points/Math.max(1,node.cost),0,1);
         drawHandRect(ctx,8,cssH-16,barWidth,9,'#ae9675',ink,1,rng);if(filled>0){ctx.fillStyle=node.state==='done'?'#8fa66c':node.state==='active'?'#d3a548':'#829baa';ctx.fillRect(9,cssH-15,Math.max(0,filled-2),7);}
         ctx.fillStyle=ink;ctx.font=this.font('tiny',true);ctx.textAlign='center';ctx.fillText(`${Math.round(node.points)}/${node.cost}`,8+barWidth/2,cssH-8,barWidth-4);
-        if(inset){drawHandRect(ctx,cssW-24,cssH-22,22,19,inset.disabled?PALETTE.kraftLight:PALETTE.sageMountain,ink,1,rng);drawNativeActionIcon(ctx,'play',cssW-13,cssH-12.5,6.5,inset.disabled?'#776c55':ink,PALETTE.creamPaper);}
+        if(inset){drawHandRect(ctx,cssW-24,cssH-22,22,19,inset.disabled?PALETTE.kraftLight:PALETTE.sageMountain,ink,1,rng);drawNativeActionIcon(ctx,'play',cssW-13,cssH-12.5,6.5,inset.disabled?NATIVE_INK.disabled:ink,PALETTE.creamPaper);}
       }else{
         const inlineIcon=!!control.icon&&cssH>=28;if(inlineIcon)icon(17,cssH/2,10);
         const available=workCell?cssW-2:cssW-(control.select?24:12)-(inlineIcon?26:0),font:NativeTextRole=control.id==='page:close'||control.label.length<=1&&cssW<=48?'medium':'small';
@@ -1922,13 +1949,13 @@ export class NativeStage {
         else ctx.fillText(label,cssW/2+(inlineIcon?12:0)-(control.select&&!workCell?4:0),control.caption?workCell?cssH*.43:14:cssH/2+4,available);
         }
         if(workCell&&control.passion){ctx.save();ctx.globalAlpha=.4;ctx.font=this.font('tiny',true);ctx.fillStyle=ink;ctx.fillText('♨'.repeat(control.passion),cssW/2,cssH-3,cssW-2);ctx.restore();}
-        if(control.caption){ctx.font=this.font(workCell?'small':'tiny',workCell);ctx.fillStyle=workCell?'#392b20':'#5b5b42';ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
+        if(control.caption){ctx.font=this.font(workCell?'small':'tiny',workCell);ctx.fillStyle=workCell?ink:NATIVE_INK.subtle;ctx.fillText(control.caption,cssW/2,cssH-5,cssW-6);}
       }
-      if(control.select){const cy=workCell?10:cssH/2;ctx.fillStyle=PALETTE.inkDark;ctx.beginPath();ctx.moveTo(cssW-12,cy-2);ctx.lineTo(cssW-5,cy-2);ctx.lineTo(cssW-8.5,cy+3);ctx.closePath();ctx.fill();}
-      if(control.active&&!control.glyph&&style!=='radio')drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,PALETTE.inkDark,1,rng);
+      if(control.select){const cy=workCell?10:cssH/2;ctx.fillStyle=ink;ctx.beginPath();ctx.moveTo(cssW-12,cy-2);ctx.lineTo(cssW-5,cy-2);ctx.lineTo(cssW-8.5,cy+3);ctx.closePath();ctx.fill();}
+      if(control.active&&!control.glyph&&style!=='radio')drawMarkerLine(ctx,5,cssH-3,cssW-5,cssH-3,ink,1,rng);
       ctx.restore();
     };
-    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:control.glyph||style==='radio'&&!control.disabled||(style==='option'||style==='history-row')&&!control.active&&!control.disabled?PALETTE.creamPaper:control.disabled?PALETTE.kraftLight:control.active?PALETTE.ochre:control.color??PALETTE.sageMountain,seed:this.seed(control.id)%CONTROL_CUT_VARIANTS+1,sharedGeometry:true,interactive:true,drawFn:draw},
+    const piece=this.pagePiece(control.id,{w,h,depth:.046,bevel:.038,uvPadding:1,textureWidth:Math.max(32,Math.ceil(cssW*2)),textureHeight:Math.max(32,Math.ceil(cssH*2)),bgColor:background,seed:this.seed(control.id)%CONTROL_CUT_VARIANTS+1,sharedGeometry:true,interactive:true,drawFn:draw},
       JSON.stringify([control.label,control.caption,control.passion,control.description,control.icon,control.glyph,control.color,style,node,inset?.icon,!!inset?.disabled,!!control.active,!!control.disabled,!!control.select,this.textFontRevision,control.mark,control.portraitUrl,portraitReady]),x,y,z,control);
     piece.userData.nativeStyle=style;piece.userData.active=!!control.active;
     piece.userData.nativeMapToolPose=this.page?.layout==='palette'&&style==='icon';piece.userData.nativeMapToolTitle=control.label;
@@ -2082,7 +2109,7 @@ export class NativeStage {
     const natural=tooltipBoxSize(widest,lines.length*line),width=Math.min(natural.width,this.width-8),height=Math.min(this.height-20,natural.height);
     const count=natural.height>height?Math.max(1,Math.floor((height-2*margin-line)/line)):lines.length;this.hintMaxScroll=Math.max(0,lines.length-count);this.hintScroll=Math.min(this.hintScroll,this.hintMaxScroll);
     const z=2,factor=1-z/HUD_DISTANCE,piece=this.art.createPiece({w:width*.01,h:height*.01,depth:.046,bevel:.038,surface:'panel',uvPadding:1,textureWidth:Math.ceil(width*2),textureHeight:Math.ceil(height*2),seed:347,bgColor:PALETTE.creamPaper,
-      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((entry,i)=>ctx.fillText(entry,margin,margin+16+i*line,width-2*margin));if(scrolling){ctx.font=this.font('tiny');ctx.fillStyle='#6b5b45';ctx.fillText('Molette : suite',margin,height-margin-2);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
+      drawFn:(ctx,wp,hp)=>{ctx.save();ctx.scale(wp/width,hp/height);ctx.fillStyle=PALETTE.inkDark;ctx.textAlign='left';ctx.font=this.font('small');const scrolling=this.hintMaxScroll>0;lines.slice(scrolling?this.hintScroll:0,scrolling?this.hintScroll+count:lines.length).forEach((entry,i)=>ctx.fillText(entry,margin,margin+16+i*line,width-2*margin));if(scrolling){ctx.font=this.font('tiny');ctx.fillStyle=NATIVE_INK.subtle;ctx.fillText('Molette : suite',margin,height-margin-2);ctx.fillStyle='#78975c';ctx.fillRect(width-6,6+(height-12)*this.hintScroll/lines.length,3,Math.max(8,(height-12)*count/lines.length));}ctx.restore();}});
     piece.userData.nativeId='native-tooltip';piece.scale.setScalar(this.uiScale*factor);this.hudRoot.add(piece);this.hintPiece=piece;this.hintSize={width,height};
     this.placeHint(true);
   }

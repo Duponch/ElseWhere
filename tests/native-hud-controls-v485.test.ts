@@ -84,6 +84,9 @@ describe('native HUD bounds and severity · V485',()=>{
       expect(room.position.y).toBe(views[5]!.position.y);expect(beauty.position.y).toBe(room.position.y);
       f.hud.setViewState({roomStats:true,beauty:true});expect(room.userData.active).toBe(true);expect(beauty.userData.active).toBe(true);expect(room.userData.tooltip).toContain('(G)');expect(beauty.userData.tooltip).toContain('(T)');
       room.userData.onClick?.();beauty.userData.onClick?.();expect(f.view.mock.calls.slice(-2).map(call=>call[0])).toEqual(['room-stats','beauty']);
+      const bedOwners=f.piece('hud:view:bed-owners');expect(px(bedOwners.userData.w)).toBe(24);expect(bedOwners.userData.active).toBe(true);
+      f.hud.setViewState({bedOwners:false});expect(bedOwners.userData.active).toBe(false);expect(bedOwners.userData.tooltip).toBe('Propriétaires de lits : masqués');
+      bedOwners.userData.onClick?.();expect(f.view.mock.calls.at(-1)).toEqual(['bed-owners']);
       const before=views.map(piece=>piece.position.toArray());f.hud.setViewport(720,450,.01);expect(views.map(piece=>piece.position.toArray())).toEqual(before);
     }finally{f.close();}
   });

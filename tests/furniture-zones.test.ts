@@ -83,3 +83,10 @@ test('an overflowing zone, a new zone, a reset or a cutaway lays the whole batch
   expect(h.apply(true)).toEqual(['set']);
   expect(h.apply(false,true)).toEqual(['set']);
 });
+
+test('prison and medical-prison roles recolor only the affected existing bed slots',()=>{
+  const world=town(),h=pipeline(world);h.apply();const bed=world.structures.find(s=>s.kind==='bed')!;
+  bed.prisoner=true;expect(h.apply()).toEqual(['patch']);expect(h.batches.items.some(part=>part.targetId===bed.id&&part.color===0xffb721)).toBe(true);
+  bed.medical=true;expect(h.apply()).toEqual(['patch']);expect(h.batches.items.some(part=>part.targetId===bed.id&&part.color===0xa76027)).toBe(true);
+  delete bed.prisoner;expect(h.apply()).toEqual(['patch']);expect(h.batches.items.some(part=>part.targetId===bed.id&&part.color===0x639fe2)).toBe(true);
+});

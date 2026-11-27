@@ -25,12 +25,13 @@ import {ReferenceFloraLibrary} from './origami/resource-flora';
 import {GENERIC_REFERENCE_PROFILE} from './origami/reference-profiles';
 import {isTreeSpecies} from './origami/baked/trees/recipe';
 import type {TreeAssetCatalog,TreeSpecies} from './origami/baked/trees/types';
+import {createNaturalSurfaceArtwork,naturalSurfaceArtworkPixels,NATURAL_ART_SIZE} from './natural-surface-art';
+import {bindPersonalizedTexture} from './texture-personalization';
 import {TreeModels,treeModelVariant,type TreeModel} from './models/TreeModels';
 import {FixedTreeCohorts,type FixedTreeCohortPlan} from './models/FixedTreeCohort';
 import type {TreeBakeDemand} from './origami/TreeBakeOwner';
 import {FixedTreeTextureSurface,fixedTreePaintKey} from './surfaces/FixedTreeTextureSurface';
 import {copyPastelTextureToArray,createTextureSurface,validateTextureSurfaceAssets,TEXTURE_SURFACE_SLOT_COUNT,type TextureSurfaceAssets} from './surfaces/TextureSurface';
-import {createStylizedSurfaceTexture} from './stylized-surfaces';
 import {createResourceSurfaceModels} from './models/ResourceSurfaceModels';
 import {applySharedPaintSurface,type SharedPaintSurfaceOptions} from './surfaces/SharedPaintSurface';
 import {naturalStroke} from './surfaces/NaturalSurfaceModels';
@@ -190,6 +191,8 @@ export class ResourceLayer {
   private wearWind:THREE.NodeMaterial|undefined;
   private readonly treeBankReady=uniform(0);
   private releaseSurfaceRefresh:()=>void=()=>{};
+  private releasePersonalizedTexture:()=>void=()=>{};
+  private releasePersonalizedTreeCopy:()=>void=()=>{};
   private makeWindPosition!:(base:THREE.Node<'vec3'>)=>THREE.Node<'vec3'>;
   private wearFlora:ReferenceFloraLibrary|undefined;
   private wearTemplates:Map<THREE.BufferGeometry,THREE.BufferGeometry>|undefined;
@@ -226,7 +229,7 @@ export class ResourceLayer {
   private pendingFixedCohort:{plan:FixedTreeCohortPlan;applied:boolean}|undefined;
   private applyingFixedWorld:FixedTreeCohortPlan|undefined;
   private readonly pastelTreeAssets:TextureSurfaceAssets;
-  private readonly fallbackPastel:THREE.DataTexture|undefined;
+  private readonly naturalPastel:THREE.DataTexture;
   private readonly sharedTreeMeshes=new WeakSet<THREE.Mesh>();
   private readonly sharedTreeCanopies=new WeakSet<THREE.Mesh>();
   private treeRecipeEpoch=0;
@@ -262,8 +265,9 @@ export class ResourceLayer {
   }
   constructor(readonly group: THREE.Group, private readonly staticMaterial: THREE.NodeMaterial, private readonly texturedMaterial: THREE.NodeMaterial=staticMaterial,private readonly detail?:AnimationDetail,treeSource?:TreeSurfaceSource) {
     const originalMap=(Reflect.get(texturedMaterial,'map') as THREE.DataTexture|undefined)??treeSource?.pastelTexture;
-    this.fallbackPastel=originalMap?undefined:createStylizedSurfaceTexture('vegetation');
-    const pastel=originalMap??this.fallbackPastel!,paint=attribute('origamiPaint','vec4'),profile=paint.w.mod(128),surface=attribute('surfaceUv','vec4'),slot=paint.w.div(128).floor().mod(32),face=paint.w.div(4096).floor();
+    this.naturalPastel=createNaturalSurfaceArtwork(originalMap);
+    if(this.graphicsStyle)this.releasePersonalizedTexture=bindPersonalizedTexture(this.graphicsStyle,this.naturalPastel,enabled=>naturalSurfaceArtworkPixels(originalMap,enabled));
+    const pastel=this.naturalPastel,paint=attribute('origamiPaint','vec4'),profile=paint.w.mod(128),surface=attribute('surfaceUv','vec4'),slot=paint.w.div(128).floor().mod(32),face=paint.w.div(4096).floor();
     const options:SharedPaintSurfaceOptions={context:this.graphicsStyle,base:attribute('color','vec3'),pastel:attribute('color','vec3').mul(texture(pastel,uv()).rgb),faceUv:surface.xy,profile,includeGeneric:true,pigmentDomain:'game-static78',
       gouacheTransform:body=>body.mul(profile.greaterThan(0).select(attribute('color','vec3').div(paint.xyz.max(vec3(.00001))),vec3(1))),
       stroke:naturalStroke(this.graphicsStyle,this.surfaceModels.stroke,face,slot.lessThan(31).select(surface.xy,surface.zw)),
@@ -307,10 +311,13 @@ export class ResourceLayer {
     // attribute layout can share the exact tree material and435 pages.
     // Texture ownership is separate from the model library and from materials.
     // Old isolated callers obtain the same tiny Source map, never a flat tint.
-    const pastelArray=copyPastelTextureToArray(pastel);
+    const pastelArray=copyPastelTextureToArray(pastel,NATURAL_ART_SIZE);
     this.pastelTreeAssets={texture:pastelArray,uvAddress:'raw',slots:Object.freeze(Array.from({length:TEXTURE_SURFACE_SLOT_COUNT},()=>Object.freeze({layer:0,paletteBaked:false})))};
+    // The fixed-tree Pastel owner borrows an exact two-layer copy. Update it
+    // only when this setting changes; Gouache's historical tree bank is intact.
+    if(this.graphicsStyle)this.releasePersonalizedTreeCopy=this.graphicsStyle.trackPersonalizedTextures(()=>{const source=pastel.image.data as Uint8Array,data=pastelArray.image.data as Uint8Array;data.set(source);data.set(source,source.length);pastelArray.needsUpdate=true;});
     const surfaceOptions={positionNode:windPosition,chartUv:vec3(surface.zw,slot),castShadowPositionNode:texturedMaterial.castShadowPositionNode,receivedShadowPositionNode:texturedMaterial.receivedShadowPositionNode,configure:treeSource?.configure};
-    try{this.fixedTreeSurface=this.graphicsStyle?new FixedTreeTextureSurface(this.graphicsStyle,this.pastelTreeAssets,surfaceOptions):undefined;this.treeSurface=this.fixedTreeSurface?.surface??createTextureSurface(this.pastelTreeAssets,surfaceOptions);}catch(error){pastelArray.dispose();throw error;}
+    try{this.fixedTreeSurface=this.graphicsStyle?new FixedTreeTextureSurface(this.graphicsStyle,this.pastelTreeAssets,surfaceOptions):undefined;this.treeSurface=this.fixedTreeSurface?.surface??createTextureSurface(this.pastelTreeAssets,surfaceOptions);}catch(error){this.releasePersonalizedTreeCopy();pastelArray.dispose();this.naturalPastel.dispose();throw error;}
     // Fixed named trees keep the final one-fetch graph from their first Pastel
     // draw. Continuous/generic resources own a separate complete Source graph.
     const direct=new THREE.MeshLambertNodeMaterial({flatShading:true,vertexColors:false});direct.userData.rendererOwned=true;direct.positionNode=windPosition;direct.castShadowPositionNode=texturedMaterial.castShadowPositionNode;direct.receivedShadowPositionNode=texturedMaterial.receivedShadowPositionNode;treeSource?.configure(direct);
@@ -494,7 +501,7 @@ export class ResourceLayer {
   }
   clearTargetPreview():void {if(this.targetPreviewIds.size)this.graphicsComparisonRevision++;this.targetTint.restore();this.targetPreviewIds.clear();}
   clear(): void { this.middleWind.reset();this.clearTargetPreview();this.preparedResources?.clear();clearGroup(this.group); this.chunks.clear(); this.resourceChunks.clear(); this.growing.clear(); this.treeParts.clear(); this.treeHits.clear(); this.treeCells.clear();this.treeCellsPending=undefined;this.cachedTreeUpdate=undefined;this.treeDemandEpoch++;this.refreshTreeCensus(); }
-  dispose():void {if(this.disposed)return;this.releaseSurfaceRefresh();this.attachPreparedResourceGpuRetirement([]);const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,this.fallbackPastel,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),...(this.fixedTreeSurface?[this.fixedTreeSurface]:[this.treeSurface]),this.bodyTextured,this.pastelTreeAssets.texture,this.surfaceModels,this.treeCohorts,this.treeModels];const errors:unknown[]=[];try{this.preparedResources?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Prepared resource owner close quarantined');try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');this.disposed=true;}
+  dispose():void {if(this.disposed)return;this.releaseSurfaceRefresh();this.releasePersonalizedTexture();this.releasePersonalizedTreeCopy();this.attachPreparedResourceGpuRetirement([]);const resources:{dispose():void}[]=[...[this.wearPlain,this.wearWind,this.referenceFlora,this.wearFlora,...(this.wearTemplates?.values()??[])].filter((r):r is NonNullable<typeof r>=>r!==undefined),...(this.fixedTreeSurface?[this.fixedTreeSurface]:[this.treeSurface]),this.bodyTextured,this.pastelTreeAssets.texture,this.naturalPastel,this.surfaceModels,this.treeCohorts,this.treeModels];const errors:unknown[]=[];try{this.preparedResources?.dispose();}catch(error){errors.push(error);}if(errors.length)throw new AggregateError(errors,'Prepared resource owner close quarantined');try{this.clear();}catch(error){errors.push(error);}try{disposeTreeResources(resources,'Resource material cleanup failed');}catch(error){errors.push(error);}this.treeCatalog=undefined;if(errors.length)throw new AggregateError(errors,'Resource layer cleanup failed');this.disposed=true;}
 
   /** Only a confirmed increase in a reserved chopping job can produce a hit.
    * The contact phase is the forward reach of the existing 11 rad/s arm pose. */

@@ -133,6 +133,8 @@ import {planConstructionPlantRetirement,commitConstructionPlantRetirement,retain
 import {applyTreeCommand,extractTreeReason,replantTreeReason,processTreeWork,advanceMinifiedTrees,isPlantDesignationJob,treeJobReason} from './tree-transfer.ts';
 import {applyDesignationCancel,cancelIntentJobs,clearPileHaulFlags} from './designation-cancel.ts';
 import {isShelfKind,newShelfStorage} from './shelf-storage.ts';
+import {applyBlueprintStorage380} from './blueprint-storage-380.ts';
+import {cloneLinkedShelfPolicy286} from './linked-storage-policy-286.ts';
 import {patchShelfPolicy} from './shelf-commands.ts';
 import { applyAllowedAreaCommand } from './allowed-areas.ts';
 import { commitAllowedAreaChange,preflightAllowedAreaChange,reconcileAllowedAreas,reconcileAllowedAreaPawn,type AreaInterruptionPlan } from './allowed-area-reconcile.ts';
@@ -800,6 +802,9 @@ function applyLocalCommand(world: World, command: LocalCommand): CommandResult {
   // dirty): no task, priority or reconciliation changes.
   if(command.type==='work-tab-mode')return applyWorkTabMode344(campaignAuthority(world),command);
   if(isLetterCommand352(command))return applyLetterCommand352(world,command);
+  // A storage plan owns settings only; it creates no hauling destination and
+  // must not advance unrelated clocks/services when those settings change.
+  if(command.type==='blueprint-storage-policy')return applyBlueprintStorage380(world,command);
   const result=stripCancel351(world,command,applyCommandInternal(world,command));
   // Developer mode, god mode: choosing a research project completes it (Core's god mode makes research free).
   if(result.ok&&command.type==='research-project'&&command.project&&devGodMode())finishCurrentResearch(world);
@@ -849,7 +854,7 @@ function setWorkPriority(world:World,pawn:Pawn,work:WorkType,value:number,drops:
   if (value === 0 && ((job && workType(job) === work && pawn.orders.active===null) || (pawn.haul && pawn.orders.active!=='haul' && work === haulingWork(pawn.haul.destination)) || (pawn.cooking && pawn.orders.active!=='cook' && disablesWork(world,pawn,work,taskWork(pawn.cooking))))) releaseWork(world, pawn,drops);
   pawn.planCooldown = 0;
 }
-function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}|import('./letters-352.ts').LetterCommand352>): CommandResult {
+function applyCommandInternal(world: World, command: Exclude<LocalCommand,import('./world-map-state.ts').WorldMapCommand|{type:'blueprint-storage-policy'|'apparel-policy-update'|'apparel-policy-copy'|'apparel-policy-rename'|'egg-forbid'|'material-forbid'|'read-book-295'|'reading-policy-295'|'work-tab-mode'}|import('./letters-352.ts').LetterCommand352>): CommandResult {
   // Schema 369: handled by applyLocalCommand; kept here for the command type.
   if(command.type==='plan-369')return applyPlanCommand369(world,command);
   if(command.type==='queue-order-378')return refusal('invalid-command','Ordre en file invalide.');
@@ -1272,6 +1277,7 @@ function completeJob(world: World, pawn: Pawn, job: Job): void {
     if(job.kind==='wind-turbine')adoptWind(world);
     const qualityStream={rng:world.rng},quality=(job.kind==='sarcophagus'||isHabitatFurnitureKind(job.kind)&&FURNITURE_DEFINITIONS[job.kind].quality||isJoyTableKind354(job.kind)&&JOY_TABLES_354[job.kind].quality)?craftingQuality(pawn.skills.construction.level,()=>healthRandom(qualityStream),useInspiration360(world,pawn,'creativity')):undefined;if(quality)world.rng=qualityStream.rng;
     const builtId=world.nextId++,shelf=isShelfKind(job.kind)?newShelfStorage(footprintCells(job).map(()=>world.nextId++),world.schemaVersion):undefined;
+    if(shelf&&job.storage380)shelf.settings=cloneLinkedShelfPolicy286(job.storage380);
     appendStructureEntries(world,{ ...(job.kind==='ship-cryptosleep-casket'?{shipCryptosleep277:newShipCasketHolder277(world.tick)}:{}), ...(job.kind==='cryptosleep-casket'?{cryptosleep:newCryptosleepHolder271(world.tick)}:{}), ...(job.kind==='vent'?{vent:newVentState()}:{}), ...(shelf?{shelf}:{}), ...(job.kind==='spike-trap'||isIedTrapKind357(job.kind)?{spikeTrap:initialSpikeTrapState(world,job)}:{}),...(job.kind==='mini-turret'?{turret:newMiniTurretState()}:{}),...(job.kind==='hospital-bed'?{medical:true as const}:{}),...(job.kind==='grave'?{grave:initialGrave()}:job.kind==='sarcophagus'?{grave:{colonists:true,strangers:false}}:{}),...(job.kind==='pen-marker'?{pen:{accepted:[...penAnimalsForVersion(world.schemaVersion)]}}:{}),...(job.kind==='heater'?{heater:newHeaterState()}:{}),...(job.kind==='wind-turbine'?{wind:newWindTurbineState()}:{}),...(job.kind==='battery'?{battery:{stored:0}}:{}),...(job.kind==='cooler'?{cooler:newCoolerState()}:{}),...(job.kind==='flower-pot'?{flower:createFlowerPotState()}:{}),...(quality?{quality}:{}),...(isElectrical(job.kind)?{power:newPowerState(job.kind)}:{}),...(isPassageDoor(job.kind)?{door:builtDoorState(world,job)}:{}),...(job.material?{material:job.material}:{}),...(job.tailorSteel379?{tailorSteel379:true as const}:{}),...(isFueledBuilding(job.kind)?{fuel:newBuildingFuel(job.kind as import('./types.ts').StructureKind)}:{}),...(job.kind==='fueled-smithy'||job.kind==='electric-smithy'||job.kind==='brewery'||job.kind==='electric-crematorium'||job.kind==='electric-smelter'||job.kind==='biofuel-refinery'||job.kind==='drug-lab'||job.kind==='art-bench'||job.kind==='machining-table'||job.kind==='fabrication-bench'||job.kind==='tailor-bench'||job.kind==='electric-tailor-bench'||job.kind==='campfire'||isFoodWorkstation(job.kind)||job.kind==='stonecutter'?{bills:[]}:{}), id: builtId, kind: job.kind as import('./types.ts').StructureKind, x: job.x, z: job.z, orientation: job.orientation, footprint: job.footprint });
       if(job.kind==='firefoam-popper')initializeFirefoamPopper290(world,world.structures.at(-1)!);
     if(job.kind==='fermenting-barrel')world.structures.at(-1)!.fermentation=newFermentationState265();

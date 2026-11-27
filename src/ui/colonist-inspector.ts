@@ -11,6 +11,7 @@ export interface ColonistInspectorOptions extends ColonistInspectorState {
   prisoner: boolean;
   onTabChange: (tab: ColonistInspectorTab) => void;
 }
+const mountedInspectorOptions=new WeakMap<HTMLElement,ColonistInspectorOptions>();
 
 interface InspectorTabDefinition {
   id: ColonistInspectorTab;
@@ -149,6 +150,7 @@ export function updateColonistInspector(root: HTMLElement, state: ColonistInspec
 }
 
 export function mountColonistInspector(root: HTMLElement, options: ColonistInspectorOptions): ColonistInspectorTab {
+  mountedInspectorOptions.set(root,options);
   if (root.querySelector('.colonist-inspector-tabs')) return updateColonistInspector(root, options, options.prisoner);
 
   root.insertAdjacentHTML('afterbegin', colonistInspectorScaffold(options.prisoner));
@@ -160,8 +162,10 @@ export function mountColonistInspector(root: HTMLElement, options: ColonistInspe
   const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-colonist-tab]')];
   const choose = (button: HTMLButtonElement): void => {
     const tab = button.dataset.colonistTab as ColonistInspectorTab;
-    setColonistInspectorTab(root, tab, options.prisoner);
-    options.onTabChange(tab);
+    const current=mountedInspectorOptions.get(root)!;
+    const prisoner=root.dataset.colonistInspectorPrisoner==='true';
+    const active=setColonistInspectorTab(root, tab, prisoner);
+    current.onTabChange(active);
   };
   for (const button of buttons) {
     const title = button.textContent ?? '';

@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import {footprintCells} from '../sim/definitions';
 import type {Structure,World} from '../sim/types';
 import {buildingMaterialColor} from './building-material-color';
@@ -9,7 +10,7 @@ export const BEDROLL_SURFACE_HEIGHT=.14;
 export function bedrollPartsForStructure(bed:Structure):Placement[] {
  if(bed.kind!=='bedroll')return [];
  const cells=footprintCells(bed),tail=cells.at(-1)!,x=(bed.x+tail.x)/2,z=(bed.z+tail.z)/2,ry=bed.orientation*Math.PI/2,c=Math.cos(ry),s=Math.sin(ry);
- const cloth=buildingMaterialColor(bed.material,0xb5a384)??0xb5a384,edge=bed.medical?0x88b9c4:0x788c7a;
+ const cloth=buildingMaterialColor(bed.material,0xb5a384)??0xb5a384,edge=bedSheetColor(bed);
  const part=(dx:number,y:number,dz:number,sx:number,sy:number,sz:number,color:number):Placement=>({targetId:bed.id,x:x+dx*c+dz*s,y,z:z+dz*c-dx*s,sx,sy,sz,ry,color});
  return [part(0,.06,0,.82,.12,1.86,edge),part(0,.12,.10,.72,.08,1.62,cloth),part(0,.15,-.67,.66,.12,.36,0xe0d4b6),
   part(0,.17,.70,.73,.09,.18,cloth),part(-.34,.17,.13,.025,.02,1.15,edge),part(.34,.17,.13,.025,.02,1.15,edge)];
@@ -19,7 +20,7 @@ export function bedrollPartsForStructure(bed:Structure):Placement[] {
 export function doubleBedrollPartsForStructure(bed:Structure):Placement[] {
  if(bed.kind!=='double-bedroll')return [];
  const cells=footprintCells(bed),x=cells.reduce((n,c)=>n+c.x,0)/cells.length,z=cells.reduce((n,c)=>n+c.z,0)/cells.length,ry=bed.orientation*Math.PI/2,c=Math.cos(ry),s=Math.sin(ry);
- const cloth=buildingMaterialColor(bed.material,0xb5a384)??0xb5a384,edge=0x788c7a;
+ const cloth=buildingMaterialColor(bed.material,0xb5a384)??0xb5a384,edge=bedSheetColor(bed);
  const part=(dx:number,y:number,dz:number,sx:number,sy:number,sz:number,color:number):Placement=>({targetId:bed.id,x:x+dx*c+dz*s,y,z:z+dz*c-dx*s,sx,sy,sz,ry,color});
  return [part(0,.06,0,1.82,.12,1.86,edge),part(0,.12,.10,1.70,.08,1.62,cloth),part(-.5,.15,-.67,.66,.12,.36,0xe0d4b6),part(.5,.15,-.67,.66,.12,.36,0xe0d4b6),
   part(0,.17,.70,1.72,.09,.18,cloth),part(0,.17,.13,.025,.02,1.15,edge)];

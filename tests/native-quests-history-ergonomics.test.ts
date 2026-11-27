@@ -7,7 +7,7 @@ import {generateForeignWorldFactions256,completeWorldFactionRegistry256} from '.
 import {defaultWorldGenerationSettings} from '../src/sim/world-generation-settings';
 import {WorldGenerationRandom} from '../src/sim/world-generation-random';
 import {worldSettlementAccess256} from '../src/sim/world-faction-access';
-import {buildNativePanel} from '../src/ui3d/native-panels';
+import {buildNativePanel,resetNativePanelSession} from '../src/ui3d/native-panels';
 import type {NativeControl,NativePage,NativeUiActions,NativeUiState} from '../src/ui3d/native-contract';
 import type {JoinerQuest} from '../src/sim/quest-state';
 import {layoutNativePage,NATIVE_UI} from '../src/ui3d/native-layout';
@@ -28,6 +28,12 @@ function offer(world:World,id:number,status:JoinerQuest['status']='offered'):Joi
   relationship:{kind:'sibling',otherId:world.pawns[0]!.id},...(status==='concluded'?{endedAt:world.tick}:{} )};
 }
 function quests(world:World,...entries:JoinerQuest[]){world.quests={profile:'pursued-joiner-v1',adoptedAt:world.tick,rng:1,nextCheck:world.tick+100,serial:entries.length,entries};}
+
+it('a closed history starts on Messages again and a retired control cannot restore its old tab',async()=>{
+ const f=fixture('history');const old=control(f.page,'history-tab-stats');await old.onActivate();expect(control(f.page,'history-tab-stats').active).toBe(true);
+ resetNativePanelSession('history');f.rebuild();expect(control(f.page,'history-tab-messages').active).toBe(true);
+ await old.onActivate();expect(control(f.page,'history-tab-messages').active).toBe(true);
+});
 
 describe('Quêtes and Historique restore recorded facts without changing rules',()=>{
  it('shows offered age, named relationship, localized backstory and skills before the optional historical dossiers',async()=>{

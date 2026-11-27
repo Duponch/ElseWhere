@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 379 as const;
+export const SCHEMA_VERSION = 380 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -58,6 +58,8 @@ export type NeedTask =
   | { kind: 'eat'; foodBinge299?:true; drugReason337?:'scheduled'; alcoholReason?:'joy'|'scheduled'|'addiction'|'ordered'|'binge'|'inventory'; forced?:true; phase: 'pickup' | 'collect' | 'choose-spot' | 'travel' | 'ingest'; sourcePileId: number | null; paste?:import('./nutrient-paste.ts').PasteRequest; carryPileId: number | null; quantity: number; progress: number; workRemainder?:number; dining: DiningPlace | null }
   | { kind: 'sleep'; roomRest?:import('./room-experience.ts').RoomRest; medical?:'patient'|'bedrest'; phase: 'travel' | 'sleep'; bedId: number | null; target: Cell };
 export interface Job extends Cell { forbidden379?:true; tailorSteel379?:true; wallDoor296?:import('./wall-door-state-296.ts').WallDoorState296; frameDamage?:number;
+  /** Storage blueprint/Frame policy, copied to the completed real shelf. */
+  storage380?:import('./shelf-storage.ts').ShelfStorageSettings;
   /** Real wood Wall Frame work only; absent history is captured at contact, never load. */
   frameWork301?:import('./finish-frame-save-301.ts').FrameWork301;
   tree?:import('./tree-transfer-state.ts').TreeTask; plantTarget?:{resourceId:number};
@@ -379,6 +381,7 @@ export type Command = import('./construction-state-379.ts').ConstructionForbidCo
   | import('./auto-slaughter-state.ts').AutoSlaughterCommand
   | {type:'spike-trap-auto-rebuild';structureId:number;on:boolean}
   | {type:'shelf-policy';structureId:number;settings:StorageSettings}
+  | import('./blueprint-storage-380.ts').BlueprintStorageCommand380
   | {type:'cut-blighted-crops'}
   | AllowedAreaCommand
   | import('./mini-turret-state.ts').TurretCommand

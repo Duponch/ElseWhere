@@ -1,3 +1,4 @@
+import {bedSheetColor} from './bed-sheet-color';
 import {cryptosleepParts271} from './cryptosleep-parts-271';
 import {smithyParts267} from './smithy-parts267';
 import {brewingParts265} from './brewing-parts265';
@@ -52,6 +53,7 @@ import {iedTrapParts357} from './ied-trap-parts-357';
 import { penParts } from './pen-parts';
 import { WORLD_SCALE } from '../world/scale';
 import type { Placement } from './primitives';
+import {decorateFurniturePlacements} from './furniture-surface-design';
 import { furniturePlacementZone, hiddenFurnitureSlot, furnitureZoneSlack, furnitureStructureValues, sameFurnitureValues, structureCells, zonesNear, zoneSubjects, samePlacement } from './furniture-zones';
 import {FurnitureSpatialRanges379,type FurnitureSpatialBatches379} from './FurnitureSpatialRanges379';
 
@@ -67,7 +69,7 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
         const cx = (x + last.x) / 2, cz = (z + last.z) / 2, ry = structure.orientation * Math.PI / 2;
         const length = structure.footprint === 'legacy-single' ? 0.93 : WORLD_SCALE.bedLength;
         bedFrames.push({ targetId:structure.id, color, x: cx, z: cz, y: WORLD_SCALE.bedFrameHeight / 2 + 0.04, sx: WORLD_SCALE.bedWidth, sy: WORLD_SCALE.bedFrameHeight, sz: length, ry });
-        bedding.push({ targetId:structure.id, color:structure.medical?0x91c2d2:0xc7a977, x: cx, z: cz, y: WORLD_SCALE.bedSurfaceHeight - 0.045, sx: WORLD_SCALE.bedWidth - 0.06, sy: 0.14, sz: length - 0.1, ry });
+        bedding.push({ targetId:structure.id, color:bedSheetColor(structure), x: cx, z: cz, y: WORLD_SCALE.bedSurfaceHeight - 0.045, sx: WORLD_SCALE.bedWidth - 0.06, sy: 0.14, sz: length - 0.1, ry });
         pillows.push({ targetId:structure.id, x: cx - Math.sin(ry) * length * 0.33, z: cz - Math.cos(ry) * length * 0.33, y: WORLD_SCALE.bedSurfaceHeight + 0.07, sx: 0.6, sy: 0.12, sz: 0.27, ry });
         headboards.push({ targetId:structure.id, color, x: cx - Math.sin(ry) * (length / 2 - 0.05), z: cz - Math.cos(ry) * (length / 2 - 0.05), y: 0.35, sx: WORLD_SCALE.bedWidth, sy: 0.63, sz: 0.08, ry });
       }
@@ -96,13 +98,13 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
       parcels.push({targetId:p.building.id,x,z,y:y+.24*scale,sx:.64*scale,sy:.48*scale,sz:.64*scale,color:0xb6996c},
         {targetId:p.building.id,x,z,y:y+.49*scale,sx:.13*scale,sy:.03*scale,sz:.67*scale,color:buildingMaterialColor(p.building.material,0x6f634e)});
     }
-    batches.set(group, 'furniture', [
+    batches.set(group, 'furniture', decorateFurniturePlacements(world, [
       ...smithyParts267(world), ...brewingParts265(world), ...ventParts(world,cutaway), ...graveParts(world), ...foodWorkstationParts(world), ...electricalParts(contextWorld,cutaway,world.structures), ...passiveCoolerParts(world), ...doorParts(contextWorld,cutaway,world.structures), ...penParts(contextWorld,world.structures,cutaway), ...campfireParts(world), ...torchLampParts(world), ...recreationParts(world), ...stonecutterParts(world), ...craftingSpotParts(world), ...animalSleepingSpotParts(world), ...researchTailorParts(world), ...industryParts(world), ...habitatParts(world), ...artParts(world), ...drugLabParts(world),
       ...shipChunkParts256(world), ...ancientCasketParts256(world), ...cryptosleepParts271(world), ...ancientMonumentParts256(world), ...localRoadPropParts256(world), ...bedrollParts(world), ...hospitalBedParts(world), ...doubleBedParts(world), ...sleepingSpotParts(world), ...vitalsMonitorParts(world), ...toolCabinetParts355(world), ...eggBoxParts374(world), ...deepDrillingParts(world), ...orbitalParts(world), ...nutrientPasteParts(world), ...biofuelParts(world), ...smeltingParts(world), ...crematoriumParts(world), ...firefoamParts290(world), ...spikeTrapParts(world), ...iedTrapParts357(world), ...hydroponicsParts(world), ...miniTurretBaseParts(world), ...parcels,
       ...woodParts.map(p => ({ ...p, color: p.color ?? 0xa38559 })),
       ...bedFrames.map(p => ({ ...p, color: p.color ?? 0x795d41 })), ...bedding.map(p => ({ ...p, color: p.color??0xc7a977 })),
       ...pillows.map(p => ({ ...p, color: 0xe5d8b7 })), ...headboards.map(p => ({ ...p, color: p.color ?? 0x795d41 })),
-    ]);
+    ]));
     batches.set(group,'sandbags',sandbagParts(world));
 }
 

@@ -1,3 +1,4 @@
+import {pileLabelAnchor} from '../src/render/map-label-anchors';
 import { afterEach, expect, test, vi } from 'vitest';
 import { BufferAttribute, OrthographicCamera } from 'three/webgpu';
 import { createWorld } from '../src/sim/engine';
@@ -60,7 +61,7 @@ test('stable snapshots keep the indexed labels and GPU buffers; quantities and p
   overlay.draw(world, camera, 120, 800, 600);
   expect(overlay['chunks'].flatMap(chunk=>chunk.entries).map(entry=>entry.label)).toEqual(['2']);
   const anchor=overlay.mesh.geometry.getAttribute('labelAnchor');
-  expect([anchor.getX(0),anchor.getY(0),anchor.getZ(0)]).toEqual([4,Math.fround(.32),4]);
+  expect([anchor.getX(0),anchor.getY(0),anchor.getZ(0)]).toEqual([4,Math.fround(pileLabelAnchor(world.piles[0]!).y),4]);
   const resident=residentLabels(overlay);
   const chunks = overlay['chunks'];
 
@@ -144,8 +145,8 @@ test('block captions clear their real top and follow changed supports or items e
   world={...world,structures:[{id:40,kind:'stool',x:4,z:4,orientation:0,footprint:'standard'}]};
   overlay.draw(world,camera,120,800,600);expect(entry().y).toBeCloseTo(WORLD_SCALE.stoolHeight+.61,12);
   world={...world,structures:[],piles:[{...world.piles[0]!,kind:'wood',item:'wood'}]};
-  overlay.draw(world,camera,120,800,600);expect(entry().label).toBe('75');expect(entry().y).toBe(.32);
-  const anchor=overlay.mesh.geometry.getAttribute('labelAnchor');expect(anchor.getY(0)).toBe(Math.fround(.32));overlay.dispose();
+  overlay.draw(world,camera,120,800,600);expect(entry().label).toBe('75');expect(entry().y).toBeCloseTo(.43700159311294556,12);
+  const anchor=overlay.mesh.geometry.getAttribute('labelAnchor');expect(anchor.getY(0)).toBe(Math.fround(entry().y));overlay.dispose();
 });
 
 test('packed quality captions clear the actual parcel or bedroll and the surface that carries it',()=>{

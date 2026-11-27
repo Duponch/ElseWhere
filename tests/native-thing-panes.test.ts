@@ -175,15 +175,18 @@ describe('an animal: the tabs of Races_Animal_Base and the gizmos', () => {
     const gauges = inspector(f.world, { selectedAnimalId: f.animalId }).page.rows.find(row => row.id === 'pane-gauges')!.gauges!;
     expect(gauges.map(gauge => gauge.id)).toEqual(['health', 'area']); expect(gauges[1]!.select!.options.map(option => option.label)).toEqual(expect.arrayContaining(['Sans restriction', 'Foyer']));
   });
-  it('opens each tab at the size of its ITab, with the same cards as a person', () => {
+  it('keeps each Core ITab width but fits the animal card to its occupied height', () => {
     const f = rescue(), ui = inspector(f.world, { selectedAnimalId: f.animalId });
     const sizes: Record<string, [number, number | undefined]> = { health: [630, 430], social: [540, 510], journal: [630, 510], training: [300, undefined], needs: [225, undefined] };
     for (const [id, [width, height]] of Object.entries(sizes)) {
       setNativeInspectorTab(id); const page = ui.rebuild();
       expect(page.inspectTab!.id).toBe(id);
-      const sheet = box(page).inspectorParts!.sheet;
-      expect(sheet.width, id).toBe(width); if (height !== undefined) expect(sheet.height, id).toBe(height);
-      expect(page.rows.some(row => row.card), id).toBe(true);
+      const layout=box(page),sheet=layout.inspectorParts!.sheet,card=layout.rows.find(row=>row.card)?.card;
+      expect(sheet.width,id).toBe(width);expect(card,id).toBeDefined();
+      expect(sheet.height,id).toBe(Math.max(40,card!.height));
+      if(height!==undefined){expect(page.inspectTab!.height,id).toBe(height);expect(sheet.height,id).toBeLessThanOrEqual(height);}
+      if(id==='health')expect(sheet.height,id).toBeLessThan(430);
+      for(const region of card!.regions){expect(region.y,id+':'+region.id).toBeGreaterThanOrEqual(0);expect(region.y+region.h,id+':'+region.id).toBeLessThanOrEqual(card!.height+1e-6);}
     }
     setNativeInspectorTab('none');
   });

@@ -20,11 +20,12 @@ import {captureFoodReadability, type FoodReadability} from '../sim/food-readabil
 import {appearanceOf} from '../sim/pawn-appearance';
 import {apparelAppearance} from '../render/character-apparel';
 import {humanLimbVisualMask} from '../render/human-anatomy-presentation';
-import {portraitDataUrl, portraitExpressionOf} from '../ui/pawn-portrait';
+import {portraitDataUrl, portraitExpressionOf,portraitPersonalizedTexturesEnabled} from '../ui/pawn-portrait';
 import {colonistBarState346, type ColonistBarState346} from '../ui/colonist-bar-state-346';
 import {pawnShortName} from '../ui/pawn-short-name';
 import {colonistBarStateLabel346} from './native-colonist-bar-346';
 import {NativeColonistBarRaster379,type NativeColonistRasterPlacement379} from './NativeColonistBarRaster379';
+import {readableUiInk} from './ui-theme';
 import {knownPosition256} from '../ui/exploration-readers-256';
 import {captureHudMapRead379,type HudPortraitOwnership379,type HudResourceRecord379} from '../ui/hud-map-read-379';
 import {ResidentBlightRead379} from '../ui/resident-blight-read-379';
@@ -71,7 +72,7 @@ export interface NativeHudActions {
 }
 export interface NativeAlertStart {key:string;text:string;priority:Exclude<CoreAlertPriority,'medium'>;bell:boolean;targets:readonly NotificationTarget[]}
 export type NativeHudViewAction=typeof NATIVE_VIEW_ACTIONS[number];
-export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string;roomStats:boolean;beauty:boolean}
+export interface NativeHudViewState {walls:string;roofs:boolean;foliage:boolean;zones:boolean;camera:string;roomStats:boolean;beauty:boolean;bedOwners:boolean}
 export interface NativeHudWindowBounds {x:number;y:number;width:number;height:number}
 interface ResourceTag {
   id: string;
@@ -197,7 +198,7 @@ export class NativeHudCards {
   private rightDockOpen=false;
   private notificationsAutoHide=false;
   private rightDockOffset=3.16;
-  private viewState:NativeHudViewState={walls:'hauts',roofs:false,foliage:true,zones:true,camera:'iso',roomStats:false,beauty:false};
+  private viewState:NativeHudViewState={walls:'hauts',roofs:false,foliage:true,zones:true,camera:'iso',roomStats:false,beauty:false,bedOwners:true};
   private readonly column=globalColumn(NATIVE_VIEW_ACTIONS.length);
   private readonly weatherPiece: CardboardPiece;
   private readonly weatherLabelPiece: CardboardPiece;
@@ -456,9 +457,9 @@ export class NativeHudCards {
     this.viewState={...this.viewState,...state};
     const labels:Record<NativeHudViewAction,string>={walls:`Murs : ${this.viewState.walls}`,roofs:`Toits : ${this.viewState.roofs?'visibles':'masqués'}`,
       foliage:`Feuillage : ${this.viewState.foliage?'visible':'masqué'}`,zones:`Zones : ${this.viewState.zones?'visibles':'masquées'}`,home:'Recentrer sur la colonie',camera:`Vue : ${this.viewState.camera}`,
-      'room-stats':`Statistiques de pièce (G) : ${this.viewState.roomStats?'activées':'désactivées'}`,beauty:`Beauté (T) : ${this.viewState.beauty?'activée':'désactivée'}`};
+      'room-stats':`Statistiques de pièce (G) : ${this.viewState.roomStats?'activées':'désactivées'}`,beauty:`Beauté (T) : ${this.viewState.beauty?'activée':'désactivée'}`,'bed-owners':`Propriétaires de lits : ${this.viewState.bedOwners?'visibles':'masqués'}`};
     for(const [action,button] of this.viewButtons){
-      const active=action==='roofs'?this.viewState.roofs:action==='foliage'?!this.viewState.foliage:action==='zones'?this.viewState.zones:action==='walls'?this.viewState.walls!=='hauts':action==='camera'?this.viewState.camera!=='iso':action==='room-stats'?this.viewState.roomStats:action==='beauty'?this.viewState.beauty:false;
+      const active=action==='roofs'?this.viewState.roofs:action==='foliage'?!this.viewState.foliage:action==='zones'?this.viewState.zones:action==='walls'?this.viewState.walls!=='hauts':action==='camera'?this.viewState.camera!=='iso':action==='room-stats'?this.viewState.roomStats:action==='beauty'?this.viewState.beauty:action==='bed-owners'?this.viewState.bedOwners:false;
       if(button.userData.tooltip!==labels[action]||button.userData.active!==active){button.userData.tooltip=labels[action];button.userData.active=active;button.redraw(undefined,active?PALETTE.sageMountain:PALETTE.creamPaper);}
     }
   }
@@ -528,7 +529,7 @@ export class NativeHudCards {
   }
 
   private drawViewControl(action:NativeHudViewAction,ctx:CanvasRenderingContext2D,w:number,h:number,_rng:()=>number):void {
-    const icons:Record<NativeHudViewAction,string>={walls:'wall',roofs:'roof',foliage:'resource-tree',zones:'zones',home:'home',camera:'camera','room-stats':'room-stats',beauty:'beauty-view'};
+    const icons:Record<NativeHudViewAction,string>={walls:'wall',roofs:'roof',foliage:'resource-tree',zones:'zones',home:'home',camera:'camera','room-stats':'room-stats',beauty:'beauty-view','bed-owners':'bed'};
     drawPicto(ctx,icons[action],w/2,h/2,Math.min(w,h)*.39);
   }
 
@@ -618,7 +619,7 @@ export class NativeHudCards {
     this.portraits.forEach((entry, idx) => {
       const pawn = shown[idx]!, appearance = appearanceOf(pawn, world.seed), look = apparelAppearance(apparel.get(pawn.id)), expression = portraitExpressionOf(pawn), limbMask = humanLimbVisualMask(pawn);
       entry.name = pawnShortName(pawn.name); entry.mood = rounded(pawn.mood); entry.selected = this.selectedIds.has(pawn.id); entry.sleeping = expression !== 'awake'; entry.skin = hex(appearance.skinColor); entry.shirt = look.color === undefined ? PALETTE.sageMountain : hex(look.color);
-      const appearanceKey = JSON.stringify([appearance, look.signature, expression, limbMask, weapons.get(pawn.id)]);
+      const appearanceKey = JSON.stringify([appearance, look.signature, expression, limbMask, weapons.get(pawn.id),portraitPersonalizedTexturesEnabled()]);
       if (entry.appearanceKey !== appearanceKey) {
         entry.appearanceKey = appearanceKey; entry.loaded = false;
         if (entry.image) { entry.image.onload = null; entry.image.onerror = null; }
@@ -660,6 +661,14 @@ export class NativeHudCards {
     this.barRaster379.draw(ctx,w,h,k,this.portraitIds,slots,rng);
   }
   colonistPaintMetrics379():Readonly<NativeColonistBarRaster379['stats']>{return {...this.barRaster379.stats};}
+  /** Theme changes retire only cached paint, preserving the HUD/rig owners. */
+  refreshTheme():void{
+    if(this.disposed)return;
+    this.barRaster379.clear();this.barDirty=true;this.barDrawnAt=-Infinity;this.flushBar();
+  }
+  /** The paint option is an explicit presentation boundary, even when a paused
+   * colony keeps returning the identical World reference. */
+  refreshPortraitTexturePreference():void{if(this.world&&!this.disposed){this.barScanAt=-Infinity;this.refreshPortraits(this.world);}}
 
   private cornerWidth():number{
     const left=colonistBarVisible(this.viewportWidth,this.viewportHeight)&&this.barLayout?.locs.length?this.barLayout.left:this.viewportWidth/2;
@@ -777,7 +786,7 @@ export class NativeHudCards {
         live.piece=this.makePiece({w:width/100,h:height/100,depth:.046,bgColor:painted,bevel:.038,surface:'panel',seed,interactive:true,
           drawFn:(ctx,w,h,rng)=>{
             ctx.save();ctx.scale(w/live.width,h/live.height);drawHandRect(ctx,4,5,4,live.height-10,live.color===PALETTE.creamPaper?PALETTE.ochre:PALETTE.creamPaper,null,0,rng);
-            ctx.fillStyle=PALETTE.inkDark;ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
+            ctx.fillStyle=readableUiInk(PALETTE.inkDark,live.painted);ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';
             live.lines.forEach((line,index)=>ctx.fillText(line,14,19+index*17,live.width-24));ctx.restore();
           },onClick:()=>this.activateAlert(live.key,1)});
         live.piece.userData.onSecondary=()=>this.activateAlert(live.key,-1);

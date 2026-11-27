@@ -1,12 +1,13 @@
 import {SCHEMA_VERSION,type World} from './types.ts';
 import {validConstructionMarkers379} from './construction-state-379.ts';
+import {validBlueprintStorageField380} from './blueprint-storage-380.ts';
 import {isConstruction} from './construction-rules.ts';
 import {validConstructionBatchShape379,validateConstructionBatches379} from './construction-batch-379.ts';
 import {validHaulOpportunityShape379,validateHaulOpportunities379} from './haul-opportunity-379.ts';
 import {groundOccupancyAllows,storageOccupancyAllows} from './occupancy.ts';
 import type {StorageGeometry} from './ground-placement.ts';
 const lanes=['world','summary','map','maps','dynamic','campaign','secondarySite','worldMaps','sites','entries','worldGroups','groups','state','group','pending261','battlefield261','retained','groupLosses','animalLosses','losses','lost','abandoned','abandonedContents','abandonedPawns','contents','humans','animals','pawn','actor','human','animal','body','members','people','pawns','resources','structures','jobs','packed','building','items','piles','wildlife','animalOwners','worldPawns','owners','worldFactions','leaders','heldCaskets259','heldPlayerCaskets271','heldShipCaskets277','casket','cryptosleep','shipCryptosleep277','occupant','visitors','podRescues','departed','banishedDepartures378','startingArrival','pods','scout','commercialTrip','civilianPost','campaignMap','wallDoor296','plan','upserted','orbital','ships','deliveries','cargo','pending','departures','raids','trade','prisonDepartures','arrivals','quests','worldSites263','tradeRequests284','requests','rewards','options','haul','orders','queue','constructionBatch379','haulOpportunity379','sources','destinations'] as const;
-const relevantKeys=new Set<PropertyKey>([...lanes,'forbidden379','tailorSteel379']);
+const relevantKeys=new Set<PropertyKey>([...lanes,'forbidden379','tailorSteel379','storage380']);
 type TransportCheck=(raw:unknown,version:number)=>boolean;
 type OrdinaryLeafRun379=(array:readonly unknown[],from:number,accept:(leaf:object)=>boolean)=>number;
 type ImmutableTransportMemo379={read:(value:object,version:number,role:number)=>number|undefined;remember:(value:object,version:number,role:number,features:number)=>void;begin:()=>void;end:()=>void;array?:(values:readonly unknown[],visit:(value:unknown)=>boolean)=>boolean|undefined};
@@ -52,7 +53,7 @@ function constructionTransport379(raw:unknown,version:number,ordinaryLeaf?:((val
     }
    }else{
     if('forbidden379'in v&&role!=='job'&&role!=='plan'||'tailorSteel379'in v&&role!=='job'&&role!=='building')return false;
-    if(!validConstructionMarkers379(v,version)||!validConstructionBatchShape379(v,version)||!validHaulOpportunityShape379(v,version))return false;
+    if(!validBlueprintStorageField380(v,version,role==='job')||!validConstructionMarkers379(v,version)||!validConstructionBatchShape379(v,version)||!validHaulOpportunityShape379(v,version))return false;
     for(const k of lanes){const d=Object.getOwnPropertyDescriptor(v,k);if(!d){if(k in v)return false;continue;}const childRole=k==='jobs'?'job':k==='structures'||k==='building'?'building':k==='plan'?'plan':k==='upserted'?role:undefined;if(!d.enumerable||!Object.hasOwn(d,'value')||!visit(d.value,childRole))return false;}
    }
    active.delete(v);done.set(v,(done.get(v)??0)|flag);immutable?.remember(v,version,flag,0);return true;

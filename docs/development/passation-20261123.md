@@ -1,5 +1,7 @@
 # Passation du 23 novembre 2026
 
+> **Reprise la plus récente (27 novembre, schéma 380) :** [retours du joueur et proportions des peintures](retours-20261127.md). Décision du rendu en Worker [différée et à reprendre explicitement](decision-rendu-worker.md), deux nouveaux sons déjà générés mais transfert en attente (ne pas relancer la génération). Les modifications locales du lot prévalent sur cette archive historique.
+
 > Suite de cette passation : [ordres personnels et Bio, schéma 378](ordres-identite-378.md), puis [retours sur la construction, le portage et les pages vivantes, schéma 379](construction-ui-portage-379.md). Le document du 23 conserve son état historique.
 
 Ce document permet à un nouvel agent de reprendre Elsewhere sans relire l'historique. Il résume le contexte, ce qui vient d'être fait, ce qui n'est pas fini et la suite prévue. L'état de référence est `origin/main` au commit `63757f38` ou après, au **schéma 377**.
@@ -165,6 +167,7 @@ Règles à ne jamais oublier :
 
 **Moyen terme** :
 
+- **Rendu WebGPU en Worker — décision différée depuis le 26 novembre 2026.** Lire [la fiche de décision](decision-rendu-worker.md). La vue expérimentale reste disponible. L'utilisateur souhaite reprendre cette question avec des mesures comparables à la partie complète avant une éventuelle migration. Le chantier visuel a livré ses peintures personnalisées des assets Gouache et Pastel, [voir le bilan du 27 novembre](peintures-assets-20261126.md).
 - Feuille de route « les bases d'abord » : accueil du nouveau joueur, alertes, fonctions de base les plus fréquentes.
 - Chantiers obligatoires :
   - **2** : publication du Worker vers l'affichage (un journal des écritures des ressources ; mesurer dans le vrai client avec `scripts/perf-client-publication.mjs`) ;

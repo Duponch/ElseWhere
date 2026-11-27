@@ -1,3 +1,4 @@
+import {SCHEMA_VERSION} from '../src/sim/types.ts';
 import {expect,test} from 'vitest';
 import type {BufferAttribute,InterleavedBufferAttribute} from 'three/webgpu';
 import {createWorld} from '../src/sim/engine';
@@ -10,7 +11,7 @@ import {ownActorPlaybackWorld435} from '../src/render/ActorPlayback435';
  * endpoint/pose code; the reference bypasses only the new terminal gate. No
  * simulation tick, render submission or whole-save qualification is inferred. */
 function fixture(){
- const seed=createWorld(379,20,20);seed.schemaVersion=379;seed.tick=100;seed.resources=[];seed.jobs=[];seed.structures=[];seed.piles=[];delete seed.wildlife;
+ const seed=createWorld(379,20,20);seed.schemaVersion=SCHEMA_VERSION;seed.tick=100;seed.resources=[];seed.jobs=[];seed.structures=[];seed.piles=[];delete seed.wildlife;
  seed.pawns=seed.pawns.slice(0,2);seed.pawns.forEach((pawn,index)=>{Object.assign(pawn,{x:8+index,z:8,state:'idle',path:[],motion:null,jobId:undefined,need:null});delete pawn.body;delete pawn.melee;});
  function one(reference:boolean){
   const world:World=structuredClone(seed),layer=new PawnLayer(),timeline=new MotionTimeline();ownActorPlaybackWorld435(world,true);

@@ -3092,11 +3092,11 @@
       "variants": [
         {
           "src": "/assets/audio/sfx/ambient-night-insects-g1122-take-1.mp3",
-          "gain": 0.089
+          "gain": 0.056234
         },
         {
           "src": "/assets/audio/sfx/ambient-night-insects-g1122-take-2.mp3",
-          "gain": 0.039
+          "gain": 0.024351
         }
       ],
       "gain": 1,

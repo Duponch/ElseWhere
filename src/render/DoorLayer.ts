@@ -23,6 +23,10 @@ import {assertUnitBoxPaintGeometry,rigidBoxPaintInputs} from './surfaces/RigidBo
 import {markResidentAttributeRange} from './resident-attribute-range';
 import {isActorPlaybackWorld435} from './ActorPlayback435';
 import type {CoreDoorPatch297} from '../bridge/core-phase-projection-297';
+import {bindPersonalizedTexture} from './texture-personalization';
+import {instancedBoxPatternUv} from './texture-variation';
+import {FurniturePaint,furnitureTileForNormal} from './furniture-surface-design';
+import {createPaintedSurfaceAtlas,paintedSurfaceAtlasPixels,surfaceDesignFaceSpanNode,encodeSurfaceDesign,furnitureSurfaceTileNode,paintedSurfaceDecorator,surfaceDesignedGeometry,surfaceDesignGeometryBytes,surfaceDesignOverrideNode,surfaceDesignUvNode,SURFACE_DESIGN_BAKE_UV} from './painted-surface-atlas';
 
 const EMPTY_AXES:ReadonlyMap<number,0|1>=new Map();
 const AUTODOOR_TINT=new THREE.Color(0xa6b7b4);
@@ -37,7 +41,8 @@ export class DoorLayer {
   private readonly base=this.surfaceModel.geometry;
   private readonly material=material(0xffffff);
   private readonly textured=material(0xffffff);
-  private readonly paint=createStylizedSurfaceTexture();
+  private readonly graphics=currentGraphicsStyle();
+  private readonly paint=this.graphics?createPaintedSurfaceAtlas():createStylizedSurfaceTexture();
   private texturesEnabled=true;
   readonly mesh:BoxMesh;
   private key='';
@@ -46,7 +51,7 @@ export class DoorLayer {
   private phaseSlots297=new Map<number,{slot:number;structure:World['structures'][number]}>();
   private readonly targetTint=new InstanceTargetTint();
   private readonly preparedSurfaces:PreparedSurfaceOwner|undefined;
-  private readonly preparedModel:PreparedSurfaceModel|undefined;
+  private readonly preparedModels=new Map<string,PreparedSurfaceModel>();
   private readonly preparedSourceMaterial:THREE.MeshStandardNodeMaterial|undefined;
   preparedSurfaceStatus(){return this.preparedSurfaces?.status();}
   requestPreparedSurfaceQualityRoute(route:'source'|'prepared'|undefined):void{this.preparedSurfaces?.requestQualityRoute(route);}
@@ -71,16 +76,25 @@ export class DoorLayer {
     const baseColor=attribute('boxColor','vec3').mul(select(positionLocal.x.abs().lessThan(.022),.77,1));
     this.material.colorNode=baseColor;
     this.textured.positionNode=this.material.positionNode;
-    this.textured.colorNode=this.material.colorNode.mul(texture(this.paint,uv()).rgb);
+    const faceSpan=surfaceDesignFaceSpanNode(attribute('normal','vec3'));
+    const designUv=this.graphics?surfaceDesignUvNode(furnitureSurfaceTileNode(surfaceDesignOverrideNode(),attribute('normal','vec3')),uv(),instancedBoxPatternUv(faceSpan),faceSpan):uv();
+    this.textured.colorNode=this.material.colorNode.mul(texture(this.paint,designUv).rgb);
     this.material.userData.rendererOwned=true;
     this.textured.userData.rendererOwned=true;
     this.mesh=new BoxMesh(this.base,this.textured,256);this.allocateAttributes(256);
     this.mesh.name='door-leaves';this.mesh.castShadow=true;this.mesh.receiveShadow=true;this.group.add(this.mesh);
-    const context=currentGraphicsStyle();
+    const context=this.graphics;
+    if(context)bindPersonalizedTexture(context,this.paint,paintedSurfaceAtlasPixels);
     this.textured.roughness=.88;this.textured.metalness=.02;
     assertUnitBoxPaintGeometry(this.base);const rigidPaint=context?rigidBoxPaintInputs(context,'rigidDoor'):undefined;
-    const sourceOptions={context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv??uv(),get pigmentUv(){return context&&!context.reliefEnabled&&!context.wearEnabled?rigidPaint?.pigmentUv:undefined;},stroke:naturalStroke(context,this.surfaceModel.stroke,undefined,undefined,true)};applySharedPaintSurface(this.textured,sourceOptions);
-    if(context){this.preparedModel=preparedNaturalModel('door-unit-box-v1',this.base,this.surfaceModel.stroke);const source=canonicalPreparedSurfaceSource({key:'door-unit-box-v1',context,stroke:this.surfaceModel.stroke,bodyOptions:()=>sourceOptions,unitBodyProven:true,assertCurrent:()=>this.preparedModel!.assertCurrent()});this.preparedSurfaces=new PreparedSurfaceOwner({key:'door:'+this.group.uuid,context,source:()=>source,changed:()=>{}});this.preparedSourceMaterial=this.textured;this.textured=this.preparedSurfaces.addTarget({sourceMaterial:this.textured,pastelTexture:this.paint,pastelUv:uv(),pastelFromSample:sample=>baseColor.mul(sample.rgb),tint:baseColor,faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2'),configure:m=>configure?.(m as THREE.MeshStandardNodeMaterial)}) as THREE.MeshStandardNodeMaterial;this.mesh.material=this.texturesEnabled?this.textured:this.material;}
+    const sourceOptions={context,base:baseColor,pastel:this.textured.colorNode as THREE.Node<'vec3'>,faceUv:rigidPaint?.faceUv??uv(),get pigmentUv(){return context&&!context.reliefEnabled&&!context.wearEnabled?rigidPaint?.pigmentUv:undefined;},personalizedGouacheTransform:(body:THREE.Node<'vec3'>)=>paintedSurfaceDecorator(body,this.paint,designUv),stroke:naturalStroke(context,this.surfaceModel.stroke,undefined,undefined,true)};applySharedPaintSurface(this.textured,sourceOptions);
+    if(context){
+      const source=canonicalPreparedSurfaceSource({key:'door-unit-box-v2',context,stroke:this.surfaceModel.stroke,bodyOptions:()=>sourceOptions,unitBodyProven:true,unitPersonalizedGouacheTransform:body=>paintedSurfaceDecorator(body,this.paint,attribute(SURFACE_DESIGN_BAKE_UV,'vec2')),assertCurrent:()=>this.surfaceModel.stroke.assertCurrent()});
+      this.preparedSurfaces=new PreparedSurfaceOwner({key:'door:'+this.group.uuid,context,source:()=>source,personalized:true,externalCpuBytes:()=>surfaceDesignGeometryBytes([...this.preparedModels.values()].map(model=>model.geometry)),externalGpuBytes:()=>1398100,changed:()=>{}});
+      this.preparedSourceMaterial=this.textured;
+      this.textured=this.preparedSurfaces.addTarget({sourceMaterial:this.textured,pastelTexture:this.paint,pastelSize:512,pastelUv:designUv,pastelFromSample:sample=>baseColor.mul(sample.rgb),tint:baseColor,variantId:attribute(PREPARED_SURFACE_VARIANT,'float').floor(),faceId:attribute(SURFACE_STROKE_FACE,'float'),chartUv:attribute(SURFACE_STROKE_UV,'vec2'),configure:m=>configure?.(m as THREE.MeshStandardNodeMaterial)}) as THREE.MeshStandardNodeMaterial;
+      this.mesh.material=this.texturesEnabled?this.textured:this.material;
+    }
   }
   setTexturesEnabled(enabled:boolean):void {
     if(this.texturesEnabled===enabled)return;
@@ -90,6 +104,16 @@ export class DoorLayer {
   }
   private allocateAttributes(capacity:number):void {
     for(const [name,size] of [['doorCurrent',4],['doorPrevious',4],['doorShift',3],[PREPARED_SURFACE_VARIANT,1]] as const)this.mesh.geometry.setAttribute(name,new THREE.InstancedBufferAttribute(new Float32Array(capacity*size),size).setUsage(THREE.StaticDrawUsage));
+  }
+  private writeSurface(index:number,s:World['structures'][number],leaf:{sx?:number;sy?:number;sz?:number},preparedIds:Set<number>):void {
+    const owner=this.preparedSurfaces;if(!owner)return;
+    const tile=s.kind==='fence-gate'?FurniturePaint.gate:s.kind==='autodoor'||s.material==='steel'?FurniturePaint.metal:FurniturePaint.door;
+    const scale=[leaf.sx!,leaf.sy!,leaf.sz!] as const,largest=Math.max(...scale.map(Math.abs)),key=tile+':'+scale.map(v=>Math.abs(v)/largest).join(',');
+    let model=this.preparedModels.get(key);
+    if(!model){const baked=surfaceDesignedGeometry(this.base,(nx,ny,nz)=>furnitureTileForNormal(tile,nx,ny,nz),scale);model=preparedNaturalModel('door-unit-box-v3:'+key,baked,this.surfaceModel.stroke);this.preparedModels.set(key,model);}
+    const id=owner.registerVariant(preparedDiagonalVariant(model,leaf.sx!,leaf.sy!,leaf.sz!));
+    this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(index,encodeSurfaceDesign(id,tile));
+    preparedIds.add(id);
   }
   // V299_NATIVE_DOOR_BEGIN
   // Central native admission owns these preparations; arguments do not grant it.
@@ -115,7 +139,7 @@ export class DoorLayer {
         this.mesh.setMatrixAt(index,object.matrix);
         color.setHex(doorLeafColor(s.material));
         if(s.kind==='autodoor')color.lerp(AUTODOOR_TINT,.24);
-        this.mesh.setColorAt(index,color);targetIds.push(s.id);if(this.preparedSurfaces&&this.preparedModel){const id=this.preparedSurfaces.registerVariant(preparedDiagonalVariant(this.preparedModel,leaf.sx!,leaf.sy!,leaf.sz!));this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(index,id);preparedIds.add(id);}
+        this.mesh.setColorAt(index,color);targetIds.push(s.id);this.writeSurface(index,s,leaf,preparedIds);
         for(const [attribute,state] of [[current,pair.current],[previous,pair.previous]] as const)attribute.setXYZW(index,state.changedAt,state.from,(state.open?1:-1)/doorMotionTicks({...s,door:state}),0);
         shift.setXYZ(index,side*.45*cos,0,-side*.45*sin);index++;
       }
@@ -174,7 +198,7 @@ export class DoorLayer {
         this.mesh.setMatrixAt(index,object.matrix);
         color.setHex(doorLeafColor(s.material));
         if(s.kind==='autodoor')color.lerp(AUTODOOR_TINT,.24);
-        this.mesh.setColorAt(index,color);targetIds.push(s.id);if(this.preparedSurfaces&&this.preparedModel){const id=this.preparedSurfaces.registerVariant(preparedDiagonalVariant(this.preparedModel,leaf.sx!,leaf.sy!,leaf.sz!));this.mesh.geometry.getAttribute(PREPARED_SURFACE_VARIANT).setX(index,id);preparedIds.add(id);}
+        this.mesh.setColorAt(index,color);targetIds.push(s.id);this.writeSurface(index,s,leaf,preparedIds);
         for(const [attribute,state] of [[current,pair.current],[previous,pair.previous]] as const)attribute.setXYZW(index,state.changedAt,state.from,(state.open?1:-1)/doorMotionTicks({...s,door:state}),0);
         shift.setXYZ(index,side*.45*cos,0,-side*.45*sin);index++;
       }
@@ -201,5 +225,5 @@ export class DoorLayer {
     const version=this.mesh.instanceMatrix.version;this.mesh.activeCount=1;
     return ()=>{if(this.mesh.instanceMatrix.version===version)this.mesh.activeCount=0;};
   }
-  dispose():void {this.preparedSurfaces?.attachGpuRetirement([this.mesh.geometry]);this.preparedSurfaces?.dispose();this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();if(this.preparedSourceMaterial)this.preparedSourceMaterial.dispose();else this.textured.dispose();this.paint.dispose();}
+  dispose():void {this.preparedSurfaces?.attachGpuRetirement([this.mesh.geometry]);this.preparedSurfaces?.dispose();for(const model of this.preparedModels.values())model.geometry.dispose();this.animation.dispose();this.targetTint.dispose();this.mesh.dispose();this.surfaceModel.dispose();this.material.dispose();if(this.preparedSourceMaterial)this.preparedSourceMaterial.dispose();else this.textured.dispose();this.paint.dispose();}
 }

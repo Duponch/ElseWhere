@@ -1,4 +1,4 @@
-import {NATIVE_TEXT} from './native-ui-scale';
+import {NATIVE_TEXT,NATIVE_INK} from './native-ui-scale';
 import {PALETTE,drawHandBlob,drawHandRect} from './prototype-art';
 import {drawColonistBarState346} from './native-colonist-bar-346';
 import type {ColonistBarState346} from '../ui/colonist-bar-state-346';
@@ -15,10 +15,11 @@ export const COLONIST_CARD_BANDS379=6;
  * touch the copied region, but must still advance its exact original jitter
  * stream. These operations are the literal painter, never a separate image. */
 export function drawNativeColonistBand379(col:NativeColonistCardInk379,ctx:CanvasRenderingContext2D,rng:()=>number,band:number):void {
+ const originalPaper=PALETTE.creamPaper==='#f3ead6'&&PALETTE.inkDark==='#261e18';
  switch(band){
-  case 0:drawHandRect(ctx,0,0,70,96,col.selected?PALETTE.ochre:PALETTE.kraftBase,'#261e18',1.4,rng);break;
+  case 0:drawHandRect(ctx,0,0,70,96,col.selected?PALETTE.ochre:PALETTE.kraftBase,PALETTE.inkDark,1.4,rng);break;
   case 1:
-   drawHandRect(ctx,6,6,58,54,col.selected?'#d8e4c4':'#b2c4ab','#261e18',1.2,rng);
+   drawHandRect(ctx,6,6,58,54,originalPaper?(col.selected?'#d8e4c4':'#b2c4ab'):(col.selected?PALETTE.sageMountain:PALETTE.kraftLight),PALETTE.inkDark,1.2,rng);
    if(col.loaded&&col.image)ctx.drawImage(col.image,6,6,58,54);
    else{drawHandBlob(ctx,35,48,15,col.shirt,'#261e18',1,rng);drawHandBlob(ctx,35,26,11,col.skin,'#261e18',1,rng);}
    break;
@@ -26,7 +27,7 @@ export function drawNativeColonistBand379(col:NativeColonistCardInk379,ctx:Canva
   case 3:drawHandRect(ctx,5,63,60,15,PALETTE.creamPaper,PALETTE.inkDark,.8,rng);break;
   case 4:ctx.fillStyle=PALETTE.inkDark;ctx.font=NAME_FONT;ctx.textAlign='center';ctx.fillText(col.name,35,75,57);break;
   case 5:
-   drawHandRect(ctx,10,81,50,5,'#423328',null,0,rng);
+   drawHandRect(ctx,10,81,50,5,originalPaper?'#423328':NATIVE_INK.barBack,null,0,rng);
    if(col.mood>0)drawHandRect(ctx,10,81,50*col.mood/100,5,col.mood>70?'#639452':'#d16b3b',null,0,rng);
    break;
  }

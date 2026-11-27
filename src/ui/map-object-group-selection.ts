@@ -188,7 +188,7 @@ export function matchingMapObjects(world:GeyserWorld256,target:MapObjectSelectio
 }
 
 /** One adoption-local scan per requested family, avoiding N repeated finds. */
-export function mapObjectGroupCells(world:GeyserWorld256,selections:readonly MapObjectSelection[]):Cell[][] {
+export function mapObjectGroupCells(world:GeyserWorld256,selections:readonly MapObjectSelection[],confirmedZoneCells?:(selection:MapObjectSelection)=>Cell[]|undefined):Cell[][] {
   const indexes=new Map<MapObjectSelection['kind'],Map<number,Cell[]>>();
   for(const selected of selections) {
     let index=indexes.get(selected.kind);if(!index)indexes.set(selected.kind,index=new Map());
@@ -208,6 +208,6 @@ export function mapObjectGroupCells(world:GeyserWorld256,selections:readonly Map
   if(packed)for(const object of world.packed)if(packed.has(object.building.id)&&object.owner.type==='ground')packed.set(object.building.id,[cellOf(object.owner)]);
   const rocks=indexes.get('rock');
   if(rocks)for(const id of rocks.keys())if(world.tiles[id]?.terrain==='rock')rocks.set(id,[{x:id%world.width,z:Math.floor(id/world.width)}]);
-  for(const selected of selections)if(selected.kind==='growing'||selected.kind==='stockpile'||selected.kind==='plan')indexes.get(selected.kind)!.set(selected.id,mapObjectCells(world,selected));
+  for(const selected of selections)if(selected.kind==='growing'||selected.kind==='stockpile'||selected.kind==='plan')indexes.get(selected.kind)!.set(selected.id,confirmedZoneCells?.(selected)??mapObjectCells(world,selected));
   return selections.map(selected=>{const cells=indexes.get(selected.kind)!.get(selected.id)!;return cells.some(c=>knownPosition256(world,c))?cells.map(cellOf):[];});
 }
