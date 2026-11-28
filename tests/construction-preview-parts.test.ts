@@ -19,6 +19,7 @@ import { miniTurretTopPartsForStructure } from '../src/render/mini-turret-parts'
 import { WIND_BLADE_SHAPE, windBladeHub, windBladeParts } from '../src/render/wind-blade-parts';
 import { WORLD_SCALE } from '../src/world/scale';
 import * as FurnitureBuilder from '../src/render/FurnitureLayer';
+import {decorateFurniturePlacements} from '../src/render/furniture-surface-design';
 
 function camp(): World {
   const world = createWorld(285, 20, 20);
@@ -60,7 +61,7 @@ test('chair, long table and refinery previews retain the authored pieces, colour
   for (const kind of ['dining-chair', 'table-long', 'biofuel-refinery'] as const) for (const orientation of [0, 1, 2, 3] as const) {
     const s = { ...structure(kind), orientation, material: 'steel' as const };
     const source = { ...world, structures: [s] };
-    const reference = kind === 'biofuel-refinery' ? biofuelParts(source) : habitatParts(source);
+    const reference = decorateFurniturePlacements(source,kind === 'biofuel-refinery' ? biofuelParts(source) : habitatParts(source));
     const preview = constructionPreviewParts(world, [{ ...s, key: 77 }]);
     expect(preview.boxes).toEqual(keyed(reference, 77));
     expect(reference.length).toBeGreaterThan(4);

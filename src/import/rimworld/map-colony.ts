@@ -18,7 +18,7 @@ export const RESEARCH_MAP:Readonly<Record<string,DefMapping<ResearchProject>>>={
  MultiAnalyzer:r('multi-analyzer'),VitalsMonitor:r('vitals-monitor'),Fabrication:r('fabrication'),AdvancedFabrication:r('advanced-fabrication'),
  Cryptosleep:r('cryptosleep'),ReconArmor:r('recon-armor'),ShipBasics:r('ship-basics'),ShipCryptosleep:r('ship-cryptosleep'),ShipReactor:r('ship-reactor'),
  ShipEngine:r('ship-engine'),ShipComputerCore:r('ship-computer'),ShipSensorCluster:r('ship-sensors'),
- Electricity:none('Électricité : acquise d’office dans Elsewhere (pas de projet).'),PassiveCooler:none('Refroidisseur passif : sans recherche dans Elsewhere.'),
+ Electricity:r('electricity'),PassiveCooler:r('passive-cooler'),
  Cocoa:none('Cacao : culture absente.'),ColoredLights:none('Lumières colorées : absentes.'),Mortars:none('Mortiers : absents.'),FoamTurret:none('Tourelle à mousse : absente.'),
  TransportPod:none('Capsules de transport : absentes.'),ShieldBelt:none('Ceinture bouclier : absente.'),HeavyTurrets:none('Tourelles lourdes : absentes.'),
  Bionics:none('Bionique : absente.'),SniperTurret:none('Tourelle de précision : absente.'),PsychoidBrewing:none('Psychoïde : absent.'),PsychiteRefining:none('Psychite : absente.'),

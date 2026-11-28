@@ -21,8 +21,8 @@ export function shipPartPlacementRefusal276(world:World,building:Cell&{kind:Ship
  if(cells.some(c=>isRoofed(world,c.z*world.width+c.x)))return `La pièce de vaisseau doit être construite sans toit sur ses ${cells.length} cases.`;
  if(!marshSupportsFootprint(world,cells,candidate))return `Le terrain doit porter une construction lourde sur les ${cells.length} cases.`;
  const overlaps=(other:Parameters<typeof footprintCells>[0])=>footprintCells(other).some(c=>shipPartContains276(candidate,c));
- if(world.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte de la pièce de vaisseau.';
- if(world.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte de la pièce de vaisseau.';
+ if(world.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind,world.schemaVersion,s.orientation,candidate.orientation)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte de la pièce de vaisseau.';
+ if(world.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind,world.schemaVersion,j.orientation,candidate.orientation)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte de la pièce de vaisseau.';
  if(world.resources.some(r=>r.kind==='rock'&&shipPartContains276(candidate,r)))return 'Dégagez les roches de l’empreinte de la pièce de vaisseau.';
  if(world.pawns.some(p=>p.haul?.destination.type==='aside'&&shipPartContains276(candidate,p.haul.destination)))return 'Une livraison réserve encore l’empreinte de la pièce de vaisseau.';
  return undefined;

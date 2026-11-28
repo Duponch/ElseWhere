@@ -30,6 +30,7 @@ export function validateConstructionMaterials(world:World|Pick<World,'tick'>,ver
     if(entity.kind==='cryptosleep-casket'&&(!isSchema271OrLater(version)||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Ordinary cryptosleep casket requires V271, steel and its standard footprint.');
     if(entity.kind==='tube-television'&&(version<190||entity.material!=='steel'||entity.footprint!=='standard'))errors.push('Tube television requires V190 and steel.');
     if(entity.kind==='sandbags'&&(version<189||entity.material!=='cloth'||entity.orientation!==0||entity.footprint!=='standard'))errors.push('Sandbags require V189, cloth and fixed orientation.');
+    if(entity.kind==='barricade'&&(version<382||!validConstructionMaterial(entity.kind,entity.material,version)||entity.orientation!==0||entity.footprint!=='standard'))errors.push('Barricades require V382, valid Stuff and fixed orientation.');
     if(['grave','lay-floor','remove-floor'].includes(entity.kind)&&(version<89||entity.material!==undefined))errors.push('Terrain work requires V89 without a building material.');
     if(['fueled-stove','electric-stove','butcher-table'].includes(entity.kind)&&(version<84||entity.material!==(entity.kind==='butcher-table'?'wood':'steel')||entity.footprint!=='standard'))errors.push('Food workstation requires V84 and its fixed material.');
     if(entity.kind==='sun-lamp'&&(version<177||entity.material!=='steel'||entity.orientation!==0||entity.footprint!=='standard'))errors.push('Sun lamp requires V177, steel and fixed orientation.');

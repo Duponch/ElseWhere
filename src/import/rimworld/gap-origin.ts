@@ -10,6 +10,9 @@ export function gapOrigin(family:Family,row:DefTally):GapOrigin|undefined {
  if(row.status==='exact')return undefined;
  if(row.origin)return row.origin;
  const reason=normalized(row.note??''),def=normalized(row.def);
+ if(family==='plants'&&['smashedstump','choppedstump','burnedtree'].includes(def)&&reason.includes('cadence de deterioration'))return 'model';
+ if(family==='health'&&(def==='ambrosiatolerance'||def==='ambrosiahigh')&&reason.includes('politique de prise non raccordees'))return 'model';
+ if(family==='weapons'&&def==='thrumbohorn'&&reason.includes('cornes individuelles'))return 'model';
  // Unknown definition names are not evidence that a mechanic is missing.
  if(row.status==='unknown')return 'unresolved';
  if(/(?:source|sauvegarde core).*(?:introuvable|incomplet|non enregistre|non serialise)|(?:provenance|cause|reference|recu|identifiant|cible|personne referencee).*(?:introuvable|non enregistre|non resolu)|(?:date|fabrication|recu|phase|identite|provenance).*(?:non sauvegarde|absente de la sauvegarde|non conserve par core|non enregistre)|aucune cause.*invente|aucun.*proprietaire.*identifi|sans carte d.origine reelle identifiee|cause deduite des lesions|recu complet.*nettoyage/.test(reason))return 'source';

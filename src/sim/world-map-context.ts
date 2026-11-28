@@ -133,7 +133,17 @@ export function flushRegisteredMap(w:World):void {
 export const registeredMaps=(w:CampaignState):World[]=>{const root=registeredCampaign(w);return root.worldMaps?root.worldMaps.sites.slice().sort((a,b)=>a.id-b.id).flatMap(s=>{const map=registeredMap(root,s.id);return map?[map]:[];}):hasLoadedRoot(root)?[root]:[];};
 export function selectedRegisteredMap(w:CampaignState):World|undefined {const root=registeredCampaign(w),id=root.worldMaps?.selectedMapId;return id===null?undefined:registeredMap(root,id??0);}
 export const localWorldGroups=(w:World):WorldGroupRecord[]=>{const root=registeredCampaign(w),id=registeredMapId(w)??(w.campaignMap?.revision===2?w.campaignMap.activeMapId:undefined);return root.worldGroups?.groups.filter(g=>g.localMapId===id)??(w.campaignMap?.revision===2?w.campaignMap.groups.filter(g=>g.localMapId===id).map(g=>({originMapId:g.originMapId,localMapId:g.localMapId,context:g.context,state:g.state})):[]);};
-export const pawnWorldGroup=(w:World,id:number):WorldGroupRecord|undefined=>localWorldGroups(w).find(g=>'memberIds' in g.state&&g.state.memberIds.includes(id));
+export function pawnWorldGroup(w:World,id:number):WorldGroupRecord|undefined {
+ // Most maps contain no on-map group. A point query must not allocate the
+ // entire filtered local-group array before checking a single pawn.
+ const root=registeredCampaign(w),registry=root.worldGroups,projection=w.campaignMap?.revision===2?w.campaignMap:undefined;
+ if(registry){const groups=registry.groups;if(!groups.length)return;const map=registeredMapId(w)??projection?.activeMapId;
+  for(const g of groups)if(g.localMapId===map&&'memberIds'in g.state&&g.state.memberIds.includes(id))return g;return;
+ }
+ if(!projection?.groups.length)return;
+ const map=registeredMapId(w)??projection.activeMapId;
+ for(const g of projection.groups)if(g.localMapId===map&&'memberIds'in g.state&&g.state.memberIds.includes(id))return {originMapId:g.originMapId,localMapId:g.localMapId,context:g.context,state:g.state};
+}
 /** A group-only adapter has no local terrain authority and is never stepped as a map or saved. */
 export function worldGroupContext(rootInput:CampaignState,id:number,validation=false):World|undefined {
  const root=registeredCampaign(rootInput),record=root.worldGroups?.groups.find(g=>g.state.id===id);if(!record)return;

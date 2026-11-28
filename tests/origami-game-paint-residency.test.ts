@@ -44,8 +44,8 @@ describe('gamewide paint residency',()=>{
   expect(BASE_REFERENCE_PAINT_DESCRIPTORS.slice(0,43)).toEqual(PROTECTED_REFERENCE_PAINT_DESCRIPTORS);
   BESTIARY_PAINT_DESCRIPTORS.forEach((descriptor,index)=>expect(bestiaryPaintProfile(descriptor.sourceKey)).toBe(43+index));
  });
- it('matches the exact independent material union of all35+7 corrected presentation factories',()=>{
-  expect(usage().size).toBe(42);
+ it('matches the exact independent material union of all36+9 corrected presentation factories',()=>{
+  expect(usage().size).toBe(45);
   const union=[...new Set([...usage().values()].flat())].sort((a,b)=>a-b);
   expect(union).toEqual([...GAME_REQUIRED_VIRTUAL_IDS78.slice(43)].sort((a,b)=>a-b));
  });

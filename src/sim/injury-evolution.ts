@@ -55,7 +55,7 @@ export function advanceMedical(record:MedicalRecord,ticks:number,context:Medical
   if((record.toxicBuildup||context.toxicFallout294)&&(!context.toxicOwner||!Number.isSafeInteger(context.toxicOwner.id)||context.toxicOwner.id<1||typeof context.toxicOwner.spawned!=='boolean'||typeof context.toxicOwner.awake!=='boolean'))throw Error('Toxic clinical interval requires its actual original owner');
   const fallout=context.toxicFallout294;
   if(fallout&&(!context.toxicOwner!.spawned||!Number.isSafeInteger(fallout.firstCore)||!Number.isSafeInteger(fallout.lastCore)||fallout.firstCore<=startCivil*10||fallout.lastCore>endCivil*10||fallout.firstCore>fallout.lastCore||fallout.firstCore%TOXIC_FALLOUT_DOSE_INTERVAL294!==0||fallout.lastCore%TOXIC_FALLOUT_DOSE_INTERVAL294!==0||!Number.isFinite(fallout.dose)||fallout.dose<=0||Math.fround(fallout.dose)!==fallout.dose))throw Error('Invalid actual fallout clinical segment');
-  if(record.animalAgeConditions&&!animalConditions)throw Error('Actual conditions require the real owner frontier');
+  if((record.animalAgeConditions||record.ambrosia382)&&!animalConditions)throw Error('Actual conditions require the real owner frontier');
   if(record.cryptosleepSickness&&typeof context.cryptosleepSicknessSpawned!=='boolean')throw Error('Missing actual cryptosleep sickness physical owner');
   const pending=record.injuries.filter(i=>i.infection&&i.infection.dueCore<=(record.tick+ticks)*10).length;
   if(pending&&!Number.isSafeInteger((record.infections?.nextId??1)+pending))throw new Error('Infection identities exhausted');

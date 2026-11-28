@@ -41,7 +41,7 @@ const terrainPassable=(world:World,i:number):boolean=>{
   return t!==undefined&&t!=='rock'&&t!=='water';
 };
 const penBarrier=(s:Structure):boolean=>
-  isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||s.kind==='fence'
+  isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||(s.kind==='fence'||s.kind==='barricade')
   ||isPassageDoor(s.kind)&&!(s.door?.holdOpen&&s.door.open);
 const passage=(s:Structure):boolean=>isPassageDoor(s.kind);
 
@@ -49,7 +49,7 @@ const passage=(s:Structure):boolean=>isPassageDoor(s.kind);
  * the previously flooded regions after one cheap structural signature. */
 export function invalidateAnimalPens(world:World):void { caches.delete(world); }
 
-const penSignatureInput=(s:Structure):boolean=>isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||s.kind==='fence'||passage(s)||s.kind==='pen-marker';
+const penSignatureInput=(s:Structure):boolean=>isShipPartKind276(s.kind)||s.kind==='geothermal-generator'||s.kind==='wall'||s.kind==='cooler'||s.kind==='vent'||(s.kind==='fence'||s.kind==='barricade')||passage(s)||s.kind==='pen-marker';
 const holdOpen=(s:Structure):number=>s.door?.holdOpen&&s.door.open?1:0;
 /** Read-only inputs of the regions besides terrain (each barrier, passage
  * and marker, by id and cell) and the held-open state that opens a passage. A

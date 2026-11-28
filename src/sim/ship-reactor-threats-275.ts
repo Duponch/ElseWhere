@@ -9,6 +9,7 @@ import {createShipReactorMechanoidRaid275,mechFactionCommonality} from './mechan
 import {actualMechanicalBirthFaction259} from './mechanoid-world-faction-259.ts';
 import {bornFactionForDef259} from './world-affiliation-259.ts';
 import {computeThreatPoints,summaryHealthPercent} from './threat-points.ts';
+import {threatModifiers382} from './game-profile.ts';
 import {colonyWealth} from './colony-wealth.ts';
 import {isColonist} from './affiliation.ts';
 import type {World} from './types.ts';
@@ -53,7 +54,7 @@ function ensureCalendar(w:World):RaidCalendar {
 function points(w:World):number {
  const native=tempMapThreatPoints261(w);if(native!==undefined)return Math.max(500,native);
  const people=w.pawns.filter(p=>isColonist(p)&&!p.prisoner&&!p.visitor&&p.state!=='dead');
- return Math.max(500,computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:(w.economy?.wealth??colonyWealth(w)).knownStorytellerWealth,freeColonists:people.length,colonistHealthSum:people.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/6000,adaptationDays:w.economy?.adaptationDays??0,seedBucket:Math.floor(w.tick/250)}).points);
+ return Math.max(500,computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:(w.economy?.wealth??colonyWealth(w)).knownStorytellerWealth,freeColonists:people.length,colonistHealthSum:people.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/6000,adaptationDays:w.economy?.adaptationDays??0,seedBucket:Math.floor(w.tick/250),difficulty:threatModifiers382(w)}).points);
 }
 function actualFaction(w:World,kind:'outlaws'|'mechanoid'):number|null|undefined {
  const factions=registeredCampaign(w).worldFactions;if(!factions)return kind==='outlaws'?null:undefined;

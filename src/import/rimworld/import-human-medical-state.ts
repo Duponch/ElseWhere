@@ -37,7 +37,7 @@ const mechanites:Readonly<Record<string,MechaniteKind307>>={FibrousMechanites:'f
 const parasites:Readonly<Record<string,ParasiteKind306>>={GutWorms:'gut-worms',MuscleParasites:'muscle-parasites'};
 const ageConditions=ANIMAL_AGE_CONDITION_DEFINITIONS_256;
 const alcoholDefs=new Set(['AlcoholHigh','AlcoholTolerance','AlcoholAddiction','Hangover','AlcoholHangover','Cirrhosis','AlcoholBrainDamage']);
-const systemic=new Set(['BloodLoss','Heatstroke','Hypothermia','Malnutrition','CryptosleepSickness','Flu','WoundInfection','ToxicBuildup','Anesthetic','FoodPoisoning','PenoxycylineHigh',...alcoholDefs,...Object.keys(immune),...Object.keys(mechanites),...Object.keys(parasites),...Object.keys(ageConditions)]);
+const systemic=new Set(['BloodLoss','Heatstroke','Hypothermia','Malnutrition','CryptosleepSickness','Flu','WoundInfection','ToxicBuildup','Anesthetic','FoodPoisoning','PenoxycylineHigh','AmbrosiaHigh','AmbrosiaTolerance',...alcoholDefs,...Object.keys(immune),...Object.keys(mechanites),...Object.keys(parasites),...Object.keys(ageConditions)]);
 export const isStoredHumanMedicalDef=(def:string)=>systemic.has(def);
 const scaled=(raw:number,unit:number)=>Math.max(0,Math.min(unit,Math.round(raw*unit)));
 const f=Math.fround;
@@ -102,13 +102,6 @@ export function importStoredHumanMedicalState(ctx:ImportContext,p:Pawn,node:XmlN
  let alcoholResult:{represented:boolean;why?:string}|undefined;
  for(const row of rows){
   const def=text(row,'def')??'';if(!isStoredHumanMedicalDef(def))continue;
-  // The native clinical case is structurally admissible but not executable
-  // on a living human: both human-age and human-condition-frontier explicitly
-  // require the original memory deletion/conditional-thought authority.
-  // Never bypass those real runtime guards just to make a valid JSON record.
-  if(def==='Alzheimers'&&!options?.allowTerminal){
-   notes.def('health',def,'dropped',undefined,'Le modèle ElseWhere ne compose pas encore les oublis de souvenirs ni les pensées conditionnelles d’Alzheimer chez un humain vivant ; le dossier clinique est conservable uniquement dans un propriétaire terminal démontré.',1,'model');continue;
-  }
   const h=p.health;if(!h)continue;
   const prev:MedicalRecord=structuredClone(h),state=p.state,now=h.tick*10,observed=options?.sourceLimitCore??effectiveCore297(w);
   const age=num(row,'ageTicks')??0,bornAt=sourceBorn(row,h.tick),severity=num(row,'severity');
@@ -122,6 +115,12 @@ export function importStoredHumanMedicalState(ctx:ImportContext,p:Pawn,node:XmlN
    if(validCryptosleepSicknessState256(receipt)){h.cryptosleepSickness=receipt;represented=true;}
   }else if(Object.hasOwn(ageConditions,def)){
    const result=ageCondition(h,row,def as AnimalAgeConditionKind256,bornAt,age);({represented,exact,why}=result);
+  }else if(def==='AmbrosiaTolerance'||def==='AmbrosiaHigh'){
+   const sourceBirth=num(row,'tickAdded'),key=def==='AmbrosiaHigh'?'high':'tolerance';
+   if(w.schemaVersion>=382&&sourceBirth!==undefined&&Number.isSafeInteger(sourceBirth)&&sourceBirth>=0&&sourceBirth<=observed&&Number.isSafeInteger(age)&&age>=0&&severity!==undefined&&severity>0&&severity<=1&&!h.ambrosia382?.[key]){
+    (h.ambrosia382??={})[key]={bornAtCore:sourceBirth,ageCore:age,severity:f(severity)};represented=true;exact=false;
+    why='Sévérité, âge et progression Core repris ; consommation d’ambroisie, dépendance et politique de prise non raccordées.';
+   }else why='Affection sans date, sévérité ou identité de dose clinique admissible.';
   }else if(alcoholDefs.has(def)){
    if(alcoholResult){notes.def('health',def,alcoholResult.represented?'adapted':'dropped',alcoholResult.represented?def:undefined,alcoholResult.why);continue;}
    represented=alcoholState(h,node,rows.filter(r=>alcoholDefs.has(text(r,'def')??'')));exact=false;
@@ -199,6 +198,7 @@ export function importStoredHumanMedicalState(ctx:ImportContext,p:Pawn,node:XmlN
     }
    }
   }
+  if(represented&&def==='Alzheimers'&&!options?.allowTerminal){exact=false;why='Affection conservée et active ; identifiant source et indices Core des pensées modélisées repris. Ordre global des souvenirs et flux aléatoire de leur oubli encore différents.';}
   if(represented){
    if(options?.allowTerminal)delete h.death;
    reconcileMedicalDeath(h);

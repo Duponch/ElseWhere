@@ -23,7 +23,7 @@ const neighbours=(part:BodyPartId):BodyPartId[]=>{
  * This is not a melee swing: no forced internal selection, stun, armor, or XP.
  * Clinical scar/exposure rolls still use the common injury kernel. Mutates only
  * the caller's private outcome record; its original World is never consulted. */
-export function applySurgeryDamage(record:MedicalRecord,part:BodyPartId,damage:number,kind:SurgeryDamageKind,random:MedicalRandom):SurgeryDamageHit {
+export function applySurgeryDamage(record:MedicalRecord,part:BodyPartId,damage:number,kind:SurgeryDamageKind,random:MedicalRandom,nativeScratch382=false):SurgeryDamageHit {
   if(record.body||!BODY_PARTS[part]||BODY_PARTS[part].conceptual||!Number.isFinite(damage)||damage<0||damage>1000000||!['cut','scratch','stab','crush'].includes(kind))throw new RangeError('Invalid surgery impact');
   const hit:SurgeryDamageHit={part,damage,kind,layers:[]};
   if(record.death||!damage||partMissing(record,part))return hit;
@@ -32,7 +32,7 @@ export function applySurgeryDamage(record:MedicalRecord,part:BodyPartId,damage:n
     if(record.death||partMissing(record,id))return;
     const severity=Math.round(amount*HP_UNIT);if(!severity)return;
     const traits=medicalPartInjuryRule(record,id);
-    const clinical:InjuryKind=traits.solid?'crack':kind==='crush'?(traits.skin?'cut':'crush'):kind==='scratch'?'cut':kind;
+    const clinical:InjuryKind=traits.solid?'crack':kind==='crush'?(traits.skin?'cut':'crush'):kind==='scratch'?(nativeScratch382?'scratch':'cut'):kind;
     const layer={part:id,kind:clinical,severity};hit.layers.push(layer);addResolvedInjuryBatch(record,[layer],draw);
   };
   const preserve=(id:BodyPartId,amount:number,min:number,max:number):number=>{

@@ -25,5 +25,5 @@ export const forestSowingChoices291=(world:Pick<World,'schemaVersion'|'site'|'re
 export const growingPlantLabel291=(plant:GrowingPlant291):string=>isForestrySpecies291(plant)?FLORA_DEFINITIONS[plant].label:PLANT_DEFINITIONS[plant].label;
 export const growingPlantMinFertility291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?FLORA_DEFINITIONS[plant].minFertility:PLANT_DEFINITIONS[plant].minFertility;
 /** Local work units: ten Core ticks each; speed/light remain runtime inputs. */
-export const growingPlantSowTicks291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?400:plant==='healroot'?80:plant==='devilstrand'?DEVILSTRAND_SOW_TICKS_358:17;
+export const growingPlantSowTicks291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?400:plant==='healroot'?80:plant==='devilstrand'?DEVILSTRAND_SOW_TICKS_358:plant==='tinctoria'?54:17;
 export const growingPlantSowSkill291=(plant:GrowingPlant291):number=>isForestrySpecies291(plant)?6:plant==='healroot'?8:plant==='hops'?3:plant==='devilstrand'?DEVILSTRAND_PLANT_358.sowMinSkill:0;

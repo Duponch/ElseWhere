@@ -7,7 +7,7 @@ import {sameRaidResult261} from './temp-map-raids-261.ts';
 import {validCaravanRaidProvenance261} from './caravan-raid-save-261.ts';
 import {validMechComposition} from './mechanoid-raid-save.ts';
 import {validComposition} from './raid-save.ts';
-import {CASSANDRA_CYCLE_START} from './cassandra-raids.ts';
+import {homeThreatCycle382} from './game-profile.ts';
 import {registeredCampaign} from './world-map-context.ts';
 import {tempMapRecord261} from './temp-map-incidents-261.ts';
 import {validKidnapLord261} from './caravan-kidnap-lord-save-261.ts';
@@ -83,7 +83,7 @@ export function validateTempRaidCollections261(w:World,version:number):string[] 
   else if(raw.memberCount261!==undefined)errors.push('Unowned retained cohort count.');
   if(!temp&&!mech&&composition!==undefined){
    const quest=raw.originQuestId!==undefined;
-   if(quest?(!int(raw.originQuestId,1,w.quests?.serial??0)||!plain(composition)||!fields(composition,['budget','roster'])||composition.budget!==35||!dense(composition.roster,1)||composition.roster.length!==1||composition.roster[0]!=='drifter'):(!reactor&&!caravan&&(raw.tick<CASSANDRA_CYCLE_START||!w.economy||raw.tick<w.economy.adoptedAt)||!validComposition(composition,count,version,true,true,!reactor&&!caravan&&s.profile==='cassandra-raids-v1')))errors.push('Invalid retained real raid composition.');
+   if(quest?(!int(raw.originQuestId,1,w.quests?.serial??0)||!plain(composition)||!fields(composition,['budget','roster'])||composition.budget!==35||!dense(composition.roster,1)||composition.roster.length!==1||composition.roster[0]!=='drifter'):(!reactor&&!caravan&&(raw.tick<homeThreatCycle382(w).start||!w.economy||raw.tick<w.economy.adoptedAt)||!validComposition(composition,count,version,true,true,!reactor&&!caravan&&s.profile==='cassandra-raids-v1')))errors.push('Invalid retained real raid composition.');
   }else if(raw.originQuestId!==undefined&&!temp)errors.push('Retained quest lost its actual composition.');
  }
  if(results.length>s.completed)errors.push('Retained results exceed real completions.');

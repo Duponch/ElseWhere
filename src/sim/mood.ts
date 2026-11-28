@@ -41,6 +41,8 @@ import { wornPiles } from './pile-index.ts';
 import type { BodyAssessment } from './body-capacities.ts';
 import { TICKS_PER_DAY,type Pawn,type World,type MaterialPile } from './types.ts';
 
+import {alzheimerMoodThoughts382} from './human-alzheimer-382.ts';
+import {ambrosiaThought382} from './ambrosia-clinical-382.ts';
 export const MOOD_BASE=32;
 export const MOOD_RISE_PER_HOUR=12,MOOD_FALL_PER_HOUR=8;
 export interface MoodThought {
@@ -151,6 +153,7 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   if(pawn.state==='dead')return [];
   const expectation=c.expectation;
   const thoughts:MoodThought[]=[expectation?expectationThoughts.get(expectation.id)!:camp,...roomMoodThoughtsAt(pawn,c.tick),...hiveDefeatThoughts256(pawn,c.tick),...alcoholThoughts265(pawn)];
+  if(pawn.health?.ambrosia382){const t=ambrosiaThought382(pawn);if(t)thoughts.push(t);}
   if(pawn.bereavement)thoughts.push(...bereavementThoughtsAt(pawn,c.tick,c.people));
   if(pawn.deathThoughts)thoughts.push(...deathThoughtsAt(pawn,c.tick,c.people));
   if(c.lost)thoughts.push(...c.lost);
@@ -202,8 +205,8 @@ export function personalMoodThoughts(pawn:Pawn,c:PersonalMoodContext):readonly M
   const catharsis=pawn.mental?.catharsis.filter(t=>t>c.tick)??[];
   if(catharsis.length)thoughts.push({id:'catharsis',label:`Catharsis ×${catharsis.length}`,offset:40*(1-.75**catharsis.length)/.25,kind:'memory',description:'Soulagement après crise ; chaque occurrence dure trois jours, au plus cinq, effet décroissant.',expiresAt:catharsis[0]});
   // Schema 361: trait nullifications and trait thoughts.
-  if(isTraitsSchema361(c.schemaVersion)&&holdsCoreTrait361(pawn))return traitMoodThoughts361(pawn,thoughts,{items:c.items,...c.traits361?{map361:c.traits361}:{},...c.despawned313?{despawned:true}:{}});
-  return thoughts;
+  const result=isTraitsSchema361(c.schemaVersion)&&holdsCoreTrait361(pawn)?traitMoodThoughts361(pawn,thoughts,{items:c.items,...c.traits361?{map361:c.traits361}:{},...c.despawned313?{despawned:true}:{}}):thoughts;
+  return pawn.health?.animalAgeConditions&&(c.schemaVersion??0)>=382?alzheimerMoodThoughts382(pawn,result):result;
 }
 export function moodTarget(thoughts:readonly MoodThought[]):number {
   return Math.max(0,Math.min(100,MOOD_BASE+thoughts.reduce((sum,t)=>sum+t.offset,0)));

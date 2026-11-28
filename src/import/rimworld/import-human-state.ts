@@ -41,7 +41,8 @@ export function importHumanName(ctx:ImportContext,p:Pawn,node:XmlNode):void {
  }
  if(!first||!last||!nick||!Number.isSafeInteger(core)||core<13*HUMAN_YEAR_TICKS*10||!p.health||p.health.ageAilments?.length)return;
  const gender=text(node,'gender')==='Female'?'Female':text(node,'gender')==='None'?'None':'Male';
- const native:NativeHumanIdentity256={revision:1,gender,name:{first,last,nick,nickSet:!!nick},biologicalCoreRemainder:core%10};
+ const sourceId=Number(/^Human(\d+)$/.exec(text(node,'id')??'')?.[1]);
+ const native:NativeHumanIdentity256={revision:1,gender,name:{first,last,nick,nickSet:!!nick},biologicalCoreRemainder:core%10,...w.schemaVersion>=382&&Number.isInteger(sourceId)&&sourceId>0&&sourceId<=2147483647?{sourceThingId382:sourceId}:{}};
  const name=ancientHumanNameLabel256(native.name);
  if(!validNativeHumanIdentity256(native)||name.length>80)return;
  const oldName=p.name,oldAge=p.age;

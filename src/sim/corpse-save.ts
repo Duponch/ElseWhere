@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {effectiveCore297} from './core-phase-297.ts';
 import {isSchema287OrLater} from './schema-compatibility-257.ts';
 import {validAnimalAreaField287} from './animal-area-save-287.ts';
 import {animalThermalFields466} from './animal-thermal-v466.ts';
@@ -39,14 +40,14 @@ export function validCorpseShape(p:Record<string,unknown>,version:number):boolea
     // owner's medical record on the human pawn, validated in serialization.
     &&validateMedicalRecord(c.health,true,true,thermal.heat,thermal.cold,true,version>=79,version>=81,version>=84,version>=87,version>=88,version>=89,version,false)===null&&object(c.health)&&object(c.health.death)&&c.health.body===c.species
     &&validAnimalClinicalOwner256(c.health as unknown as import('./injury-types.ts').MedicalRecord,c.species,Number(c.ageTicks),clock)
-    &&validCorpseConsumption(c as unknown as CorpseState);
+    &&validCorpseConsumption(c as unknown as CorpseState,Number.MAX_SAFE_INTEGER,version);
 }
 export function validateCorpses(w:World,version:number):string[] {
   const errors:string[]=[];
   for(const p of w.piles)if(p.kind==='corpse'&&p.item!=='human-corpse') {
     if(!validCorpseShape(p as unknown as Record<string,unknown>,version)){errors.push('Invalid corpse state.');continue;}
     const c=p.corpse!;
-    if(!validCorpseConsumption(c,w.tick))errors.push('Invalid consumed corpse anatomy or clock.');
+    if(!validCorpseConsumption(c,w.tick,version,c.consumedParts?.some(m=>m.atCore382!==undefined)?effectiveCore297(w):undefined))errors.push('Invalid consumed corpse anatomy or clock.');
     if(!validCorpseRot(p.rot,w.tick,c.health.death!.tick,version,c.health)||c.health.tick>w.tick||Array.isArray(w.wildlife?.animals)&&w.wildlife.animals.some(a=>a?.id===c.animalId))errors.push('Invalid corpse age, clock or duplicated animal.');
   }
   return errors;

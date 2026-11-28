@@ -10,6 +10,7 @@ import { FURNITURE_MATERIALS,isSculptureKind,isSculptureMaterial,sculptureWorkTo
 import { structureMaxHp } from './thing-damage-rules.ts';
 import { roundTradeSilver, tradeHealthFactor } from './trade-prices.ts';
 import type { ConstructionMaterial } from './building-materials.ts';
+import {barricadeStuff382} from './barricade-382.ts';
 import type { FloorKind } from './flooring.ts';
 import type { Resource, ResourceKind, Structure, StructureKind, Tile } from './types.ts';
 
@@ -19,7 +20,7 @@ const VALUE_PER_WORK = .0036;
 const UNKNOWN_STUFF_VALUE = 2;
 const MATERIAL_VALUE: Readonly<Record<ConstructionMaterial, number>> = Object.freeze({
   ...BEDROLL_TEXTILE_MARKET_VALUES_256,
-  wood: 1.2, steel: 1.9, jade:5,
+  wood: 1.2, steel: 1.9, jade:5,silver:1,gold:10,plasteel:9,uranium:6,
   'granite-blocks': .9, 'limestone-blocks': .9, 'marble-blocks': .9,
   'sandstone-blocks': .9, 'slate-blocks': .9,
   cloth: 1.5, 'light-leather': 1.9,
@@ -104,6 +105,7 @@ const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.free
   'mini-turret': def(0, 1800, 'pass-through', {steel:100,component:3}),
   'tube-television': def(0, 10000, 'pass-through', {steel:80,component:4}),
   sandbags: def(5, 180, 'pass-through'),
+  barricade: def(5, 320, 'pass-through'),
   'drug-lab': def(50, 3500, 'pass-through', {steel:75,component:6}),
   'art-bench': def(75, 2500, 'pass-through', {steel:50}),
   'small-sculpture': def(50, 18000, 'pass-through', {}, true),
@@ -116,6 +118,7 @@ const BUILDINGS: Readonly<Record<StructureKind, BuildingValueDef>> = Object.free
   heater: def(0, 1000, 'pass-through', {steel:50,component:1}),
   'wind-turbine': def(0, 3300, 'pass-through', {steel:100,component:2}),
   'power-conduit': def(0, 35, 'standable', {steel:1}),
+  'hidden-conduit': def(0, 280, 'standable', {steel:2}),
   'power-switch': def(0, 200, 'standable', {steel:15,component:1}),
   battery: def(0, 800, 'pass-through', {steel:70,component:2}),
   'solar-generator': def(0, 2500, 'pass-through', {steel:100,component:3}),
@@ -190,7 +193,8 @@ export function structureRoomStandable(kind: StructureKind): boolean {
 export function structureRoomMarketValue(structure: Structure): number {
   const d = coreDef(structure.kind);
   const material = d.stuff && structure.material ? structure.material : undefined;
-  const factors = material ? FURNITURE_MATERIALS[material] : undefined;
+  const barricade=structure.kind==='barricade'?barricadeStuff382(material):undefined;
+  const factors = barricade?{workFactor:barricade.work,workOffset:barricade.offset}:material ? FURNITURE_MATERIALS[material as keyof typeof FURNITURE_MATERIALS] : undefined;
   if (material && !factors) throw new RangeError(`Unmapped building material: ${material}`);
   const stuffValue = d.stuff * (material ? MATERIAL_VALUE[material] : UNKNOWN_STUFF_VALUE);
   let fixedValue = d.wood * MATERIAL_VALUE.wood + d.steel * MATERIAL_VALUE.steel + d.plasteel * 9 + d.uranium * 6 + d.gold * 10 + d.component * 32 + d.advancedComponent * 200;
@@ -255,7 +259,7 @@ export function floorRoomMarketValue(tile: Tile): number {
  * flower pot likewise adds beauty but zero value beyond the pot. */
 const RESOURCE_VALUE: Readonly<Record<ResourceKind, 0>> = Object.freeze({
   'wild-plant': 0, potato: 0, corn: 0, tree: 0, berries: 0,
-  rock: 0, rice: 0, cotton: 0, healroot: 0, haygrass: 0, hops:0, devilstrand:0,
+  rock: 0, rice: 0, cotton: 0, healroot: 0, haygrass: 0, hops:0, devilstrand:0,tinctoria:0,
 });
 export function resourceRoomMarketValue(resource: Resource): number {
   const value = RESOURCE_VALUE[resource.kind];

@@ -56,13 +56,13 @@ export function advanceGroupPersonal(group:ActiveGroup,c:GroupPersonalContext):G
     const healthBefore=p.health;
     // Preserve the local personal ordering and its birthday draw sequence.
     // A birthday may create a dossier AT this tick; that dossier owes zero clinical ticks.
-    advanceHumanAgeAt(p,{tick:c.tick,schemaVersion:c.schemaVersion,random:c.random,notice:message=>c.notice(p,message)});
+    advanceHumanAgeAt(p,{tick:c.tick,schemaVersion:c.schemaVersion,random:c.random,notice:message=>c.notice(p,message),notifyBirthday:true});
     if(c.schemaVersion>=84&&p.hunger<=0)p.health??=createMedicalRecord(group.lastPersonalTick);
     if(p.health){
       cancelAlcoholSpatial265(p.health);
       if(p.health.body||medicalCivilTick271(p.health)!==group.lastPersonalTick&&!(healthBefore===undefined&&medicalCivilTick271(p.health)===c.tick))throw Error('Invalid human clinical frontier');
       const firstInfection=p.health.infections?.nextId??1;
-      const conditionFrontier=humanConditionMedicalFrontier256(p,p.health,c.tick,c.random,{kind:'caravan'});
+      const conditionFrontier=humanConditionMedicalFrontier256(p,p.health,c.tick,c.random,{kind:'caravan',schemaVersion:c.schemaVersion});
       advanceMedical(p.health,medicalElapsedTicks271(p.health,c.tick),{civilTick:c.tick,phase:p.id%60,alcoholOwner:{id:p.id,spawned:false,awake:p.state!=='sleeping',inMentalState:!!p.mental?.crisis},toxicOwner:{id:p.id,spawned:false,awake:p.state!=='sleeping'},cryptosleepSicknessSpawned:false,posture:c.resting?'ground':'standing',starving:p.hunger<=0,
         malnutritionRate:malnutritionRate(p.id),infectionChanceFactor:c.infectionChanceFactor,hunger:p.hunger,rest:p.rest,
         restingBonus:c.resting&&p.state!=='downed',infectionSeed:((c.seedFor?.(p)??c.seed)^Math.imul(p.id,0x9e3779b1))>>>0,

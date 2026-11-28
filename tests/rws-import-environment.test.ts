@@ -38,11 +38,13 @@ describe('RWS environmental and historical state',()=>{
   if(w.snow)expect(w.tiles[dest]!.snowDepth).toBe(Math.fround(32768/65535));
   else expect(ctx.notes.summary('snow').dropped).toBe(1);
   const defs=new Uint16Array(w.tiles.length),counts=new Uint16Array(w.tiles.length);
+  const jade=(source+2)%w.tiles.length,unknown=(source+3)%w.tiles.length;
   defs[source]=rawShortHash('Steel');counts[source]=165;defs[other]=rawShortHash('Uranium');counts[other]=300;
+  defs[jade]=rawShortHash('Jade');counts[jade]=42;defs[unknown]=65535;counts[unknown]=20;
   ctx.map.node.children.push(parseXml(`<deepResourceGrid><defGrid>${grid64(defs)}</defGrid><countGrid>${grid64(counts)}</countGrid></deepResourceGrid>`));
   importDeepResources(ctx);
-  expect(w.deepResources?.cells).toEqual([{index:dest,item:'steel',count:165}]);
-  expect(ctx.notes.summary('deep-resources')).toMatchObject({exact:1,dropped:1});
+  expect(w.deepResources?.cells).toEqual([{index:dest,item:'steel',count:165},{index:ctx.coordinates.index(other),item:'uranium',count:300},{index:ctx.coordinates.index(jade),item:'jade',count:42}].sort((a,b)=>a.index-b.index));
+  expect(ctx.notes.summary('deep-resources')).toMatchObject({exact:3,dropped:1});
  });
  it('recovers mineable health and potted plant state without a duplicate resource',()=>{
   const ctx=context(),tile:Tile={terrain:'rock',stone:'granite'};

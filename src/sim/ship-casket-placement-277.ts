@@ -32,9 +32,9 @@ export function shipCasketPlacementRefusal277(w:World,building:ShipCasketPose277
  const beam=shipCasketBeamCell277(building,rotation);
  if(!inBounds(beam)||!w.structures.some(s=>s.kind==='ship-beam'&&footprintContains(s,beam)))return 'La tête du caisson doit toucher une poutre de vaisseau construite.';
  const overlaps=(other:Parameters<typeof footprintCells>[0])=>footprintCells(other).some(c=>shipCasketContains277(building,c,rotation));
- if(w.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte du caisson spatial.';
+ if(w.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind,w.schemaVersion,s.orientation,candidate.orientation)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte du caisson spatial.';
  const jobs=w.jobs.filter(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind)));
- if(jobs.some(j=>sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte du caisson spatial.';
+ if(jobs.some(j=>sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind,w.schemaVersion,j.orientation,candidate.orientation)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte du caisson spatial.';
  const interact=shipCasketInteraction277(building,rotation);if(!inBounds(interact))return 'Interaction du caisson spatial hors de la carte.';
  for(const other of [...w.structures,...jobs]){
   if(!footprintCells(other).some(c=>Math.abs(c.x-interact.x)<=1&&Math.abs(c.z-interact.z)<=1))continue;

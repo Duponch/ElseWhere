@@ -3,6 +3,7 @@ import {validSownResource291} from './forestry-save-291.ts';
 import {validateWildFlora256} from './wild-plant-runtime-256.ts';
 import { BIOME_FLORA,FLORA_DEFINITIONS,isBiomeId,isPlantSpeciesInVersion,weightedSpecies,type BiomeId } from './biome-flora.ts';
 import { createPlantLife } from './plant-life.ts';
+import {isDeadStump382} from './native-special-plants-382.ts';
 import { footprintCells } from './definitions.ts';
 import { isRoofed } from './roof-rules.ts';
 import { soilFertility } from './soil.ts';
@@ -24,7 +25,7 @@ const uint=(value:unknown):value is number=>Number.isInteger(value)&&Number(valu
 
 export function initializeWildFlora(world:World,site:BiomeSite):void {
   if(world.flora)throw new Error('La flore sauvage est deja initialisee.');
-  const capacity=world.resources.filter(resource=>resource.species!==undefined).length;
+  const capacity=world.resources.filter(resource=>resource.species!==undefined&&!isDeadStump382(resource.species)).length;
   const seed=(world.seed^0x7a4d3c19)>>>0;
   world.flora={revision:1,biome:site.biome,rng:seed||0x6d2b79f5,nextCheck:world.tick+CHECK_INTERVAL,adoptedAt:world.tick,capacity};
 }
@@ -49,7 +50,7 @@ export function validateWildFlora(world:Pick<World,'flora'|'site'|'tick'|'width'
     const growthTick=resource.growthTick;
     if(resource.kind!==definition.kind||resource.amount!==definition.yield||typeof resource.growth!=='number'||!Number.isFinite(resource.growth)||resource.growth<0||resource.growth>1||
       typeof growthTick!=='number'||!Number.isSafeInteger(growthTick)||growthTick<0||growthTick>world.tick||!resource.plantLife)return false;
-    if(!((version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))))&&resource.sown291===true))present++;
+    if(!isDeadStump382(resource.species)&&!((version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version)))))))&&resource.sown291===true))present++;
   }
   return present<=state.capacity;
 }
@@ -81,7 +82,7 @@ export function advanceWildFlora(world:World):void {
   if(state.revision!==1||world.site?.revision===3)throw Error('Geographic flora requires its actual physical reader');
   if(world.tick<state.nextCheck)return;
   while(state.nextCheck<=world.tick)state.nextCheck+=CHECK_INTERVAL;
-  const present=world.resources.reduce((count,resource)=>count+(resource.species!==undefined&&!((Number(world.schemaVersion)===291||(Number(world.schemaVersion)===292||(Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))))))&&resource.sown291===true)?1:0),0),missing=Math.max(0,state.capacity-present);
+  const present=world.resources.reduce((count,resource)=>count+(resource.species!==undefined&&!isDeadStump382(resource.species)&&!((Number(world.schemaVersion)===291||(Number(world.schemaVersion)===292||(Number(world.schemaVersion)===293||(Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))))))&&resource.sown291===true)?1:0),0),missing=Math.max(0,state.capacity-present);
   if(!missing||!Number.isSafeInteger(world.nextId+1))return;
   const checksPerDay=6000/CHECK_INTERVAL,expected=missing/(BIOME_FLORA[state.biome].regrowDays*checksPerDay);
   let attempts=Math.floor(expected);if(next(state)<expected-attempts)attempts++;

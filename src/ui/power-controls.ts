@@ -1,3 +1,4 @@
+import {isConduitKind} from '../sim/conduit-kinds-382.ts';
 import {targetBuildingPlayerUse263} from '../sim/world-target-building-263';
 import {roadPropCanDeconstruct256} from '../sim/local-road-prop-ownership-256';
 import { footprintContains } from '../sim/definitions';
@@ -49,7 +50,7 @@ export function updatePowerControls(root: HTMLElement, world: World, cell: Cell,
     flick.textContent = pending ? 'Annuler la demande' : structure.kind==='vent'?(actualDeviceSwitch(structure)?'Demander la fermeture':'Demander l’ouverture'):actualDeviceSwitch(structure) ? 'Demander l’arrêt' : 'Demander la mise en marche';
     flick.onclick = () => send({type: 'power-flick', structureId: structure.id, on: pending ? actualDeviceSwitch(structure) : !actualDeviceSwitch(structure)});
     const remove = card.querySelector<HTMLButtonElement>('[data-power-remove]')!;
-    remove.hidden = structure.kind !== 'power-conduit'; remove.disabled = removing||!roadPropCanDeconstruct256(world,structure);
+    remove.hidden = !isConduitKind(structure.kind); remove.disabled = removing||!roadPropCanDeconstruct256(world,structure);
     remove.onclick = () => send({type: 'designate', kind: 'deconstruct', targetId: structure.id, x: structure.x, z: structure.z});
     const thermostat = card.querySelector<HTMLElement>('[data-heater-controls]')!;
     thermostat.hidden = structure.kind !== 'heater'; thermostat.dataset.target = String(structure.heater?.target ?? '');

@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {appendPileEntries,filterPileEntries} from './pile-identity-directory.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {advanceCoreStartingArrival256} from './starting-pod-runtime-256.ts';
@@ -56,7 +57,7 @@ function occupiedExit(world:World,cell:Cell):boolean {
 }
 /** Blueprints remain cancellable by the player while no starting worker exists.
  * Floors and conduits coexist with people/items; other plans reserve the exit. */
-const plannedBlocker=(world:World,cell:Cell)=>world.jobs.some(j=>isConstruction(j)&&j.kind!=='build-bridge'&&j.kind!=='lay-floor'&&j.kind!=='power-conduit'&&footprintContains(j,cell));
+const plannedBlocker=(world:World,cell:Cell)=>world.jobs.some(j=>isConstruction(j)&&j.kind!=='build-bridge'&&j.kind!=='lay-floor'&&!isConduitKind(j.kind)&&footprintContains(j,cell));
 function canOpen(world:World,state:StartingArrivalPending):boolean {
   const ids=new Set<number>(),cells=new Set<number>();
   if(world.piles.length+state.pods.reduce((n,p)=>n+p.items.length,0)>32768)return false;

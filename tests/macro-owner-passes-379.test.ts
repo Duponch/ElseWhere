@@ -6,6 +6,9 @@ import {INITIAL_ANIMAL_FACTS_256} from '../src/sim/initial-animal-data-256.ts';
 import {CORE_ANIMAL_DATA_256,CORE_ANIMAL_LIFE_STAGES_256} from '../src/sim/animal-core-data-v256.ts';
 import {advanceSocial} from '../src/sim/social.ts';
 import {detachMissingMacroWorkBills379} from '../src/sim/unfinished-bill-pass-379.ts';
+import {refreshStock} from '../src/sim/materials.ts';
+import {localWorldGroups,pawnWorldGroup} from '../src/sim/world-map-context.ts';
+import {backgroundTagRefusal,childhoodDefinition,adulthoodDefinition,CHILDHOODS,ADULTHOODS,type BackgroundWorkTag,type ChildhoodId,type AdulthoodId} from '../src/sim/colonist-backgrounds.ts';
 import {createWorld} from '../src/sim/engine.ts';
 import {withJournalTerrainReadScope} from '../src/sim/terrain-read-scope.ts';
 import {setTerrainWriteCacheVerification} from '../src/sim/terrain-mutation-journal.ts';
@@ -73,4 +76,36 @@ test('one macro captures all seven missing work-bill families in the same order,
  detachMissingMacroWorkBills379(expected);
  const scans=vi.spyOn(w.piles,'some');withJournalTerrainReadScope({},()=>detachMissingMacroWorkBills379(w));
  expect(scans).not.toHaveBeenCalled();expect(w).toEqual(expected);expect(multi.unfinished?.billId).toBeUndefined();expect(multi.artWork?.billId).toBe(9);expect(multi.smithingWork?.billId).toBeUndefined();
+});
+
+test('closed stock refresh allocates balances only for actual changes; exact public projection includes unknown and removed job deliveries',()=>{
+ const w={stock:{wood:7,food:1},pawns:[],jobs:[{id:1,escrow:{wood:0,food:0}},{id:2,escrow:{wood:7,food:0}},{id:3,escrow:{wood:0,food:1}}],piles:[
+  {id:4,kind:'wood',item:'wood',quantity:4,owner:{type:'ground',x:1,z:1}},
+  {id:5,kind:'wood',item:'wood',quantity:7,owner:{type:'job',jobId:2}},
+  {id:6,kind:'food',item:'rice',quantity:3,owner:{type:'job',jobId:999}},
+ ]} as unknown as World,expected=structuredClone(w),unchanged=w.jobs[0]!.escrow,delivered=w.jobs[1]!.escrow;
+ refreshStock(expected);withJournalTerrainReadScope({},()=>refreshStock(w));
+ expect(w).toEqual(expected);expect(w.jobs[0]!.escrow).toBe(unchanged);expect(w.jobs[1]!.escrow).toBe(delivered);
+ w.piles[1]!.quantity=2;expected.piles[1]!.quantity=2;refreshStock(expected);withJournalTerrainReadScope({},()=>refreshStock(w));
+ expect(w).toEqual(expected);expect(w.jobs[1]!.escrow).not.toBe(delivered);
+});
+
+test('point group lookup follows direct membership replacements and both owner paths without filtering an array',()=>{
+ const actual=[{originMapId:0,localMapId:0,state:{memberIds:[7,8]}},{originMapId:0,localMapId:1,state:{memberIds:[7]}}];
+ const w={schemaVersion:382,tiles:[],worldGroups:{groups:actual}} as unknown as World;
+ for(const id of [7,8,9])expect(pawnWorldGroup(w,id)).toBe(localWorldGroups(w).find(g=>'memberIds'in g.state&&g.state.memberIds.includes(id)));
+ actual[0]!.state.memberIds=[9];expect(pawnWorldGroup(w,7)).toBeUndefined();expect(pawnWorldGroup(w,9)).toBe(actual[0]);
+ const projection={schemaVersion:382,campaignMap:{revision:2,activeMapId:1,groups:actual}} as unknown as World;
+ expect(pawnWorldGroup(projection,7)).toEqual(localWorldGroups(projection)[0]);
+ expect(pawnWorldGroup(projection,9)).toBeUndefined();
+});
+
+test('compiled immutable background refusal table preserves story precedence and sees the next actual background',()=>{
+ const tags=['manual-dumb','manual-skilled','caring','social','intellectual','plant-work','artistic','animals','hunting','violent','firefighting'] as const satisfies readonly BackgroundWorkTag[];
+ for(const child of Object.keys(CHILDHOODS) as ChildhoodId[])for(const adult of Object.keys(ADULTHOODS) as AdulthoodId[])for(const tag of tags){
+  const c=childhoodDefinition(child),a=adulthoodDefinition(adult),cause=c.disables.includes(tag)?c:a.disables.includes(tag)?a:undefined;
+  expect(backgroundTagRefusal({background:{childhood:child,adulthood:adult}},tag)).toBe(cause?`Incapacité liée au passé : ${cause.label}.`:undefined);
+ }
+ const p={background:{childhood:'quiet-child' as ChildhoodId}};expect(backgroundTagRefusal(p,'violent')).toBeDefined();p.background.childhood='settlement-child';expect(backgroundTagRefusal(p,'violent')).toBeUndefined();
+ expect(backgroundTagRefusal({background:p.background,traits:['pyromaniac']},'firefighting')).toContain('trait');
 });

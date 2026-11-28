@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveLocal297} from './core-phase-297.ts';
 import {humanMoveSpeedFactor297} from './human-move-speed-297.ts';
@@ -75,7 +76,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   'ancient-road-barrier':{delay:4.2,stand:false,repeat:true},
   'ancient-road-lamp':{delay:4.2,stand:false,repeat:false},
   'ship-chunk':{delay:4.2,stand:false,repeat:true},
-  sandbags:{delay:4.2,stand:false,repeat:true},
+  sandbags:{delay:4.2,stand:false,repeat:true},barricade:{delay:4.2,stand:false,repeat:true},
   'drug-lab':{delay:5,stand:false,repeat:true},
   'art-bench':{delay:5,stand:false,repeat:true},
   'fabrication-bench':{delay:5,stand:false,repeat:true},
@@ -87,6 +88,7 @@ export const FURNITURE_TRAVEL:Readonly<Record<StructureKind,Readonly<{delay:numb
   heater:{delay:3,stand:false,repeat:true},
   'wind-turbine':{delay:5,stand:false,repeat:true},
   'power-conduit':{delay:0,stand:true,repeat:false},
+  'hidden-conduit':{delay:0,stand:true,repeat:false},
   'power-switch':{delay:0,stand:true,repeat:false},
   battery:{delay:5,stand:false,repeat:true},
   'solar-generator':{delay:5,stand:false,repeat:true},
@@ -133,7 +135,7 @@ export function canStandAt(world:World,cell:Cell,geometry?:StructureNavigationGe
     if(chunk)return false;
   }
   const frames=version>=22?captureFrameGeometry379(world):undefined;
-  return frames?!frames.standDenied.has(cell.z*world.width+cell.x):!world.jobs.some(j=>(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')&&footprintContains(j,cell));
+  return frames?!frames.standDenied.has(cell.z*world.width+cell.x):!world.jobs.some(j=>(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&!isConduitKind(j.kind)&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')&&footprintContains(j,cell));
 }
 /** For a batch of point queries in one read-only decision. Discard before any
  * world mutation; this is not a shared navigation or cross-actor cache. */
@@ -155,7 +157,7 @@ export function captureStandability(world:World,geometry?:StructureNavigationGeo
   const structures=geometry?structureDeniedMask(world,geometry,version<22):undefined;
   if(!geometry)for(const s of world.structures)if(version<22?s.kind==='wall'||s.kind==='table':!FURNITURE_TRAVEL[s.kind].stand)add(s);
   const frameDenied=version>=22?captureFrameGeometry379(world)?.standDenied:undefined;
-  if(!frameDenied)for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
+  if(!frameDenied)for(const j of world.jobs)if(version<16&&(j.kind==='wall'||j.kind==='table')||version>=22&&j.construction==='frame'&&!isConduitKind(j.kind)&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')add(j);
   // Ground chunks: inside a simulation step, a copy of the pile index's facts
   // taken now (the same cells as the chunk list, as a snapshot); else the list.
   const index=version>=28?pileIndex(world):undefined;
@@ -195,12 +197,12 @@ export function furnitureDelay(world:World,from:Cell,to:Cell,terrainOverride?:Du
   geometry??=captureStructureNavigation(world);
   if(geometry){
     for(const s of geometry.at(to)){
-      if(s.kind!=='power-conduit')target=s.kind;
+      if(!isConduitKind(s.kind)&&(s.kind!=='wall-lamp'||version<382||target===undefined))target=s.kind;
       if(isTrapKind357(s.kind)&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
     }
     previousRepeats=geometry.at(from).some(s=>FURNITURE_TRAVEL[s.kind].repeat);
   }else for(const s of world.structures) {
-    if(s.kind!=='power-conduit'&&footprintContains(s,to))target=s.kind;
+    if(!isConduitKind(s.kind)&&(s.kind!=='wall-lamp'||version<382||target===undefined)&&footprintContains(s,to))target=s.kind;
     if(isTrapKind357(s.kind)&&s.spikeTrap&&s.x===to.x&&s.z===to.z)trap=true;
     if(footprintContains(s,from)&&FURNITURE_TRAVEL[s.kind].repeat)previousRepeats=true;
   }
@@ -401,7 +403,7 @@ function computeNavigationCosts(world:World,origin?:Cell,terrainOverride?:DuckTe
       if(knows)for(const {structure,cells} of structureBase.traps)if(structure.spikeTrap)for(const i of cells)traps.set(i,SPIKE_TRAP_SEARCH_COST);
     }
     else for(const s of world.structures)for(const c of footprintCells(s))add(s,c.z*width+c.x);
-    for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))stops.add(c.z*width+c.x);
+    for(const j of world.jobs)if(j.construction==='frame'&&!isConduitKind(j.kind)&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))stops.add(c.z*width+c.x);
   }
   const floors=new Map<number,number>();
   // A single captured byte per cell replaces two mostly dense Maps on a site.
@@ -472,7 +474,7 @@ function captureLazyNavigation379(world:World,terrainOverride:DuckTerrainOverrid
   const version=world.schemaVersion,width=world.width,size=width*world.height,snow=!!world.snow;
   const base=structureTravelBase(geometry),columns=travelColumns(base,size),frames=frameCosts(world),pileFacts=capturePileGroundFacts379(index),facts=pileFacts.facts;
   let frameStops=captureFrameGeometry379(world)?.standDenied;
-  if(!frameStops){const captured=new Set<number>();for(const j of world.jobs)if(j.construction==='frame'&&j.kind!=='power-conduit'&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))captured.add(c.z*width+c.x);frameStops=captured;}
+  if(!frameStops){const captured=new Set<number>();for(const j of world.jobs)if(j.construction==='frame'&&!isConduitKind(j.kind)&&j.kind!=='lay-floor'&&j.kind!=='build-bridge')for(const c of footprintCells(j))captured.add(c.z*width+c.x);frameStops=captured;}
   const layer=terrainCostLayer(world,version,!!human?.draft,snow,terrainOverride),terrain=layer.terrain;
   const now=isCorePhysicalSchema297(Number(version))?effectiveLocal297(world):world.tick;
   // Room doors in the capture's order: each adds its wait after the maximum.

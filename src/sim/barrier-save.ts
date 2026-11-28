@@ -1,7 +1,7 @@
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isSchema275OrLater} from './schema-compatibility-257.ts';
 import {validNaturalHiveLoss256} from './cave-hive-loss-256.ts';
-import {isFutureEcologyItem256} from './cave-products-256.ts';
+import {unavailableEcologyItem} from './cave-products-256.ts';
 import {isBedrollTextile256} from './bedroll-textiles-256.ts';
 import { isRepairableStructure,structureMaxHp } from './thing-damage-rules.ts';
 import { barrierMaxHp,isBarrier } from './barriers.ts';
@@ -26,7 +26,7 @@ export function validateBarriers(world:World,version:number):string[] {
       ||Object.entries(ledger.lost).some(([k,v])=>!(isSchema298OrLater(version)&&k==='ai-core'||version>=123&&k==='gold'||isSchema275OrLater(version)&&k==='plasteel'||version>=256&&(k==='jade'||k==='uranium')||k!=='jade'&&CONSTRUCTION_MATERIALS.includes(k as never)||version>=256&&isBedrollTextile256(k)||version>=75&&k==='component'||version>=193&&k==='advanced-component'||version>=211&&k==='silver'||version>=265&&(k==='wort'||k==='beer')||isIedSchema357(version)&&isShellItem357(k))||!integer(v,1))
       ||['fuelTicksLost','fuelTicksBurned'].some(k=>ledger[k]!==undefined&&!integer(ledger[k],1))
       ||ledger.batteryEnergyLost!==undefined&&(typeof ledger.batteryEnergyLost!=='number'||!Number.isFinite(ledger.batteryEnergyLost)||ledger.batteryEnergyLost<=0||!Number.isSafeInteger(ledger.batteryEnergyLost*2))
-      ||ledger.items!==undefined&&(!object(ledger.items)||!Object.keys(ledger.items).length||Object.entries(ledger.items).some(([k,v])=>!Object.hasOwn(ITEM_DEFINITIONS,k)||version<256&&(isFutureEcologyItem256(k)||k==='slag-steel-chunk')||version<235&&k==='minified-tree'||version<227&&['hay','kibble'].includes(k)||version<206&&k==='neutroamine'||!isIedSchema357(version)&&isShellItem357(k)||version<194&&k==='scyther-corpse'||version<197&&V219_ITEM_IDS.some(item=>item===k)||!integer(v,1)))
+      ||ledger.items!==undefined&&(!object(ledger.items)||!Object.keys(ledger.items).length||Object.entries(ledger.items).some(([k,v])=>!Object.hasOwn(ITEM_DEFINITIONS,k)||(unavailableEcologyItem(k,version)||version<256&&k==='slag-steel-chunk')||version<235&&k==='minified-tree'||version<227&&['hay','kibble'].includes(k)||version<206&&k==='neutroamine'||!isIedSchema357(version)&&isShellItem357(k)||version<194&&k==='scyther-corpse'||version<197&&V219_ITEM_IDS.some(item=>item===k)||!integer(v,1)))
       ||ledger.resources!==undefined&&(!validFireResourceLosses(ledger.resources,version)||!Object.keys(ledger.resources as object).length)
       ||ledger.woodPotentialLost!==undefined&&(!integer(ledger.woodPotentialLost,1)||!object(ledger.resources)||!integer(ledger.resources.tree,1)))errors.push('Invalid destroyed building ledger.');
   }

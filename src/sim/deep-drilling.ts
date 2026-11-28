@@ -47,6 +47,7 @@ function drillTick(world:World,pawn:Pawn,s:Structure,light:number):boolean {
     draft.yieldPct=Math.fround(draft.yieldPct+Math.fround(Math.fround(rate*yieldFactor)/10000));
     if(draft.progress>10000){
       const resource=nextDeepResource(world,s),item=resource?.item??deepRockItem(world,s),raw=resource?Math.min(resource.count,DEEP_RESOURCES[resource.item].portion):0;
+      if(!item)return false;
       const exact=Math.fround(raw*draft.yieldPct),floor=Math.floor(exact),roll=deepRandom(draft),quantity=resource?Math.max(1,floor+(roll<exact-floor?1:0)):1;
       const interaction=deepWorkSpot(s),plan=planGroundPlacement(world,quantity,interaction,item,c=>(!policy||allowedAreaAllows(world,pawn,c,policy))&&(c.x!==s.x||c.z!==s.z)&&(c.x!==interaction.x||c.z!==interaction.z));
       const identities=plan?.reduce((n,part)=>n+materialIdentityCount(world,part.quantity,{type:'ground',...part.cell},item),0)??0;

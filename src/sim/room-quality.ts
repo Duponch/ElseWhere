@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import { roomWithoutStats303 } from './room-region-limit-303.ts';
 import { isBedKind } from './bed-kinds.ts';
 import { footprintCells } from './definitions.ts';
@@ -68,7 +69,7 @@ export class RoomQualityCapture {
     for(const f of w.filth?.items??[]){if(contains(index(f)))totalBeauty+=filthBeauty(f);if(containsClean(index(f)))totalClean+=FILTH_DEFINITIONS[f.kind].cleanliness;}
     for(const p of w.piles)if(p.owner.type==='ground'){const i=index(p.owner);if(contains(i))totalBeauty+=p.item==='slag-steel-chunk'?-8:p.kind==='corpse'?-20:-4;if(p.kind==='chunk')cannotStand.add(i);}
     for(const pack of w.packed)if(pack.owner.type==='ground'&&contains(index(pack.owner)))totalBeauty-=4;
-    for(const job of w.jobs)if(job.construction==='frame'&&job.kind!=='power-conduit'&&job.kind!=='lay-floor')for(const c of footprintCells(job))cannotStand.add(index(c));
+    for(const job of w.jobs)if(job.construction==='frame'&&!isConduitKind(job.kind)&&job.kind!=='lay-floor')for(const c of footprintCells(job))cannotStand.add(index(c));
     let usable=0;for(const i of cells){if(w.tiles[i]!.terrain==='water'||w.tiles[i]!.terrain==='rock')continue;usable+=cannotStand.has(i)?.5:1.4;}
     let unroofed=0;for(const i of cells)if(!isRoofed(w,i))unroofed++;
     const stats={wealth,space:unroofed>=300?350:Math.min(350,usable),cleanliness:totalClean/cells.size,beauty:totalBeauty/weightedBeautySize(cells.size)};

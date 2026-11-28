@@ -132,7 +132,7 @@ export function processSurgery(world:World,doctor:Pawn,context:NeedContext,docto
   const bed=structureById(world,task.bedId)!;
   const capture=captureCleanliness(world);
   const chance=surgerySuccessChance({doctor,medicine:task.consumedMedicine!,bedQuality:bed.quality,bedSurgeryFactor:bedSurgeryFactor(bed,world),patientGlow:patientGlow(bed),roomCleanliness:capture.cleanliness(bed),outdoors:surgeryOutdoors(world,bed,capture),inspired:useInspiration360(world,doctor,'surgery')});
-  const outcome=resolveSurgeryOutcome(patient.health!,task.part,chance,()=>healthRandom(world));
+  const outcome=resolveSurgeryOutcome(patient.health!,task.part,chance,()=>healthRandom(world),{nativeScratch382:world.schemaVersion>=382});
   patient.health=outcome.record;
   if(outcome.kind==='success'){if(task.removeArtificial273){if(!removeArtificialPart273(patient.health,task.part,task.removeArtificial273))throw Error('Actual artificial root changed during removal');commitArtificialRestitution273(world,restitution);}else amputateSurgicalLimb(patient.health,task.part);}
   delete patient.surgeryRequest;

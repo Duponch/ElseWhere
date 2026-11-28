@@ -43,7 +43,7 @@ export function captureWorldProjectileTargets(world:World):WorldProjectileTarget
     if(range.end&&id<=ids[range.end-1])range.ordered=false;range.end=slot+1;
     if(cells){const copy=cells.map(c=>({x:c.x,z:c.z}));footprints.set(slot,copy);for(const c of copy)link(slot,c.x,c.z);}else link(slot,x,z);
   };
-  for(const s of world.structures)append(1,s.id,s.x,s.z,STRUCTURE_SHOT_FILL[s.kind],structureShotLayer(s.kind),isRoomDoor(s.kind)&&s.door?.open?1:0,footprintCells(s));
+  for(const s of world.structures)if(s.kind!=='hidden-conduit')append(1,s.id,s.x,s.z,STRUCTURE_SHOT_FILL[s.kind],structureShotLayer(s.kind),isRoomDoor(s.kind)&&s.door?.open?1:0,footprintCells(s));
   for(const j of world.jobs)if(j.construction==='frame')append(2,j.id,j.x,j.z,FRAME_SHOT_FILL,structureShotLayer((j.furniture?.kind??j.kind) as StructureKind),0,footprintCells(j));
   // Decorative pebbles are not actual chunks or destructible Core objects yet.
   for(const r of world.resources)if(r.kind!=='rock')append(3,r.id,r.x,r.z,resourceShotFill(r),r.kind==='tree'?SHOT_LAYER.building:SHOT_LAYER.lowPlant);

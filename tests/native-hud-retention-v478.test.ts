@@ -75,6 +75,14 @@ const alert=(key:string,text:string):TestAlert=>({key,text,targets:[]});
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 
 describe('HUD dossiers keep the accepted live facts',()=>{
+  it('keeps the stock column compact without discarding the resource entries',()=>{
+    const f=fixture();try{
+      f.resources([['wood',12],['steel',8]]);
+      const wood=f.piece('hud:resource:wood');
+      expect(wood.userData.w).toBeLessThanOrEqual(1.92);
+      expect(wood.userData.h).toBeCloseTo(.23);
+    }finally{f.close();}
+  });
   it('refreshes an open roster and stock dossier on a same-tick accepted world without creating more HUD pieces',()=>{
     const world=createWorld(8_530_099,16,16);world.piles=[];
     for(const tile of world.tiles){tile.terrain='soil';delete tile.fogged;}

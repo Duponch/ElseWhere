@@ -1,19 +1,19 @@
 import {eggSpeciesForItem256} from './animal-egg-content-v256.ts';
-import {animalCore256,isAnimalSpecies256} from './animal-core-v256.ts';
+import {CORE_ANIMAL_DATA_256} from './animal-core-data-v256.ts';
 import type {WildAnimal} from './wildlife-state.ts';
 import type {ItemId} from './items.ts';
 import {isAnimalMeat} from './biome-items.ts';
 import {SCHEMA_VERSION} from './types.ts';
 /** Numeric food categories, not a predator/herbivore inference. The source
  * composite flags are facts; actual candidates/contact remain wildlife-food. */
-const flags:Readonly<Record<string,number>>={AnimalProduct:0x20,VegetarianRoughAnimal:0x1f51,CarnivoreAnimal:0xb0a,CarnivoreAnimalStrict:0xa,OmnivoreAnimal:0x1f1b,OmnivoreRoughAnimal:0x1f5b,OvivoreAnimal:0xb20};
-export function animalDietFlags256(species:WildAnimal['species']):number|undefined {
- if(!isAnimalSpecies256(species))return;
- let value=0;for(const name of animalCore256(species).race.foodType.split(',')){
+const flags:Readonly<Record<string,number>>={AnimalProduct:0x20,DendrovoreAnimal:0x80,VegetarianRoughAnimal:0x1f51,CarnivoreAnimal:0xb0a,CarnivoreAnimalStrict:0xa,OmnivoreAnimal:0x1f1b,OmnivoreRoughAnimal:0x1f5b,OvivoreAnimal:0xb20};
+const dietBySpecies=new Map<string,number>(Object.entries(CORE_ANIMAL_DATA_256).map(([species,data])=>{
+ let value=0;for(const name of data.race.foodType.split(',')){
   const key=name.trim();if(!Object.hasOwn(flags,key))throw Error('Unbound animal food category.');value|=flags[key]!;
  }
- return value;
-}
+ return [species,value];
+}));
+export function animalDietFlags256(species:WildAnimal['species']):number|undefined {return dietBySpecies.get(species);}
 export function animalPlantDiet256(a:WildAnimal,tree=false):boolean|undefined {
  const diet=animalDietFlags256(a.species);return diet===undefined?undefined:(diet&(tree?0x80:0x40))!==0;
 }

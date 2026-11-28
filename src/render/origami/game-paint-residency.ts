@@ -2,7 +2,7 @@ import {BESTIARY_PAINT_DESCRIPTORS} from './bestiary-paint-descriptors';
 import {BASE_REFERENCE_PAINT_DESCRIPTORS,PROTECTED_REFERENCE_PAINT_DESCRIPTORS,bestiaryPaintProfile} from './reference-profiles';
 import {VirtualPaintPool} from './virtual-paint-pool';
 
-/** Exact material union of the42 corrected game presentation factories.
+/** Exact material union of the45 corrected game presentation factories.
  * No species/model names are guessed, no virtual identity is removed/moved.
  * The independent real-factory contract guards this list. */
 export const GAME_UNUSED_BESTIARY_SOURCE_KEYS=Object.freeze([

@@ -44,7 +44,7 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
   const toxic=object(value)?Object.getOwnPropertyDescriptor(value,'toxicFallout'):undefined;
   if(object(value)&&'toxicFallout'in value&&((version!==294&&(version!==295&&(version!==296&&!isCorePhysicalSchema297(version))))||!toxic||toxic.enumerable!==true||!Object.hasOwn(toxic,'value')||toxic.value===undefined))return false;
   if(version<169||!world.gameProfile||!object(value)||
-    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[],...version>=310?['volcanicWinters310','lastVolcanicWinterStart310','volcanicWinter310']:[],...isRecentIncidents341(version)?['recent341']:[],...isMoodPool350(version)?['psychicDrones350','psychicSoothes350','lastPsychicDrone350','lastPsychicSoothe350','psychic350']:[]])||
+    !keys(value,['profile','adoptedAt','rng','nextCheck','introDone','checks','opportunities','heatwaves','lastHeatwaveStart','active',...version>=200?['weather']:[],...version>=201?['shortCircuits']:[],...version>=205?['cropBlights']:[],...(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))?['toxicFallout']:[],...version>=305?['resourcePods305','resourcePod305']:[],...version>=310?['volcanicWinters310','lastVolcanicWinterStart310','volcanicWinter310']:[],...isRecentIncidents341(version)?['recent341']:[],...version>=382?['lastThrumboPassAt382']:[],...isMoodPool350(version)?['psychicDrones350','psychicSoothes350','lastPsychicDrone350','lastPsychicSoothe350','psychic350']:[]])||
     value.profile!=='cassandra-misc-v1'||!integer(value.adoptedAt,0,world.tick)||!integer(value.rng,1,0xffffffff)||
     !integer(value.nextCheck,MISC_FIRST_CHECK)||value.nextCheck%MISC_CHECK_INTERVAL!==0||
     value.nextCheck!==Math.max(MISC_FIRST_CHECK,(Math.floor(scheduleTick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL)||
@@ -53,6 +53,7 @@ export function validMiscIncidents(value:unknown,version:number,world:Pick<World
     value.opportunities>value.checks+(value.introDone&&value.adoptedAt<MISC_INTRO_TICK?1:0)||
     value.heatwaves>value.opportunities||
     value.introDone!==(scheduleTick>=MISC_INTRO_TICK)||
+    Object.hasOwn(value,'lastThrumboPassAt382')&&(version<382||!integer(value.lastThrumboPassAt382,0,world.tick))||
     world.heatwaves!==undefined)return false;
   if(value.lastHeatwaveStart!==undefined&&(!integer(value.lastHeatwaveStart,value.adoptedAt,world.tick)||
     value.heatwaves===0||

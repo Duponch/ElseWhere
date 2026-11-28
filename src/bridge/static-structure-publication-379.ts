@@ -1,3 +1,4 @@
+import {isConduitKind} from '../sim/conduit-kinds-382.ts';
 import type {Structure,World} from '../sim/types';
 import {structureMembershipToken} from '../sim/structure-navigation';
 import {damagedStructures379,invalidateStructureFamily379} from '../sim/structure-family-379';
@@ -20,13 +21,13 @@ function ordinaryConduitPower(value:unknown):boolean {
  * or EMP target; its ordinary off/null power stub never changes in stepping.
  * All other kinds, component records and unknown own layouts stay dynamic. */
 function coldStructure(row:Structure):boolean {
- if(row.kind!=='wall'&&row.kind!=='fence'&&row.kind!=='power-conduit'||!!row.damage||Object.getPrototypeOf(row)!==Object.prototype)return false;
+ if(row.kind!=='wall'&&row.kind!=='fence'&&!isConduitKind(row.kind)||!!row.damage||Object.getPrototypeOf(row)!==Object.prototype)return false;
  for(const key of Reflect.ownKeys(row)){
-  if(typeof key!=='string'||!simpleKeys.has(key)&&!(row.kind==='power-conduit'&&key==='power'))return false;
+  if(typeof key!=='string'||!simpleKeys.has(key)&&!(isConduitKind(row.kind)&&key==='power'))return false;
   const d=Object.getOwnPropertyDescriptor(row,key);if(!d?.enumerable||!Object.hasOwn(d,'value'))return false;
   if(key!=='power'&&d.value!==undefined&&d.value!==null&&typeof d.value!=='number'&&typeof d.value!=='string')return false;
  }
- return row.kind!=='power-conduit'||ordinaryConduitPower(row.power);
+ return !isConduitKind(row.kind)||ordinaryConduitPower(row.power);
 }
 interface State {
  readonly generation:object;readonly owner:World;readonly source:readonly Structure[];readonly membership:object;

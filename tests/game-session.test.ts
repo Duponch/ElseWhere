@@ -89,3 +89,16 @@ test('external downloads reserve the session before network completion',async()=
   expect(f.client.load).not.toHaveBeenCalled();resolve('external');await load;
   expect(f.client.load).toHaveBeenCalledWith('external');expect(f.session.busy).toBe(false);
 });
+
+test('the confirmed draft advances the accepted generation even when its renderer fails, not when the worker refuses',async()=>{
+  const f=fixture();
+  const refused=vi.fn(async()=>{throw Error('invalid map');});
+  await expect(f.session.createConfirmedDraft(refused)).rejects.toThrow('invalid map');
+  expect(f.session.generation).toBe(0);expect(f.session.hasWorld).toBe(false);
+  expect(f.prepare).not.toHaveBeenCalled();
+  const start=vi.fn(async()=>{});f.prepare.mockRejectedValueOnce(Error('No shared actual animal model'));
+  await expect(f.session.createConfirmedDraft(start)).rejects.toThrow('No shared actual animal model');
+  expect(f.session.generation).toBe(1);expect(f.session.hasWorld).toBe(true);
+  expect(f.session.busy).toBe(false);expect(start).toHaveBeenCalledOnce();
+  expect(f.prepare).toHaveBeenCalledOnce();
+});

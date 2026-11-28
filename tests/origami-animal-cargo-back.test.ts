@@ -43,8 +43,8 @@ describe('actual Origami torso cargo attachment',()=>{
   expect(legacy.top-back[1]).toBeGreaterThan(.10);expect(legacy.top-back[1]).toBeLessThan(.12);
   const canonical=bestiaryAnimalGeometry(1,'cougar',false);try{expect(bestiaryAnimalCargoBack('cougar')===back,'canonical compile cannot replace the presentation attachment').toBe(true);}finally{canonical?.dispose();const wear:unknown=canonical?.userData.origamiWear;if(wear instanceof THREE.BufferGeometry)wear.dispose();}
  });
- it('caches exactly eight finite numbers for all42 and matches the actual SpeciesRig body centre/restFloor, never the old11',()=>{
-  expect(BESTIARY_ANIMAL_SPECIES).toHaveLength(42);
+ it('caches exactly eight finite numbers for all45 and matches the actual SpeciesRig body centre/restFloor, never the old11',()=>{
+  expect(BESTIARY_ANIMAL_SPECIES).toHaveLength(45);
   for(const id of BESTIARY_ANIMAL_SPECIES){const geometry=origamiAnimalPresentationGeometry(1,id);if(!geometry)throw Error('Actual body absent: '+id);
    try{const back=bestiaryAnimalCargoBack(id),torso=bestiaryAnimalCargoTorso(id);if(!back||!torso)throw Error('Actual rigid torso unsupported: '+id);expect(back.length,id).toBe(8);expect(back.every(Number.isFinite),id).toBe(true);expect(back[3],id).toBeGreaterThan(0);expect(back[4],id).toBeGreaterThan(0);expect(back[7],id).toBeGreaterThan(0);expect(back[7],id).toBeLessThanOrEqual(1);expect(geometry.userData.origamiCargoBack===back,id+' shares metadata').toBe(true);expect(bestiaryAnimalCargoBack(id)===back,id+' repeated access does not rebuild').toBe(true);
     expect(geometry.userData.origamiCargoTorso===torso,id+' shares original Float32 torso').toBe(true);expect(bestiaryAnimalCargoTorso(id)===torso,id+' source corners stay cached').toBe(true);

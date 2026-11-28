@@ -1,4 +1,5 @@
 import { captureStandability } from './furniture-travel.ts';
+import {extremeWeatherAllowed382} from './game-profile.ts';
 import {journalLetter352,cell352} from './letter-producers-352.ts';
 import { isRoofed } from './roof-rules.ts';
 import { TICKS_PER_DAY,type Cell,type World } from './types.ts';
@@ -53,7 +54,7 @@ function chooseCenter(world:World,state:FlashstormState,radius:number):Cell {
 }
 
 export function eligibleFlashstorm(world:World):boolean {
-  if(!world.gameProfile||!world.miscIncidents||!world.weather||world.width<=16||world.height<=16||
+  if(!world.gameProfile||!extremeWeatherAllowed382(world)||!world.miscIncidents||!world.weather||world.width<=16||world.height<=16||
     world.flashstorm?.active||world.flashstorm&&world.tick-world.flashstorm.lastStart<FLASHSTORM_COOLDOWN)return false;
   return Number.isSafeInteger(world.tick*10+6000)&&Number.isSafeInteger(world.tick+601+FLASHSTORM_RAIN_DELAY)&&
     world.weather.lightningCount<=Number.MAX_SAFE_INTEGER-20&&

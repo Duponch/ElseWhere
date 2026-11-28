@@ -1,5 +1,5 @@
 import {animalSpecies} from '../sim/animal-species';
-import {AUTO_SLAUGHTER_SPECIES,defaultAutoSlaughterConfig,type AutoSlaughterConfig} from '../sim/auto-slaughter-state';
+import {visibleAutoSlaughterSpecies,defaultAutoSlaughterConfig,type AutoSlaughterConfig} from '../sim/auto-slaughter-state';
 import {autoSlaughterCounts} from '../sim/auto-slaughter';
 import type {World} from '../sim/types';
 import './auto-slaughter-panel.css';
@@ -24,7 +24,7 @@ export function updateAutoSlaughterPanel(root:HTMLElement,world:World,send?:Auto
     const host=root.querySelector<HTMLElement>('[data-auto-slaughter]')!;
     const feedback=host.querySelector<HTMLElement>('[data-auto-slaughter-feedback]')!;
     const table=document.createElement('table');table.className='auto-slaughter-table';
-    table.innerHTML=`<thead><tr><th scope="col">Espèce</th><th scope="col">Population</th>${labels.map(label=>`<th scope="col">${label}<small>Actuel / max.</small></th>`).join('')}<th scope="col">Gestantes<small>Abattage autorisé</small></th><th scope="col">Réinitialiser</th></tr></thead><tbody></tbody>`;
+    table.innerHTML=`<thead><tr><th scope="col">Espèce</th><th scope="col">Population</th>${labels.map(label=>`<th scope="col">${label}<small>Actuel / max.</small></th>`).join('')}<th scope="col">Gestantes<small>Abattage autorisé</small></th>${current.schemaVersion>=382?'<th scope="col">Liés<small>Abattage autorisé</small></th>':''}<th scope="col">Réinitialiser</th></tr></thead><tbody></tbody>`;
     const body=table.querySelector('tbody')!;
     const config=(species:AutoSlaughterConfig['species'])=>pendingDraft?.species===species?pendingDraft:current.autoSlaughter?.find(c=>c.species===species)??defaultAutoSlaughterConfig(species);
     const commit=async(next:AutoSlaughterConfig)=>{
@@ -33,7 +33,7 @@ export function updateAutoSlaughterPanel(root:HTMLElement,world:World,send?:Auto
       catch(error){feedback.textContent=error instanceof Error?error.message:String(error);}
       finally{pending=false;pendingDraft=undefined;host.removeAttribute('aria-busy');refresh();}
     };
-    const rows=AUTO_SLAUGHTER_SPECIES.map(species=>{
+    const rows=visibleAutoSlaughterSpecies(current).map(species=>{
       const row=document.createElement('tr');row.dataset.autoSlaughterSpecies=species;
       const name=document.createElement('th');name.scope='row';name.textContent=animalSpecies(species).label;
       const population=document.createElement('td');population.dataset.autoSlaughterPopulation='';
@@ -48,8 +48,9 @@ export function updateAutoSlaughterPanel(root:HTMLElement,world:World,send?:Auto
         cell.append(count,input,infinity);row.append(cell);return {field,count,input,infinity};
       });
       const pregnantCell=document.createElement('td'),pregnantCount=document.createElement('span'),pregnant=document.createElement('input');pregnant.type='checkbox';pregnant.dataset.autoSlaughterPregnant='';pregnant.setAttribute('aria-label',`${animalSpecies(species).label} · autoriser l’abattage des gestantes`);pregnant.onchange=()=>void commit({...config(species),allowPregnant:pregnant.checked});pregnantCell.append(pregnantCount,pregnant);
-      const resetCell=document.createElement('td'),reset=document.createElement('button');reset.type='button';reset.textContent='Réinitialiser';reset.dataset.autoSlaughterReset='';reset.onclick=()=>void commit(defaultAutoSlaughterConfig(species));resetCell.append(reset);row.append(pregnantCell,resetCell);body.append(row);
-      return {species,population,fields,pregnantCount,pregnant,reset};
+      const bondedCell=document.createElement('td'),bonded=document.createElement('input');bonded.type='checkbox';bonded.dataset.autoSlaughterBonded='';bonded.setAttribute('aria-label',animalSpecies(species).label+" : autoriser l'abattage des animaux liés");bonded.onchange=()=>{const next={...config(species)};if(bonded.checked)next.allowBonded382=true;else delete next.allowBonded382;void commit(next);};bondedCell.append(bonded);
+      const resetCell=document.createElement('td'),reset=document.createElement('button');reset.type='button';reset.textContent='Réinitialiser';reset.dataset.autoSlaughterReset='';reset.onclick=()=>void commit(defaultAutoSlaughterConfig(species));resetCell.append(reset);row.append(pregnantCell,...current.schemaVersion>=382?[bondedCell]:[],resetCell);body.append(row);
+      return {species,population,fields,pregnantCount,pregnant,bonded,reset};
     });
     host.querySelector('[data-auto-slaughter-table]')!.replaceChildren(table);
     function refresh(){
@@ -63,10 +64,10 @@ export function updateAutoSlaughterPanel(root:HTMLElement,world:World,send?:Auto
           input.disabled=pending||!dispatch;infinity.disabled=pending||!dispatch;infinity.setAttribute('aria-label',`${animalSpecies(row.species).label} · ${labels[index]} : ${limit===-1?'fixer le maximum à l’effectif actuel':'retirer la limite'}`);
           infinity.setAttribute('aria-pressed',String(limit===-1));
         }
-        row.pregnantCount.textContent=String(counts.pregnant);row.pregnant.checked=policy.allowPregnant;row.pregnant.disabled=pending||!dispatch;row.reset.disabled=pending||!dispatch;
+        row.pregnantCount.textContent=String(counts.pregnant);row.pregnant.checked=policy.allowPregnant;row.pregnant.disabled=pending||!dispatch;row.reset.disabled=pending||!dispatch;row.bonded.checked=policy.allowBonded382===true;row.bonded.disabled=pending||!dispatch;
       }
     }
-    component={update:(next,nextSend)=>{current=next;dispatch=nextSend;refresh();}};controls.set(root,component);
+    component={update:(next,nextSend)=>{const species=visibleAutoSlaughterSpecies(next);if(!pending&&(species.length!==rows.length||species.some((id,index)=>id!==rows[index]?.species))){controls.delete(root);updateAutoSlaughterPanel(root,next,nextSend);return;}current=next;dispatch=nextSend;refresh();}};controls.set(root,component);
   }
   component.update(world,send);
 }

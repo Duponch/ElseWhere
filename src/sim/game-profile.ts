@@ -47,8 +47,8 @@ export interface TutorialLessons349 {
  * Cassandra profile and keeps its ended tutorial record. */
 export interface GameProfile {
   revision:1;
-  storyteller:'cassandra-partial'|'tutor';
-  difficulty:'adventure-story'|'community-builder';
+  storyteller:'cassandra-partial'|'phoebe-partial'|'tutor';
+  difficulty:'adventure-story'|'community-builder'|'strive-to-survive';
   saveMode:'reloadable';
   tutorial347?:TutorialState347;
 }
@@ -73,11 +73,18 @@ export const storytellerIncidents347=(world:ProfileWorld):boolean=>!!world.gameP
 export const alertsDisabled347=(world:ProfileWorld):boolean=>tutorialMode347(world);
 /** A game that began as the tutorial (active or ended). */
 export const tutorialOrigin347=(world:ProfileWorld):boolean=>!!world.gameProfile?.tutorial347;
-/** The two supported creation profiles: Cassandra at Adventure Story, and
- * the tutorial's Tutor at Community builder. */
+/** The currently admitted ordinary profiles plus the tutorial's fixed profile. */
 export function supportedCoreProfile347(p:GameProfile|undefined):boolean {
-  return !!p&&p.revision===1&&p.saveMode==='reloadable'&&(p.storyteller==='cassandra-partial'&&p.difficulty==='adventure-story'||p.storyteller==='tutor'&&p.difficulty==='community-builder');
+  return !!p&&p.revision===1&&p.saveMode==='reloadable'&&((p.storyteller==='cassandra-partial'||p.storyteller==='phoebe-partial')&&(p.difficulty==='adventure-story'||p.difficulty==='community-builder'||p.difficulty==='strive-to-survive')||p.storyteller==='tutor'&&p.difficulty==='community-builder');
 }
+
+/** Core's explicit shared cycle parameters (ThreatBig and ThreatSmall).
+ * Both narrators share the ClassicIntro and the home Misc components. */
+export interface HomeThreatCycle382 {start:number;active:number;cycle:number;spacing:number;bigCount:1|2}
+const CLASSIC_THREATS:Readonly<HomeThreatCycle382>=Object.freeze({start:66000,active:27600,cycle:63600,spacing:11400,bigCount:2});
+const PHOEBE_THREATS:Readonly<HomeThreatCycle382>=Object.freeze({start:78000,active:48000,cycle:96000,spacing:0,bigCount:1});
+export const isPhoebe382=(world:ProfileWorld):boolean=>world.gameProfile?.storyteller==='phoebe-partial';
+export const homeThreatCycle382=(world:ProfileWorld):Readonly<HomeThreatCycle382>=>isPhoebe382(world)?PHOEBE_THREATS:CLASSIC_THREATS;
 
 /** Core DifficultyDef values the simulation reads (Medium "adventure
  * story" and Easy "community builder", Difficulties.xml). Medium keeps the
@@ -91,18 +98,29 @@ const MEDIUM:Readonly<DifficultyValues347>=Object.freeze({colonistMoodOffset:5,p
   enemyDeathOnDownedChanceFactor:1,researchSpeedFactor:1,cropYieldFactor:1,mineYieldFactor:1,adaptationGrowthRateFactorOverZero:.75,scariaRotChance:.333,enemyReproductionRateFactor:.5});
 const EASY:Readonly<DifficultyValues347>=Object.freeze({colonistMoodOffset:10,playerPawnInfectionChanceFactor:.5,foodPoisonChanceFactor:.5,
   enemyDeathOnDownedChanceFactor:.9,researchSpeedFactor:1.2,cropYieldFactor:1.2,mineYieldFactor:1.2,adaptationGrowthRateFactorOverZero:.25,scariaRotChance:0,enemyReproductionRateFactor:.15});
+const ROUGH:Readonly<DifficultyValues347>=Object.freeze({colonistMoodOffset:0,playerPawnInfectionChanceFactor:1,foodPoisonChanceFactor:1,
+  enemyDeathOnDownedChanceFactor:1,researchSpeedFactor:1,cropYieldFactor:1,mineYieldFactor:1,adaptationGrowthRateFactorOverZero:1,scariaRotChance:.6,enemyReproductionRateFactor:1});
 /** The profile's difficulty values; undefined without a creation profile
  * (historical camps keep their own neutral rules). */
 export function difficultyValues347(world:ProfileWorld):Readonly<DifficultyValues347>|undefined {
-  const d=world.gameProfile?.difficulty;return d==='community-builder'?EASY:d==='adventure-story'?MEDIUM:undefined;
+  const d=world.gameProfile?.difficulty;return d==='community-builder'?EASY:d==='adventure-story'?MEDIUM:d==='strive-to-survive'?ROUGH:undefined;
 }
 const easy=(world:ProfileWorld):boolean=>world.gameProfile?.difficulty==='community-builder';
 
+export interface ThreatModifiers382 {threatScale:number;adaptationEffectFactor:number;minimumCeiling:number}
+const EASY_THREATS:Readonly<ThreatModifiers382>=Object.freeze({threatScale:.3,adaptationEffectFactor:1,minimumCeiling:45});
+const ROUGH_THREATS:Readonly<ThreatModifiers382>=Object.freeze({threatScale:1,adaptationEffectFactor:.9,minimumCeiling:70});
+/** O(1), shared immutable values. Medium and the historical tutorial keep
+ * the existing formula, including its deliberately adapted RNG. */
+export const threatModifiers382=(world:ProfileWorld):Readonly<ThreatModifiers382>|undefined=>world.gameProfile?.storyteller==='tutor'?undefined:world.gameProfile?.difficulty==='strive-to-survive'?ROUGH_THREATS:easy(world)?EASY_THREATS:undefined;
+export const diseaseIntervalFactor382=(world:ProfileWorld):number=>world.gameProfile?.difficulty==='strive-to-survive'?1:easy(world)&&world.gameProfile?.storyteller!=='tutor'?2.5:1.5;
+export const extremeWeatherAllowed382=(world:ProfileWorld):boolean=>!easy(world)||world.gameProfile?.storyteller==='tutor';
+
 /** Core Need_Mood: colonistMoodOffset for a colonist or (schema 313) a prisoner of the colony. */
-export const colonistMoodOffset=(world:Pick<World,'gameProfile'>&Partial<Pick<World,'schemaVersion'>>,pawn:Pawn):number=>world.gameProfile&&(isColonist(pawn)||Number(world.schemaVersion)>=313&&!!pawn.prisoner)?(easy(world)?EASY.colonistMoodOffset:MEDIUM.colonistMoodOffset):0;
+export const colonistMoodOffset=(world:Pick<World,'gameProfile'>&Partial<Pick<World,'schemaVersion'>>,pawn:Pawn):number=>world.gameProfile&&(isColonist(pawn)||Number(world.schemaVersion)>=313&&!!pawn.prisoner)?difficultyValues347(world)?.colonistMoodOffset??0:0;
 /** Current Core player-faction multiplier applies when an exposed wound
  * reaches its infection deadline, not when the original wound is received. */
-export const playerInfectionFactor=(world:Pick<World,'gameProfile'>,pawn:Pawn):number=>world.gameProfile&&isColonist(pawn)?(easy(world)?EASY.playerPawnInfectionChanceFactor:MEDIUM.playerPawnInfectionChanceFactor):1;
+export const playerInfectionFactor=(world:Pick<World,'gameProfile'>,pawn:Pawn):number=>world.gameProfile&&isColonist(pawn)?difficultyValues347(world)?.playerPawnInfectionChanceFactor??1:1;
 /** The profile's playerPawnInfectionChanceFactor for a caravan member; 1 without a profile. */
 export const profileInfectionFactor347=(world:ProfileWorld):number=>difficultyValues347(world)?.playerPawnInfectionChanceFactor??1;
 /** Core foodPoisonChanceFactor; 1 without a profile. */
@@ -123,6 +141,6 @@ export function effectiveMineableYield347(world:ProfileWorld,mineableYield:numbe
   return fraction<.5?lower:fraction>.5?lower+1:lower%2===0?lower:lower+1;
 }
 /** Core StoryWatcher_Adaptation: adaptationGrowthRateFactorOverZero. */
-export const adaptationGrowthFactor347=(world:ProfileWorld):number=>easy(world)?EASY.adaptationGrowthRateFactorOverZero:MEDIUM.adaptationGrowthRateFactorOverZero;
+export const adaptationGrowthFactor347=(world:ProfileWorld):number=>difficultyValues347(world)?.adaptationGrowthRateFactorOverZero??MEDIUM.adaptationGrowthRateFactorOverZero;
 /** Both the historical camp and the selected Core difficulty use .40. */
 export const friendlyFireFactor=(_world:Pick<World,'gameProfile'>):number=>.4;

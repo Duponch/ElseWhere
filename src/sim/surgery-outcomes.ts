@@ -36,7 +36,7 @@ export function surgeryProtectedDamage(record:MedicalRecord,part:BodyPartId,dama
 /** Caller awards actual-work XP and revalidates all physical guards first.
  * A successful result leaves anatomy untouched for amputateSurgicalLimb.
  * Failure operates on a clone, with one explicit authoritative random stream. */
-export function resolveSurgeryOutcome(record:MedicalRecord,part:BodyPartId,chance:number,random:MedicalRandom,options:{allowMissingPart?:true}={}):SurgeryOutcome {
+export function resolveSurgeryOutcome(record:MedicalRecord,part:BodyPartId,chance:number,random:MedicalRandom,options:{allowMissingPart?:true;nativeScratch382?:boolean}={}):SurgeryOutcome {
   const missing=partMissing(record,part),parent=BODY_PARTS[part]?.parent;
   const allowedMissing=options.allowMissingPart&&record.missing.some(m=>m.part===part)&&parent&&!partMissing(record,parent);
   if(record.body!==undefined||record.death||!BODY_PARTS[part]||BODY_PARTS[part].conceptual||missing&&!allowedMissing||!Number.isFinite(chance)||chance<0||chance>.98)throw new RangeError('Invalid surgery outcome');
@@ -54,7 +54,7 @@ export function resolveSurgeryOutcome(record:MedicalRecord,part:BodyPartId,chanc
     const amount=remainingPartHealth(next,selected)/HP_UNIT*(.5+.5*draw()),floor=Math.floor(amount);
     const rounded=floor+(draw()<amount-floor?1:0),damage=surgeryProtectedDamage(next,selected,Math.max(3,rounded));if(!damage)break;
     const damageKind=(['cut','scratch','stab','crush'] as const)[Math.floor(draw()*4)]! as SurgeryDamageKind;
-    hits.push(applySurgeryDamage(next,selected,damage,damageKind,draw));left-=damage;
+    hits.push(applySurgeryDamage(next,selected,damage,damageKind,draw,options.nativeScratch382));left-=damage;
   }
   return {kind,record:next,hits};
 }

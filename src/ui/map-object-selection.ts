@@ -1,3 +1,4 @@
+import {isConduitKind} from '../sim/conduit-kinds-382.ts';
 import {geyserAt256,geyserOwnedId256,geyserCells256} from '../sim/local-geyser-state-256';
 import {knownPosition256} from './exploration-readers-256';
 import { footprintCells,footprintContains } from '../sim/definitions';
@@ -19,10 +20,10 @@ const STORAGE_KINDS:ReadonlySet<string>=new Set(['shelf','small-shelf','hopper']
 /** Core AltitudeLayer of the structures that are not ordinary Buildings
  * (GenUI sorts the things of a cell by drawing altitude, highest first). */
 function structureAltitude(kind:string):number {
-  return kind==='wall-lamp'?17:kind==='power-conduit'?5:kind==='door'||kind==='autodoor'?14:15;
+  return kind==='wall-lamp'?17:isConduitKind(kind)?5:kind==='door'||kind==='autodoor'?14:15;
 }
 /** Wall attachments (Core building.isAttachment, Placeworker_AttachedToWall)
- * stand on a free cell but are drawn on the wall in front of them, so a click
+ * occupy the neighbouring cell but are drawn on the wall in front of them, so a click
  * on the wall cell also finds them, above the wall itself. */
 export function wallAttachmentsDrawnAt(world:World,cell:Cell):World['structures'] {
   const found:World['structures']=[];

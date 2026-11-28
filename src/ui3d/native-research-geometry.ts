@@ -8,11 +8,11 @@ import {NATIVE_RESEARCH} from './native-research-metrics';
  * positions of research not yet implemented; never invent prerequisites. */
 export {NATIVE_RESEARCH};
 const positions:Record<ResearchProject,readonly [number,number]>={
-  'tree-sowing':[0,0],'recurve-bow':[0,.7],stonecutting:[0,1.4],devilstrand:[0,2.8],
+  'tree-sowing':[0,0],'recurve-bow':[0,.7],stonecutting:[0,1.4],'passive-cooler':[0,2.1],devilstrand:[0,2.8],
   brewing:[0,3.5],'complex-furniture':[0,4.2],'complex-clothing':[0,4.9],
   greatbow:[1,.7],pemmican:[1,1.4],'carpet-making':[1,2.1],smithing:[1,3.5],
   'drug-production':[2,0],'plate-armor':[2,5.6],'penoxycyline-production':[3,2.8],'long-blades':[3,5.6],
-  machining:[5,3.5],autodoors:[6,.3],batteries:[6,.9],hydroponics:[6,1.5],'air-conditioning':[6,2.1],
+  electricity:[4,3],machining:[5,3.5],autodoors:[6,.3],batteries:[6,.9],hydroponics:[6,1.5],'air-conditioning':[6,2.1],
   gunsmithing:[6,3.4],'flak-armor':[6,4.1],ieds:[7,.9],firefoam:[7,1.5],'solar-power':[7,2.1],
   'biofuel-refining':[7,2.7],'blowback-operation':[7,3.4],prosthetics:[7,4.8],
   'sterile-materials':[8,.9],'nutrient-paste':[8,1.5],'gun-turrets':[8,4.1],
@@ -33,7 +33,7 @@ const ids=new Set<ResearchProject>(researchProjects.map(project=>project.id));
  * prerequisite to the left centre of the project. Hidden prerequisites are
  * still enforced by the simulation and listed in the project dossier. */
 export const coreResearchLinks=researchProjects.flatMap(project=>
-  RESEARCH_PREREQUISITES[project.id].visible.filter((parent):parent is ResearchProject=>parent!=='electricity'&&ids.has(parent)).map(parent=>{
+  RESEARCH_PREREQUISITES[project.id].visible.filter(parent=>ids.has(parent)).map(parent=>{
     const from=coreResearchNodePosition(parent),to=coreResearchNodePosition(project.id),g=NATIVE_RESEARCH;
     return {from:parent,to:project.id,path:[{x:from.x+g.nodeWidth,y:from.y+g.nodeHeight/2},{x:to.x,y:to.y+g.nodeHeight/2}]};
   }));

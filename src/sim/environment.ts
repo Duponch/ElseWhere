@@ -60,18 +60,20 @@ export function annualNaturalLight(world:ClimateWorld,tick=world.tick):number {
 // Shared immutable annual table: one profile, ~2.9MB, O(1) interval queries.
 // No plant/map scan on lookup and no accumulated authoritative growth cache.
 const yearlyPrefixes=new Map<number,Float64Array>();
-function annualPrefix(latitude:number):Float64Array {
-  const cached=yearlyPrefixes.get(latitude);if(cached)return cached;
+const tinctoriaYearlyPrefixes=new Map<number,Float64Array>();
+function annualPrefix(latitude:number,minGlow=.51):Float64Array {
+  const prefixes=minGlow===.51?yearlyPrefixes:tinctoriaYearlyPrefixes;
+  const cached=prefixes.get(latitude);if(cached)return cached;
   const values=new Float64Array(TICKS_PER_YEAR+1);
   for(let tick=1;tick<=TICKS_PER_YEAR;tick++) {
     const phase=tick%TICKS_PER_DAY/TICKS_PER_DAY;
-    const light=phase>=.25&&phase<=.8?Math.max(0,(seasonalNaturalLight(latitude,tick)-.51)/.49):0;
+    const light=phase>=.25&&phase<=.8?Math.max(0,(seasonalNaturalLight(latitude,tick)-minGlow)/(1-minGlow)):0;
     values[tick]=values[tick-1]!+light;
   }
   // New geographical starts add real latitudes. Keep the derived annual
   // tables bounded across repeated new games; eviction never alters values.
-  if(yearlyPrefixes.size>=8)yearlyPrefixes.delete(yearlyPrefixes.keys().next().value!);
-  yearlyPrefixes.set(latitude,values);return values;
+  if(prefixes.size>=8)prefixes.delete(prefixes.keys().next().value!);
+  prefixes.set(latitude,values);return values;
 }
 
 export function annualGrowingLightIntegral(world:ClimateWorld,tick=world.tick):number {
@@ -85,18 +87,39 @@ export function annualGrowingLightIntegral(world:ClimateWorld,tick=world.tick):n
   return base-eclipseGrowingLightLoss(world,tick)-volcanicGrowingLightLoss310(world,tick);
 }
 
+let tinctoriaDayPrefix:Float64Array|undefined;
+/** Core Tinctoria's 30% minimum glow. Only its growth reads create the
+ * derived prefixes; ordinary crops retain the original fixed profile. */
+export function tinctoriaGrowingLightIntegral382(world:ClimateWorld,tick=world.tick):number {
+  const civil=climateTick(world,tick);let base:number;
+  if(world.climate){
+    const values=annualPrefix(siteClimateDefinition(world).latitude,.3),years=Math.floor(civil/TICKS_PER_YEAR),remainder=civil-years*TICKS_PER_YEAR;
+    base=years*values[TICKS_PER_YEAR]!+values[remainder]!;
+  }else{
+    if(!tinctoriaDayPrefix){const values=new Float64Array(TICKS_PER_DAY+1);for(let t=1;t<=TICKS_PER_DAY;t++){
+      const phase=t%TICKS_PER_DAY/TICKS_PER_DAY;
+      values[t]=values[t-1]!+(phase>=.25&&phase<=.8?Math.max(0,(naturalLight(t)-.3)/.7):0);
+    }tinctoriaDayPrefix=values;}
+    const days=Math.floor(civil/TICKS_PER_DAY),remainder=civil-days*TICKS_PER_DAY;
+    base=days*tinctoriaDayPrefix[TICKS_PER_DAY]!+tinctoriaDayPrefix[remainder]!;
+  }
+  return base-eclipseGrowingLightLoss(world,tick,.3)-volcanicGrowingLightLoss310(world,tick,.3);
+}
+
 /** Schema 310 volcanic winter: the growth lost to the darker sky, as a prefix
  * table over the condition's own ticks (at most 240,001 doubles, ~1.9 MB per
  * live World, built once). Plants are checkpointed at its start and end. */
 interface VolcanicLoss {startCore:number;endCore:number;civilStart:number;latitude:number|undefined;values:Float64Array}
 const volcanicLosses=new WeakMap<object,VolcanicLoss>();
-function volcanicGrowingLightLoss310(world:ClimateWorld,tick:number):number {
+const tinctoriaVolcanicLosses=new WeakMap<object,VolcanicLoss>();
+function volcanicGrowingLightLoss310(world:ClimateWorld,tick:number,minGlow=.51):number {
   const v=world.miscIncidents?.volcanicWinter310;
   if(!v)return 0;
   const start=v.startCore/10,duration=Math.ceil((v.endCore-v.startCore)/10);
   if(tick<=start)return 0;
   const civilStart=climateTick(world,start),latitude=world.climate?siteClimateDefinition(world).latitude:undefined;
-  let cached=volcanicLosses.get(world);
+  const losses=minGlow===.51?volcanicLosses:tinctoriaVolcanicLosses;
+  let cached=losses.get(world);
   if(!cached||cached.startCore!==v.startCore||cached.endCore!==v.endCore||cached.civilStart!==civilStart||cached.latitude!==latitude){
     const values=new Float64Array(duration+1);
     for(let offset=1;offset<=duration;offset++){
@@ -104,11 +127,11 @@ function volcanicGrowingLightLoss310(world:ClimateWorld,tick:number):number {
       let loss=0;
       if(phase>=.25&&phase<=.8){
         const base=latitude===undefined?naturalLight(civil):seasonalNaturalLight(latitude,civil);
-        loss=Math.max(0,(base-.51)/.49)-Math.max(0,(volcanicGlow310(base,volcanicWinterStrength310(world,start+offset))-.51)/.49);
+        loss=Math.max(0,(base-minGlow)/(1-minGlow))-Math.max(0,(volcanicGlow310(base,volcanicWinterStrength310(world,start+offset))-minGlow)/(1-minGlow));
       }
       values[offset]=values[offset-1]!+loss;
     }
-    cached={startCore:v.startCore,endCore:v.endCore,civilStart,latitude,values};volcanicLosses.set(world,cached);
+    cached={startCore:v.startCore,endCore:v.endCore,civilStart,latitude,values};losses.set(world,cached);
   }
   return cached.values[Math.min(duration,tick-start)]!;
 }
@@ -118,7 +141,8 @@ interface EclipseLoss {start:number;end:number;civilStart:number;latitude:number
 // visits ticks of this single bounded event, never plants or elapsed history.
 // All subsequent growth queries and interval clips are O(1); JSON saves omit it.
 const eclipseLosses=new WeakMap<object,EclipseLoss>();
-function eclipseGrowingLightLoss(world:ClimateWorld&EclipseWorld,tick:number):number {
+const tinctoriaEclipseLosses=new WeakMap<object,EclipseLoss>();
+function eclipseGrowingLightLoss(world:ClimateWorld&EclipseWorld,tick:number,minGlow=.51):number {
   const interval=world.miscIncidents?.weather?.eclipse;
   if(!interval)return 0;
   if(tick<=interval.start)return 0;
@@ -126,7 +150,8 @@ function eclipseGrowingLightLoss(world:ClimateWorld&EclipseWorld,tick:number):nu
   if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||duration<=0||duration>ECLIPSE_MAX_DURATION)
     throw new Error('Invalid bounded eclipse interval');
   const civilStart=climateTick(world,start),latitude=world.climate?siteClimateDefinition(world).latitude:undefined;
-  let cached=eclipseLosses.get(world);
+  const losses=minGlow===.51?eclipseLosses:tinctoriaEclipseLosses;
+  let cached=losses.get(world);
   if(!cached||cached.start!==start||cached.end!==end||cached.civilStart!==civilStart||cached.latitude!==latitude) {
     const values=new Float64Array(duration+1);
     for(let offset=1;offset<=duration;offset++) {
@@ -134,11 +159,11 @@ function eclipseGrowingLightLoss(world:ClimateWorld&EclipseWorld,tick:number):nu
       let loss=0;
       if(phase>=.25&&phase<=.8) {
         const base=latitude===undefined?naturalLight(civil):seasonalNaturalLight(latitude,civil);
-        loss=Math.max(0,(base-.51)/.49)-Math.max(0,(base*eclipseLightFactor(world,start+offset)-.51)/.49);
+        loss=Math.max(0,(base-minGlow)/(1-minGlow))-Math.max(0,(base*eclipseLightFactor(world,start+offset)-minGlow)/(1-minGlow));
       }
       values[offset]=values[offset-1]!+loss;
     }
-    cached={start,end,civilStart,latitude,values};eclipseLosses.set(world,cached);
+    cached={start,end,civilStart,latitude,values};losses.set(world,cached);
   }
   return cached.values[Math.min(duration,tick-start)]!;
 }

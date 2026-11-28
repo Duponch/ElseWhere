@@ -2,6 +2,7 @@ import {isJoyTableKind354,JOY_TABLES_354} from './joy-tables-354.ts';import {STR
 import {isShipCasketKind277,SHIP_CASKET_CONTENT_277} from './ship-casket-content-277.ts';
 import {isIedTrapKind357,IED_COMMON_357} from './ied-traps-357.ts';
 import {SCHEMA_VERSION} from './types.ts';
+import {BARRICADE_382,barricadeStuff382} from './barricade-382.ts';
 import {hasSmoothedStoneSubstrate281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
 import {naturalWallBeauty373,isRockBeautySchema373} from './rock-beauty-373.ts';
 import {isShipPartKind276} from './ship-part-content-276.ts';
@@ -57,7 +58,7 @@ export function filthBeauty(filth:Pick<BeautyFilth,'kind'>,outdoors=false):numbe
 }
 export function groundObjectBeauty(object:BeautyObject):number {return object.visible===false?0:object.beauty??-4;}
 /** Schema 311: Core Beauty of power buildings that had none here. */
-const POWER_BEAUTY311:Readonly<Record<string,number>>=Object.freeze({'wind-turbine':-12,battery:-15,'wood-generator':-20,'power-conduit':-2,'power-switch':-2});
+const POWER_BEAUTY311:Readonly<Record<string,number>>=Object.freeze({'wind-turbine':-12,battery:-15,'wood-generator':-20,'power-conduit':-2,'hidden-conduit':0,'power-switch':-2});
 export function structureBeauty(structure:BeautyStructure,version:number=SCHEMA_VERSION):number {
   const v311=Number(version)>=311;
   if(v311&&Object.hasOwn(POWER_BEAUTY311,structure.kind))return POWER_BEAUTY311[structure.kind]!;
@@ -79,6 +80,7 @@ export function structureBeauty(structure:BeautyStructure,version:number=SCHEMA_
   // Schema 355 ToolCabinet: no Beauty stat and steel is a fixed cost, not its stuff.
   if(structure.kind==='tool-cabinet')return 0;
   if(structure.kind==='sandbags'||structure.kind==='ancient-road-barrier')return -10;
+  if(structure.kind==='barricade')return coreBeauty311(BARRICADE_382.beauty,1,barricadeStuff382(structure.material)?.beautyOffset??0,1);
   if(structure.kind==='ancient-road-lamp')return 0;
   if(isJoyTableKind354(structure.kind)){
     // Schema 354: Beauty 0 (2 for the Game of Ur board), stuff factor and offset, quality factor when the def has CompQuality.

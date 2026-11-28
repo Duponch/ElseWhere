@@ -11,7 +11,7 @@ import {RESEARCH_PARENT_LABELS,RESEARCH_PREREQUISITES,type ResearchParent} from 
 const nodeIds=new Set<ResearchProject>(researchProjects.map(project=>project.id));
 const enforcedParents=(project:ResearchProject):ResearchParent[]=>{const p=RESEARCH_PREREQUISITES[project];return [...p.visible,...p.hidden];};
 export const researchLinks:readonly (readonly [ResearchProject,ResearchProject])[]=Object.freeze(researchProjects.flatMap(project=>
-  enforcedParents(project.id).filter((parent):parent is ResearchProject=>parent!=='electricity'&&nodeIds.has(parent)).map(parent=>Object.freeze([parent,project.id] as const))));
+  enforcedParents(project.id).filter(parent=>nodeIds.has(parent)).map(parent=>Object.freeze([parent,project.id] as const))));
 export const RESEARCH_NODE_WIDTH=142,RESEARCH_NODE_HEIGHT=66,RESEARCH_GRAPH_WIDTH=850;
 export const RESEARCH_GRAPH_HEIGHT=Math.ceil(Math.max(740,...researchProjects.map(project=>22+(project.y-20)*.66+RESEARCH_NODE_HEIGHT+22)));
 export const researchNodePosition=(project:Pick<ProjectNode,'x'|'y'>)=>({x:20+(project.x-24)*.82,y:22+(project.y-20)*.66});

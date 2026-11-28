@@ -7,7 +7,7 @@ export type ResidentCropKind=typeof RESIDENT_CROP_KINDS[number];
 export const isResidentCrop=(r:Pick<Resource,'kind'>):boolean=>(RESIDENT_CROP_KINDS as readonly string[]).includes(r.kind);
 export const isMedicinalPlant=(r:Pick<Resource,'kind'|'species'>):boolean=>r.kind==='healroot'||r.species==='healroot-wild';
 /** The original four visible steps, with the original arithmetic order. */
-export const floraSize=(world:World,r:Resource,readGrowth?:()=>number):number=>!r.species&&!isMedicinalPlant(r)?1:(r.growth??1)===1?1:.3+.7*Math.ceil((readGrowth?readGrowth():plantGrowth(world,r))*4)/4;
+export const floraSize=(world:World,r:Resource,readGrowth?:()=>number):number=>!r.species&&!isMedicinalPlant(r)&&r.kind!=='tinctoria'?1:(r.growth??1)===1?1:.3+.7*Math.ceil((readGrowth?readGrowth():plantGrowth(world,r))*4)/4;
 
 export interface NaturalVisualUpsert {
   readonly id:number;

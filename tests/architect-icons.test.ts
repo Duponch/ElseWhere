@@ -15,8 +15,10 @@ describe('Architect generated icon atlases', () => {
     // Schema 354 adds the four joy tables; schema 355 the tool cabinet and the 63 Core carpet colours; schema 357 the two IED traps; schema 363 the 3×3 table, the double sleeping spot, the double bedroll and the wall lamp; schema 365 the couch and straw matting.
     // Schema 367 adds the wall smoothing tools (Orders and Structure).
     // Schema 369 adds the two plan tools; schema 374 the egg box.
-    expect(rendered).toHaveLength(205);
-    expect(new Set(rendered).size).toBe(205);
+    // Schema 382: the distinct hidden conduit and barricade.
+    expect(rendered).toHaveLength(207);
+    expect(new Set(rendered).size).toBe(207);
+    expect(rendered).toContain('hidden-conduit');expect(rendered).toContain('barricade');
     expect(rendered).toContain('spike-trap');
     expect(rendered).toContain('double-bed');
     expect(rendered).toContain('mini-turret');

@@ -204,6 +204,7 @@ function carried(w:World,p:Pawn,task:AnimalHandlingTask) {
 /** A wild animal joins the colony: the conversion of a successful taming,
  * also used by the schema 305 self-tame and farm animal incidents. */
 export function adoptAsColonyAnimal(w:World,a:WildAnimal):void {
+  delete a.exitAtCore382;
   if(isSchema287OrLater(w.schemaVersion)){delete a.animalThermalRefuge288;delete a.animalMapAreas287;delete a.animalAreaReturn287;}tameHiveInsect256(w,a);a.domestic={since:w.tick,care:'herbal',tameness:MAX_TAMENESS,nextDecay:w.tick+TAMENESS_DECAY,lastTraining:w.tick,...(productKind(a)?{productFullness:0}:{})};
   delete a.taming;delete a.flee;delete a.threat;delete a.retaliation;
   if(w.hunting)w.hunting.targets=w.hunting.targets.filter(id=>id!==a.id);

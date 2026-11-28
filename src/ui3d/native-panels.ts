@@ -46,7 +46,7 @@ import {productKind,productFullness} from '../sim/animal-products';
 import {animalPenStatus} from '../ui/pen-status';
 import {supportsAnimalAreas287,currentAnimalAreaChoice287} from '../sim/animal-area-policy-287';
 import type {AnimalAreaChoice287} from '../sim/animal-area-state-287';
-import {AUTO_SLAUGHTER_SPECIES,defaultAutoSlaughterConfig,type AutoSlaughterConfig,type AutoSlaughterSpecies} from '../sim/auto-slaughter-state';
+import {visibleAutoSlaughterSpecies,defaultAutoSlaughterConfig,type AutoSlaughterConfig,type AutoSlaughterSpecies} from '../sim/auto-slaughter-state';
 import {autoSlaughterCounts,autoSlaughterTargets} from '../sim/auto-slaughter';
 import {buildNativeResearch,resetNativeResearch} from './native-research';
 import {expectationForWealth} from '../sim/expectations';
@@ -329,6 +329,7 @@ function quotaEditor(species:AutoSlaughterSpecies):void {
   row('quota-help','Limites',undefined,'−1 signifie sans limite. Les plus âgés excédentaires sont désignés ; le travail reste physique. Les désignations manuelles sont indépendantes.'),
   ...fields.map(([key,label]):NativeRow=>({id:`quota-${key}`,label,input:{value:String(draft[key]),kind:'number',onCommit:value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n< -1)throw Error('Limite entière supérieure ou égale à −1 requise.');draft={...draft,[key]:n};}}})),
   row('quota-pregnant','Inclure les femelles gestantes',draft.allowPregnant?'Oui':'Non',undefined,[button('quota-pregnant-toggle',draft.allowPregnant?'Oui':'Non',()=>{draft={...draft,allowPregnant:!draft.allowPregnant};open(make());},{active:draft.allowPregnant})]),
+  ...(currentWorld().schemaVersion>=382?[row('quota-bonded','Inclure les animaux liés',draft.allowBonded382?'Oui':'Non',undefined,[button('quota-bonded-toggle',draft.allowBonded382?'Oui':'Non',()=>{if(draft.allowBonded382)delete draft.allowBonded382;else draft.allowBonded382=true;open(make());},{active:!!draft.allowBonded382})])]:[]),
  ],[button('quota-apply','Appliquer',async()=>{await send({type:'auto-slaughter-policy',config:{...draft}});back();})]);open(make());
 }
 type AnimalTableKind='animals'|'wildlife';
@@ -388,7 +389,7 @@ function filteredTableAnimals(kind:AnimalTableKind,world:World,animals:TableAnim
 function animalQuotaOverview():void {openLive(animalQuotaOverviewPage);}
 function animalQuotaOverviewPage():NativePage {
  const world=currentWorld(),rows:NativeRow[]=[{id:'quotas-headings',label:'Espèce',value:'Total',compact:true,columns:['Adultes ♂','Adultes ♀','Jeunes ♂','Jeunes ♀','Gestantes','Limite','Modifier'].map(label=>({label}))}];
- for(const species of AUTO_SLAUGHTER_SPECIES){const counts=autoSlaughterCounts(world,species),config=world.autoSlaughter?.find(row=>row.species===species)??defaultAutoSlaughterConfig(species);
+ for(const species of visibleAutoSlaughterSpecies(world)){const counts=autoSlaughterCounts(world,species),config=world.autoSlaughter?.find(row=>row.species===species)??defaultAutoSlaughterConfig(species);
   rows.push({id:`quota-${species}`,label:animalSpecies(species).label,value:String(counts.total),compact:true,presentation:'plain',controls:[...[[counts.males,'males'],[counts.females,'females'],[counts.malesYoung,'males-young'],[counts.femalesYoung,'females-young'],[counts.pregnant,'pregnant'],[config.maxTotal<0?'∞':config.maxTotal,'limit']].map(([value,suffix])=>animalFact(`quota-${species}-${suffix}`,String(value))),animalTableButton(`quota-${species}-edit`,'Quotas',()=>quotaEditor(species))]});
  }
  const page=detailPage('animals-quotas','Abattage automatique',rows);page.layout='table';page.width=1140;return page;
@@ -875,6 +876,10 @@ function menuPanel(state:NativeUiState,actions:NativeUiActions):NativePage {
  if(world&&tutorialMode347(world))rows.push(compact('menu-storyteller','Narrateur : Tuteur (tutoriel)',[
   menuAction('menu-choose-storyteller','Choisir Cassandra Classique · Récit d’aventure',fresh=>{if(fresh.world&&tutorialMode347(fresh.world))return send({type:'choose-storyteller',storyteller:'cassandra-partial',difficulty:'adventure-story'});},state.busy),
  ],'Pendant le tutoriel, aucun incident ni alerte, difficulté Bâtisseur de communauté. Choisir le narrateur termine le tutoriel : raids, visiteurs, maladies et autres événements commencent à partir de maintenant.'));
+ else if(world?.gameProfile&&(world.gameProfile.storyteller==='phoebe-partial'||world.gameProfile.difficulty!=='adventure-story')){
+  const narrator=world.gameProfile.storyteller==='phoebe-partial'?'Phoebe la relax':'Cassandra Classique',difficulty=world.gameProfile.difficulty==='community-builder'?'Bâtisseur de communauté':world.gameProfile.difficulty==='strive-to-survive'?'Lutte pour la survie':'Récit d’aventure';
+  rows.push(compact('menu-storyteller',`Narrateur : ${narrator}`,[],`${difficulty} · Paramètres actifs de la partie.`));
+ }
  const saved=state.saves,named=saved.filter(save=>save.kind==='named').length,automatic=saved.filter(save=>save.kind==='auto').length;
  rows.push(compact('menu-saves','Sauvegardes',[
   ...(actions.openSaveManager?[menuAction('native-manage-saves','Gérer les sauvegardes',()=>host?.openSaveManager?.(),state.busy)]:[]),

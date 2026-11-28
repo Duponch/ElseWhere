@@ -55,11 +55,15 @@ describe('item 9 · baby animals use Core drawSize per life stage',()=>{
     expect(animalStageDrawScale('muffalo',adultAgeTicks('muffalo'))).toBe(1);
     expect(animalStageDrawScale('duck',0)).toBeCloseTo(.45/.87,12);
   });
-  test('every species keeps baby < juvenile < adult and no baby is drawn below 0.45 of its adult',()=>{
-    expect(ANIMAL_SPECIES_IDS).toHaveLength(53);
+  test('every species keeps baby < juvenile < adult, including the smaller Core goat and pig babies',()=>{
+    expect(ANIMAL_SPECIES_IDS).toHaveLength(56);
     for(const species of ANIMAL_SPECIES_IDS){
       const baby=animalStageDrawScale(species,0),juvenile=animalStageDrawScale(species,juvenileAgeTicks(species)),adult=animalStageDrawScale(species,adultAgeTicks(species));
-      expect(adult,species).toBe(1);expect(baby,species).toBeGreaterThanOrEqual(.45);expect(baby,species).toBeLessThan(juvenile);expect(juvenile,species).toBeLessThan(1);
+      expect(adult,species).toBe(1);expect(baby,species).toBeLessThan(juvenile);expect(juvenile,species).toBeLessThan(1);
+      if(species==='goat'){expect(baby).toBeCloseTo(.6/1.42,12);expect(juvenile).toBeCloseTo(1.15/1.42,12);}
+      else if(species==='pig'){expect(baby).toBeCloseTo(.6/1.6,12);expect(juvenile).toBeCloseTo(1.15/1.6,12);}
+      else if(species==='thrumbo'){expect(baby).toBeCloseTo(2.5/4.8,12);expect(juvenile).toBeCloseTo(4/4.8,12);}
+      else expect(baby,species).toBeGreaterThanOrEqual(.45);
       expect(animalStageIndex(species,0)).toBe(0);
     }
   });

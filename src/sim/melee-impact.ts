@@ -11,7 +11,7 @@ export interface MeleeImpact { damage:number;kind:MeleeDamage;part?:BodyPartId }
 export interface MeleeImpactResult {record:MedicalRecord;selected:BodyPartId|null;layers:ResolvedInjury[];stun:boolean;totalDamageDealt:number}
 /** Unarmored natural adult. Independent resolution, explicit random stream;
  * actor, XP, cadence and attack commands belong to the combat controller. */
-export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,random:()=>number,protect?:ImpactProtection,smallPawn324=false):MeleeImpactResult {
+export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,random:()=>number,protect?:ImpactProtection,smallPawn324=false,nativeScratch382=false):MeleeImpactResult {
   if(hit.kind==='toxic-bite')hit={...hit,kind:'bite'};
   const model=medicalModel(record),{parts:HUMAN_BODY,byId:BODY_PARTS,index:BODY_INDEX,coverage:BODY_COVERAGE}=model,PART_INJURY_RULES=injuryPartRules(model,record);
   if(!Number.isFinite(hit.damage)||hit.damage<0||hit.damage>1000000||!['blunt','poke','bite','cut','stab','scratch'].includes(hit.kind)||hit.part!==undefined&&(!modelHasPart(model,hit.part)||BODY_PARTS[hit.part].conceptual||BODY_PARTS[hit.part].depth!=='outside'))throw new RangeError('Invalid melee impact');
@@ -27,7 +27,7 @@ export function resolveUnarmoredMelee(record:MedicalRecord,hit:MeleeImpact,rando
   if((hit.kind==='poke'||hit.kind==='stab')&&draw()<(hit.kind==='stab'?.6:.4))first=select(id=>BODY_PARTS[id].depth==='inside'&&isWithinPart(id,first!,model))??first;
   result.selected=first;
   let guarded:ReturnType<ImpactProtection>|undefined,last:BodyPartId=first;
-  const kind=(id:BodyPartId):InjuryKind=>PART_INJURY_RULES[id].solid?'crack':!guarded?.converted&&hit.kind==='scratch'?'cut':!guarded?.converted&&(hit.kind==='bite'||hit.kind==='cut'||hit.kind==='stab')?hit.kind:PART_INJURY_RULES[id].skin?'bruise':'crush';
+  const kind=(id:BodyPartId):InjuryKind=>PART_INJURY_RULES[id].solid?'crack':!guarded?.converted&&hit.kind==='scratch'?(nativeScratch382?'scratch':'cut'):!guarded?.converted&&(hit.kind==='bite'||hit.kind==='cut'||hit.kind==='stab')?hit.kind:PART_INJURY_RULES[id].skin?'bruise':'crush';
   const add=(id:BodyPartId,damage:number)=>{
     last=id;const severity=Math.round(damage*HP_UNIT),hp=remainingPartHealth(next,id)/HP_UNIT;
     if(severity>0){const layer={part:id,kind:kind(id),severity};result.layers.push(layer);delete next.death;addResolvedInjuryBatch(next,[layer],draw);}

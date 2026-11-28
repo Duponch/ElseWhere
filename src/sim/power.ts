@@ -25,8 +25,8 @@ export function reconcilePower(world:World):void {
     // Clear before the balanced-network fast path. The player's actual switch
     // and connection survive the night; morning still uses ordinary startup.
     if(s.kind==='sun-lamp'&&!sunLampScheduled(world))p.on=false;
-    if(p.parentId===null||!validPowerParent(topology,s,p.parentId)) {
-      const parent=bestPowerParent(topology,s);
+    if(p.parentId===null||!validPowerParent(topology,s,p.parentId,world.schemaVersion)) {
+      const parent=bestPowerParent(topology,s,undefined,world.schemaVersion);
       if(parent!==p.parentId){p.parentId=parent;p.on=false;}
       if(parent===null)p.on=false;
     }

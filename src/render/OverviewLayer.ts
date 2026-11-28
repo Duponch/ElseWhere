@@ -14,7 +14,7 @@ import { syncTerrainPaintUvs } from './TerrainLayer';
 import { OverviewBatch,configureOverviewMaterial } from './OverviewBatch';
 
 type OverviewKind='tree'|'berries'|'wild-plant'|'rock';
-const overviewKind=(r:Resource):OverviewKind=>r.kind==='healroot'?'wild-plant':r.kind as OverviewKind;
+const overviewKind=(r:Resource):OverviewKind=>r.kind==='healroot'||r.kind==='tinctoria'?'wild-plant':r.kind as OverviewKind;
 
 /** Resident distant representation. Switching zoom never rebuilds geometry.
  * Terrain keeps its exact heights/colors. Tiny fruit/branches yield to silhouettes. */
@@ -129,7 +129,7 @@ export class OverviewLayer {
       const width=r.kind==='tree'?0.8+n*0.32:medicinal?.3:0.45,size=observation?.size??floraSize(world,r);
       const support=hydroponicFloraHeight(world,r);
       this.transform.position.set(r.x,support?height*size/2+support:height*size/2,r.z);this.transform.rotation.set(0,n*Math.PI*2,0);this.transform.scale.set(width*size,height*size,width*size);this.transform.updateMatrix();
-      mesh.setMatrixAt(slot,this.transform.matrix);this.tint.setHex((r.species||medicinal)&&r.kind!=='tree'?floraColor(r):r.kind==='tree'?0xffffff:r.kind==='rock'?(r.stone?stoneColor(r.stone):0x92998d):0x697b55);mesh.setColorAt(slot,this.tint);
+      mesh.setMatrixAt(slot,this.transform.matrix);this.tint.setHex((r.species||medicinal||r.kind==='tinctoria')&&r.kind!=='tree'?floraColor(r):r.kind==='tree'?0xffffff:r.kind==='rock'?(r.stone?stoneColor(r.stone):0x92998d):0x697b55);mesh.setColorAt(slot,this.tint);
       this.slots.set(r.id,{kind,slot,signature});
     }
     for(const kind of dirty) {const mesh=this.batches.get(kind)!;mesh.instanceMatrix.needsUpdate=true;mesh.colorBuffer.needsUpdate=true;mesh.computeBoundingSphere();}

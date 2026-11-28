@@ -2,6 +2,7 @@ import {validCollapsedRock256,excavatedCollapsedRock256,admittedRoofTerrain256} 
 import type {Tile} from './types.ts';
 import {terrainBridgeable256} from './natural-terrain-runtime-256.ts';
 import {footprintContains} from './definitions.ts';
+import {barricadeStuff382} from './barricade-382.ts';
 import type {Cell,Job,World,StructureKind} from './types.ts';
 export const BRIDGE_SCHEMA_VERSION=247;
 export const BRIDGE_WOOD=12;
@@ -56,7 +57,7 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'animal-sleeping-spot':'Light',
   'crafting-spot':'Light',
   'butcher-spot':'Light',
-  'power-conduit':'Light',
+  'power-conduit':'Light','hidden-conduit':'Light',
   'power-switch':'Light',
   'standing-lamp':'Light',
   'sun-lamp':'Light',
@@ -70,7 +71,7 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
   'tube-television':'Light',
   'spike-trap':'Light',
   'ied-high-explosive':'Light','ied-incendiary':'Light',
-  'sandbags':'Light',
+  'sandbags':'Light','barricade':'Stuff',
   'small-sculpture':'Light',
   'large-sculpture':'Light',
   'hopper':'Light',
@@ -117,6 +118,7 @@ export const BUILDING_SUPPORT:Readonly<Record<StructureKind,'Light'|'Medium'|'He
 /** Only wall:legacy may omit Stuff in a valid current save; its existing
  * recipe and HP rules already interpret that immutable form as wood. */
 export function buildingSupportNeed256(entity:{kind:string;material?:unknown}):'Light'|'Medium'|'Heavy'|'Diggable'|undefined {
+ if(entity.kind==='barricade')return barricadeStuff382(entity.material)?.support;
  const need=BUILDING_SUPPORT[entity.kind as StructureKind];if(need==='None')return undefined;if(need!=='Stuff')return need;
  if(entity.material==='wood'||entity.kind==='wall'&&entity.material===undefined)return 'Light';if(entity.material==='steel')return 'Medium';
  return typeof entity.material==='string'&&['granite-blocks','limestone-blocks','marble-blocks','sandstone-blocks','slate-blocks'].includes(entity.material)?'Heavy':undefined;

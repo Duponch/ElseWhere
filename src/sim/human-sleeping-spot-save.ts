@@ -110,8 +110,8 @@ function validTransport(w:World,version:number,structures?:StructureProvenanceRe
     for(const spot of grounds)for(const c of footprintCells(spot)){
       const key=c.z*w.width+c.x;if(occupied.has(key))return false;occupied.add(key);
       if(!w.tiles[key]||['water','rock'].includes(w.tiles[key]!.terrain)||w.resources.some(r=>same(c,r)&&['rock','tree'].includes(r.kind))
-        ||w.structures.some(s=>s!==spot&&sharesConstructionLayer(s.kind,spot.kind)&&footprintCells(s).some(d=>same(c,d)))
-        ||w.jobs.some(j=>isConstruction(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,spot.kind)&&footprintCells(j).some(d=>same(c,d))))return false;
+        ||w.structures.some(s=>s!==spot&&sharesConstructionLayer(s.kind,spot.kind,version,s.orientation,spot.orientation)&&footprintCells(s).some(d=>same(c,d)))
+        ||w.jobs.some(j=>isConstruction(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,spot.kind,version,j.orientation,spot.orientation)&&footprintCells(j).some(d=>same(c,d))))return false;
     }
     const assignments=new Set<number>(),claims=new Set<number>();
     const claim=(id:number)=>{if(claims.has(id))return false;claims.add(id);return true;};

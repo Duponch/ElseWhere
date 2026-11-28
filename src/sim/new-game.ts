@@ -42,6 +42,7 @@ import { crashlandedHumanAge } from './human-age.ts';
 import { initializeCampTraits } from './traits.ts';
 import { adoptEnvironment } from './environment-step.ts';
 import {giveCrashlandedStartThoughts343,grantClassicStartResearch343} from './crashlanded-start-343.ts';
+import {grantFoundationalResearch382} from './foundational-research-382.ts';
 import type { Cell,World } from './types.ts';
 import { enableBiomeWildlife,enableWildlife } from './wildlife.ts';
 
@@ -113,6 +114,7 @@ function survivalStart(world:World,commerce=false,party?:StartingParty):{landing
   const possessionPiles=world.piles.length;
   for(const {item,quantity} of possessions)addMaterial(world,ITEM_DEFINITIONS[item].kind,quantity,{type:'ground',...cells[cursor++]!},item);
   world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0}};
+  if(world.schemaVersion>=382)grantFoundationalResearch382(world.research);
   return {landing,pawnIds,transportedPileIds:world.piles.slice(firstPile,possessionPiles).filter(p=>p.item!=='wood'&&p.item!=='steel').map(p=>p.id)};
 }
 

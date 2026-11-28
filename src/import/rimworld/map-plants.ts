@@ -18,14 +18,16 @@ export const PLANT_MAP:Readonly<Record<string,DefMapping<PlantSpec>>>={
  Glowstool:wild('glowstool'),Agarilux:wild('agarilux'),Bryolux:wild('bryolux'),
  Plant_Rice:crop('rice'),Plant_Potato:crop('potato'),Plant_Corn:crop('corn'),Plant_Cotton:crop('cotton'),Plant_Healroot:crop('healroot'),
  Plant_Haygrass:crop('haygrass'),Plant_Hops:crop('hops'),Plant_Devilstrand:crop('devilstrand'),
- Plant_Strawberry:none('Fraisier cultivé : culture absente d’Elsewhere.'),Plant_Ambrosia:none('Ambroisie : plante absente.'),
+ Plant_Strawberry:none('Fraisier cultivé : culture absente d’Elsewhere.'),Plant_Ambrosia:wild('ambrosia'),
  Plant_Daylily:exact<PlantSpec>({pot:'daylily'}),Plant_Rose:none('Rosier (pot de fleurs) : fleur décorative absente.'),
- Plant_Tinctoria:none('Tinctoria (teinture) : plante absente.'),Plant_Smokeleaf:none('Feuille à fumer : drogue absente.'),Plant_Psychoid:none('Psychoïde : drogue absente.'),
+ Plant_Tinctoria:crop('tinctoria'),Plant_Smokeleaf:none('Feuille à fumer : drogue absente.'),Plant_Psychoid:none('Psychoïde : drogue absente.'),
  Plant_TreeCocoa:none('Cacaoyer : arbre absent.'),Plant_Timbershroom:none('Champignon de bois : plante absente.'),Plant_TreeGauranlen:none('Arbre Gauranlen : extension, absent.'),
 };
 /** Dead plants are separate things in the save. */
-export const DEAD_PLANT_MAP:Readonly<Record<string,DefMapping<never>>>={
- SmashedStump:drop('Souche brisée : décor non recréé.'),ChoppedStump:drop('Souche coupée : décor non recréé.'),BurnedTree:drop('Arbre calciné : décor non recréé.'),
+export const DEAD_PLANT_MAP:Readonly<Record<string,DefMapping<PlantSpec>>>={
+ SmashedStump:adapt({wild:'smashed-stump'},'Souche et croissance conservées ; cadence de détérioration Core et influence sur la beauté non encore identiques.'),
+ ChoppedStump:adapt({wild:'chopped-stump'},'Souche et croissance conservées ; cadence de détérioration Core non encore identique.'),
+ BurnedTree:adapt({wild:'burned-stump'},'Souche et croissance conservées ; cadence de détérioration Core et influence sur la beauté non encore identiques.'),
  BurnedBush:drop('Buisson calciné : décor non recréé.'),
 };
 /** Plant chosen for a growing zone (crops, and trees for forestry). */

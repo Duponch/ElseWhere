@@ -72,7 +72,7 @@ export function validateMental(world:World,version:number):string[] {
       if(c.targetId>=world.nextId||c.targetId===p.id)errors.push('Invalid mental target identity.');
       const structure=world.structures.find(s=>s.id===c.targetId),human=world.pawns.find(t=>t.id===c.targetId);
       const other=world.piles.some(t=>t.id===c.targetId&&!(c.kind==='berserk'&&(t.corpse?.animalId===t.id||version>=194&&t.mechCorpse)))||world.resources.some(t=>t.id===c.targetId)||world.jobs.some(t=>t.id===c.targetId)||world.packed.some(t=>t.building.id===c.targetId);
-      if(c.kind==='tantrum'&&(human||other||world.wildlife?.animals.some(t=>t.id===c.targetId)||world.mechanoids?.some(t=>t.id===c.targetId)||structure&&structureMaxHp(structure)<=0))errors.push('Invalid destruction crisis target.');
+      if(c.kind==='tantrum'&&(human||other||world.wildlife?.animals.some(t=>t.id===c.targetId)||world.mechanoids?.some(t=>t.id===c.targetId)||structure&&(structure.kind==='hidden-conduit'||structureMaxHp(structure)<=0)))errors.push('Invalid destruction crisis target.');
       if(c.kind!=='tantrum'&&(structure||other))errors.push('Invalid violent crisis target.');
       if(c.kind==='murderous-rage'&&(world.wildlife?.animals.some(t=>t.id===c.targetId)||world.mechanoids?.some(t=>t.id===c.targetId)))errors.push('Murderous rage requires a human victim.');
     }

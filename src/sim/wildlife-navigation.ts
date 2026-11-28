@@ -179,7 +179,7 @@ function animalStaticSolids(world:World,geometry:StructureNavigationGeometry,fen
   let entry=list.find(e=>e.width===world.width&&e.size===size&&e.fence===fence&&e.legacy===legacy);
   if(!entry){const cells:number[]=[],source=geometry.entries,previous=prior?.geometry.entries,count=previous?.length??0;
     const append=!!prior&&count<=source.length&&(count===0||source[0]===previous![0]&&source[count-1]===previous![count-1]);
-    for(let k=append?count:0;k<source.length;k++){const {structure:s,cells:at}=source[k]!;if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||s.kind==='fence'&&fence||legacy&&s.kind==='table')for(const i of at)cells.push(i);}
+    for(let k=append?count:0;k<source.length;k++){const {structure:s,cells:at}=source[k]!;if(s.kind==='vent'||s.kind==='wall'||s.kind==='cooler'||(s.kind==='fence'||s.kind==='barricade')&&fence||legacy&&s.kind==='table')for(const i of at)cells.push(i);}
     let mask:Uint8Array,allCells:Int32Array;
     if(append){const old=prior!.entry;mask=cells.length?old.mask.slice():old.mask;allCells=cells.length?(()=>{const rows=new Int32Array(old.cells.length+cells.length);rows.set(old.cells);rows.set(cells,old.cells.length);return rows;})():old.cells;}
     else{mask=new Uint8Array(size);allCells=Int32Array.from(cells);}

@@ -10,6 +10,7 @@ import { canStandAt } from './furniture-travel.ts';
 import { reservedServiceCells } from './service-reservations.ts';
 import { carrierOf } from './rescue-state.ts';
 import { intellectualSkill,deepDrillingUnlocked,groundScannerUnlocked } from './research.ts';
+import { deepBedrock,nextDeepResource } from './deep-resources.ts';
 import type { Cell,Pawn,Structure,World } from './types.ts';
 
 export interface DeepDrillState {progress:number;yieldPct:number;rng:number;lastUsedAt?:number}
@@ -34,6 +35,7 @@ export function deepWorkReason(world:World,pawn:Pawn,s:Structure,accepted=false)
     ||world.piles.some(p=>p.owner.type==='pawn'&&p.owner.pawnId===pawn.id))return 'Cet opérateur a une autre activité.';
   if(workPriority(pawn,s.kind==='deep-drill'?'mine':'research')<=0)return 'Travail désactivé.';
   if(s.kind==='deep-drill'?!deepDrillingUnlocked(world):!groundScannerUnlocked(world))return 'Recherche nécessaire.';
+  if(!deepBedrock(world)&&(s.kind==='ground-scanner'||!nextDeepResource(world,s)))return 'Absence de socle rocheux.';
   if(!isPowerActive(s)||empStructureActive(s,world.tick*10))return 'Installation non alimentée.';
   if(world.fires?.items.some(f=>footprintCells(s).some(c=>c.x===f.x&&c.z===f.z)))return 'Installation en feu.';
   if(world.jobs.some(j=>(j.kind==='uninstall'||j.kind==='deconstruct')&&(j.deconstruction?.structureId??j.furniture?.structureId)===s.id))return 'Retrait de cette installation demandé.';

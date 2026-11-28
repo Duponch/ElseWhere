@@ -33,7 +33,7 @@ export function validateHiveRuntimeOwners256(w:Pick<World,'schemaVersion'|'tick'
   if(!validHiveRuntimeFields256(animal,w.schemaVersion,w.tick,w.nextId))return ['Invalid or future Hive runtime job/think data'];
   const job=(animal as import('./cave-hive-maintenance-256.ts').HiveMaintenanceActor256).hiveJob;if(!job)continue;
   if(job.kind==='maintain'){if(reserved.has(job.hiveId)||!w.structures.some(s=>s.id===job.hiveId&&s.kind==='insect-hive'))return ['Missing or multiply reserved original Hive maintenance target'];reserved.add(job.hiveId);}
-  else if(job.structure?!w.structures.some(s=>s.id===job.targetId):![...w.pawns,...(w.wildlife?.animals??[]),...(w.mechanoids??[])].some(a=>a.id===job.targetId))return ['Hive attack references an absent physical owner'];
+  else if(job.structure?!w.structures.some(s=>s.id===job.targetId&&s.kind!=='hidden-conduit'):![...w.pawns,...(w.wildlife?.animals??[]),...(w.mechanoids??[])].some(a=>a.id===job.targetId))return ['Hive attack references an absent physical owner'];
  }
  return [];
 }

@@ -102,6 +102,7 @@ import { bodyEfficiencies } from '../sim/body-capacities';
 import { remainingPartHealth, partMissing, injuryBleed, freshMissing } from '../sim/injury-state';
 import { artificialPartCovering, artificialPartEfficiencies } from '../sim/artificial-parts-rules';
 import { humanLimbVisualMask } from '../render/human-anatomy-presentation';
+import { humanConsumedPartAbsent382 } from '../sim/corpse-anatomy';
 import { apparelAppearance } from '../render/character-apparel';
 import { portraitDataUrl, portraitExpressionOf } from '../ui/pawn-portrait';
 import { nativeTextEntitiesFor } from './native-text-entities';
@@ -126,7 +127,7 @@ import { mechanoidView } from '../sim/mechanoid-presentation';
 import { animalSpecies } from '../sim/animal-species';
 import { animalLifeStage, animalBodySize, animalFoodPerDay, animalNutritionMax } from '../sim/animal-life';
 import { animalBody } from '../sim/wildlife-health';
-import { animalBodyModel } from '../sim/body-model';
+import { animalBodyModel,medicalModel } from '../sim/body-model';
 import { actualAnimalName256 } from '../sim/starting-pet-state-256';
 import { tameRefusal, handlingSkill } from '../sim/animal-handling';
 import { slaughterRefusal } from '../sim/animal-slaughter';
@@ -295,8 +296,8 @@ function anatomyPage(world: World, pawn: Pawn): NativePage {
   const health = pawn.health, efficiencies = bodyEfficiencies({ damage: health?.injuries.map(injury => ({ part: injury.part, loss: injury.severity / HP_UNIT })) ?? [], missing: health?.missing.map(part => part.part) ?? [], pain: 0, ...(health?.artificialParts ? { artificialParts: artificialPartEfficiencies(health) } : {}) });
   const rows: NativeRow[] = [];
   for (const definition of HUMAN_BODY) {
-    const part = definition.id, added = health && artificialPartCovering(health, part), missing = !!health && partMissing(health, part), efficiency = efficiencies[BODY_INDEX[part]]!;
-    rows.push(row(`anatomy-${part}`, definition.label, added ? `${ARTIFICIAL_PARTS[added.kind].label}${added.part !== part ? ' · Partie naturelle remplacée par celle du parent' : ''}` : missing ? 'Absente' : `${health ? (remainingPartHealth(health, part) / HP_UNIT).toFixed(2) : definition.hp} / ${definition.hp} PV`, `${definition.depth === 'inside' ? 'Interne' : 'Externe'} · Efficacité anatomique ${pct(efficiency)}${definition.parent ? ` · Sous ${BODY_PARTS[definition.parent].label.toLocaleLowerCase('fr-FR')}` : ''}`));
+    const part = definition.id, postmortem=humanConsumedPartAbsent382(pawn,part), added = health && artificialPartCovering(health, part), missing = postmortem||!!health && partMissing(health, part), efficiency = postmortem?0:efficiencies[BODY_INDEX[part]]!;
+    rows.push(row(`anatomy-${part}`, definition.label, postmortem?'Absente après le décès':added ? `${ARTIFICIAL_PARTS[added.kind].label}${added.part !== part ? ' · Partie naturelle remplacée par celle du parent' : ''}` : missing ? 'Absente' : `${health ? (remainingPartHealth(health, part) / HP_UNIT).toFixed(2) : definition.hp} / ${definition.hp} PV`, `${definition.depth === 'inside' ? 'Interne' : 'Externe'} · Efficacité anatomique ${pct(efficiency)}${definition.parent ? ` · Sous ${BODY_PARTS[definition.parent].label.toLocaleLowerCase('fr-FR')}` : ''}`));
     rows.at(-1)!.meter = { value: missing ? 0 : health ? remainingPartHealth(health, part) / HP_UNIT : definition.hp, max: definition.hp, label: rows.at(-1)!.value, color: '#89a48b' };
     for (const injury of health?.injuries.filter(injury => injury.part === part) ?? []) rows.push(row(`anatomy-injury-${injury.id}`, injury.scar?.pain !== undefined ? 'Cicatrice permanente' : INJURY_RULES[injury.kind].label, `−${(injury.severity / HP_UNIT).toFixed(2)} PV · Saignement ${pct(injuryBleed(health!, injury))}/jour`, injury.tended === undefined ? 'Non soignée' : `Soignée · qualité ${pct(injury.tended / 1000)}`));
     const lost = health?.missing.find(missing => missing.part === part); if (lost && !added) rows.push(row(`anatomy-missing-${part}`, 'Plaie de membre perdu', lost.tended ? 'Soignée' : freshMissing(health!, lost) ? 'Fraîche · Non soignée' : 'Fermée'));
@@ -438,6 +439,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     const overviewTab = control('health-overview', 'Vue d’ensemble', () => { healthPane = 'overview'; resetCardScroll(); }, false, healthPane === 'overview', 'Capacités, lésions et politique de soins.');
     const operationsTab = operationsAvailable ? control('health-operations', `Opérations${pawn.surgeryRequest ? ' (1)' : ''}`, () => { healthPane = 'operations'; resetCardScroll(); }, false, healthPane === 'operations', 'Demandes, pose et retrait de prothèses ; risques et conditions opératoires.') : undefined;
     const records = bodyRows(health);
+    if(pawn.body?.consumedParts382)for(const m of pawn.body.consumedParts382)records.push(row(`missing-${m.part}`,BODY_PARTS[m.part].label,'Partie consommée après le décès','Absence physique observée ; le dossier clinique reste arrêté au moment du décès.'));
     for (const injury of health?.injuries ?? []) { const entry = records.find(entry => entry.id === `injury-${injury.id}`); if (entry) entry.hint = `${entry.hint ?? ''} · ${tooltipText(healthPartTooltip(pawn, injury.part))} · Saignement ${pct(injuryBleed(health!, injury))}/jour.`; }
     const clinical = pawn.state === 'dead' ? 'Décédé · Dossier conservé' : pawn.state === 'downed' ? 'À terre' : health?.flu?.severity || health?.immuneDiseases?.malaria?.severity || health?.immuneDiseases?.plague?.severity || health?.immuneDiseases?.['sleeping-sickness']?.severity || health?.parasites306 || health?.mechanites307 || (health?.cryptosleepSickness?.remainingCore ?? 0) > 0 ? 'Malade' : 'Mobile';
     const settings: HealthSettingSpec[] = [];
@@ -460,7 +462,7 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
       missing: part => health?.missing.find(entry => entry.part === part),
       infectionPart: index => health?.infections?.cases[index]?.part,
       part: part => {
-        const id = part as BodyPartId, missing = !!health && partMissing(health, id), fraction = health && !missing ? remainingPartHealth(health, id) / HP_UNIT / BODY_PARTS[id].hp : 1;
+        const id = part as BodyPartId, missing = humanConsumedPartAbsent382(pawn,id)||!!health && partMissing(health, id), fraction = health && !missing ? remainingPartHealth(health, id) / HP_UNIT / BODY_PARTS[id].hp : 1;
         return { label: BODY_PARTS[id].label, hint: tooltipText(healthPartTooltip(pawn, id)), ink: missing ? NATIVE_INK.red : fraction < .5 ? NATIVE_INK.painSevere : fraction < 1 - 1e-6 ? NATIVE_INK.painMedium : NATIVE_INK.text, info: anatomy(part) };
       },
       whole: () => anatomy('whole'),
@@ -484,17 +486,17 @@ function pawnPage(world: World, pawn: Pawn): NativePage {
     const primary = equippedWeapon(world, pawn), comfortable = comfortableTemperature(world, pawn), canOrder = colonist && alive;
     const massOf = (pile: MaterialPile) => { const unit = physicalTravelUnitMass(pile, world.schemaVersion); return unit === undefined ? undefined : unit * pile.quantity; };
     const info = (id: number) => control(`item-information-${id}`, 'Informations', () => { subpage = { kind: 'item', itemId: id }; }, false, false, 'Informations sur cet objet');
-    const equipment: GearRowSpec[] = primary ? [{ id: `weapon-${primary.id}`, label: weaponLabel(primary), grams: massOf(primary), hint: `Arme principale : ${weaponLabel(primary)}`, info: info(primary.id), drop: canOrder ? command('drop-primary', 'Déposer', { type: 'order-equipment', pawnId: pawn.id, itemId: primary.id, action: 'drop', queue: false }, false, false, 'Déposer cette arme') : undefined }] : [];
+    const equipment: GearRowSpec[] = primary ? [{ id: `weapon-${primary.id}`, icon:`item-${primary.item}`, label: weaponLabel(primary), grams: massOf(primary), hint: `Arme principale : ${weaponLabel(primary)}`, info: info(primary.id), drop: canOrder ? command('drop-primary', 'Déposer', { type: 'order-equipment', pawnId: pawn.id, itemId: primary.id, action: 'drop', queue: false }, false, false, 'Déposer cette arme') : undefined }] : [];
     const pieces = wornApparel(world, pawn);
     const apparel: GearRowSpec[] = pieces.map(piece => {
       const definition = apparelDefinition(piece), rating = armorPiece(piece).ratings, insulation = apparelInsulation(piece), label = apparelLabel(piece);
-      return { id: `apparel-${piece.id}`, label: `${label}${piece.apparel!.forced ? ', imposé' : ''}`, grams: massOf(piece), info: info(piece.id),
+      return { id: `apparel-${piece.id}`, icon:`item-${piece.item}`, label: `${label}${piece.apparel!.forced ? ', imposé' : ''}`, grams: massOf(piece), info: info(piece.id),
         hint: `${label}\n\n${piece.apparel!.hitPoints}/${definition.hitPoints} PV${piece.apparel!.forced ? ' · Port imposé' : ''}\nTranchant ${pct(rating.sharp)} · Contondant ${pct(rating.blunt)} · Chaleur ${pct(rating.heat)}\nIsolation froid ${insulation.cold.toFixed(1)} °C / chaleur ${insulation.heat.toFixed(1)} °C`,
         drop: canOrder ? command(`remove-apparel-${piece.id}`, 'Retirer', { type: 'order-equipment', pawnId: pawn.id, itemId: piece.id, action: 'remove', queue: false }, false, false, 'Retirer ce vêtement') : undefined };
     });
-    const inventory: GearRowSpec[] = world.piles.filter(pile => ['pawn', 'inventory'].includes(pile.owner.type) && 'pawnId' in pile.owner && pile.owner.pawnId === pawn.id).map(pile => ({ id: `inventory-${pile.id}`, label: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label}${pile.quantity > 1 ? ` ×${pile.quantity}` : ''}`, grams: massOf(pile), hint: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label} × ${pile.quantity}`, info: info(pile.id) }));
-    for (const packed of world.packed) if (packed.owner.type === 'pawn' && packed.owner.pawnId === pawn.id) inventory.push({ id: `packed-${packed.building.id}`, label: `${buildingLabels[packed.building.kind]} (transporté)`, hint: 'Meuble emballé transporté' });
-    const carried = (id: string, label: string, value: string | undefined) => inventory.push({ id, label: value ? `${label} : ${value}` : label, hint: label });
+    const inventory: GearRowSpec[] = world.piles.filter(pile => ['pawn', 'inventory'].includes(pile.owner.type) && 'pawnId' in pile.owner && pile.owner.pawnId === pawn.id).map(pile => ({ id: `inventory-${pile.id}`, icon:`item-${pile.item}`, label: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label}${pile.quantity > 1 ? ` ×${pile.quantity}` : ''}`, grams: massOf(pile), hint: `${pile.book?.title ?? ITEM_DEFINITIONS[pile.item].label} × ${pile.quantity}`, info: info(pile.id) }));
+    for (const packed of world.packed) if (packed.owner.type === 'pawn' && packed.owner.pawnId === pawn.id) inventory.push({ id: `packed-${packed.building.id}`, icon:packed.building.kind, label: `${buildingLabels[packed.building.kind]} (transporté)`, hint: 'Meuble emballé transporté' });
+    const carried = (id: string, label: string, value: string | undefined) => inventory.push({ id, icon:'people', label: value ? `${label} : ${value}` : label, hint: label });
     if (pawn.cryptosleepTask?.action === 'carry' && ['carry', 'closing'].includes(pawn.cryptosleepTask.phase)) carried('carried-cryptosleep-patient', 'Patient porté vers un caisson', world.pawns.find(patient => patient.id === pawn.cryptosleepTask?.patientId)?.name ?? 'Patient confirmé');
     if (pawn.shipCasketTask277?.action === 'carry' && ['carry', 'closing'].includes(pawn.shipCasketTask277.phase)) carried('carried-spatial-patient', 'Occupant porté vers un caisson spatial', pawn.shipCasketTask277.patient ? `${pawn.shipCasketTask277.patient.kind === 'human' ? 'Personne' : pawn.shipCasketTask277.patient.kind === 'animal' ? 'Animal' : 'Mécanoïde'} ${pawn.shipCasketTask277.patient.id}` : undefined);
     if (pawn.rescue?.phase === 'carry') carried('carried-rescue', pawn.rescue.capture ? 'Personne capturée transportée' : 'Personne secourue transportée', world.pawns.find(patient => patient.id === pawn.rescue?.patientId)?.name);
@@ -852,6 +854,7 @@ function objectPage(world: World, objects: readonly MapObjectSelection[]): Nativ
         }));
       }
       if (pile.corpse || pile.humanCorpse) rows.push(row('corpse-stage', 'État de la dépouille', ({ fresh: 'Fraîche', rotting: 'En décomposition', desiccated: 'Desséchée' })[corpseStage(pile, world.tick)]));
+      if(pile.corpse?.consumedParts){const model=medicalModel(pile.corpse.health);for(const missing of pile.corpse.consumedParts)rows.push(row(`corpse-missing-${missing.part}`,model.byId[missing.part].label,'Partie consommée après le décès'));}
       if (pile.prostheticWork273 || pile.smithingWork || pile.artWork || pile.gunWork || pile.flakWork || pile.componentWork || pile.unfinished) actions.push(command('cancel-unfinished', 'Annuler cet ouvrage', { type: 'cancel-unfinished', itemId: pile.id }));
     }
   } else if (selected.kind === 'resource') {
@@ -959,9 +962,9 @@ type WildAnimalView = NonNullable<World['wildlife']>['animals'][number];
 function animalGear(world:World,animal:WildAnimalView):GearRowSpec[]{
   const gear:GearRowSpec[]=world.piles.filter(pile=>pile.owner.type==='inventory'&&pile.owner.pawnId===animal.id).map(pile=>{
     const unit=physicalTravelUnitMass(pile,world.schemaVersion),label=pile.book?.title??itemTitle(pile.item,ITEM_DEFINITIONS[pile.item].label);
-    return{id:`inventory-${pile.id}`,label:`${label}${pile.quantity>1?` ×${pile.quantity}`:''}`,grams:unit===undefined?undefined:unit*pile.quantity,hint:`${label} · Quantité ${pile.quantity} · Réellement porté par cet animal.`,info:control(`item-information-${pile.id}`,'Informations',()=>{subpage={kind:'item',itemId:pile.id};},false,false,'Consulter cet objet transporté')};
+    return{id:`inventory-${pile.id}`,icon:`item-${pile.item}`,label:`${label}${pile.quantity>1?` ×${pile.quantity}`:''}`,grams:unit===undefined?undefined:unit*pile.quantity,hint:`${label} · Quantité ${pile.quantity} · Réellement porté par cet animal.`,info:control(`item-information-${pile.id}`,'Informations',()=>{subpage={kind:'item',itemId:pile.id};},false,false,'Consulter cet objet transporté')};
   });
-  for(const pack of world.packed)if(pack.owner.type==='inventory'&&pack.owner.pawnId===animal.id)gear.push({id:`packed-${pack.building.id}`,label:`${buildingTitle(pack.building.kind,buildingLabels[pack.building.kind])} (emballé)`,grams:groupPackedMassGrams258(pack,world.schemaVersion),hint:'Meuble original emballé, déjà chargé sur cet animal.'});
+  for(const pack of world.packed)if(pack.owner.type==='inventory'&&pack.owner.pawnId===animal.id)gear.push({id:`packed-${pack.building.id}`,icon:pack.building.kind,label:`${buildingTitle(pack.building.kind,buildingLabels[pack.building.kind])} (emballé)`,grams:groupPackedMassGrams258(pack,world.schemaVersion),hint:'Meuble original emballé, déjà chargé sur cet animal.'});
   return gear;
 }
 function noActorLog():NonNullable<NativeRow['card']>{
@@ -1094,11 +1097,12 @@ function humanInfoSource(world:World,pawn:Pawn):NativeInfoSource {
   for(const trait of bio.traits)add('Profil',trait.id,trait.label,undefined,trait.hint);
   for(const story of bio.stories)add('Profil',`background-${story.chip.id}`,story.chip.label,story.phase,story.chip.hint);
   const records=bodyRows(health);
+  if(pawn.body?.consumedParts382)for(const m of pawn.body.consumedParts382)records.push(row(`missing-${m.part}`,BODY_PARTS[m.part].label,'Partie consommée après le décès','Absence physique observée ; le dossier clinique reste arrêté au moment du décès.'));
   facts.push(...records.map(record=>({...record,infoCategory:'Santé'})));
   const entries=healthEntries(records,{
     injury:id=>{const injury=health?.injuries.find(entry=>entry.id===id);return injury?{part:injury.part,bleeding:injuryBleed(health!,injury)>0,tended:injury.tended!==undefined}:undefined;},
     missing:part=>health?.missing.find(entry=>entry.part===part),infectionPart:index=>health?.infections?.cases[index]?.part,
-    part:part=>{const id=part as BodyPartId,missing=!!health&&partMissing(health,id);return{label:BODY_PARTS[id].label,hint:tooltipText(healthPartTooltip(pawn,id)),ink:missing?NATIVE_INK.red:NATIVE_INK.text};},whole:()=>undefined,
+    part:part=>{const id=part as BodyPartId,missing=humanConsumedPartAbsent382(pawn,id)||!!health&&partMissing(health,id);return{label:BODY_PARTS[id].label,hint:tooltipText(healthPartTooltip(pawn,id)),ink:missing?NATIVE_INK.red:NATIVE_INK.text};},whole:()=>undefined,
   });
   const pain=painLabel(health?medicalPain(health):0),bleed=health?health.injuries.reduce((sum,injury)=>sum+injuryBleed(health,injury),0):0;
   const card:HealthSpec={type:'health',tab:'overview',tabs:{overview:healthOverviewInfo,operationsLabel:'Opérations'},settings:[],pain:alive?{...pain,hint:`Niveau de douleur : ${pct(health?medicalPain(health):0)}`}:undefined,capacities,entries,bleed:bleed>.01?{text:`Saignement : ${pct(bleed)}/jour`,hint:'Somme des plaies qui saignent encore.'}:undefined,emptyText:'(Aucun problème de santé)'};

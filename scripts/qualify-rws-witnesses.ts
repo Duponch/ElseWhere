@@ -25,11 +25,13 @@ import {footprintCells} from '../src/sim/definitions.ts';
 import {isConstructionLightPlant,constructionFinalWipesPlants} from '../src/sim/construction-plants.ts';
 import {conduitKeepsPlant} from '../src/sim/power-construction.ts';
 import {hydroponicPlantAllowed} from '../src/sim/farming-save.ts';
+import {nativeHumanBiologicalCore256} from '../src/sim/native-human-identity-256.ts';
+import {syncNativeHumanClinicalScale256} from '../src/sim/native-human-clinical-scale-256.ts';
 import type {World} from '../src/sim/types.ts';
 
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 const args=process.argv.slice(2),inputs:{file:string;developerTest:boolean}[]=[];
-let ticks=600,contract=false,details=false,transport=false;
+let ticks=600,contract=false,details=false,transport=false,birthdayProbe=false;
 let reports:string|undefined;
 for(let i=0;i<args.length;i++){
  const arg=args[i]!;
@@ -37,6 +39,7 @@ for(let i=0;i<args.length;i++){
  if(arg==='--contract'){contract=true;continue;}
  if(arg==='--details'){details=true;continue;}
  if(arg==='--transport'){transport=true;continue;}
+ if(arg==='--birthday-probe'){birthdayProbe=true;continue;}
  if(arg==='--reports'){reports=args[++i];if(!reports||reports.startsWith('--'))throw Error('Dossier des rapports attendu.');continue;}
  const dev=arg==='--developer-test',file=dev?args[++i]:arg;
  if(!file||file.startsWith('--'))throw Error('Chemin RWS attendu.');
@@ -53,7 +56,9 @@ function census(w:World,conversion:RwsConversion,save:RwsSave){
   pawns:alive.length,deadPeople:w.pawns.length-alive.length,corpses:w.piles.filter(p=>p.kind==='corpse').length,
   casketHumans:sum(w.structures,s=>s.casket?.humans.length??0),worldSites:w.worldSites263?.entries.length??0,
   animals:animals.length,domestic:animals.filter(a=>a.domestic).length,
-  mechs:w.mechanoids?.length??0,structures:w.structures.length,plants:w.resources.length,daylilies:w.structures.filter(s=>s.flower?.plant).length,
+  goats:animals.filter(a=>a.species==='goat').length,pigs:animals.filter(a=>a.species==='pig').length,thrumbos:animals.filter(a=>a.species==='thrumbo').length,
+  mechs:w.mechanoids?.length??0,structures:w.structures.length,wallLamps:w.structures.filter(s=>s.kind==='wall-lamp').length,barricades:w.structures.filter(s=>s.kind==='barricade').length,plants:w.resources.length,daylilies:w.structures.filter(s=>s.flower?.plant).length,
+  hiddenConduits:w.structures.filter(s=>s.kind==='hidden-conduit').length,ordinaryConduits:w.structures.filter(s=>s.kind==='power-conduit').length,
   piles:w.piles.length,packed:w.packed.length,filth:w.filth?.items.length??0,
   workpieces:w.piles.filter(p=>p.kind==='unfinished').length,
   penoxyStacks:w.piles.filter(p=>p.item==='penoxycyline').map(p=>p.quantity).sort((a,b)=>a-b),
@@ -67,10 +72,14 @@ function census(w:World,conversion:RwsConversion,save:RwsSave){
   coolers:w.structures.filter(s=>s.cooler).map(s=>s.cooler!.target),
   snow:w.tiles.filter(t=>t.snowDepth).length,deepCells:w.deepResources?.cells.length??0,
   deepUnits:sum(w.deepResources?.cells??[],c=>c.count),rockDamage:w.tiles.filter(t=>t.miningDamage).length,
+  deepSteelCells:w.deepResources?.cells.filter(c=>c.item==='steel').length??0,deepSteelUnits:sum(w.deepResources?.cells.filter(c=>c.item==='steel')??[],c=>c.count),
+  deepUraniumCells:w.deepResources?.cells.filter(c=>c.item==='uranium').length??0,deepUraniumUnits:sum(w.deepResources?.cells.filter(c=>c.item==='uranium')??[],c=>c.count),
   plantAge,plantDamage:w.resources.filter(p=>p.damage).length,
+  ambrosiaPlants:w.resources.filter(p=>p.species==='ambrosia').length,tinctoriaPlants:w.resources.filter(p=>p.kind==='tinctoria').length,
+  smashedStumps:w.resources.filter(p=>p.species==='smashed-stump').length,choppedStumps:w.resources.filter(p=>p.species==='chopped-stump').length,burnedStumps:w.resources.filter(p=>p.species==='burned-stump').length,
   weather:w.weather&&{current:w.weather.current,age:w.weather.ageCore,duration:w.weather.durationCore},
   thermalRegions:w.thermal?.regions.length??0,thermalCells:sum(w.thermal?.regions??[],r=>r.cells.length),
-  nativeHumans:alive.filter(p=>p.nativeHuman).length,titles:alive.filter(p=>p.identity378?.title).length,
+  nativeHumans:alive.filter(p=>p.nativeHuman).length,sourceHumanIds:alive.filter(p=>p.nativeHuman?.sourceThingId382).length,ambrosiaTolerance:alive.filter(p=>p.health?.ambrosia382?.tolerance).length,titles:alive.filter(p=>p.identity378?.title).length,
   beards:alive.filter(p=>p.appearance?.beard&&p.appearance.beard!=='NoBeard').length,
   bestMedical:alive.filter(p=>p.medicalCare==='best').length,relations:w.relationships?.links.length??0,
   memories:sum(w.pawns,p=>p.memories.length+(p.social?.memories.length??0)+(p.roomMemories?.length??0)+(p.coupleMemories285?.length??0)),
@@ -86,16 +95,16 @@ type Census=ReturnType<typeof census>;
  * contracts, and these real file invariants prevent silently dropping owners. */
 const contracts:Record<string,{developerTest:boolean;exact:Partial<Census>;minimum:Partial<Record<keyof Census,number>>}>={
  'bd9af6c8d0da9c9f29ff98ae2193f0ebb64f95614ec51021f6f5ae5fa2e952b3':{
-  developerTest:false,exact:{site:86845,core:12305756,domestic:100,pawns:12,daylilies:13,geothermal:2,batteries:[600,600,600],coolers:[-3,-3,-3,21],snow:35,pregnancy:14,fertilizedEggUnits:51,nativeHumans:12,titles:10,bestMedical:12,stockCells:690,fieldCells:2060,casketHumans:1,worldSites:1,
-   weather:{current:'clear',age:63152,duration:92110}},
-  minimum:{animals:149,mechs:1,structures:2152,filth:1331,bills:29,packed:7,deepCells:58,deepUnits:17265,rockDamage:13,plantAge:21364,deadPeople:6,corpses:7,memories:394,relations:9,rotNonzero:257,archives:200,foodPolicies:6,apparelPolicies:5,drugPolicies:4}
+  developerTest:false,exact:{site:86845,core:12305756,domestic:101,animals:150,goats:16,pigs:9,thrumbos:1,pawns:12,daylilies:13,wallLamps:31,barricades:16,plants:21815,completedResearch:45,geothermal:2,batteries:[600,600,600],coolers:[-3,-3,-3,21],snow:35,pregnancy:14,fertilizedEggUnits:51,nativeHumans:12,sourceHumanIds:12,ambrosiaTolerance:1,ambrosiaPlants:20,tinctoriaPlants:4,smashedStumps:234,choppedStumps:35,burnedStumps:119,titles:10,bestMedical:12,stockCells:690,fieldCells:2060,casketHumans:1,worldSites:1,
+   weather:{current:'clear',age:63152,duration:92110},deepCells:68,deepUnits:20265,deepSteelCells:58,deepSteelUnits:17265,deepUraniumCells:10,deepUraniumUnits:3000,hiddenConduits:138,ordinaryConduits:283},
+  minimum:{animals:149,mechs:1,structures:2152,filth:1331,bills:29,packed:7,rockDamage:13,plantAge:21364,deadPeople:6,corpses:7,memories:394,relations:9,rotNonzero:257,archives:200,foodPolicies:6,apparelPolicies:5,drugPolicies:4}
  },
  '50232588cecceb82dabb2c26c14bc78b1774488eae465413ee65f7f7758ff064':{
   developerTest:false,exact:{site:59170,core:1376,pawns:3,domestic:1,nativeHumans:3,bestMedical:3,mechs:0,casketHumans:3},
   minimum:{animals:60,structures:436,filth:2517,plants:27834,plantAge:27820,archives:1}
  },
  '6ea7c4dd0b78eabe97629909344b82f918b3ae10c9b0bba54c3b123a743c992a':{
-  developerTest:true,exact:{site:55885,core:12068,pawns:29,daylilies:1,penoxyStacks:[150,150,150],completedResearch:5,developerFloors:206,developerBills:54,mechs:1,casketHumans:6},
+  developerTest:true,exact:{site:55885,core:12068,pawns:29,daylilies:1,penoxyStacks:[150,150,150],completedResearch:7,developerFloors:206,developerBills:54,mechs:1,casketHumans:6},
   minimum:{structures:3295,plants:11,piles:1564,filth:3812,bills:131,workpieces:3,archives:13}
  }
 };
@@ -150,6 +159,19 @@ for(const {file,developerTest} of inputs){
   else{
    const raw=serializeWorld(w),loaded=deserializeWorld(raw);
    result.roundTrip=serializeWorld(loaded)===raw;
+   if(birthdayProbe){
+    // Deliberate isolated boundary test, not a claim that we played the
+    // intervening days. Keep the full real map, owner and medical dossier.
+    const probe=deserializeWorld(raw),actual=[...probe.pawns,...(probe.worldPawns?.owners??[]).flatMap(row=>row.kind==='human'&&row.mode==='active'?[row.actor]:[])],p=actual.filter(p=>p.nativeHuman&&p.state!=='dead'&&!p.health?.death).sort((a,b)=>nativeHumanBiologicalCore256(b)%3600000-nativeHumanBiologicalCore256(a)%3600000)[0];
+    if(p){const core=nativeHumanBiologicalCore256(p),remaining=Math.ceil((3600000-core%3600000)/10),shift=remaining-1;
+     p.age!.biologicalTicks+=shift;p.age!.chronologicalTicks+=shift;syncNativeHumanClinicalScale256(p,nativeHumanBiologicalCore256(p));
+     const before=validateWorld(probe),year=Math.floor(nativeHumanBiologicalCore256(p)/3600000);if(!before.length)stepWorld(probe,2);
+     const after=validateWorld(probe),crossed=Math.floor(nativeHumanBiologicalCore256(p)/3600000)===year+1,encoded=after.length?'':serializeWorld(probe);
+     const reloaded=!!encoded&&serializeWorld(deserializeWorld(encoded))===encoded;
+     result.birthdayProbe={owner:probe.pawns.includes(p)?'map':'world-pawn',sourceDistance:remaining,shift,yearsBefore:year,yearsAfter:Math.floor(nativeHumanBiologicalCore256(p)/3600000),before,after,crossed,reloaded};
+     if(before.length||after.length||!crossed||!reloaded)failed=true;
+    }
+   }
    const digestBefore=hash(Buffer.from(raw));
    result.convertedHash=digestBefore;
    const encoder=transport?new SnapshotEncoder({structureDelta:true,minimumStructures:1000}):undefined,decoder=transport?new SnapshotDecoder():undefined;
@@ -167,9 +189,9 @@ for(const {file,developerTest} of inputs){
   }
   if(reports){
    mkdirSync(reports,{recursive:true});
-   const body=frenchReport({title:`Qualification de ${name} — phase 1`,analysis:analyzeRwsSave(save),conversion:c,checks:{valid:errors.length===0,errors,roundTrip:result.roundTrip===true,ticksRun:Number(result.ticksRun??0),validAfterTicks:Array.isArray(result.afterTicks)&&result.afterTicks.length===0,planetMode:c.planetMode,elapsedMs:performance.now()-started}});
+   const body=frenchReport({title:`Qualification de ${name} — schéma ${w.schemaVersion}`,analysis:analyzeRwsSave(save),conversion:c,checks:{valid:errors.length===0,errors,roundTrip:result.roundTrip===true,ticksRun:Number(result.ticksRun??0),validAfterTicks:Array.isArray(result.afterTicks)&&result.afterTicks.length===0,planetMode:c.planetMode,elapsedMs:performance.now()-started}});
    const snapshots=Array.isArray(result.transport)?result.transport as {tick:number;status:string;reason?:string}[]:[];
-   writeFileSync(join(reports,`${name.replace(/\.rws$/i,'')}-phase1.md`),`${body}\n## Qualification du client\n\n${snapshots.map((s,i)=>`- ${i===0?'Checkpoint complet':'Delta'} au tick ${s.tick} : ${s.status}${s.reason?` (${s.reason})`:''}.`).join('\n')}\n\nEmpreinte source : ${sourceHash}.\n`);
+   writeFileSync(join(reports,`${name.replace(/\.rws$/i,'')}-schema${w.schemaVersion}.md`),`${body}\n## Qualification du client\n\n${snapshots.map((s,i)=>`- ${i===0?'Checkpoint complet':'Delta'} au tick ${s.tick} : ${s.status}${s.reason?` (${s.reason})`:''}.`).join('\n')}\n\nEmpreinte source : ${sourceHash}.\n`);
   }
  }catch(e){result.failure=e instanceof Error?e.stack??e.message:String(e);failed=true;}
  result.sourceUnchanged=sourceHash===hash(readFileSync(file));if(!result.sourceUnchanged)failed=true;

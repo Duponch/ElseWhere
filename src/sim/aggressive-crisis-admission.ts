@@ -28,7 +28,7 @@ export function murderVictim(w:World,p:Pawn,t:Pawn):boolean {
  * means no physically admitted target. Region rules are adapted to this map. */
 export function aggressiveCrisisCandidates(w:World,p:Pawn,kind:AggressiveCrisisKind,budget?:SearchBudget,bashDoors=false):number[]|null {
   const candidates:(Pawn|Structure|WildAnimal|Mechanoid)[]=kind==='tantrum'
-    ?w.structures.filter(s=>structureMaxHp(s)>0&&distanceSquared(p,s)<=40**2)
+    ?w.structures.filter(s=>s.kind!=='hidden-conduit'&&structureMaxHp(s)>0&&distanceSquared(p,s)<=40**2)
     :kind==='murderous-rage'?w.pawns.filter(t=>murderVictim(w,p,t)):[
       ...w.pawns.filter(t=>t!==p&&t.state!=='dead'&&t.state!=='downed'&&!carrierOf(w,t.id)&&distanceSquared(p,t)<=40**2),
       ...(w.wildlife?.animals??[]).filter(t=>t.state!=='dead'&&t.state!=='downed'&&distanceSquared(p,t)<=40**2),

@@ -18,9 +18,9 @@ export function canPlaceSpikeTrap(world:World,command:DesignateCommand):CommandR
  const {x,z}=command;if(!Number.isInteger(x)||!Number.isInteger(z)||x<0||z<0||x>=world.width||z>=world.height)return fail('out-of-bounds','Empreinte hors de la carte.');
  if(!spikeTrapPlacementAllowed(world,command))return fail('invalid-command','Aucun autre piège dans les huit cases voisines.');
  const same=(c:{x:number;z:number})=>c.x===x&&c.z===z;
- if(world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.deconstruction?.kind??j.flick?.kind??j.fixBreakdown?.kind??j.kind,command.kind)&&footprintCells(j).some(same)))return fail('occupied','Un ordre existe déjà dans cette empreinte.');
+ if(world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.deconstruction?.kind??j.flick?.kind??j.fixBreakdown?.kind??j.kind,command.kind,world.schemaVersion,j.orientation,command.orientation)&&footprintCells(j).some(same)))return fail('occupied','Un ordre existe déjà dans cette empreinte.');
  if((['water','rock'].includes(world.tiles[z*world.width+x]!.terrain)||isWetTerrain(world.tiles[z*world.width+x]!.terrain)&&!world.tiles[z*world.width+x]!.bridge)||world.resources.some(r=>r.kind==='rock'&&same(r))
-  ||world.structures.some(s=>sharesConstructionLayer(s.kind,command.kind)&&footprintCells(s).some(same))
+  ||world.structures.some(s=>sharesConstructionLayer(s.kind,command.kind,world.schemaVersion,s.orientation,command.orientation)&&footprintCells(s).some(same))
   ||world.pawns.some(p=>p.haul?.destination.type==='aside'&&same(p.haul.destination))||cookingCellReserved(world,command))return fail('occupied','Construction impossible : terrain, ouvrage ou réservation incompatible.');
  return {ok:true};
 }

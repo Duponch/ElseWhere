@@ -32,19 +32,19 @@ function snapshot(root:BestiaryGroup){
 }
 
 describe('additional bestiary joins the real resident species geometry',()=>{
- it('pins the independent literal and ports35 canonical recipes without changing source vertices/UV/palettes',()=>{
+ it('pins the independent literal and ports36 canonical recipes without changing source vertices/UV/palettes',()=>{
   expect(createHash('sha256').update(original).digest('hex')).toBe('425b69a408fdea62b7bd8ca61b80abe04de1146a81790025f659f01c4a781780');
-  const source=createOriginal(THREE),port=createBestiaryReference(THREE);expect(Object.keys(BESTIARY_NEW_SPECIES)).toHaveLength(35);
+  const source=createOriginal(THREE),port=createBestiaryReference(THREE);expect(Object.keys(BESTIARY_NEW_SPECIES)).toHaveLength(36);
   for(const id of Object.values(BESTIARY_NEW_SPECIES)){const a=source.build(id),b=port.build(id);try{expect(snapshot(b),id).toEqual(snapshot(a));}finally{disposeSource(a);disposeSource(b);}}
  });
- it('covers all53 current species while distinguishing35 source recipes,7 adaptations and11 protected identities',()=>{
-  expect([...ORIGAMI_ANIMAL_SPECIES].sort()).toEqual([...ANIMAL_SPECIES_IDS].sort());expect(new Set(ORIGAMI_ANIMAL_SPECIES).size).toBe(53);
+ it('covers all56 current species while distinguishing36 source recipes,9 adaptations and11 protected identities',()=>{
+  expect([...ORIGAMI_ANIMAL_SPECIES].sort()).toEqual([...ANIMAL_SPECIES_IDS].sort());expect(new Set(ORIGAMI_ANIMAL_SPECIES).size).toBe(56);
   expect(Object.keys(ORIGAMI_ANIMAL_REFERENCES)).toHaveLength(11);
   const kinds=ORIGAMI_ANIMAL_SPECIES.map(species=>origamiAnimalReferenceInfo(species)!.kind);
-  expect(kinds.filter(kind=>kind==='existing-reference')).toHaveLength(11);expect(kinds.filter(kind=>kind==='new-reference')).toHaveLength(35);expect(kinds.filter(kind=>kind==='explicit-adaptation')).toHaveLength(7);
-  for(const species of ['thrumbo','chicken','not-a-species']){expect(origamiAnimalReferenceInfo(species)).toBeUndefined();expect(origamiAnimalPresentationGeometry(1,species)).toBeUndefined();}
+  expect(kinds.filter(kind=>kind==='existing-reference')).toHaveLength(11);expect(kinds.filter(kind=>kind==='new-reference')).toHaveLength(36);expect(kinds.filter(kind=>kind==='explicit-adaptation')).toHaveLength(9);
+  for(const species of ['chicken','not-a-species']){expect(origamiAnimalReferenceInfo(species)).toBeUndefined();expect(origamiAnimalPresentationGeometry(1,species)).toBeUndefined();}
  });
- it('binds42 new product assets to real native masks and bone sets, finite UVs and a shared33-float owner stream',()=>{
+ it('binds45 new product assets to real native masks and bone sets, finite UVs and a shared33-float owner stream',()=>{
   for(const species of ORIGAMI_ANIMAL_SPECIES.filter(species=>!ORIGAMI_ANIMAL_REFERENCES[species])){
    const geometry=origamiAnimalPresentationGeometry(16,species)!;
    try{

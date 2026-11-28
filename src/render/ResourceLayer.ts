@@ -173,7 +173,7 @@ function resizeResources(world:World,group:THREE.Group,resources:ResourceLookup,
 }
 
 function visibleResourceKeys(world:World,r:World['resources'][number],appearance?:NaturalAppearanceReader):number[]{
-  if(r.kind!=='berries'&&!r.species&&!isMedicinalPlant(r))return [r.id];
+  if(r.kind!=='berries'&&r.kind!=='tinctoria'&&!r.species&&!isMedicinalPlant(r))return [r.id];
   return [r.id,...((appearance?.read(r).leafless??plantLeafless(world,r))?[]:[-r.id*2]),...((appearance?appearance.harvestable(r):harvestable(world,r))?[-r.id*2-1]:[])];
 }
 
@@ -791,7 +791,7 @@ export class ResourceLayer {
       if(previous?.signature===signature){this.deferredChunks.delete(key);continue;}
       this.graphicsComparisonRevision++;
       const sizes=new Map(rows.map(row=>[row.resource.id,row.size])),visibleKeys=new Set<number>();
-      for(const row of rows){const r=row.resource;visibleKeys.add(r.id);if(r.kind==='berries'||r.species||isMedicinalPlant(r)){if(!row.leafless)visibleKeys.add(-r.id*2);if(r.kind==='berries'?row.ripe:ripe(r))visibleKeys.add(-r.id*2-1);}}
+      for(const row of rows){const r=row.resource;visibleKeys.add(r.id);if(r.kind==='berries'||r.kind==='tinctoria'||r.species||isMedicinalPlant(r)){if(!row.leafless)visibleKeys.add(-r.id*2);if(r.kind==='berries'?row.ripe:ripe(r))visibleKeys.add(-r.id*2-1);}}
       let resourceLookup:Map<number,Resource>|undefined;
       const chunkResourcesById=()=>resourceLookup??=new Map(rows.map(row=>[row.resource.id,row.resource]));
       if (previous&&rows.every(row => previous.identities.get(row.resource.id) === row.identity)) {
@@ -845,7 +845,7 @@ export class ResourceLayer {
           sharedTreeIds.add(resource.id);continue;
         }
         if(origamiParts?.append(world,resource,turn,row.size))continue;
-        if(resource.species||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,row.size);continue;}
+        if(resource.species||resource.kind==='tinctoria'||isMedicinalPlant(resource)){appendFlora({trunks,crowns,cones,blades,cacti,bushes,fruit:berries},world,resource,turn,row.size);continue;}
         if (resource.kind === 'rock') {
           rocks.push({ x: x - 0.1, y: 0.3, z, sx: 0.46 + n * 0.14, sy: 0.35 + n * 0.15, sz: 0.43, ry: turn, color: resource.stone ? stoneColor(resource.stone) : 0x92998d, pigment:'stone' });
           rocks.push({ x: x + 0.3, y: 0.15, z: z + 0.2, sx: 0.25, sy: 0.24, sz: 0.25, ry: -turn, color: resource.stone ? stoneColor(resource.stone) : 0xa8ad9c, pigment:'stone' });

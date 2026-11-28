@@ -18,6 +18,7 @@ import { serviceCell } from './service-reservations.ts';
 import { spikeTrapPlacementAllowed } from './spike-trap-state.ts';
 import { isShelfKind,shelfFixedAccepts } from './shelf-storage.ts';
 import { structureById } from './structure-navigation.ts';
+import {wallLampSupported363} from './wall-lamp-363.ts';
 import { resourceArrayDelta } from './resource-array-delta.ts';
 import { pileIndex,pileIndexMismatch,verifyPileIndex } from './pile-index.ts';
 import {terrainJournalReadOwner} from './terrain-read-scope.ts';
@@ -259,6 +260,7 @@ function pawnOnCell(world:World,p:Pawn,c:Cell):boolean {
  * a person, an active edge (including its diagonal corner), or a service.
  * `occupancy`, when given, must be captured from this same unchanged World. */
 export function constructionSiteFree(world: World, job: Job, workerId?: number, obstacle=constructionObstruction(world,job), occupancy?: ConstructionOccupancy): boolean {
+  if(world.schemaVersion>=382&&job.kind==='install'&&job.furniture?.kind==='wall-lamp'&&!wallLampSupported363(world,job,true))return false;
   if(isShipCasketKind277(job.kind)&&shipCasketPlacementRefusal277(world,{...job,kind:job.kind},job.id))return false;
   if(isShipComputerSensorsKind298(job.kind)&&shipComputerSensorsPlacementRefusal298(world,{...job,kind:job.kind},job.id))return false;
   if(isShipPartKind276(job.kind)&&shipPartPlacementRefusal276(world,{...job,kind:job.kind},job.id))return false;

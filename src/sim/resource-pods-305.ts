@@ -13,7 +13,7 @@ import {isRoofed} from './roof-rules.ts';
 import {foggedCell256} from './exploration-state-256.ts';
 import {footprintCells} from './definitions.ts';
 import {refreshStock} from './materials.ts';
-import type {Cell,MaterialPile,World} from './types.ts';
+import {SCHEMA_VERSION,type Cell,type MaterialPile,type World} from './types.ts';
 
 /* Schema 305: Core ResourcePodCrash (Misc, weight 1.0). One kind of
  * sellable, non-equipment item worth 1 to 40 silver a unit is chosen; 150 to
@@ -32,9 +32,10 @@ const isMeat=(item:string)=>item.endsWith('-meat');
 const isLeather=(item:string)=>item.endsWith('-leather')||item==='foxfur';
 const isEgg=(item:string)=>item.includes('egg');
 /** Candidate kinds in catalogue order, with their category-adjusted weight. */
-export function resourcePodKinds305():{item:ItemId;value:number;weight:number}[] {
+export function resourcePodKinds305(version:number=SCHEMA_VERSION):{item:ItemId;value:number;weight:number}[] {
   const rows:{item:ItemId;value:number}[]=[];
   for(const [id,entry] of Object.entries(TRADE_CATALOGUE)){
+    if(version<382&&(id==='dye'||id==='ambrosia'))continue;
     const item=id as ItemId,definition=ITEM_DEFINITIONS[item];
     if(!entry||!definition||!entry.playerCanBuy||entry.hasQuality||!(entry.baseMarketValue>=1&&entry.baseMarketValue<40))continue;
     if(definition.kind==='weapon'||definition.kind==='apparel'||isEgg(id))continue;
@@ -44,8 +45,8 @@ export function resourcePodKinds305():{item:ItemId;value:number;weight:number}[]
   return rows.map(r=>({...r,weight:(isMeat(r.item)?Math.min(5/meats,1):1)*(isLeather(r.item)?Math.min(5/leathers,1):1)}));
 }
 /** The pod contents drawn from the incident seed: one kind, its stacks. */
-export function resourcePodContents305(seed:number):{item:ItemId;stacks:number[]} {
-  const state={rng:seed>>>0||1},kinds=resourcePodKinds305();
+export function resourcePodContents305(seed:number,version:number=SCHEMA_VERSION):{item:ItemId;stacks:number[]} {
+  const state={rng:seed>>>0||1},kinds=resourcePodKinds305(version);
   const total=kinds.reduce((n,k)=>n+k.weight,0);let ticket=random(state)*total,kind=kinds[kinds.length-1]!;
   for(const k of kinds){ticket-=k.weight;if(ticket<0){kind=k;break;}}
   let budget=150+450*random(state);const stacks:number[]=[],limit=ITEM_DEFINITIONS[kind.item].stackLimit;
@@ -85,7 +86,7 @@ export function resolveSelectedResourcePod305(world:World,seed:number):boolean {
 export function advanceResourcePod305(world:World):void {
   const state=world.miscIncidents,pending=state?.resourcePod305;if(!state||!pending||world.tick<pending.openAt)return;
   if(!canStandAt(world,pending.cell))return;
-  const {item,stacks}=resourcePodContents305(pending.seed),made:MaterialPile[]=[];
+  const {item,stacks}=resourcePodContents305(pending.seed,world.schemaVersion),made:MaterialPile[]=[];
   const draft:World={...world,piles:[...world.piles]};let nextId=world.nextId;
   const place=(subject:ItemId,quantity:number):boolean=>{
     // One new stack per free floor cell: a cell already holding a stack (this

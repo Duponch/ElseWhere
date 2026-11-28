@@ -54,8 +54,8 @@ describe('zero wear omits actor work at construction, not only visibility',()=>{
   try{expect(on.wear).toBeInstanceOf(THREE.BufferGeometry);expect(off.wear).toBeNull();expect(digest(off.surface)).toBe(digest(on.surface));expect(digest(off.lines)).toBe(digest(on.lines));}
   finally{source.dispose();for(const result of [on,off]){result.surface.dispose();result.lines.dispose();result.wear?.dispose();}}
  });
- it('omits wear for every53 species while replacing dedicated cached wear and preserving shared bodies/ribbons',()=>{
-  expect(ORIGAMI_ANIMAL_SPECIES).toHaveLength(53);
+ it('omits wear for every56 species while replacing dedicated cached wear and preserving shared bodies/ribbons',()=>{
+  expect(ORIGAMI_ANIMAL_SPECIES).toHaveLength(56);
   for(const species of ORIGAMI_ANIMAL_SPECIES){
    const zero=origamiAnimalPresentationGeometry(2,species,false)!,positive=origamiAnimalPresentationGeometry(2,species)!;
    expect(origamiAnimalCachedWearBytes(species),species).toBeGreaterThan(0);
@@ -136,7 +136,7 @@ describe('zero wear omits actor work at construction, not only visibility',()=>{
   const layer=withGraphicsStyle(context,()=>new WildlifeLayer());
   try{
    const rigs=Reflect.get(layer,'rigs') as {mesh:THREE.Mesh;origamiLines?:THREE.Mesh;origamiWear?:THREE.Mesh}[];
-   expect(rigs).toHaveLength(53);
+   expect(rigs).toHaveLength(56);
    for(const rig of rigs){expect(rig.origamiWear).toBeUndefined();expect(rig.origamiLines).toBeInstanceOf(THREE.Mesh);expect(Object.hasOwn(rig.mesh.geometry.userData,'origamiWear')).toBe(false);}
    const restore=layer.prepare();restore();layer.setTexturesEnabled(false);layer.setTexturesEnabled(true);
    expect(create).not.toHaveBeenCalled();expect(track).not.toHaveBeenCalled();expect(Reflect.get(context,'wearGeometries').size).toBe(0);

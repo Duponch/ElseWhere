@@ -25,6 +25,12 @@ const KNIFE_PARTS = [
   {size:[.11,.045,.035],center:[-.11,0,0],color:0x53656b},
   {size:[.025,.105,.04],center:[-.045,0,0],color:0x849ea3},
 ] as const;
+const THRUMBO_HORN_PARTS = [
+  {size:[.24,.16,.15],center:[-.15,0,0],color:0xb2a386},
+  {size:[.26,.105,.105],center:[.10,.035,0],color:0xd9cfb8},
+  {size:[.24,.055,.055],center:[.35,.075,0],color:0xe5ddcb},
+  {size:[.13,.025,.025],center:[.52,.10,0],color:0xeee8d7},
+] as const;
 const EMP_LAUNCHER_PARTS = [
   {size:[.60,.14,.14],center:[.10,.045,0],color:0x546e77},
   {size:[.09,.19,.19],center:[.405,.045,0],color:0x293f4b},
@@ -184,4 +190,8 @@ export const RESIDENT_WEAPON_VISUALS269=[...WEAPON_VISUALS,
 const maceVisuals269=new Map(MACE_ITEMS_269.map(item=>[item,{item,equipment:maceEquipment269(item),cargo:0,dye:MACE_DYE269,parts:maceParts269(item)}]));
 const longswordVisuals270=new Map(LONGSWORD_ITEMS_270.map(item=>[item,{item,equipment:longswordEquipment270(item),cargo:0,dye:LONGSWORD_DYE270,parts:longswordParts270(item)}]));
 const spearVisuals272=new Map(SPEAR_ITEMS_272.map(item=>[item,{item,equipment:spearEquipment272(item),cargo:0,dye:SPEAR_DYE272,parts:spearParts272(item)}]));
-export const weaponVisual=(item:string|undefined)=>isSpearItem272(item)?spearVisuals272.get(item):isLongswordItem270(item)?longswordVisuals270.get(item):isMaceItem269(item)?maceVisuals269.get(item):WEAPON_VISUALS.find(v=>v.item===item);
+// The ground item is distinct. Hand/cargo reuses the compact existing knife
+// silhouette until a sparse, equipped-only render owner can be added without
+// increasing every pawn geometry/shader with a rarely held weapon.
+const hornVisual382={item:'thrumbo-horn',equipment:3,cargo:71,dye:-5,parts:THRUMBO_HORN_PARTS} as const;
+export const weaponVisual=(item:string|undefined)=>item==='thrumbo-horn'?hornVisual382:isSpearItem272(item)?spearVisuals272.get(item):isLongswordItem270(item)?longswordVisuals270.get(item):isMaceItem269(item)?maceVisuals269.get(item):WEAPON_VISUALS.find(v=>v.item===item);

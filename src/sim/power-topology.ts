@@ -6,6 +6,7 @@ import { filteredStructures,structureMembershipToken } from './structure-navigat
 import {structureFamily379} from './structure-family-379.ts';
 import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
+import {wallLampWallCell363} from './furniture-c-363.ts';
 
 interface PowerFootprint { readonly minX:number;readonly maxX:number;readonly minZ:number;readonly maxZ:number }
 
@@ -75,13 +76,25 @@ export class PowerTopologyCache {
     this.key=key;this.rebuilds++;return this.topology={width:world.width,height:world.height,cells,sources,footprints,wireParents,groups,netOf};
   }
 }
-export function validPowerParent(topology:Pick<PowerTopology,'footprints'|'wireParents'>,lamp:Cell,id:number):boolean {
-  const bounds=topology.footprints.get(id);if(!bounds||!topology.wireParents.has(id))return false;
-  // The search window intersects any occupied source cell; ranking uses its anchor.
-  return bounds.minX<=lamp.x+CONNECTION_RANGE&&bounds.maxX>=lamp.x-CONNECTION_RANGE
-    &&bounds.minZ<=lamp.z+CONNECTION_RANGE&&bounds.maxZ>=lamp.z-CONNECTION_RANGE;
+type ConnectorCell=Cell&{kind?:unknown;orientation?:number};
+/** Core PowerConnectionMaker.BestTransmitterForConnector starts from the
+ * actual wall for an attachment, including the natural wall case. */
+export function connectorCell382(lamp:ConnectorCell,version:number):Cell {
+  return lamp.kind==='wall-lamp'&&version>=382?wallLampWallCell363(lamp):lamp;
 }
-export function bestPowerParent(topology:PowerTopology,lamp:Cell,disallowedNets?:ReadonlySet<number>):number|null {
+export function validPowerParent(topology:Pick<PowerTopology,'footprints'|'wireParents'>,lamp:ConnectorCell,id:number,version=381):boolean {
+  const bounds=topology.footprints.get(id);if(!bounds||!topology.wireParents.has(id))return false;
+  // This guard runs for every already connected consumer. Only attachments
+  // need the shifted origin; compute it as scalars, without allocating a
+  // support-cell object on every tick.
+  let x=lamp.x,z=lamp.z;
+  if(lamp.kind==='wall-lamp'&&version>=382){const facing=(((lamp.orientation??0)%4)+4)%4;if(facing===0)z++;else if(facing===1)x++;else if(facing===2)z--;else x--;}
+  // The search window intersects any occupied source cell; ranking uses its anchor.
+  return bounds.minX<=x+CONNECTION_RANGE&&bounds.maxX>=x-CONNECTION_RANGE
+    &&bounds.minZ<=z+CONNECTION_RANGE&&bounds.maxZ>=z-CONNECTION_RANGE;
+}
+export function bestPowerParent(topology:PowerTopology,lamp:ConnectorCell,disallowedNets?:ReadonlySet<number>,version=381):number|null {
+  lamp=connectorCell382(lamp,version);
   let best:number|null=null,distance=Infinity;
   for(let z=Math.max(0,lamp.z-CONNECTION_RANGE);z<=Math.min(topology.height-1,lamp.z+CONNECTION_RANGE);z++)
     for(let x=Math.max(0,lamp.x-CONNECTION_RANGE);x<=Math.min(topology.width-1,lamp.x+CONNECTION_RANGE);x++) {

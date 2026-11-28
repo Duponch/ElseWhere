@@ -43,7 +43,7 @@ function naturalVisualDue(world:World,r:Resource,readGrowth:()=>number,ready:boo
  const leaflessAt=r.plantLife?.leaflessAt;
  if(leaflessAt!==undefined&&world.tick-leaflessAt<LEAFLESS_TICKS)due=leaflessAt+LEAFLESS_TICKS;
  if((r.growth??1)!==1&&isPlant(r)){
-  if(r.species||isMedicinalPlant(r))due=Math.min(due,plantGrowthExceedTickBound(r,Math.ceil(readGrowth()*4)/4));
+  if(r.species||r.kind==='tinctoria'||isMedicinalPlant(r))due=Math.min(due,plantGrowthExceedTickBound(r,Math.ceil(readGrowth()*4)/4));
   if(!ready)due=Math.min(due,plantGrowthExceedTickBound(r,plantHarvestMinGrowth(r)));
  }
  return due;

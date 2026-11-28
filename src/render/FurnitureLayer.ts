@@ -26,6 +26,7 @@ import { industryParts } from './industry-parts';
 import { hospitalBedParts } from './hospital-bed-parts';
 import { hydroponicsParts } from './hydroponics-parts';
 import { sandbagParts } from './sandbag-parts';
+import {barricadeStuff382} from '../sim/barricade-382';
 import { miniTurretBaseParts } from './mini-turret-parts';
 import {animalSleepingSpotParts} from './animal-sleeping-spot-parts';
 import {sleepingSpotParts} from './sleeping-spot-parts';
@@ -58,13 +59,21 @@ import { furniturePlacementZone, hiddenFurnitureSlot, furnitureZoneSlack, furnit
 import {FurnitureSpatialRanges379,type FurnitureSpatialBatches379} from './FurnitureSpatialRanges379';
 
 /** Procedural furniture batches rebuilt only when structure content changes. */
-export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world): void {
+export function buildFurniture(world: World, group: THREE.Group, cutaway: boolean, batches: BoxBatches, contextWorld:World=world,showHiddenConduits=false): void {
     // Walls of every material are drawn linked by WallLayer, never here.
     const bedFrames: Placement[] = [], bedding: Placement[] = [], pillows: Placement[] = [], headboards: Placement[] = [], woodParts: Placement[] = [];
     for (const structure of world.structures) {
       const { x, z } = structure;
       const color = buildingMaterialColor(structure.material);
-      if (structure.kind === 'bed') {
+      if(structure.kind==='barricade'){
+        const tint=barricadeStuff382(structure.material)?.color??color;
+        // The barricade is a rigid waist-high structure rather than soft
+        // cloth sacks. It uses the existing shared box batch, like furniture.
+        woodParts.push({targetId:structure.id,x,z,y:.32,sx:.89,sy:.60,sz:.72,color:tint},
+          {targetId:structure.id,x,z,y:.64,sx:.98,sy:.09,sz:.82,color:tint},
+          {targetId:structure.id,x:x-.4,z,y:.25,sx:.10,sy:.50,sz:.84,color:tint},
+          {targetId:structure.id,x:x+.4,z,y:.25,sx:.10,sy:.50,sz:.84,color:tint});
+      } else if (structure.kind === 'bed') {
         const cells = footprintCells(structure), last = cells[cells.length - 1]!;
         const cx = (x + last.x) / 2, cz = (z + last.z) / 2, ry = structure.orientation * Math.PI / 2;
         const length = structure.footprint === 'legacy-single' ? 0.93 : WORLD_SCALE.bedLength;
@@ -99,7 +108,7 @@ export function buildFurniture(world: World, group: THREE.Group, cutaway: boolea
         {targetId:p.building.id,x,z,y:y+.49*scale,sx:.13*scale,sy:.03*scale,sz:.67*scale,color:buildingMaterialColor(p.building.material,0x6f634e)});
     }
     batches.set(group, 'furniture', decorateFurniturePlacements(world, [
-      ...smithyParts267(world), ...brewingParts265(world), ...ventParts(world,cutaway), ...graveParts(world), ...foodWorkstationParts(world), ...electricalParts(contextWorld,cutaway,world.structures), ...passiveCoolerParts(world), ...doorParts(contextWorld,cutaway,world.structures), ...penParts(contextWorld,world.structures,cutaway), ...campfireParts(world), ...torchLampParts(world), ...recreationParts(world), ...stonecutterParts(world), ...craftingSpotParts(world), ...animalSleepingSpotParts(world), ...researchTailorParts(world), ...industryParts(world), ...habitatParts(world), ...artParts(world), ...drugLabParts(world),
+      ...smithyParts267(world), ...brewingParts265(world), ...ventParts(world,cutaway), ...graveParts(world), ...foodWorkstationParts(world), ...electricalParts(contextWorld,cutaway,world.structures,showHiddenConduits), ...passiveCoolerParts(world), ...doorParts(contextWorld,cutaway,world.structures), ...penParts(contextWorld,world.structures,cutaway), ...campfireParts(world), ...torchLampParts(world), ...recreationParts(world), ...stonecutterParts(world), ...craftingSpotParts(world), ...animalSleepingSpotParts(world), ...researchTailorParts(world), ...industryParts(world), ...habitatParts(world), ...artParts(world), ...drugLabParts(world),
       ...shipChunkParts256(world), ...ancientCasketParts256(world), ...cryptosleepParts271(world), ...ancientMonumentParts256(world), ...localRoadPropParts256(world), ...bedrollParts(world), ...hospitalBedParts(world), ...doubleBedParts(world), ...sleepingSpotParts(world), ...vitalsMonitorParts(world), ...toolCabinetParts355(world), ...eggBoxParts374(world), ...deepDrillingParts(world), ...orbitalParts(world), ...nutrientPasteParts(world), ...biofuelParts(world), ...smeltingParts(world), ...crematoriumParts(world), ...firefoamParts290(world), ...spikeTrapParts(world), ...iedTrapParts357(world), ...hydroponicsParts(world), ...miniTurretBaseParts(world), ...parcels,
       ...woodParts.map(p => ({ ...p, color: p.color ?? 0xa38559 })),
       ...bedFrames.map(p => ({ ...p, color: p.color ?? 0x795d41 })), ...bedding.map(p => ({ ...p, color: p.color??0xc7a977 })),

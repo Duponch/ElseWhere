@@ -10,33 +10,44 @@ import {learnSkill,xpRequired} from './skills.ts';
 import {BACKGROUND_SKILL_IDS,backgroundSkillRefusal} from './colonist-backgrounds.ts';
 import type {MedicalRecord,MedicalRandom} from './injury-types.ts';
 import type {Pawn,World} from './types.ts';
-export type HumanConditionOwner256={kind:'map';world:World}|{kind:'caravan'}|{kind:'world-pawn'};
+import {forgetHumanMemory382} from './human-alzheimer-382.ts';
+import {advanceAmbrosiaClinical382} from './ambrosia-clinical-382.ts';
+export type HumanConditionOwner256={kind:'map';world:World}|{kind:'caravan';schemaVersion?:number}|{kind:'world-pawn';schemaVersion?:number};
 /** Same actual actor/record/owner clock. WorldPawn admission intentionally
  * cannot start a new mental episode, as the primary StateCanOccur refuses it. */
 export function humanConditionMedicalFrontier256(p:Pawn,record:MedicalRecord,clock:number,draw:MedicalRandom,owner:HumanConditionOwner256,actualCommitPawn?:Pawn):AnimalConditionMedicalFrontier256|undefined {
- if(!record.animalAgeConditions&&p.mental?.crisis?.kind!=='confused-wander'&&!record.toxicBuildup)return;
+ if(!record.animalAgeConditions&&p.mental?.crisis?.kind!=='confused-wander'&&!record.toxicBuildup&&!record.ambrosia382)return;
  if(record.body)throw Error('Human condition frontier requires the actual human record');
- if(record.humanHealthScale!==undefined&&record.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers'))throw Error('Actual native Human Alzheimer memories and conditional thoughts are not bound');
+ const version=owner.kind==='map'?owner.world.schemaVersion:owner.schemaVersion??256;
+ if(version<382&&record.humanHealthScale!==undefined&&record.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers'))throw Error('Actual native Human Alzheimer memories and conditional thoughts are not bound');
  // Carcinoma has no mental giver or skill/memory effect. A newly acquired
  // liver cancer can evolve on an old literal human without inventing a mind.
- const requiresMind=!record.alcohol||!!record.toxicBuildup||p.mental?.crisis?.kind==='confused-wander'||record.animalAgeConditions?.cases.some(c=>c.kind!=='Carcinoma');
+ const requiresMind=!!record.animalAgeConditions&&(!record.alcohol||record.animalAgeConditions.cases.some(c=>c.kind!=='Carcinoma'))||!!record.toxicBuildup||p.mental?.crisis?.kind==='confused-wander';
  if(requiresMind&&!hasHumanConditionMind256(p))throw Error('Historical human clinical wander authority is unavailable');
  const local=owner.kind==='map'?owner.world:undefined,commitPawn=actualCommitPawn??p;
  if(actualCommitPawn&&(owner.kind!=='map'||!local||!isSchema256Or257(local.schemaVersion)||actualCommitPawn===p||p.id!==actualCommitPawn.id||p.health!==record||actualCommitPawn.health===record||local.tick!==clock||!local.pawns.includes(actualCommitPawn)||local.pawns.some(a=>a!==actualCommitPawn&&a.id===p.id)))throw Error('Private clinical outcome lacks its actual original map owner');
  const random=animalClinicalRandom256(draw);
+ const clinicalId=version>=382?p.nativeHuman?.sourceThingId382??p.id:p.id,phase=version>=382&&local?local.phaseCore297??0:0;
  let last=record.tick,done=false,episode=p.mental?.crisis?.kind==='confused-wander'?{revision:1 as const,ageCore:p.mental.crisis.age}:undefined,started=false,recovered=false;
+ const bindings:import('./animal-age-condition-runtime-256.ts').AnimalAgeConditionBindings256={
+  inMentalState:()=>!!p.mental?.crisis||!!episode,
+  tryStartConfused:()=>{if(owner.kind==='world-pawn'||episode||p.mental?.crisis||['dead','downed','sleeping'].includes(p.state)||medicalStatus(record)!=='mobile')return false;episode={revision:1,ageCore:0};started=true;return true;},
+  destroyPart:(part,atCore)=>{destroyAnimalConditionPart256(record,part,atCore,random);},
+  reconcileHealth:()=>reconcileMedicalDeath(record)
+ };
+ if(version>=382&&record.humanHealthScale!==undefined&&record.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers'))bindings.forgetHumanMemory=()=>{forgetHumanMemory382(p,random);};
+ if(version>=382&&record.humanHealthScale!==undefined&&record.animalAgeConditions?.cases.some(c=>c.ageCore===0&&c.bornAt>record.tick)){
+  const newborn=record.animalAgeConditions.cases.filter(c=>c.ageCore===0&&c.bornAt>record.tick);
+  bindings.deferNewCondition=c=>newborn.includes(c)&&c.bornAt>=record.tick;
+ }
  return {
   step(current){
    if(current!==record||record.tick!==last+1||done)throw Error('Human condition frontier lost its actual original');last=record.tick;
    for(let core=(record.tick-1)*10+1;core<=record.tick*10&&!record.death;core++){
+    if(record.ambrosia382)advanceAmbrosiaClinical382(record,clinicalId,medicalCivilCore271(record,core)+phase);
     tickAnimalConditionTends256(record);
-    advanceAnimalAgeConditionInterval256(record,{actorId:p.id,atCore:core,civilCore:medicalCivilCore271(record,core),deltaCore:1,random,bindings:{
-     inMentalState:()=>!!p.mental?.crisis||!!episode,
-     tryStartConfused:()=>{if(owner.kind==='world-pawn'||episode||p.mental?.crisis||['dead','downed','sleeping'].includes(p.state)||medicalStatus(record)!=='mobile')return false;episode={revision:1,ageCore:0};started=true;return true;},
-     destroyPart:(part,atCore)=>{destroyAnimalConditionPart256(record,part,atCore,random);},
-     reconcileHealth:()=>reconcileMedicalDeath(record)
-    }});
-    for(const c of record.animalAgeConditions?.cases??[])if(c.kind==='Dementia'){
+    advanceAnimalAgeConditionInterval256(record,{actorId:clinicalId,atCore:core,civilCore:medicalCivilCore271(record,core)+phase,deltaCore:1,random,bindings});
+    for(const c of record.animalAgeConditions?.cases??[])if(c.kind==='Dementia'&&!bindings.deferNewCondition?.(c)){
      const f=Math.fround;
      for(const [key,skill] of Object.entries(p.skills)){
       if(key==='lastResetTick'||!skill||typeof skill!=='object')continue;
@@ -47,7 +58,7 @@ export function humanConditionMedicalFrontier256(p:Pawn,record:MedicalRecord,clo
       if(units)learnSkill(skill,-units,p);
      }
     }
-    if(episode&&(medicalStatus(record)!=='mobile'||advanceAnimalConfusionState256(episode,p.id,medicalCivilCore271(record,core),1,random))){episode=undefined;recovered=true;}
+    if(episode&&(medicalStatus(record)!=='mobile'||advanceAnimalConfusionState256(episode,clinicalId,medicalCivilCore271(record,core)+phase,1,random))){episode=undefined;recovered=true;}
    }
   },
   commit(){

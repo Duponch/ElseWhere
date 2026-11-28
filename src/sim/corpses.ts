@@ -20,6 +20,8 @@ import { reservedSource } from './materials.ts';
 import {actualAnimalProfile256} from './actual-animal-profile-256.ts';
 import { animalSpecies,type AnimalSpeciesId,type AnimalMeatItem,type AnimalLeatherItem } from './animal-species.ts';
 import { adultAgeTicks,bodySizeAtAge } from './animal-life.ts';
+import {animalToolParts256} from './animal-anatomy-v256.ts';
+import {trackedAnimalLifeStage256} from './animal-growth-runtime-256.ts';
 
 /** One corpse owns the original animal identity and frozen medical record. It is
  * not food, not a stack of abstract meat, and never also a live wildlife actor. */
@@ -47,6 +49,14 @@ export function corpseProducts(p:Pick<MaterialPile,'corpse'>):{meat:{item:Animal
   return {meat:{item:definition.meatItem,quantity:yielded.meat},leather:{item:definition.leatherItem,quantity:yielded.leather}};
 }
 export const animalCorpseItem=(species:AnimalSpeciesId)=>animalSpecies(species).corpseItem;
+
+const thrumboHornParts=animalToolParts256('QuadrupedAnimalWithHoovesAndHorn','HornAttackTool');
+/** Core adult PawnKindDef butcherBodyPart: one intact HornAttackTool yields
+ * a horn. No random roll, no juvenile prize, no invented replacement part. */
+export function thrumboHornFromCorpse382(c:CorpseState|undefined):number {
+ if(c?.species!=='thrumbo'||(c.growthTracker?trackedAnimalLifeStage256(c.species,c.growthTracker).definition!=='AnimalAdult':c.ageTicks<adultAgeTicks(c.species)))return 0;
+ return thrumboHornParts.filter(part=>!corpsePartAbsent(c,part)).length;
+}
 
 function thermalAnchor(rot:RotState,tick:number,rate:number):RotState {
   if(rate===(rot.rate??1))return rot;

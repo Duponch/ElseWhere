@@ -38,7 +38,7 @@ function freshAnimal(species:AnimalSpeciesId,index:number,ageTicks:number,world:
  attachGeneratedAnimalGrowth256(animal,world.tick*10,world.schemaVersion);initializeAnimalEggLayer256(animal);expect(validAnimalGrowthTracker256(animal,world.schemaVersion,world.tick)).toBe(true);expect(animal.wander).toEqual({revision:1,nextMoveOrderIsWait:false});return animal;
 }
 
-test('all53 active animals share corrected geometry, clinical owners, native/cached poses and growth across styles; Default keeps coat surfaces without Origami companions or bake admission',()=>{
+test('all56 active animals share corrected geometry, clinical owners, native/cached poses and growth across styles; Default keeps coat surfaces without Origami companions or bake admission',()=>{
  let world=animalCombatCamp();world.resources=[];world.piles=[];world.wildlife!.animals=ANIMAL_SPECIES_IDS.map((species,i)=>freshAnimal(species,i,adultAgeTicks(species),world));world.nextId=Math.max(world.nextId,1000);
  const legacy=owner('default'),origami=owner('origami'),camera=new THREE.OrthographicCamera(-16,16,16,-16,.1,100);camera.position.set(20,20,20);camera.lookAt(16,0,16);camera.updateMatrixWorld();
  const compare=()=>{
@@ -54,7 +54,7 @@ test('all53 active animals share corrected geometry, clinical owners, native/cac
   expect(legacy.layer.bakedStatus()).toMatchObject({eligible:false,pending:false,published:[]});expect(legacy.requirePaint).not.toHaveBeenCalled();expect(legacy.brush).not.toHaveBeenCalled();
  };
  try{
-  expect(ANIMAL_SPECIES_IDS).toHaveLength(53);compare();const adultScales=ANIMAL_SPECIES_IDS.map(s=>body(legacy.layer,s).geometry.getAttribute('aScale').getX(0)),deerActive=body(legacy.layer,'deer').geometry.drawRange.count;
+  expect(ANIMAL_SPECIES_IDS).toHaveLength(56);compare();const adultScales=ANIMAL_SPECIES_IDS.map(s=>body(legacy.layer,s).geometry.getAttribute('aScale').getX(0)),deerActive=body(legacy.layer,'deer').geometry.drawRange.count;
   // A real localized injury removes an existing outside silhouette part; the
   // renderer consumes the resulting medical record and packed mask unchanged.
   const deer=world.wildlife!.animals.find(a=>a.species==='deer')!,health=deer.health=createAnimalMedicalRecord256(world,deer),model=medicalModel(health);

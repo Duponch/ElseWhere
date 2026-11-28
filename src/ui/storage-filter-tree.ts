@@ -31,7 +31,7 @@ export const STORAGE_FILTER_TREE:readonly StorageFilterNode[]=[
     branch('mortar-shells','Obus de mortier',kind('shell')),
     branch('prostheses','Prothèses',kind('prosthesis')),
     branch('brewing-products','Brassage',leaves(id=>id==='wort'||id==='beer')),
-    branch('brewing-plants','Matières végétales',leaves(id=>id==='hops')),
+    branch('brewing-plants','Matières végétales',leaves(id=>id==='hops'||id==='dye')),
     branch('textiles','Textiles',[
       branch('leathers','Cuirs',leaves((id,k)=>k==='textile'&&id!=='cloth'&&id!=='muffalo-wool'&&id!=='devilstrand')),
       branch('wools','Laines',leaves(id=>id==='muffalo-wool')),

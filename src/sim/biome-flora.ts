@@ -1,6 +1,7 @@
 import {CAVE_PLANT_SPECIES_256,CAVE_FLORA_DEFINITIONS_256} from './cave-flora-256.ts';
 import type { ItemId } from './items.ts';
 import type { Resource } from './types.ts';
+import {DEAD_STUMP_FACTS_382,DEAD_STUMP_SPECIES_382,isSpecialPlantSpecies382,type DeadStumpSpecies382} from './native-special-plants-382.ts';
 
 export const BIOMES = ['temperate-forest','boreal-forest','arid-shrubland','tundra'] as const;
 export type BiomeId = typeof BIOMES[number];
@@ -12,12 +13,12 @@ export const LEGACY_PLANT_SPECIES = [
 export const PROSPECTIVE_PLANT_SPECIES_256 = [
   'alocasia','astragalus','bush','chokevine','clivia','dandelion','pincushion-cactus','rafflesia','low-shrub','bamboo','cecropia','cypress','maple','palm','teak','willow',...CAVE_PLANT_SPECIES_256,
 ] as const;
-export const PLANT_SPECIES = [...LEGACY_PLANT_SPECIES,...PROSPECTIVE_PLANT_SPECIES_256] as const;
+export const PLANT_SPECIES = [...LEGACY_PLANT_SPECIES,...PROSPECTIVE_PLANT_SPECIES_256,'ambrosia',...DEAD_STUMP_SPECIES_382] as const;
 export type PlantSpecies = typeof PLANT_SPECIES[number];
 export const PLANT_SPECIES_SCHEMA=256;
 export const isPlantSpeciesInVersion=(value:unknown,version:number):value is PlantSpecies=>
   isPlantSpecies(value)&&(version>=256||(LEGACY_PLANT_SPECIES as readonly unknown[]).includes(value))
-  &&(value!=='healroot-wild'||version>=167)&&version>=91;
+  &&(value!=='healroot-wild'||version>=167)&&(!isSpecialPlantSpecies382(value)||version>=382)&&version>=91;
 
 export interface FloraDefinition {
   label:string;
@@ -34,7 +35,7 @@ export interface FloraDefinition {
   flammability:number;
   maxGrowthTemperature:58|75;
   coldLeafless:boolean;
-  lifespanMultiplier:8|9|40;
+  lifespanMultiplier:0|8|9|40;
 }
 
 /** Values are the resolved Core 1.6.4871 definitions. Lisiere keeps one
@@ -42,6 +43,10 @@ export interface FloraDefinition {
  * their fertility, duration, physical yield, nutrition, HP and fire profile. */
 export const FLORA_DEFINITIONS:Readonly<Record<PlantSpecies,FloraDefinition>>=Object.freeze({
   ...CAVE_FLORA_DEFINITIONS_256,
+  ...Object.fromEntries(DEAD_STUMP_SPECIES_382.map(species=>{
+    const fact=DEAD_STUMP_FACTS_382[species];return [species,{label:fact.label,kind:'wild-plant',growDays:30,minFertility:.01,sensitivity:0,harvestMinGrowth:0,yield:4,product:'wood',persistent:false,nutrition:0,hitPoints:100,flammability:fact.flammability,maxGrowthTemperature:58,coldLeafless:false,lifespanMultiplier:0}];
+  })) as Record<DeadStumpSpecies382,FloraDefinition>,
+  ambrosia:{label:'Ambroisie',kind:'wild-plant',growDays:6,minFertility:.7,sensitivity:.15,harvestMinGrowth:.65,yield:4,product:'ambrosia',persistent:true,nutrition:.5,hitPoints:100,flammability:1,maxGrowthTemperature:58,coldLeafless:true,lifespanMultiplier:8},
   grass:{label:'Herbe',kind:'wild-plant',growDays:2.5,minFertility:.05,sensitivity:.3,harvestMinGrowth:1,yield:0,product:null,persistent:false,nutrition:.5,hitPoints:85,flammability:1.3,maxGrowthTemperature:75,coldLeafless:true,lifespanMultiplier:8},
   'tall-grass':{label:'Herbe haute',kind:'wild-plant',growDays:3,minFertility:.7,sensitivity:.7,harvestMinGrowth:1,yield:0,product:null,persistent:false,nutrition:.5,hitPoints:90,flammability:1.3,maxGrowthTemperature:75,coldLeafless:false,lifespanMultiplier:8},
   brambles:{label:'Ronces',kind:'wild-plant',growDays:3,minFertility:.7,sensitivity:.7,harvestMinGrowth:1,yield:0,product:null,persistent:false,nutrition:.5,hitPoints:100,flammability:1,maxGrowthTemperature:58,coldLeafless:true,lifespanMultiplier:8},

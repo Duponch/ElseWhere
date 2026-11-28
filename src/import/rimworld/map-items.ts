@@ -25,14 +25,14 @@ const items:Record<string,Item>={
  Leather_Bluefur:i('bluefur'),Leather_Camel:i('camelhide'),WoolMuffalo:i('muffalo-wool'),WoolAlpaca:i('alpaca-wool'),WoolBison:i('bison-wool'),
  WoolMegasloth:i('megasloth-wool'),
  WoolSheep:ia('muffalo-wool','Laine de mouton : devient de la laine de muffalo.'),Synthread:ia('cloth','Synthétique : devient du tissu.'),
- Hyperweave:ia('devilstrand','Hypertissu : devient de la soie du diable.'),Leather_Thrumbo:ia('heavy-fur','Cuir de thrumbo : devient de la fourrure épaisse.'),
+ Hyperweave:ia('devilstrand','Hypertissu : devient de la soie du diable.'),Leather_Thrumbo:i('thrumbofur'),
  Leather_Patch:ia('plainleather','Cuir rapiécé : devient du cuir ordinaire.'),Leather_Human:ix('Cuir humain : absent.'),
  MealNutrientPaste:i('nutrient-paste-meal'),MealSimple:i('simple-meal'),MealFine:i('fine-meal'),MealFine_Veg:i('vegetarian-fine-meal'),
  MealFine_Meat:i('carnivore-fine-meal'),MealLavish:i('lavish-meal'),MealLavish_Veg:i('vegetarian-lavish-meal'),MealLavish_Meat:i('carnivore-lavish-meal'),
  MealSurvivalPack:i('survival-meal'),Hay:i('hay'),RawBerries:i('berries'),RawRice:i('rice'),RawPotatoes:i('potato'),RawCorn:i('corn'),RawAgave:i('agave-fruit'),
  RawFungus:i('raw-fungus'),RawHops:i('hops'),Milk:i('milk'),InsectJelly:i('insect-jelly'),Pemmican:i('pemmican'),Kibble:i('kibble'),
- Chocolate:ix('Chocolat : absent.'),Ambrosia:ix('Ambroisie : absente.'),Dye:ix('Teinture : absente.'),ReinforcedBarrel:ix('Canon renforcé : absent.'),
- ThrumboHorn:ix('Corne de thrumbo : absente.'),ElephantTusk:ix('Défense d’éléphant : absente.'),InsectJellyBottle:ix('Absent.'),
+ Chocolate:ix('Chocolat : absent.'),Ambrosia:ia('ambrosia','Fruit conservé ; effets de la drogue et dépendance non modélisés.'),Dye:ia('dye','Teinture conservée ; travaux de peinture non modélisés.'),ReinforcedBarrel:ix('Canon renforcé : absent.'),
+ ThrumboHorn:i('thrumbo-horn'),ElephantTusk:ix('Défense d’éléphant : absente.'),InsectJellyBottle:ix('Absent.'),
  Novel:i('novel'),TextBook:ix('Manuel d’apprentissage : absent.'),Textbook:ix('Manuel d’apprentissage : absent.'),Schematic:ix('Schéma : absent.'),
  PsychicAnimalPulser:ix('Pulser animal : artefact d’incident absent.'),PsychicSoothePulser:ix('Pulser d’apaisement : artefact d’incident absent.'),
  MechSerumHealer:ix('Sérum de guérison : absent.'),MechSerumResurrector:ix('Sérum de résurrection : absent.'),
@@ -70,9 +70,10 @@ const meats:Record<string,ItemId>={Hare:'hare-meat',Deer:'deer-meat',Muffalo:'mu
  Lynx:'lynx-meat',Megasloth:'megasloth-meat',Monkey:'monkey-meat',Panther:'panther-meat',Raccoon:'raccoon-meat',Rat:'rat-meat',Rhinoceros:'rhinoceros-meat',
  Squirrel:'squirrel-meat',Tortoise:'tortoise-meat',Turkey:'turkey-meat',Warg:'warg-meat',Pig:'pig-meat',Wolf_Timber:'timber-wolf-meat',Yak:'yak-meat'} as Record<string,ItemId>;
 for(const [race,id] of Object.entries(meats))items[`Meat_${race}`]=i(id);
-for(const [race,id,label] of [['Goat','ibex-meat','bouquetin'],['Sheep','alpaca-meat','alpaga'],['Cow','yak-meat','yak'],['Chicken','turkey-meat','dinde'],['Goose','duck-meat','canard']] as const)
+items.Meat_Goat=i('goat-meat');items.Meat_Thrumbo=i('thrumbo-meat');
+for(const [race,id,label] of [['Sheep','alpaca-meat','alpaga'],['Cow','yak-meat','yak'],['Chicken','turkey-meat','dinde'],['Goose','duck-meat','canard']] as const)
  items[`Meat_${race}`]=ia(id,`Viande de cet animal : devient de la viande de ${label}, comme l’animal lui-même.`);
-for(const race of ['Thrumbo','Alphabeaver','Human'])items[`Meat_${race}`]=ix(`Viande (${race}) : absente d’Elsewhere.`);
+for(const race of ['Alphabeaver','Human'])items[`Meat_${race}`]=ix(`Viande (${race}) : absente d’Elsewhere.`);
 for(const bird of ['Cassowary','Cobra','Duck','Emu','Iguana','Ostrich','Tortoise','Turkey']){
  const id=bird.toLowerCase();
  items[`Egg${bird}Unfertilized`]=i(`${id}-egg-unfertilized` as ItemId);
@@ -143,6 +144,7 @@ export const WEAPON_MAP:Readonly<Record<string,DefMapping<WeaponSpec>>>={
  Gun_Autopistol:exact({item:'autopistol'}),Gun_MachinePistol:exact({item:'machine-pistol'}),Gun_ChainShotgun:exact({item:'chain-shotgun'}),
  Gun_HeavySMG:exact({item:'heavy-smg'}),Gun_LMG:exact({item:'lmg'}),Gun_AssaultRifle:exact({item:'assault-rifle'}),Gun_SniperRifle:exact({item:'sniper-rifle'}),
  Gun_EmpLauncher:exact({item:'emp-launcher'}),Bow_Short:exact({item:'short-bow'}),Bow_Recurve:exact({item:'recurve-bow'}),Bow_Great:exact({item:'greatbow'}),
+ ThrumboHorn:exact({item:'thrumbo-horn'}),
  MeleeWeapon_Mace:exact({family:'mace'}),MeleeWeapon_LongSword:exact({family:'longsword'}),MeleeWeapon_Spear:exact({family:'spear'}),
  MeleeWeapon_Knife:adapt({item:'plasteel-knife'},'Couteau : devient le couteau en plastacier (seul couteau d’Elsewhere).'),
  MeleeWeapon_Club:adapt({family:'mace'},'Massue : devient une masse.'),MeleeWeapon_Ikwa:adapt({family:'spear'},'Ikwa : devient une lance.'),

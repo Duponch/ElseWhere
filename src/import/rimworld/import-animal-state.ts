@@ -26,7 +26,7 @@ import {validAnimalTrainingField282} from '../../sim/animal-training-save-282.ts
 import {ANIMAL_EGG_CONTENT_256,isEggSpecies256} from '../../sim/animal-egg-content-v256.ts';
 import {validAnimalEggState256} from '../../sim/animal-egg-save-v256.ts';
 import type {MedicalCare} from '../../sim/medicine-rules.ts';
-import {AUTO_SLAUGHTER_SPECIES,type AutoSlaughterSpecies,defaultAutoSlaughterConfig} from '../../sim/auto-slaughter-state.ts';
+import {isAutoSlaughterSpecies,defaultAutoSlaughterConfig} from '../../sim/auto-slaughter-state.ts';
 import {validAutoSlaughterConfig} from '../../sim/auto-slaughter-save.ts';
 import {penAnimalsForVersion} from '../../sim/animal-pens.ts';
 import {effectiveCore297} from '../../sim/core-phase-297.ts';
@@ -81,13 +81,13 @@ function admittedHealth(ctx:ImportContext,a:WildAnimal,allowDeath=false):boolean
  if(allowDeath)reconcileMedicalDeath(a.health);
  return !validateMedicalRecord(a.health,true,true,true,true,true,true,true,true,true,true,true,ctx.w.schemaVersion)&&(allowDeath||medicalStatus(a.health)!=='dead');
 }
-export function importAnimalHealth(ctx:ImportContext,t:RwsThing,a:WildAnimal,options?:{allowDeath?:true}):void {
+export function importAnimalHealth(ctx:ImportContext,t:RwsThing,a:WildAnimal,options?:{allowDeath?:true;hasPhysicalCorpseOwner?:true}):void {
  const all=listItems(t.node,'healthTracker/hediffSet/hediffs').filter(h=>{
   if(h.attrs?.Class==='Hediff_Pregnant')return false;
   // Later scavenging/removal of corpse parts is not the animal's terminal
   // clinical proof. The outer carcass owner can represent that separately.
   if(options?.allowDeath&&num(h,'tickAdded')!==undefined&&num(h,'tickAdded')!>ctx.save.ticksGame){
-   ctx.notes.def('health',t.def+': '+(text(h,'def')??'?'),'dropped',undefined,'État postmortem : hors du dossier clinique arrêté au décès.');return false;
+   if(!options.hasPhysicalCorpseOwner)ctx.notes.def('health',t.def+': '+(text(h,'def')??'?'),'dropped',undefined,'État postmortem : hors du dossier clinique arrêté au décès.');return false;
   }
   return true;
  });
@@ -221,6 +221,12 @@ export function importAnimalState(ctx:ImportContext,t:RwsThing,a:WildAnimal):voi
  if(rawFood!==undefined&&a.food!==rawFood)ctx.notes.def('animals',t.def+': nourriture','adapted','nutrition','Valeur bornée aux capacités de cette espèce.',1,'model');
  if(rawRest!==undefined)a.rest=clamp(rawRest,0,1);
  if(a.wander&&at(t.node,'mindState'))a.wander.nextMoveOrderIsWait=bool(text(t.node,'mindState/nextMoveOrderIsWait'));
+ const exit=num(t.node,'mindState/exitMapAfterTick');
+ if(a.species==='thrumbo'&&!a.domestic&&exit!==undefined&&Number.isSafeInteger(exit)&&exit>0&&exit<2147483647){
+  const converted=effectiveCore297(ctx.w)+exit-ctx.save.ticksGame;
+  if(Number.isSafeInteger(converted)&&converted>0&&converted<=ctx.w.tick*10+150000){a.exitAtCore382=converted;ctx.notes.def('animals',t.def+': départ de visite','exact','échéance Core');}
+  else ctx.notes.def('animals',t.def+': départ de visite','dropped',undefined,'Échéance de départ sans ancrage temporel admissible.',1,'source');
+ }
  importActorFilthFeet(ctx,a,t.node,'animals');
  const d=a.domestic;
  if(d){
@@ -305,20 +311,19 @@ export function finalizeImportedAnimals(ctx:ImportContext,animals:readonly Impor
    }else if(bedRef)ctx.notes.def('animals',t.def+': couchage','dropped',undefined,'Couchage normal compatible et libre non importé.');
   }
  }
- // The existing schema still restricts automatic slaughter to its five
- // historical species; do not broaden the rule silently on import.
+ // Quotas now have the actual species owner, with bonded protection.
  for(const row of listItems(ctx.map.node,'autoSlaughterManager/configs')){
   const def=text(row,'animal')??'',mapped=lookup(ANIMAL_MAP,def),
         limits=['maxTotal','maxMales','maxMalesYoung','maxFemales','maxFemalesYoung'] as const;
-  if(!limits.some(k=>num(row,k)!==undefined&&num(row,k)!>=0)&&!bool(text(row,'allowSlaughterPregnant')))continue;
-  if(!mapped||isDropped(mapped)||!(AUTO_SLAUGHTER_SPECIES as readonly string[]).includes(mapped.to)){
+  if(!limits.some(k=>num(row,k)!==undefined&&num(row,k)!>=0)&&!bool(text(row,'allowSlaughterPregnant'))&&!bool(text(row,'allowSlaughterBonded')))continue;
+  if(!mapped||isDropped(mapped)||!isAutoSlaughterSpecies(mapped.to,w.schemaVersion)){
    ctx.notes.def('animals',def+': abattage automatique','dropped',undefined,'Espèce absente du système d’abattage automatique.',1,'model');continue;
   }
-  const config=defaultAutoSlaughterConfig(mapped.to as AutoSlaughterSpecies);
+  const config=defaultAutoSlaughterConfig(mapped.to);
   for(const k of limits){const n=num(row,k);if(n!==undefined)config[k]=n;}
   config.allowPregnant=bool(text(row,'allowSlaughterPregnant'));
-  if(bool(text(row,'allowSlaughterBonded')))ctx.notes.def('animals',def+': abattage des animaux liés','dropped',undefined,'Le modèle actuel ne porte pas cette politique distincte.',1,'model');
-  if(validAutoSlaughterConfig(config)&&!w.autoSlaughter?.some(c=>c.species===config.species)){
+  if(bool(text(row,'allowSlaughterBonded')))config.allowBonded382=true;
+  if(validAutoSlaughterConfig(config,w.schemaVersion)&&!w.autoSlaughter?.some(c=>c.species===config.species)){
    (w.autoSlaughter??=[]).push(config);ctx.notes.def('animals',def+': abattage automatique',mappingStatus(mapped),mapped.to);
   }
  }

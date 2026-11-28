@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {assignPileOwner} from './pile-index.ts';
 import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {isShipComputerSensorsKind298} from './ship-computer-sensors-content-298.ts';
@@ -54,16 +55,16 @@ export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolea
   // body identity will be moved there only after all preflights succeed.
   if(graveRelease.corpseId!==null)assignPileOwner(view.piles.find(p=>p.id===graveRelease.corpseId)!,{type:'ground',...graveRelease.cell!});
   const refunds: { item: ItemId; quantity: number; cell: { x:number; z:number } }[] = [];
-  let rng = world.rng, lostWood = 0, lostSteel = 0, lostComponents=0,lostPlasteel=0,lostUranium=0,lostAdvancedComponents=0,lostAiCores=0,lostGold=0;
+  let rng = world.rng, lostWood = 0, lostSteel = 0, lostComponents=0,lostPlasteel=0,lostUranium=0,lostAdvancedComponents=0,lostAiCores=0,lostGold=0,lostSilver=0,lostJade=0;
   if(structure.kind==='glow-pod')rng=shipChunkNextRandom256(rng).rng; // actual singleton leavingsRect, no material/filth under Deconstruct
   const shipRefunds=structure.kind==='ship-chunk'?drawShipChunkDeconstruction256(structure,rng):null;if(shipRefunds)rng=shipRefunds.rng;let shipRefundIndex=0;
   const lostBlocks:Partial<Record<BlockMaterial,number>>={...world.deconstructed.lostBlocks};
   // Prospective accounting only: older textile losses remain unknown.
   const lostTextiles:Partial<Record<UpholsteryMaterial,number>>={...world.deconstructed.lostTextiles};
   for (const cost of structure.kind === 'campfire' || structure.kind === 'passive-cooler' ? [] : constructionRecipe(structure).ingredients) {
-    let quantity = structure.kind==='torch-lamp'||structure.kind==='power-conduit'?0:Math.floor(cost.quantity / 2);
+    let quantity = structure.kind==='torch-lamp'||isConduitKind(structure.kind)?0:Math.floor(cost.quantity / 2);
     const shipRefund=shipRefunds?.entries[shipRefundIndex++];if(shipRefund)quantity=shipRefund.quantity;const refundOrigin=shipRefund?.origin??structure;
-    if (structure.kind!=='ship-chunk'&&structure.kind!=='torch-lamp'&&structure.kind!=='power-conduit'&&cost.quantity % 2) {
+    if (structure.kind!=='ship-chunk'&&structure.kind!=='torch-lamp'&&!isConduitKind(structure.kind)&&cost.quantity % 2) {
       rng ^= rng << 13; rng ^= rng >>> 17; rng ^= rng << 5; rng >>>= 0;
       if (rng / 0x100000000 < .5) quantity++;
     }
@@ -81,11 +82,13 @@ export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolea
     else if(cost.item==='steel')lostSteel += cost.quantity - quantity;
     else if(cost.item==='component')lostComponents+=cost.quantity-quantity;
     // Prospective ship parts only: older generic removals keep their ledger.
-    else if(shipPart&&cost.item==='plasteel')lostPlasteel+=cost.quantity-quantity;
-    else if(shipPart&&cost.item==='uranium')lostUranium+=cost.quantity-quantity;
+    else if((shipPart||structure.kind==='barricade')&&cost.item==='plasteel')lostPlasteel+=cost.quantity-quantity;
+    else if((shipPart||structure.kind==='barricade')&&cost.item==='uranium')lostUranium+=cost.quantity-quantity;
     else if(shipPart&&cost.item==='advanced-component')lostAdvancedComponents+=cost.quantity-quantity;
     else if(shipPart&&cost.item==='ai-core')lostAiCores+=cost.quantity-quantity;
-    else if(shipPart&&cost.item==='gold')lostGold+=cost.quantity-quantity;
+    else if((shipPart||structure.kind==='barricade')&&cost.item==='gold')lostGold+=cost.quantity-quantity;
+    else if(structure.kind==='barricade'&&cost.item==='silver')lostSilver+=cost.quantity-quantity;
+    else if(structure.kind==='barricade'&&cost.item==='jade')lostJade+=cost.quantity-quantity;
     else if(isBlockMaterial(cost.item))lostBlocks[cost.item]=(lostBlocks[cost.item]??0)+cost.quantity-quantity;
     else if(world.schemaVersion>=189&&isUpholsteryMaterial(cost.item))lostTextiles[cost.item]=(lostTextiles[cost.item]??0)+cost.quantity-quantity;
   }
@@ -93,7 +96,7 @@ export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolea
   const ledger = world.deconstructed;
   const fermentation=fermentationContents265(structure),fermentationLostKey=fermentation?.item==='beer'?'lostBeer':'lostWort';
   if(fermentation&&!Number.isSafeInteger((ledger[fermentationLostKey]??0)+fermentation.quantity))return false;
-  if (![(ledger.lostGold298??0)+lostGold,(ledger.lostAiCores298??0)+lostAiCores,(ledger.lostPlasteel275??0)+lostPlasteel,(ledger.lostUranium??0)+lostUranium,(ledger.lostAdvancedComponents271??0)+lostAdvancedComponents,(ledger.lostComponents??0)+lostComponents, ledger.count + 1, ledger.lostWood + lostWood, (ledger.lostSteel ?? 0) + lostSteel, ledger.fuelTicks + fuelTicks,...Object.values(lostBlocks),...Object.values(lostTextiles)].every(Number.isSafeInteger)) return false;
+  if (![(ledger.lostJade382??0)+lostJade,(ledger.lostSilver??0)+lostSilver,(ledger.lostGold298??0)+lostGold,(ledger.lostAiCores298??0)+lostAiCores,(ledger.lostPlasteel275??0)+lostPlasteel,(ledger.lostUranium??0)+lostUranium,(ledger.lostAdvancedComponents271??0)+lostAdvancedComponents,(ledger.lostComponents??0)+lostComponents, ledger.count + 1, ledger.lostWood + lostWood, (ledger.lostSteel ?? 0) + lostSteel, ledger.fuelTicks + fuelTicks,...Object.values(lostBlocks),...Object.values(lostTextiles)].every(Number.isSafeInteger)) return false;
   if(!linked.current())return false;
   if(!commitGraveRelease(world,structure,graveRelease))return false;
   if(!linked.commit())throw Error('Admitted linked shelf deconstruction changed during grave release');
@@ -110,6 +113,8 @@ export function finishDeconstruction(world: World, pawn: Pawn, job: Job): boolea
   if(lostPlasteel)ledger.lostPlasteel275=(ledger.lostPlasteel275??0)+lostPlasteel;
   if(lostUranium)ledger.lostUranium=(ledger.lostUranium??0)+lostUranium;
   if(lostGold)ledger.lostGold298=(ledger.lostGold298??0)+lostGold;
+  if(lostSilver)ledger.lostSilver=(ledger.lostSilver??0)+lostSilver;
+  if(lostJade)ledger.lostJade382=(ledger.lostJade382??0)+lostJade;
   if(lostAiCores)ledger.lostAiCores298=(ledger.lostAiCores298??0)+lostAiCores;
   if(lostAdvancedComponents)ledger.lostAdvancedComponents271=(ledger.lostAdvancedComponents271??0)+lostAdvancedComponents;
   if (lostSteel) ledger.lostSteel = (ledger.lostSteel ?? 0) + lostSteel;

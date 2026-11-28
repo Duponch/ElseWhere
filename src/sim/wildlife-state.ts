@@ -58,6 +58,8 @@ export interface WildAnimal extends Cell { shipCryptosleepHeldAt277?:number; fil
   path:Cell[]; motion?:TravelSegment; nextDecision:number;
   meal?:{kind:'plant'|'pile';id:number;quantity:number;progress:number};
   exiting?:{destination:Cell;nextFoodCheck:number};
+  /** Rare visiting thrumbo's real Core departure deadline. Only local wild original. */
+  exitAtCore382?:number;
 }
 export interface WildlifeState {
   geographicRenewal262?:import('./geographic-renewal-state-262.ts').GeographicRenewal262;

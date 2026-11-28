@@ -20,8 +20,8 @@ export function shipComputerSensorsPlacementRefusal298(w:World,b:ShipComputerSen
  if(cells.some(c=>isRoofed(w,c.z*w.width+c.x)))return 'La pièce de vaisseau doit être construite sans toit sur ses quatre cases.';
  if(!marshSupportsFootprint(w,cells,b))return 'Le terrain doit porter une construction lourde sur les quatre cases.';
  const overlaps=(other:Parameters<typeof footprintCells>[0])=>footprintCells(other).some(c=>shipComputerSensorsContains298(b,c));
- if(w.structures.some(s=>sharesConstructionLayer(s.kind,b.kind)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte de la pièce de vaisseau.';
- if(w.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,b.kind)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte de la pièce de vaisseau.';
+ if(w.structures.some(s=>sharesConstructionLayer(s.kind,b.kind,w.schemaVersion,s.orientation,b.orientation)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte de la pièce de vaisseau.';
+ if(w.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,b.kind,w.schemaVersion,j.orientation,b.orientation)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte de la pièce de vaisseau.';
  if(w.resources.some(r=>r.kind==='rock'&&shipComputerSensorsContains298(b,r)))return 'Dégagez les roches de l’empreinte de la pièce de vaisseau.';
  if(w.pawns.some(p=>p.haul?.destination.type==='aside'&&shipComputerSensorsContains298(b,p.haul.destination)))return 'Une livraison réserve encore l’empreinte de la pièce de vaisseau.';
  return undefined;

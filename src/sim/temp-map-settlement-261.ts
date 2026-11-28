@@ -9,6 +9,6 @@ import type {World} from './types.ts';
 export function resumeTempMapHomeAgendas261(w:World):void {
  if((Number(w.schemaVersion)!==261&&(Number(w.schemaVersion)!==262&&!isSchema263OrLater(Number(w.schemaVersion))))||tempMapAdoptedAtCore261(w)===undefined)return;
  const misc=w.miscIncidents;if(misc){misc.nextCheck=Math.max(MISC_FIRST_CHECK,(Math.floor(w.tick/MISC_CHECK_INTERVAL)+1)*MISC_CHECK_INTERVAL);misc.introDone=w.tick>=MISC_INTRO_TICK;}
- const small=w.smallIncidents;if(small){small.nextCheck=smallNextCheck(w.tick);small.cycle=smallCycleAt(w.tick);small.pending=[];small.introDone=w.tick>=SMALL_INTRO_TICK;}
+ const small=w.smallIncidents;if(small){small.nextCheck=smallNextCheck(w.tick,w);small.cycle=smallCycleAt(w.tick,w);small.pending=[];small.introDone=w.tick>=SMALL_INTRO_TICK;}
  resumeProspectiveVisitorSchedule261(w);
 }

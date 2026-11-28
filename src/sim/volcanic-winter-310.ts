@@ -1,4 +1,5 @@
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
+import {extremeWeatherAllowed382} from './game-profile.ts';
 import {journalLetter352} from './letter-producers-352.ts';
 import {checkpointPlantGrowth} from './plant-lighting.ts';
 import {TICKS_PER_DAY,type World} from './types.ts';
@@ -9,7 +10,7 @@ import {isVolcanicWinter310,VOLCANIC_WINTER_FIRST_DAY310,VOLCANIC_WINTER_MAX_COR
 const emit=(world:World,message:string)=>{world.events.push({tick:world.tick,type:'need',message});if(world.events.length>80)world.events.splice(0,world.events.length-80);};
 export function eligibleVolcanicWinter310(world:World):boolean {
   const state=world.miscIncidents;
-  return !!state&&isVolcanicWinter310(Number(world.schemaVersion))&&!!world.gameProfile&&!homeIncidentsBlocked261(world)&&!state.volcanicWinter310
+  return !!state&&isVolcanicWinter310(Number(world.schemaVersion))&&!!world.gameProfile&&extremeWeatherAllowed382(world)&&!homeIncidentsBlocked261(world)&&!state.volcanicWinter310
     &&!(Number(world.schemaVersion)>=328&&(!!state.active||!!world.heatwaves?.active))
     &&world.tick>=VOLCANIC_WINTER_FIRST_DAY310*TICKS_PER_DAY&&Number.isSafeInteger(world.tick*10+VOLCANIC_WINTER_MAX_CORE310)
     &&(state.lastVolcanicWinterStart310===undefined||world.tick-state.lastVolcanicWinterStart310>=VOLCANIC_WINTER_REFIRE_DAYS310*TICKS_PER_DAY);

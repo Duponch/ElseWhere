@@ -18,8 +18,8 @@ export function canPlaceAnimalSpot(world:World,c:DesignateCommand):CommandResult
     return {ok:false,code:'out-of-bounds',reason:'Emplacement hors de la carte.'};
   if((['rock','water'].includes(world.tiles[c.z*world.width+c.x]!.terrain)||isWetTerrain(world.tiles[c.z*world.width+c.x]!.terrain)&&!world.tiles[c.z*world.width+c.x]!.bridge)||world.resources.some(r=>r.kind==='rock'&&same(r,c)))
     return refusal('Dégager la roche ou choisir un terrain praticable.');
-  if(world.structures.some(s=>sharesConstructionLayer(s.kind,c.kind)&&footprintCells(s).some(p=>same(p,c)))
-    ||world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,c.kind)&&footprintCells(j).some(p=>same(p,c))))
+  if(world.structures.some(s=>sharesConstructionLayer(s.kind,c.kind,world.schemaVersion,s.orientation,c.orientation)&&footprintCells(s).some(p=>same(p,c)))
+    ||world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,c.kind,world.schemaVersion,j.orientation,c.orientation)&&footprintCells(j).some(p=>same(p,c))))
     return refusal('Un ouvrage ou son plan occupe cet emplacement.');
   if(!Number.isSafeInteger(world.nextId+1)||world.structures.length>=world.width*world.height)
     return {ok:false,code:'invalid-command',reason:'Limite des emplacements atteinte.'};

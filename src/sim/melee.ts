@@ -46,7 +46,7 @@ function canFight(world:World,pawn:Pawn,carried=(id:number)=>!!carrierOf(world,i
 }
 function structureTarget(world:World,pawn:Pawn){
   const order=pawn.melee?.order;
-  return order?.structure?world.structures.find(s=>s.id===order.targetId&&(order.auto==='mental'?mentalMeleeOwnership(world,pawn,order)&&structureMaxHp(s)>0:order.auto==='prison-break'?prisonBreakMeleeOwned(world,pawn,order)&&isBarrier(s):isBarrier(s))):undefined;
+  return order?.structure?world.structures.find(s=>s.id===order.targetId&&s.kind!=='hidden-conduit'&&(order.auto==='mental'?mentalMeleeOwnership(world,pawn,order)&&structureMaxHp(s)>0:order.auto==='prison-break'?prisonBreakMeleeOwned(world,pawn,order)&&isBarrier(s):isBarrier(s))):undefined;
 }
 function mentalAttempt(pawn:Pawn):void {
   const c=pawn.mental?.crisis;if(!c||pawn.melee?.order?.auto!=='mental')return;

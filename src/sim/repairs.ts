@@ -7,10 +7,18 @@ import { physicalWorkFactor } from './health-rules.ts';
 import { releaseAssignments } from './work-release.ts';
 import { advanceWork,setWorkUnits,WORK_FRACTIONS } from './work-progress.ts';
 import type { BodyAssessment } from './body-capacities.ts';
-import type { Job,Pawn,World } from './types.ts';
-import { structureById } from './structure-navigation.ts';
+import type { Job,Pawn,World,Structure } from './types.ts';
+import { structureById,captureStructureNavigation } from './structure-navigation.ts';
+import {sharesConstructionLayer} from './power-grid.ts';
 
 export interface RepairTarget { structureId:number; warmed?:true }
+function repairCellBusy382(world:World,s:Structure,busy:ReadonlySet<number>):boolean {
+  if(!busy.has(s.z*world.width+s.x))return false;
+  if(world.schemaVersion<382||s.kind!=='wall-lamp'&&!captureStructureNavigation(world).at(s).some(other=>other.kind==='wall-lamp'))return true;
+  // A repair on the floor building must not hide a different attachment's
+  // repair (or vice versa). Keep the previous cell guard elsewhere.
+  return world.jobs.some(j=>j.x===s.x&&j.z===s.z&&sharesConstructionLayer(j.deconstruction?.kind??j.furniture?.kind??j.flick?.kind??j.fixBreakdown?.kind??(j.repair?structureById(world,j.repair.structureId)?.kind:undefined)??j.kind,s.kind,world.schemaVersion,j.orientation,s.orientation));
+}
 export function inHome(world:World,index:number):boolean {const a=world.home??[];let lo=0,hi=a.length;while(lo<hi){const mid=(lo+hi)>>>1;if(a[mid]!<index)lo=mid+1;else hi=mid;}return a[lo]===index;}
 export function repairWanted(world:World,j:Job):boolean {
   const s=structureById(world,j.repair?.structureId);
@@ -28,7 +36,7 @@ export function reconcileRepairs(world:World):void {
   // Same conjunction of pure tests, the rare one first: almost every structure
   // is undamaged, and only a damaged one needs the job-cell set.
   const repairable=world.schemaVersion>=87?isRepairableStructure:isBarrier;let busy:Set<number>|undefined;
-  for(const s of damagedStructures379(world))if(s.damage&&roadPropCanRepair256(world,s)&&!s.breakdown&&repairable(s)&&inHome(world,s.z*world.width+s.x)&&!(busy??=new Set(world.jobs.map(j=>j.z*world.width+j.x))).has(s.z*world.width+s.x)&&Number.isSafeInteger(world.nextId+1)) {
+  for(const s of damagedStructures379(world))if(s.damage&&roadPropCanRepair256(world,s)&&!s.breakdown&&repairable(s)&&inHome(world,s.z*world.width+s.x)&&!repairCellBusy382(world,s,busy??=new Set(world.jobs.map(j=>j.z*world.width+j.x)))&&Number.isSafeInteger(world.nextId+1)) {
     world.jobs.push({id:world.nextId++,kind:'repair',repair:{structureId:s.id},x:s.x,z:s.z,orientation:s.orientation,footprint:s.footprint,status:'pending',reservedBy:null,progress:0,escrow:{wood:0,food:0}});
   }
 }

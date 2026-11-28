@@ -1,6 +1,6 @@
 import { isPenoxycyline337,penoxycylineImmuneTo337 } from './penoxycyline-337.ts';
 import {journalLetter352,actors352} from './letter-producers-352.ts';
-import {storytellerIncidents347} from './game-profile.ts';
+import {storytellerIncidents347,isPhoebe382,diseaseIntervalFactor382} from './game-profile.ts';
 import {BIOME_DISEASE_FACTS_256,biomeDiseaseChoice256} from './biome-disease-facts-256.ts';
 import { isPlayerPatient } from './affiliation.ts';
 import { acquireFlu } from './flu-state.ts';
@@ -19,7 +19,7 @@ import { TICKS_PER_DAY,type Pawn,type World } from './types.ts';
  * frequent. Adventure Story multiplies the biome MTB by 1.5. */
 export const FLU_CHECK_INTERVAL=100;
 export const FLU_FIRST_CHECK=9*TICKS_PER_DAY;
-const DISEASE_INTERVAL_FACTOR=1.5;
+export const fluFirstCheck382=(world:Pick<World,'gameProfile'>):number=>isPhoebe382(world)?12*TICKS_PER_DAY+FLU_CHECK_INTERVAL:FLU_FIRST_CHECK;
 const BIOMES={
   'temperate-forest':{mtbDays:50,humanWeight:470},
   'boreal-forest':{mtbDays:60,humanWeight:370},
@@ -71,7 +71,7 @@ function emit(world:World,message:string):void {
 export function adoptFluIncidents(world:World):void {
   if(!storytellerIncidents347(world)||world.fluIncidents)return;
   world.fluIncidents={profile:'cassandra-flu-v1',rng:((world.seed^0xf10a1270)>>>0)||1,
-    nextCheck:Math.max(FLU_FIRST_CHECK,(Math.floor(world.tick/FLU_CHECK_INTERVAL)+1)*FLU_CHECK_INTERVAL),
+    nextCheck:Math.max(fluFirstCheck382(world),(Math.floor(world.tick/FLU_CHECK_INTERVAL)+1)*FLU_CHECK_INTERVAL),
     checks:0,fluDraws:0,episodes:0,cases:0};
 }
 
@@ -233,7 +233,7 @@ export function advanceFluIncidents(world:World):void {
   state.checks++;
   const site=world.site;
   const biome=site?.revision===3?BIOME_DISEASE_FACTS_256[site.biome]:BIOMES[site?.biome??'temperate-forest'];
-  const mtbTicks=biome.mtbDays*DISEASE_INTERVAL_FACTOR*TICKS_PER_DAY;
+  const mtbTicks=biome.mtbDays*diseaseIntervalFactor382(world)*TICKS_PER_DAY;
   if(random(state)>=-Math.expm1(-FLU_CHECK_INTERVAL/mtbTicks))return;
   if(site?.revision===3){
     const selected=biomeDiseaseChoice256(site.biome,random(state));

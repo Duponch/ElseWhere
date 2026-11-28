@@ -5,6 +5,8 @@ import {medicalModel} from './body-model.ts';
 import {freshMissing} from './injury-state.ts';
 import {HP_UNIT,injuryPartRules,isWithinPart} from './injury-rules.ts';
 import type {MedicalRecord} from './injury-types.ts';
+import type {ThreatModifiers382} from './game-profile.ts';
+import {VerseRand} from './verse-rand.ts';
 
 export interface ThreatPointsInput {
   /** Already summed as items + half building/floor value + pawn market value. */
@@ -21,6 +23,7 @@ export interface ThreatPointsInput {
   readonly timeFactorWholeDays?: boolean;
   /** Schema 329: colony animals able to learn Release (animal-threat-points-329.ts). */
   readonly animalPoints?: number;
+  readonly difficulty?:Readonly<ThreatModifiers382>;
 }
 
 export interface ThreatPointsResult {
@@ -91,6 +94,11 @@ function minimumThreatPoints(elapsedDays: number, seedBucket: number): number {
   hash ^= hash >>> 16;
   return 35 + (ceiling - 35) * (hash >>> 0) / 0x100000000;
 }
+function profileMinimum382(elapsedDays:number,seedBucket:number,difficulty?:Readonly<ThreatModifiers382>):number {
+  if(!difficulty)return minimumThreatPoints(elapsedDays,seedBucket);
+  const ceiling=curve([[12,35],[35,difficulty.minimumCeiling]],elapsedDays);
+  return new VerseRand(seedBucket).rangeFloat(35,Math.fround(ceiling));
+}
 
 /** Ordinary home-map incident points for the fixed Adventure Story profile.
  * The classic introductory raid supplies its own 40 points and bypasses this. */
@@ -108,10 +116,11 @@ export function computeThreatPoints(input: ThreatPointsInput): ThreatPointsResul
   const timeFactor = curve(TIME_FACTOR, input.timeFactorWholeDays ? Math.floor(elapsedDays) : elapsedDays);
   const animalPoints = input.animalPoints ?? 0;
   if (!validFinite(animalPoints, 0)) throw new RangeError('Invalid threat-points input.');
-  const unclampedPoints = (wealthPoints + colonistPoints + animalPoints) * adaptationFactor * .6 * timeFactor;
-  const minimum = minimumThreatPoints(elapsedDays, seedBucket);
+  const appliedAdaptation=input.difficulty?1+(adaptationFactor-1)*input.difficulty.adaptationEffectFactor:adaptationFactor;
+  const unclampedPoints = (wealthPoints + colonistPoints + animalPoints) * appliedAdaptation * (input.difficulty?.threatScale??.6) * timeFactor;
+  const minimum = profileMinimum382(elapsedDays, seedBucket,input.difficulty);
   return {points: Math.min(10000, Math.max(minimum, unclampedPoints)), wealthPoints,
-    colonistPoints, adaptationFactor, timeFactor, minimum, unclampedPoints};
+    colonistPoints, adaptationFactor:appliedAdaptation, timeFactor, minimum, unclampedPoints};
 }
 
 /** One Core half-day update, after any downing/loss notifications in that tick. */
@@ -144,6 +153,7 @@ export interface WeightedWorldThreatInput298 {
  readonly knownWealth:number;readonly colonistContribution:number;
  readonly animalHealthPower:number;readonly elapsedDays:number;
  readonly adaptationDays:number;readonly seedBucket:number;
+ readonly difficulty?:Readonly<ThreatModifiers382>;
 }
 export function computeWeightedWorldThreatPoints298(input:WeightedWorldThreatInput298):ThreatPointsResult&{animalPoints:number} {
  const {knownWealth,colonistContribution,animalHealthPower,elapsedDays,adaptationDays,seedBucket}=input;
@@ -151,7 +161,8 @@ export function computeWeightedWorldThreatPoints298(input:WeightedWorldThreatInp
   ||!validFinite(elapsedDays,0)||!validFinite(adaptationDays,-60,100)||!Number.isSafeInteger(seedBucket))throw new RangeError('Invalid known World threat-points input.');
  const wealthPoints=curve(WEALTH_POINTS,knownWealth),colonistPoints=curve(COLONIST_POINTS,knownWealth)*colonistContribution;
  const animalPoints=animalHealthPower*.08,adaptationFactor=curve(ADAPT_FACTOR,adaptationDays),timeFactor=curve(TIME_FACTOR,elapsedDays);
- const unclampedPoints=(wealthPoints+colonistPoints+animalPoints)*adaptationFactor*.6*timeFactor;
- const minimum=minimumThreatPoints(elapsedDays,seedBucket);
- return {points:Math.min(10000,Math.max(minimum,unclampedPoints)),wealthPoints,colonistPoints,animalPoints,adaptationFactor,timeFactor,minimum,unclampedPoints};
+ const appliedAdaptation=input.difficulty?1+(adaptationFactor-1)*input.difficulty.adaptationEffectFactor:adaptationFactor;
+ const unclampedPoints=(wealthPoints+colonistPoints+animalPoints)*appliedAdaptation*(input.difficulty?.threatScale??.6)*timeFactor;
+ const minimum=profileMinimum382(elapsedDays,seedBucket,input.difficulty);
+ return {points:Math.min(10000,Math.max(minimum,unclampedPoints)),wealthPoints,colonistPoints,animalPoints,adaptationFactor:appliedAdaptation,timeFactor,minimum,unclampedPoints};
 }

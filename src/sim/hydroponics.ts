@@ -8,7 +8,7 @@ import type { Cell,GrowingZone,Structure,World } from './types.ts';
 
 export const HYDROPONIC_FERTILITY=2.8;
 export const HYDROPONIC_ROT_INTERVAL=25;
-export const hydroponicCropAllowed=(plant:unknown):boolean=>plant==='hops'||plant==='rice'||plant==='potato'||plant==='cotton'||plant==='healroot';
+export const hydroponicCropAllowed=(plant:unknown):boolean=>plant==='hops'||plant==='rice'||plant==='potato'||plant==='cotton'||plant==='healroot'||plant==='tinctoria';
 
 /** Presentation captures this small derived field once per update. Rebuild from
  * the current zones: neither a mutable array nor a returned Map owns a cache. */

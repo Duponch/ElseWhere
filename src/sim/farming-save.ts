@@ -15,9 +15,10 @@ import type { Structure,Terrain,World } from './types.ts';
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
 const hydro=(v:unknown):v is Record<string,unknown>=>record(v)&&v.kind==='hydroponics-basin';
-const hydroCrops=['rice','potato','cotton','healroot','hops'];
+const hydroCrops=['rice','potato','cotton','healroot','hops','tinctoria'];
+const hydroCropInVersion=(kind:string,version:number):boolean=>hydroCrops.includes(kind)&&(kind!=='hops'||version>=265)&&(kind!=='tinctoria'||version>=382);
 export const hydroponicPlantAllowed=(world:World,basinId:number,plant:{kind:string;x:number;z:number}):boolean=>
-  world.schemaVersion>=203&&(plant.kind!=='hops'||world.schemaVersion>=265)&&hydroCrops.includes(plant.kind)&&world.growingZones.some(z=>z.basinId===basinId&&z.cells.includes(plant.z*world.width+plant.x));
+  world.schemaVersion>=203&&hydroCropInVersion(plant.kind,world.schemaVersion)&&world.growingZones.some(z=>z.basinId===basinId&&z.cells.includes(plant.z*world.width+plant.x));
 
 /** One hydroponics contract for saves and accepted snapshot candidates. It is
  * scoped to the new content; historical soil zones keep their old validators. */
@@ -75,7 +76,7 @@ export function validateHydroponics(world:World,version:number,powerTopology?:Po
     if(!record(z))continue;
     const cells=integer(z.basinId,1,world.nextId-1)?geometry.get(z.basinId):undefined;
     if(Object.keys(z).some(k=>!['id','basinId','cells','plant','allowSow','allowCut'].includes(k))||!integer(z.id,1,world.nextId-1)||occupiedIds.has(z.id)||zoneIds.has(z.id)||zoneCounts.get(z.id)!==1
-      ||!cells||linkedBasins.has(Number(z.basinId))||z.id===z.basinId||(!hydroCrops.includes(String(z.plant))||z.plant==='hops'&&version<265)||typeof z.allowSow!=='boolean'||typeof z.allowCut!=='boolean'
+      ||!cells||linkedBasins.has(Number(z.basinId))||z.id===z.basinId||!hydroCropInVersion(String(z.plant),version)||typeof z.allowSow!=='boolean'||typeof z.allowCut!=='boolean'
       ||!Array.isArray(z.cells)||z.cells.length!==4||z.cells.some((c,i)=>!integer(c,0,world.width*world.height-1)||c!==cells[i])){errors.push('Invalid hydroponics growing zone.');continue;}
     zoneIds.add(z.id);linkedBasins.add(Number(z.basinId));for(const c of cells)linkedCells.set(c,z.id);
   }
@@ -96,7 +97,7 @@ export function validateHydroponics(world:World,version:number,powerTopology?:Po
         overlapOccurrences=new Map();
         for(let ordinal=0;ordinal<structures.length;ordinal++){
           const other=structures[ordinal];
-          if(!record(other)||!sharesConstructionLayer('hydroponics-basin',other.kind)
+          if(!record(other)||!sharesConstructionLayer('hydroponics-basin',other.kind,version)
             ||!integer(other.orientation,0,3)||!integer(other.x,0,world.width-1)||!integer(other.z,0,world.height-1))continue;
           for(const c of footprintCells(other as unknown as Structure)){
             const index=c.z*world.width+c.x,entries=overlapOccurrences.get(index);
@@ -109,7 +110,7 @@ export function validateHydroponics(world:World,version:number,powerTopology?:Po
         if(structures[ordinal]!==b)overlapping.add(ordinal);
       for(const _ordinal of overlapping)errors.push('Hydroponics overlaps another structure.');
     }else{
-      for(const other of structures)if(record(other)&&other!==b&&sharesConstructionLayer(b.kind,other.kind)){
+      for(const other of structures)if(record(other)&&other!==b&&sharesConstructionLayer(b.kind,other.kind,version)){
         if(!integer(other.orientation,0,3)||!integer(other.x,0,world.width-1)||!integer(other.z,0,world.height-1))continue;
         if(footprintCells(other as unknown as Structure).some(c=>cells.includes(c.z*world.width+c.x)))errors.push('Hydroponics overlaps another structure.');
       }
@@ -122,7 +123,7 @@ export function validateHydroponics(world:World,version:number,powerTopology?:Po
   if(spatial?.hydroOverlapCount){
     const count=spatial.hydroOverlapCount(linkedCells);
     for(let i=0;i<count;i++)errors.push('Unsupported plant overlaps hydroponics.');
-  }else for(const r of world.resources)if(linkedCells.has(r.z*world.width+r.x)&&(!hydroCrops.includes(r.kind)||r.kind==='hops'&&version<265))errors.push('Unsupported plant overlaps hydroponics.');
+  }else for(const r of world.resources)if(linkedCells.has(r.z*world.width+r.x)&&!hydroCropInVersion(r.kind,version))errors.push('Unsupported plant overlaps hydroponics.');
   for(const j of jobs)if(record(j)&&zoneIds.has(Number(j.growingZoneId))){
     const z=linked.find(z=>record(z)&&z.id===j.growingZoneId),index=Number(j.z)*world.width+Number(j.x);
     if(!record(z)||!Array.isArray(z.cells)||!['sow','cut','harvest','chop'].includes(String(j.kind))||!integer(j.x,0,world.width-1)||!integer(j.z,0,world.height-1)

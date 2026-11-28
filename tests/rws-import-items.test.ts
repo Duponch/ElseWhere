@@ -17,10 +17,13 @@ import {validateInterruptedCargo} from '../src/sim/interrupted-cargo.ts';
 import {validatePackedFurnitureRecords} from '../src/sim/furniture-transfer-save.ts';
 import {validEggPile256} from '../src/sim/animal-egg-save-v256.ts';
 import {refreshStock} from '../src/sim/materials.ts';
-import {validateWorld} from '../src/sim/serialization.ts';
+import {validateWorld,serializeWorld,deserializeWorld} from '../src/sim/serialization.ts';
 import {importRwsCorpses} from '../src/import/rimworld/import-corpses.ts';
 import {validateCorpses} from '../src/sim/corpse-save.ts';
-import {validateBurials} from '../src/sim/burial-save.ts';
+import {validateBurials,validHumanBodyShape} from '../src/sim/burial-save.ts';
+import {humanLimbVisualMask} from '../src/render/human-anatomy-presentation.ts';
+import {corpsePartAbsent,validCorpseConsumption} from '../src/sim/corpse-anatomy.ts';
+import {SnapshotEncoder,SnapshotDecoder} from '../src/bridge/snapshots.ts';
 import {at} from '../src/import/rimworld/xml.ts';
 import {animalPartId256} from '../src/sim/animal-anatomy-v256.ts';
 
@@ -158,7 +161,8 @@ describe('RimWorld physical item adoption',()=>{
   // The rest of this synthetic fixture is not simulated in this domain test.
   w.tick=Math.floor(now/10);w.phaseCore297=now%10;
   const world=at(ctx.save.game,'world')!;
-  const absent=(index:number)=>`<li Class="Hediff_MissingPart"><def>MissingBodyPart</def><tickAdded>${now-2000}</tickAdded><lastInjury>Bite</lastInjury><part><body>QuadrupedAnimalWithPawsAndTail</body><index>${index}</index></part></li>`;
+  const consumedCore=now-2003;
+  const absent=(index:number)=>`<li Class="Hediff_MissingPart"><def>MissingBodyPart</def><tickAdded>${consumedCore}</tickAdded><lastInjury>Bite</lastInjury>${index===20?'<isFresh>True</isFresh>':''}<part><body>QuadrupedAnimalWithPawsAndTail</body><index>${index}</index></part></li>`;
   world.children.push(parseXml(`<worldPawns><pawnsDead><li Class="Pawn"><def>Hare</def><id>ActualDeadHare</id><gender>Female</gender><ageTracker><ageBiologicalTicks>6000000</ageBiologicalTicks><growth>1</growth></ageTracker><healthTracker><healthState>Dead</healthState><hediffSet><hediffs><li><def>BloodLoss</def><severity>1</severity></li>${absent(20)}${absent(21)}</hediffs></hediffSet></healthTracker></li></pawnsDead></worldPawns>`));
   const local=free(ctx),source=ctx.coordinates.cell(local);
   ctx.map.things.push(thing(`<thing Class="Corpse"><def>Corpse_Hare</def><id>ActualCorpse</id><pos>(${source.x},0,${source.z})</pos><timeOfDeath>${now-2400}</timeOfDeath><rotProg>1350</rotProg><health>87</health><forbidden>True</forbidden><innerContainer><contentsLookMode>Reference</contentsLookMode><innerList><li>Thing_ActualDeadHare</li></innerList></innerContainer></thing>`));
@@ -167,7 +171,10 @@ describe('RimWorld physical item adoption',()=>{
   expect(pile,JSON.stringify([...ctx.notes.tallies.values()].flatMap(m=>[...m.values()]))).toMatchObject({owner:{type:'ground',...local},item:'hare-corpse',quantity:1,damage:13,forbidden:true,rot:{progress:135,atTick:w.tick},corpse:{species:'hare',sex:'female',ageTicks:600000,ageCoreRemainder:0,health:{death:{tick:w.tick-240,cause:'blood-loss'}}}});
   expect(ctx.thingIds.get('ActualDeadHare')).toBe(pile.id);
   expect(pile.corpse?.health.missing).toEqual([]);
-  expect(pile.corpse?.consumedParts).toEqual([{part:animalPartId256('QuadrupedAnimalWithPawsAndTail',20),atTick:w.tick-200}]);
+  expect(pile.corpse?.consumedParts).toEqual([{part:animalPartId256('QuadrupedAnimalWithPawsAndTail',20),atTick:Math.floor(consumedCore/10),atCore382:consumedCore}]);
+  expect(corpsePartAbsent(pile.corpse!,animalPartId256('QuadrupedAnimalWithPawsAndTail',21))).toBe(true);
+  expect(validCorpseConsumption(pile.corpse!,w.tick,381)).toBe(false);
+  expect(ctx.notes.summary('health').exact).toBeGreaterThanOrEqual(3);
   expect(w.wildlife?.animals.some(a=>a.id===pile.id)).toBe(false);
   expect(validateCorpses(w,w.schemaVersion)).toEqual([]);
  });
@@ -184,7 +191,8 @@ describe('RimWorld physical item adoption',()=>{
   const graveId=w.nextId++;
   w.structures.push({id:graveId,kind:'grave',...cell,orientation:0,footprint:'standard',grave:{colonists:true,strangers:true}});
   ctx.thingIds.set('SavedGrave',graveId);
-  const inner=`<li Class="Pawn"><def>Human</def><id>TrueDeadHuman</id><faction>${ctx.save.playerFaction}</faction><gender>Female</gender><name Class="NameTriple"><first>Alice</first><nick>Alice</nick><last>Test</last></name><ageTracker><ageBiologicalTicks>90000000</ageBiologicalTicks></ageTracker><healthTracker><healthState>Dead</healthState><hediffSet><hediffs><li><def>BloodLoss</def><severity>1</severity></li></hediffs></hediffSet></healthTracker></li>`;
+  const consumedCore=now-2003,absent=Array.from({length:9},(_,i)=>`<li Class="Hediff_MissingPart"><def>MissingBodyPart</def><tickAdded>${consumedCore}</tickAdded><lastInjury>Bite</lastInjury>${i===0?'<isFresh>True</isFresh>':''}<part><body>Human</body><index>${46+i}</index></part></li>`).join('');
+  const inner=`<li Class="Pawn"><def>Human</def><id>TrueDeadHuman</id><faction>${ctx.save.playerFaction}</faction><gender>Female</gender><name Class="NameTriple"><first>Alice</first><nick>Alice</nick><last>Test</last></name><ageTracker><ageBiologicalTicks>90000000</ageBiologicalTicks></ageTracker><healthTracker><healthState>Dead</healthState><hediffSet><hediffs><li><def>BloodLoss</def><severity>1</severity></li>${absent}</hediffs></hediffSet></healthTracker></li>`;
   const body=`<li Class="Corpse"><def>Corpse_Human</def><id>TrueHumanCorpse</id><timeOfDeath>${now-3000}</timeOfDeath><health>100</health><rotProg>1500</rotProg><innerContainer><innerList>${inner}</innerList></innerContainer></li>`;
   ctx.map.things.push(thing(`<thing Class="Building"><def>Grave</def><id>SavedGrave</id><pos>(${source.x},0,${source.z})</pos><innerContainer><innerList>${body}</innerList></innerContainer></thing>`));
   importRwsCorpses(ctx);
@@ -192,7 +200,17 @@ describe('RimWorld physical item adoption',()=>{
   const failure=JSON.stringify([...ctx.notes.tallies.values()].flatMap(m=>[...m.values()]));
   expect(corpse,failure).toMatchObject({owner:{type:'grave',graveId},kind:'corpse',item:'human-corpse',rot:{progress:150,atTick:w.tick,rate:0}});
   expect(pawn,failure).toMatchObject({state:'dead',body:{pileId:corpse.id,observedAt:w.tick-300},health:{death:{tick:w.tick-300,cause:'blood-loss'}}});
+  expect(pawn.health?.missing).toEqual([]);
+  expect(pawn.body?.consumedParts382).toEqual([{part:'left-leg',atTick:Math.floor(consumedCore/10),atCore382:consumedCore}]);
+  expect(humanLimbVisualMask(pawn)).toBe(4);
+  expect(validHumanBodyShape(pawn.body,381,w.tick,pawn.health)).toBe(false);
+  expect(validHumanBodyShape({...pawn.body,consumedParts382:[{part:'left-leg',atTick:w.tick+1}]},w.schemaVersion,w.tick,pawn.health)).toBe(false);
   expect(w.structures.find(s=>s.id===graveId)?.grave?.corpseId).toBe(corpse.id);
   expect(validateBurials(w,w.schemaVersion)).toEqual([]);
+  refreshStock(w);expect(validateWorld(w)).toEqual([]);
+  const saved=serializeWorld(w);expect(serializeWorld(deserializeWorld(saved))).toBe(saved);
+  const encoder=new SnapshotEncoder(),decoder=new SnapshotDecoder();
+  const adopted=decoder.adopt(structuredClone(encoder.encode(w,0,6)));
+  expect(adopted.status).toBe('applied');if(adopted.status==='applied')expect(adopted.world.pawns.find(p=>p.id===pawn.id)?.body).toEqual(pawn.body);
  });
 });

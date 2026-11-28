@@ -36,7 +36,8 @@ export function pasteDispenserCandidates379(world:World):readonly Structure[] {
 export function foodSearchGoals(world: World, pawn: Pawn, sources: readonly MaterialPile[], topology?:RoomTopology,ignoreForbidden=false): Set<number> {
   if(!topology&&(pawn.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
   const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden);
-  const allowed = selfAllowedFood(world, pawn); sources = sources.filter(p => allowed.includes(p.item as FoodItemId)&&accessible(p));
+  const allowed = selfAllowedFood(world, pawn),membership=allowed.length>=32&&sources.length>=8?new Set(allowed):undefined;
+  sources = sources.filter(p => (membership?membership.has(p.item as FoodItemId):allowed.includes(p.item as FoodItemId))&&accessible(p));
   if (world.foodRules === 'legacy') return interactionGoals(world, sources.flatMap(p => p.owner.type === 'ground' ? [p.owner] : []));
   let best: MaterialPile | undefined, score = -Infinity;
   for (const pile of sources) {
@@ -50,11 +51,14 @@ export function foodSearchGoals(world: World, pawn: Pawn, sources: readonly Mate
 }
 export function selectFood(world: World, pawn: Pawn, sources: readonly MaterialPile[], reachable: Reachability, eater: Pawn = pawn, topology?:RoomTopology,ignoreForbidden=false): { id: number; path: Cell[]; score: number } | undefined {
   const allowed = eater===pawn?selfAllowedFood(world,pawn):allowedFood(world,eater);
+  // New complete species policies can be large. A decision-local membership
+  // set avoids O(policy size × pile count) and needs no invalidation cache.
+  const membership=allowed.length>=32&&sources.length>=8?new Set(allowed):undefined;
   if(!topology&&(pawn.prisoner||eater.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
   const accessible=eater===pawn?createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden):createAssistedFoodAccessibilityQuery379(world,pawn,eater,topology);
   let best: { id: number; path: Cell[]; score: number } | undefined;
   for (const pile of sources) {
-    if (pile.owner.type !== 'ground' || !ITEM_DEFINITIONS[pile.item].nutrition || !allowed.includes(pile.item as FoodItemId)) continue;
+    if (pile.owner.type !== 'ground' || !ITEM_DEFINITIONS[pile.item].nutrition || !(membership?membership.has(pile.item as FoodItemId):allowed.includes(pile.item as FoodItemId))) continue;
     if(!accessible(pile))continue;
     // Reference map search uses Manhattan distance for ranking, independently
     // of the Euclidean travel duration and actual reachability of the item.
@@ -92,11 +96,11 @@ export function selectFoodSource(world:World,pawn:Pawn,sources:readonly Material
  * machine interaction cell. An unreachable winner exhausts the component. */
 export function foodSourceSearchGoals(world:World,pawn:Pawn,sources:readonly MaterialPile[],topology?:RoomTopology,ignoreForbidden=false):Set<number> {
   if(!topology&&(pawn.prisoner||hasPrisonBedMark379(world)))topology=capturePrisonTopology(world);
-  const goals=foodSearchGoals(world,pawn,sources,topology,ignoreForbidden),allowed=selfAllowedFood(world,pawn);
+  const goals=foodSearchGoals(world,pawn,sources,topology,ignoreForbidden),allowed=selfAllowedFood(world,pawn),membership=allowed.length>=32&&sources.length>=8?new Set(allowed):undefined;
   const accessible=createSelfFoodAccessibilityQuery379(world,pawn,topology,ignoreForbidden);
   let bestScore=-Infinity,bestId=Infinity;
   if(world.foodRules!=='legacy')for(const p of sources){
-    if(p.owner.type!=='ground'||!allowed.includes(p.item as FoodItemId)||!accessible(p))continue;
+    if(p.owner.type!=='ground'||!(membership?membership.has(p.item as FoodItemId):allowed.includes(p.item as FoodItemId))||!accessible(p))continue;
     const score=pileFoodScore(world,p,Math.abs(pawn.x-p.owner.x)+Math.abs(pawn.z-p.owner.z));
     if(score>bestScore||score===bestScore&&p.id<bestId){bestScore=score;bestId=p.id;}
   }

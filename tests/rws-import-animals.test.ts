@@ -93,9 +93,9 @@ describe('native animal state from RimWorld',()=>{
   expect(pile).toMatchObject({quantity:7,owner:{type:'inventory',pawnId:husky.id}});
   expect(husky.haul).toMatchObject({phase:'deliver',sourcePileId:carryId,carryPileId:carryId,quantity:7,pickupCell:{x:15,z:13}});
  });
- it('only admits automatic-slaughter policies represented by the present game model',()=>{
-  expect(conversion.world.autoSlaughter).toEqual([{species:'hare',maxTotal:-1,maxMales:2,maxMalesYoung:-1,maxFemales:-1,maxFemalesYoung:-1,allowPregnant:false}]);
-  expect([...conversion.notes.tallies.get('animals')!.values()].some(r=>r.def==='Bison: abattage automatique'&&r.status==='dropped')).toBe(true);
+ it('retains each admitted automatic-slaughter species, including Bison',()=>{
+  expect(conversion.world.autoSlaughter).toEqual([{species:'hare',maxTotal:-1,maxMales:2,maxMalesYoung:-1,maxFemales:-1,maxFemalesYoung:-1,allowPregnant:false},{species:'bison',maxTotal:-1,maxMales:-1,maxMalesYoung:-1,maxFemales:3,maxFemalesYoung:-1,allowPregnant:false}]);
+  expect([...conversion.notes.tallies.get('animals')!.values()].some(r=>r.def==='Bison: abattage automatique'&&r.status==='exact')).toBe(true);
  });
  it('routes original animal designations through their native command admission',()=>{
   const save=readRwsSave(base),ctx=new ImportContext(save,save.maps[0]!,conversion.world,new ImportNotes(),false);

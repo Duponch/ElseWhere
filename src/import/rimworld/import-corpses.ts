@@ -5,7 +5,7 @@ import {ImportContext} from './convert.ts';
 import {prepareRwsHumanCorpseOwner} from './import-world-people.ts';
 import {importAnimalHealth} from './import-animal-state.ts';
 import {placeRwsMaterial,placeRwsPacked} from './convert-items.ts';
-import {ANIMAL_MAP} from './map-pawns.ts';
+import {ANIMAL_MAP,HUMAN_PART_MAP} from './map-pawns.ts';
 import {lookup,isDropped} from './mapping.ts';
 import {at,items,num,text,type XmlNode} from './xml.ts';
 import {readThing,referencedThingId,type RwsThing} from './rws-save.ts';
@@ -23,7 +23,11 @@ import {animalNutritionMax} from '../../sim/animal-life.ts';
 import {nativeAnimalAnatomy256} from '../../sim/native-animal-anatomy-256.ts';
 import {animalPartId256} from '../../sim/animal-anatomy-v256.ts';
 import {medicalModel} from '../../sim/body-model.ts';
-import {projectCorpseConsumption} from '../../sim/corpse-anatomy.ts';
+import {validConsumedParts382,type ConsumedPart} from '../../sim/corpse-anatomy.ts';
+import {isWithinPart} from '../../sim/injury-rules.ts';
+import type {BodyPartId} from '../../sim/body-definition.ts';
+import type {MedicalRecord} from '../../sim/injury-types.ts';
+import {isAnimalSpecies} from '../../sim/animal-species.ts';
 import {groundCapacity,groundPilesAt,nearbyGround} from '../../sim/ground-placement.ts';
 import {groundMaxStacks} from '../../sim/shelf-storage.ts';
 import {appendPileEntries} from '../../sim/pile-identity-directory.ts';
@@ -116,31 +120,43 @@ function corpseCondition(ctx:ImportContext,c:RwsThing,pile:MaterialPile,death:nu
  if(c.forbidden&&pile.owner.type==='ground')setMaterialForbidden256(pile,true);
  return true;
 }
-/** Core writes missing descendants after scavenging a body. These parts
- * must never be added to the pre-death medical history (doing so could invent
- * a vital failure); the native consumed-parts field preserves their actual
- * frozen absence separately. */
-function postmortemAnimalParts(ctx:ImportContext,t:RwsThing,pile:MaterialPile,deathCore:number,why:string[]):void {
- const corpse=pile.corpse! ,body=nativeAnimalAnatomy256(corpse.species).body,model=medicalModel(corpse.health);
- const rows=items(t.node,'healthTracker/hediffSet/hediffs').filter(h=>h.attrs?.Class==='Hediff_MissingPart'&&(num(h,'tickAdded')??0)>deathCore);
- const mapped=rows.flatMap(row=>{
-  const index=num(row,'part/index');if(index===undefined||!Number.isSafeInteger(index)||text(row,'part/body')!==body)return [];
-  try{const part=animalPartId256(body,index);return model.byId[part]?[{part,row}]:[];}catch{return [];}
- });
- const strip=new Set(mapped.map(p=>p.part));let represented=0;
- for(const {part,row} of mapped.sort((a,b)=>num(a.row,'tickAdded')!-num(b.row,'tickAdded')!)){
-  let parent=model.byId[part].parent,descendant=false;
-  while(parent){if(strip.has(parent)){descendant=true;break;}parent=model.byId[parent].parent;}
-  if(descendant)continue;
-  if(text(row,'lastInjury')!=='Bite'){why.push('Partie absente après le décès sans trace compatible de consommation.');continue;}
-  const atTick=Math.max(corpse.health.death!.tick,localClock(ctx,num(row,'tickAdded')!));
-  if(atTick>ctx.w.tick)continue;
-  const projected=projectCorpseConsumption(corpse,part,atTick);
-  if(!projected||projected.consumesWhole||!projected.consumedParts){why.push('Partie consommée après décès non représentable.');continue;}
-  corpse.consumedParts=projected.consumedParts;represented++;
+/** Core writes the consumed part and its descendants in the deceased pawn's
+ * hediff list. The physical corpse is the authority for these observations,
+ * never the frozen pre-death dossier. One root records a whole subtree; count
+ * each actually observed source row only once, and preserve the event phase. */
+export function postmortemCorpseParts382(ctx:ImportContext,t:RwsThing,health:MedicalRecord,deathCore:number,notes:ImportNotes):ConsumedPart[]|undefined {
+ if(health.body!==undefined&&!isAnimalSpecies(health.body))throw Error('Postmortem organic anatomy requires an actual flesh body');
+ const body=health.body===undefined?'Human':nativeAnimalAnatomy256(health.body).body,model=medicalModel(health);
+ const rows=items(t.node,'healthTracker/hediffSet/hediffs').filter(h=>(num(h,'tickAdded')??0)>deathCore);
+ if(!rows.length)return undefined;
+ const mapped=new Map<XmlNode,{part:BodyPartId;sourceCore:number;fresh:boolean}>();
+ for(const row of rows){
+  if(row.attrs?.Class!=='Hediff_MissingPart'||text(row,'def')!=='MissingBodyPart'||text(row,'lastInjury')!=='Bite'||text(row,'part/body')!==body)continue;
+  const index=num(row,'part/index'),sourceCore=num(row,'tickAdded');
+  if(index===undefined||!Number.isSafeInteger(index)||index<0||sourceCore===undefined||!Number.isSafeInteger(sourceCore)||sourceCore>ctx.save.ticksGame)continue;
+  let part:BodyPartId|undefined;
+  try{part=body==='Human'?HUMAN_PART_MAP[index]:animalPartId256(body,index);}catch{continue;}
+  if(part&&model.byId[part])mapped.set(row,{part,sourceCore,fresh:text(row,'isFresh')==='True'});
  }
- if(mapped.length<rows.length)why.push('Certaines parties post mortem n’ont pas d’anatomie correspondante.');
- if(represented)why.push(`${represented} absence(s) post mortem conservée(s) en parties consommées (morsure source).`);
+ const candidates=[...mapped.values()],roots:ConsumedPart[]=[];
+ // A valid external root is the only claim of ingestion. A corrupt ancestor
+ // can never suppress an otherwise admissible actual child event.
+ const possible=candidates.filter(c=>c.fresh&&validConsumedParts382(health,[{part:c.part,atTick:localClock(ctx,c.sourceCore),atCore382:localClock(ctx,c.sourceCore)*10+c.sourceCore%10}],ctx.w.tick,ctx.w.schemaVersion));
+ for(const c of possible){
+  if(possible.some(parent=>parent.part!==c.part&&isWithinPart(c.part,parent.part,model))||roots.some(r=>r.part===c.part))continue;
+  const atTick=localClock(ctx,c.sourceCore);roots.push({part:c.part,atTick,atCore382:atTick*10+c.sourceCore%10});
+ }
+ roots.sort((a,b)=>model.index[a.part]-model.index[b.part]);
+ if(roots.length&&!validConsumedParts382(health,roots,ctx.w.tick,ctx.w.schemaVersion))throw Error('Invalid admitted postmortem roots');
+ for(const row of rows){
+  const candidate=mapped.get(row),root=candidate&&roots.find(r=>isWithinPart(candidate.part,r.part,model));
+  const def=health.body===undefined?'Anatomie après décès':`${t.def}: ${text(row,'def')??'?'}`;
+  if(!root||!candidate){notes.def('health',def,'dropped',undefined,'Lésion tardive ou absence sans morsure et racine anatomique effectivement représentables.');continue;}
+  const atTick=localClock(ctx,candidate.sourceCore),atCore=atTick*10+candidate.sourceCore%10;
+  const exact=root.atCore382===atCore;
+  notes.def('health',def,exact?'exact':'adapted','partie consommée après décès',exact?'Absence et date Core du sous-arbre conservées indépendamment du décès.':'Absence conservée ; une consommation plus récente de son parent a remplacé sa date individuelle.');
+ }
+ return roots.length?roots:undefined;
 }
 function importHumanBody(ctx:ImportContext,b:SourceBody,t:RwsThing,clock:{core:number;local:number},why:string[]):string|undefined {
  const w=ctx.w,death=clock.local,prepared=prepareRwsHumanCorpseOwner(ctx,t,b.cell,death,clock.core);
@@ -158,7 +174,8 @@ function importHumanBody(ctx:ImportContext,b:SourceBody,t:RwsThing,clock:{core:n
    if(local>=0&&local<=w.tick+6000)pile.humanCorpse!.nextBileTick=local;
   }
  }
- pawn.body={observedAt:death,pileId:pile.id};
+ const consumedParts382=postmortemCorpseParts382(ctx,t,pawn.health!,clock.core,prepared.notes);
+ pawn.body={observedAt:death,pileId:pile.id,...consumedParts382?{consumedParts382}:{}};
  if(target.type==='ground'){pawn.x=target.x;pawn.z=target.z;}
  const graveId=target.type==='grave'?target.graveId:null,carrier=target.type==='pawn'?target.pawnId:null;
  const trial:World={...w,pawns:[...w.pawns,pawn].map(p=>p.id===carrier?{...p,interruptedCargo:true}:p),structures:w.structures.map(s=>s.id===graveId&&s.grave?{...s,grave:{...s.grave,corpseId:pile.id}}:s),piles:[...w.piles,...prepared.items,pile],packed:[...w.packed,...prepared.packed],nextId:pile.id+1};
@@ -182,7 +199,7 @@ function importAnimalBody(ctx:ImportContext,b:SourceBody,t:RwsThing,clock:{core:
  const growth=num(t.node,'ageTracker/growth');
  if(animal.growthTracker&&growth!==undefined&&growth>=0&&growth<=1){animal.growthTracker.value=Math.fround(growth);if(growth===1)animal.growthTracker.nextCheckCore=null;}
  animal.food=animalNutritionMax(animal)*.5;
- importAnimalHealth(stage,t,animal,{allowDeath:true});
+ importAnimalHealth(stage,t,animal,{allowDeath:true,hasPhysicalCorpseOwner:true});
  const health=animal.health;
  if(!health?.death||health.death.tick!==atTick)return 'Aucun décès clinique représenté par les blessures et états originaux.';
  const id=w.nextId,item=animalCorpseItem(species);
@@ -190,7 +207,7 @@ function importAnimalBody(ctx:ImportContext,b:SourceBody,t:RwsThing,clock:{core:
  const target=corpseDestination(ctx,pile,b.owner,b.cell);if(!target)return 'Aucun emplacement physique admis pour ce corps.';
  pile.owner=target;
  if(!sameOwner(target,b.owner))why.push('Emplacement du corps adapté à une case disponible.');
- postmortemAnimalParts(ctx,t,pile,clock.core,why);
+ const consumed=postmortemCorpseParts382(ctx,t,health,clock.core,notes);if(consumed)pile.corpse!.consumedParts=consumed;
  if(!corpseCondition(ctx,b.corpse,pile,atTick,why)||!validCorpseRot(pile.rot,w.tick,atTick,w.schemaVersion,health)||!validCorpseShape(pile as unknown as Record<string,unknown>,w.schemaVersion))return 'Dépouille animale refusée par les contrôles de provenance ou d’âge.';
  if('adapt' in m&&m.adapt)why.push(m.adapt);
  w.nextId++;appendPileEntries(w.piles,pile);setCarriedOrGrave(w,pile);

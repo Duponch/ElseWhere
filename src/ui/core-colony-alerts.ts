@@ -236,8 +236,8 @@ export function readNeedMealSource(world:World,free:readonly Pawn[]):StatusAlert
     'Construisez un feu de camp ou une cuisinière pour préparer des repas ; la nourriture crue rend les colons malheureux et peut les rendre malades.'};
 }
 
-/** Alert_NeedDefenses (High) during days 2 to 5: no turret, trap or sandbags. */
-export const DEFENSE_KINDS:ReadonlySet<string>=new Set(['mini-turret','spike-trap','ied-high-explosive','ied-incendiary','sandbags']);
+/** Alert_NeedDefenses (High) during days 2 to 5: no turret, trap, sandbags or barricade. */
+export const DEFENSE_KINDS:ReadonlySet<string>=new Set(['mini-turret','spike-trap','ied-high-explosive','ied-incendiary','sandbags','barricade']);
 export function readNeedDefenses(world:World,free:readonly Pawn[]):StatusAlert|undefined {
   const days=coreDaysPassed(world);
   if(days<2||days>5||!isPlayerHomeMap(world))return;

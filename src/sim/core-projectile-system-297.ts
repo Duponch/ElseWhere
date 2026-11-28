@@ -93,7 +93,7 @@ export function createCoreProjectileStepper297(world:World) {
     const animal=a.targetKey?.startsWith('animal:')?world.wildlife?.animals.find(a=>`animal:${a.id}`===next.arrival?.targetKey):undefined;
     const mech=world.schemaVersion>=194&&a.targetKey?.startsWith('mech:')?world.mechanoids?.find(m=>`mech:${m.id}`===a.targetKey):undefined;
     const barrier=a.targetKey?.startsWith('structure:')?world.structures.find(s=>`structure:${s.id}`===a.targetKey&&isBarrier(s)):undefined;
-    const structure=world.schemaVersion>=193&&a.targetKey?.startsWith('structure:')?world.structures.find(s=>`structure:${s.id}`===a.targetKey&&structureMaxHp(s)>0):undefined;
+    const structure=world.schemaVersion>=193&&a.targetKey?.startsWith('structure:')?world.structures.find(s=>`structure:${s.id}`===a.targetKey&&s.kind!=='hidden-conduit'&&structureMaxHp(s)>0):undefined;
     const packed=world.schemaVersion>=193&&a.targetKey?.startsWith('packed:')?world.packed.find(pack=>`packed:${pack.building.id}`===a.targetKey&&pack.owner.type==='ground'&&structureMaxHp(pack.building)>0):undefined;
     const pile=world.schemaVersion>=193&&a.targetKey?.startsWith('pile:')?world.piles.find(pile=>`pile:${pile.id}`===a.targetKey&&pile.owner.type==='ground'&&pileMaxHp(pile,world.schemaVersion)>0):undefined;
     const resource=world.schemaVersion>=193&&a.targetKey?.startsWith('resource:')?world.resources.find(r=>`resource:${r.id}`===a.targetKey&&r.kind!=='rock'&&resourceMaxHp(r)>0):undefined;

@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {geyserCells256} from './local-geyser-state-256.ts';
 import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
 import {STRUCTURE_SHOT_FILL,RESOURCE_SHOT_FILL,FRAME_SHOT_FILL,resourceShotFill,itemShotFill} from './combat-content.ts';
@@ -14,7 +15,7 @@ import {actualAdditionalPlantOwners256} from './actual-plant-physical-masks-256.
 import {naturalTerrainWalkable256} from './natural-terrain-movement-256.ts';
 import {readNaturalPlantSubstrate256,terrainIsWater256} from './natural-terrain-runtime-256.ts';
 import {roofKindAt} from './roof-rules.ts';
-import {runtimePlantDef256} from './wild-plant-runtime-256.ts';
+import {runtimePlantDef256,runtimePlantNonStump382} from './wild-plant-runtime-256.ts';
 import {PlantSpatialRegions256} from './wild-plant-spatial-regions-256.ts';
 import {WILD_PLANT_GENERATION_FACTS_256 as FACTS,type WildPlantGenerationDef256 as Def} from './wild-plant-generation-data-256.ts';
 import type {World,StructureKind,Cell} from './types.ts';
@@ -120,7 +121,7 @@ function addResource256(world:World,capture:LiveResourceCapture256,resource:Reso
  const defId=runtimePlantDef256(resource);
  if(defId!==undefined){
   if(capture.at.has(cell))throw Error('Invalid existing initial plant');
-  capture.at.set(cell,{cell,defId,nonStump:true});capture.total++;capture.species.set(defId,(capture.species.get(defId)??0)+1);
+  const nonStump=runtimePlantNonStump382(resource);capture.at.set(cell,{cell,defId,nonStump});if(nonStump){capture.total++;capture.species.set(defId,(capture.species.get(defId)??0)+1);}
  }
 }
 /** The inverse of addResource256 for a resource of the capture's multiset. */
@@ -133,7 +134,7 @@ function removeResource256(capture:LiveResourceCapture256,resource:Resource256):
  }
  const defId=runtimePlantDef256(resource);
  if(defId!==undefined){
-  capture.at.delete(cell);capture.total--;
+  capture.at.delete(cell);if(!runtimePlantNonStump382(resource))return;capture.total--;
   const count=capture.species.get(defId)!-1;if(count)capture.species.set(defId,count);else capture.species.delete(defId);
  }
 }
@@ -175,9 +176,9 @@ function writeStructureMask256(structures:readonly World['structures'][number][]
   const structure=structures[k]!;
   if(!Object.hasOwn(STRUCTURE_SHOT_FILL,structure.kind)||!Object.hasOwn(STRUCTURE_DEFINITIONS,structure.kind))throw Error('Missing physical plant structure metadata');
   const fill=STRUCTURE_SHOT_FILL[structure.kind],edifice=ZERO_FILL_EDIFICES.has(structure.kind);
-  if(fill<.01&&structure.kind!=='power-conduit'&&!edifice)throw Error('Unresolved zero-fill edifice metadata');
+  if(fill<.01&&!isConduitKind(structure.kind)&&!edifice)throw Error('Unresolved zero-fill edifice metadata');
   const flags=(fill>.99?FULL:0)|(fill>=.01||edifice?COVER:0)|(constructionFinalWipesPlants(structure.kind)?BLOCKS_PLANT:0)|
-   (STRUCTURE_DEFINITIONS[structure.kind].blocksMovement?BLOCKED:0)|(isPassageDoor(structure.kind)?DOOR:structure.kind==='fence'?FENCE:0);
+   (STRUCTURE_DEFINITIONS[structure.kind].blocksMovement?BLOCKED:0)|(isPassageDoor(structure.kind)?DOOR:(structure.kind==='fence'||structure.kind==='barricade')?FENCE:0);
   for(const cell of footprintCells(structure)){
    const i=index(cell);if(!flags)continue;
    const before=bits[i]!,after=before|flags;
@@ -247,7 +248,7 @@ function captureActualPlantSpatialSession256(world:World,header:Header256,popula
  // plants in population (bitwise OR and keyed rows do not depend on order).
  if(!(base&&base.n===n))for(const resource of world.resources){
   filled(resource,resourceShotFill(resource),resource.kind!=='rock');const defId=runtimePlantDef256(resource);
-  if(defId!==undefined)plant({cell:resource.z*world.width+resource.x,defId,nonStump:true});
+  if(defId!==undefined)plant({cell:resource.z*world.width+resource.x,defId,nonStump:runtimePlantNonStump382(resource)});
  }
  for(const row of actualAdditionalPlantOwners256(world))plant(row);
  for(const pile of world.piles)if(pile.owner.type==='ground')filled(pile.owner,itemShotFill(pile.item));

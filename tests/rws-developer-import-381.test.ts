@@ -5,6 +5,7 @@ import {runRwsImport,handleRwsImportRequest,type RwsImportWorkerMessage} from '.
 import {ImportNotes} from '../src/import/rimworld/notes.ts';
 import {developerResearchPlacement381,developerBillPlacement381,validDeveloperPlacements381} from '../src/sim/developer-import-381.ts';
 import {deconstructionCamp} from './scenarios/deconstruction.ts';
+import {asOldSchema} from './scenarios/old-schema.ts';
 import {validateWorld,serializeWorld,deserializeWorld,validateCampaignSchema380} from '../src/sim/serialization.ts';
 import {newBatteryState} from '../src/sim/power-battery.ts';
 import {newPowerState} from '../src/sim/power-rules.ts';
@@ -69,10 +70,13 @@ test('normal schemas and missing or falsified exception records are refused; 380
  const malformed=structuredClone(original);malformed.developerPlacements381!.buildings.push(structuredClone(malformed.developerPlacements381!.buildings[0]!));
  expect(validateWorld(malformed)).not.toEqual([]);
  expect(validateCampaignSchema380({...original,schemaVersion:380})).not.toEqual([]);
- const normal=deconstructionCamp(),old=JSON.parse(serializeWorld(normal));
+ const normal=deconstructionCamp(),old=JSON.parse(asOldSchema(serializeWorld(normal),380));
+ if(old.research){delete old.research.electricity;delete old.research.passiveCooler;}
  old.schemaVersion=380;
  const migrated=deserializeWorld(JSON.stringify(old));
- expect(JSON.parse(serializeWorld(migrated))).toEqual({...old,schemaVersion:381});
+ const expected={...old,schemaVersion:migrated.schemaVersion};
+ if(expected.research)expected.research={...expected.research,electricity:{points:1600000000,completedAt:0},passiveCooler:{points:400000000,completedAt:0}};
+ expect(JSON.parse(serializeWorld(migrated))).toEqual(expected);
  expect(migrated.developerTest381).toBeUndefined();
  expect(migrated.developerPlacements381).toBeUndefined();
 });

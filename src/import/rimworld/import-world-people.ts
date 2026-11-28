@@ -59,7 +59,7 @@ function isolated(ctx:ImportContext):ImportContext {
 function mergeNotes(target:ImportNotes,source:ImportNotes):void {
  for(const table of source.tallies.values())for(const row of table.values())target.def('world',`Personne hors carte : ${row.def}`,row.status,row.to,row.note,row.count);
 }
-function projectHuman(ctx:ImportContext,t:RwsThing,template:Pawn,leader:boolean,terminalAt?:number,terminalCore?:number):Pawn|undefined {
+function projectHuman(ctx:ImportContext,t:RwsThing,template:Pawn,leader:boolean,terminalAt?:number,terminalCore?:number,hasPhysicalCorpseOwner=false):Pawn|undefined {
  const {w}=ctx,node=t.node,n=name(node);
  const rawAge=num(node,'ageTracker/ageBiologicalTicks');
  if(!n||n.length>80||rawAge===undefined||!Number.isSafeInteger(rawAge)||rawAge<18*HUMAN_YEAR_TICKS*10)return undefined;
@@ -110,7 +110,7 @@ function projectHuman(ctx:ImportContext,t:RwsThing,template:Pawn,leader:boolean,
   const outfit=idFromRef(text(node,'outfits/curOutfit'));if(outfit&&w.apparelPolicies?.some(x=>x.id===outfit))p.apparelPolicyId=outfit;
   const drug=idFromRef(text(node,'drugs/curAssignedDrugs'));if(drug&&w.drugPolicies?.some(x=>x.id===drug))p.drugPolicyId=drug;
  }
- if(terminalAt!==undefined&&!importTerminalHumanMedical(ctx,p,node,terminalAt,false,terminalCore))return undefined;
+ if(terminalAt!==undefined&&!importTerminalHumanMedical(ctx,p,node,terminalAt,false,terminalCore,hasPhysicalCorpseOwner))return undefined;
  if(downed&&!importTerminalHumanMedical(ctx,p,node,w.tick,true,effectiveCore297(w)))return undefined;
  return p;
 }
@@ -152,7 +152,7 @@ export function prepareRwsHumanCorpseOwner(ctx:ImportContext,t:RwsThing,corpseCe
  if(ctx.thingIds.has(t.id)||text(t.node,'healthTracker/healthState')!=='Dead')return undefined;
  const local=isolated(ctx),template=starterTemplate(local,t,corpseCell);
  if(!template)return undefined;
- const p=projectHuman(local,t,template,false,deathAtLocal,deathAtCore);
+ const p=projectHuman(local,t,template,false,deathAtLocal,deathAtCore,true);
  if(!p)return undefined;
  // The clinical record is frozen at death; portable goods retain the
  // saved observation/freshness frontier until their physical corpse is

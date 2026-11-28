@@ -1,5 +1,6 @@
 import {ANIMAL_SPECIES_256,type AnimalLeatherItem256} from './animal-species-v256.ts';
 import {ANIMAL_SPECIES_IDS_256,isAnimalSpecies256} from './animal-core-v256.ts';
+import {isAnimalSpecies382} from './animal-missing-core-382.ts';
 import type {AnimalBodyDef256} from './animal-anatomy-data-v256.ts';
 import type { BodyPartId } from './body-definition.ts';
 import type { MeleeDamage, MeleeToolId } from './melee-statistics.ts';
@@ -101,8 +102,9 @@ export const ANIMAL_SPECIES:Readonly<Record<AnimalSpeciesId,AnimalSpeciesProfile
   dromedary:profile({id:'dromedary',label:'dromadaire',combatPower:90,bodySize:2.1,healthScale:1.6,bodyTemplate:'camelid',nutrition:2.1,foodPerDay:.86,moveTicks:6/4.3,walkTicks:30/4.3,ingestTicks:50,ecoSystemWeight:1,wildGroupSize:[2,5],leatherItem:'camelhide',melee:dromedaryMelee}),
   'red-fox':profile({id:'red-fox',label:'renard roux',combatPower:45,predator:true,maxPreySize:.8,bodySize:.55,healthScale:.7,bodyTemplate:'paws',nutrition:.55,foodPerDay:.16,moveTicks:6/4.6,walkTicks:30/4.6,ingestTicks:50,ecoSystemWeight:.25,wildGroupSize:[1,1],leatherItem:'foxfur',melee:foxMelee}),
 });
-export const isAnimalSpecies=(value:unknown):value is AnimalSpeciesId=>typeof value==='string'&&(ANIMAL_SPECIES_IDS as readonly string[]).includes(value);
-export const isAnimalSpeciesInVersion=(value:unknown,version:number):value is AnimalSpeciesId=>isAnimalSpecies(value)&&(version>=256||!isAnimalSpecies256(value));
+const speciesIds=new Set<string>(ANIMAL_SPECIES_IDS);
+export const isAnimalSpecies=(value:unknown):value is AnimalSpeciesId=>typeof value==='string'&&speciesIds.has(value);
+export const isAnimalSpeciesInVersion=(value:unknown,version:number):value is AnimalSpeciesId=>isAnimalSpecies(value)&&(version>=382||!isAnimalSpecies382(value))&&(version>=256||!isAnimalSpecies256(value));
 export const animalSpecies=(id:AnimalSpeciesId):AnimalSpeciesProfile=>ANIMAL_SPECIES[id];
 
 export interface BiomeFaunaEntry {readonly species:AnimalSpeciesId;readonly commonality:number}

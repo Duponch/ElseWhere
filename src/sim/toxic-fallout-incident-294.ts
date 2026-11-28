@@ -1,4 +1,5 @@
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
+import {extremeWeatherAllowed382} from './game-profile.ts';
 import {journalLetter352} from './letter-producers-352.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import {TICKS_PER_DAY,type World} from './types.ts';
@@ -15,9 +16,8 @@ export function adoptToxicFallout294(world:World):void {
 }
 export function eligibleToxicFallout294(world:World):boolean {
   const state=world.miscIncidents?.toxicFallout;
-  // The only represented profile is Adventure Story, whose Core difficulty
-  // allows extreme weather. The ordinary incident targets a player home map.
-  return (Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion)))))&&!!world.gameProfile&&!!state&&!homeIncidentsBlocked261(world)&&!state.active&&
+  // Core's difficulty-specific disabledWhen flag applies before selecting the ticket.
+  return (Number(world.schemaVersion)===294||(Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion)))))&&!!world.gameProfile&&extremeWeatherAllowed382(world)&&!!state&&!homeIncidentsBlocked261(world)&&!state.active&&
     world.tick>=TOXIC_FALLOUT_FIRST_DAY294*TICKS_PER_DAY&&world.tick>=state.adoptedAt&&
     Number.isSafeInteger(world.tick*10+TOXIC_FALLOUT_MAX_CORE294)&&state.count<Number.MAX_SAFE_INTEGER&&
     (state.lastStart===undefined||world.tick-state.lastStart>=TOXIC_FALLOUT_COOLDOWN_DAYS294*TICKS_PER_DAY);

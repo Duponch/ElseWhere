@@ -92,7 +92,7 @@ function advancePreparedWorldPawnRow256(row:WorldPawnOwner256,toCore:number,rand
  else {
   if(mothball)return {ok:false,reason:'Human AgeTickMothballed requires actual records/birthday binding'};
   if(delta!==10)return {ok:false,reason:'World human active interval skipped'};
-  advanceHumanAgeAt(row.actor,{tick:toCore/10,schemaVersion:256,random,notice:message=>notices.push(message)});
+  advanceHumanAgeAt(row.actor,{tick:toCore/10,schemaVersion:version,random,notice:message=>notices.push(message)});
   tickSkillsAt(row.actor,toCore/10);expireMealMemoriesAt(row.actor,toCore/10);expireSocialMemories(row.actor,toCore/10);expireMentalCatharsisAt(row.actor,toCore/10);
  }
  const a=row.actor;let h=a.health;
@@ -100,7 +100,7 @@ function advancePreparedWorldPawnRow256(row:WorldPawnOwner256,toCore:number,rand
   cancelAlcoholSpatial265(h);
   if(medicalCivilTick271(h)!==row.clockCore/10&&medicalCivilTick271(h)!==toCore/10)return {ok:false,reason:'WorldPawn clinical clock skipped'};
   const medicalContext={civilTick:toCore/10,cryptosleepSicknessSpawned:false,...h.alcohol?{alcoholOwner:{id:a.id,spawned:false,awake:a.state!=='sleeping',chemicalNeedFrozen:true}}:{},...h.toxicBuildup?{toxicOwner:{id:a.id,spawned:false,awake:a.state!=='sleeping'}}:{},phase:a.id%60,posture:'standing' as const,starving:row.kind==='animal'?row.actor.food<=0:row.actor.hunger<=0,hunger:row.kind==='animal'?row.actor.food/animalNutritionMax(row.actor)*100:row.actor.hunger,rest:row.kind==='animal'?row.actor.rest*100:row.actor.rest,infectionSeed:(row.context.seed^Math.imul(a.id,0x9e3779b1))>>>0};
-  const frontier=row.kind==='animal'?worldPawnAnimalConditionFrontier256(row.actor,h,random):humanConditionMedicalFrontier256(row.actor,h,toCore/10,random,{kind:'world-pawn'});
+  const frontier=row.kind==='animal'?worldPawnAnimalConditionFrontier256(row.actor,h,random):humanConditionMedicalFrontier256(row.actor,h,toCore/10,random,{kind:'world-pawn',schemaVersion:version});
   if((version===261||(Number(version)===262||isSchema263OrLater(Number(version))))&&row.kind==='animal')advanceScariaRecord261(h,toCore,row.actor.manhunter?.permanent261===true);
   advanceMedical(h,medicalElapsedTicks271(h,toCore/10),medicalContext,random,frontier);frontier?.commit();
  }

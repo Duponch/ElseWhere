@@ -1,7 +1,7 @@
 import {isSchema273OrLater} from './schema-compatibility-257.ts';
 import {isProstheticItem273} from './prosthetic-content-273.ts';
 import {terrainExtraDeterioration256} from './natural-terrain-runtime-256.ts';
-import {isFutureEcologyItem256} from './cave-products-256.ts';
+import {unavailableEcologyItem} from './cave-products-256.ts';
 import {footprintCells} from './definitions.ts';
 import {isShelfKind} from './shelf-storage.ts';
 import {isRoofed} from './roof-rules.ts';
@@ -23,7 +23,7 @@ function containsSorted(cells:readonly number[],cell:number):boolean {let low=0,
 /** Snapshot path uses serialized retained thermal regions, not a new layout build. */
 export function deteriorationExposure(w:World,pile:MaterialPile,environment?:DeteriorationEnvironment):DeteriorationExposure {
  const neutral={baseRate:0,rate:0,roofed:false,usesOutdoorTemperature:true,terrainFactor:0};
- if(w.schemaVersion<252||w.schemaVersion<295&&pile.item==='novel'||!isSchema273OrLater(w.schemaVersion)&&isProstheticItem273(pile.item)||w.schemaVersion<267&&isSmithingApparel267(pile.item)||w.schemaVersion<256&&isFutureEcologyItem256(pile.item)||!isDeteriorationItem(pile.item))return {status:'out-of-scope',...neutral};
+ if(w.schemaVersion<252||w.schemaVersion<295&&pile.item==='novel'||!isSchema273OrLater(w.schemaVersion)&&isProstheticItem273(pile.item)||w.schemaVersion<267&&isSmithingApparel267(pile.item)||unavailableEcologyItem(pile.item,w.schemaVersion)||!isDeteriorationItem(pile.item))return {status:'out-of-scope',...neutral};
  const baseRate=DETERIORATION_RATES[pile.item];if(pile.owner.type!=='ground')return {status:'not-ground',...neutral,baseRate};
  const e=environment??captureDeteriorationEnvironment(w),cell=pile.owner.z*w.width+pile.owner.x;
  const roofed=isRoofed(w,cell),inside=e.layout?(e.layout.indices[cell]??-1)>=0:(w.thermal?.regions??[]).some(r=>containsSorted(r.cells,cell));

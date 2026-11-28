@@ -8,16 +8,18 @@ import type {WildAnimal} from './wildlife-state.ts';
  * spelopede 0.18/0.18. Same roll as worn armor: below half the effective
  * rating the hit is deflected, below the rating it is halved and a sharp hit
  * becomes blunt. Species without armor draw nothing. */
-export function naturalArmor321(a:Pick<WildAnimal,'species'>):{sharp:number;blunt:number}|undefined {
+export function naturalArmor321(a:Pick<WildAnimal,'species'>):{sharp:number;blunt:number;heat?:number}|undefined {
   if(!isAnimalSpecies256(a.species))return undefined;
-  const s=animalCore256(a.species).stats as {ArmorRating_Sharp?:number;ArmorRating_Blunt?:number};
+  const s=animalCore256(a.species).stats as {ArmorRating_Sharp?:number;ArmorRating_Blunt?:number;ArmorRating_Heat?:number};
   const sharp=s.ArmorRating_Sharp??0,blunt=s.ArmorRating_Blunt??0;
-  return sharp>0||blunt>0?{sharp,blunt}:undefined;
+  // Native thrumbo adds the actual Core heat armor without changing older
+  // profiles' shape or hot path. Damage owner still resolves the category.
+  return sharp>0||blunt>0?{sharp,blunt,...a.species==='thrumbo'?{heat:s.ArmorRating_Heat}:{}}:undefined;
 }
-export function naturalArmorProtection321(armor:{sharp:number;blunt:number},category:ArmorCategory,penetration:number,random:()=>number):ImpactProtection {
+export function naturalArmorProtection321(armor:{sharp:number;blunt:number;heat?:number},category:ArmorCategory,penetration:number,random:()=>number):ImpactProtection {
   if(!Number.isFinite(penetration)||penetration<0)throw new RangeError('Invalid natural armor penetration');
   return (_part,amount)=>{
-    const rating=category==='sharp'?armor.sharp:category==='blunt'?armor.blunt:0;
+    const rating=category==='sharp'?armor.sharp:category==='blunt'?armor.blunt:armor.heat??0;
     const effective=Math.max(0,rating-penetration);if(effective<=0)return {amount,converted:false};
     const draw=()=>{const n=random();if(!Number.isFinite(n)||n<0||n>=1)throw new RangeError('Invalid natural armor random');return n;};
     const roll=draw();

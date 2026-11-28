@@ -56,6 +56,8 @@ import { pileDamage,pileMaxHp,resourceMaxHp,structureMaxHp } from './thing-damag
 import type { MaterialPile,Pawn,Resource,Structure,World } from './types.ts';
 import { wallDoorBlueprint296 } from './wall-door-state-296.ts';
 import {markResourceChanged,markResourceArrayChanged} from './resource-mutation-journal.ts';
+import {treeLeavesStump382,treeStump382} from './stump-birth-382.ts';
+import {plantGrowth} from './plants.ts';
 export { pileDamage,pileMaxHp,resourceMaxHp,structureMaxHp,copyThingDamage,mergeThingDamage } from './thing-damage-rules.ts';
 
 const positive=(n:number)=>Number.isSafeInteger(n)&&n>0;
@@ -89,7 +91,11 @@ export function damageResource(world:World,r:Resource,amount:number,reason:'fire
   if(neutral===null)return false;
   if(ledger&&(!addSafe(ledger.resources[r.kind]??0,1)||!addSafe(ledger.woodPotentialLost,woodPotential)))return false;
   const jobs=new Set(world.jobs.filter(j=>at(j,r)&&['mine','chop','cut','harvest','extract-tree'].includes(j.kind)).map(j=>j.id));
-  removeJobs(world,jobs,reason==='roof');const beforeResources=world.resources;world.resources=withoutResource(world.resources,r);markResourceArrayChanged(world,beforeResources,[],[r]);
+  const growth=world.schemaVersion>=382&&r.kind==='tree'&&r.species!==undefined&&reason!=='roof'&&reason!=='frost'?plantGrowth(world,r):0;
+  const leavesStump=treeLeavesStump382(world,r,growth);if(leavesStump&&!Number.isSafeInteger(world.nextId+1))return false;
+  removeJobs(world,jobs,reason==='roof');const beforeResources=world.resources;world.resources=withoutResource(world.resources,r);
+  const stump=leavesStump?treeStump382(world,r,growth,reason==='fire'?'burned-stump':'smashed-stump'):undefined;
+  if(stump)world.resources.push(stump);markResourceArrayChanged(world,beforeResources,stump?[stump]:[],[r]);
   // The clearance step ended without a harvest. Keep its construction intent,
   // materials and unrelated queued work, but release this now-obsolete claim:
   // an unsupplied blueprint cannot retain a finishing-work reservation.
@@ -161,6 +167,10 @@ export function damageStructure(world:World,s:Structure,amount:number,cause:Stru
   const packed=world.packed.find(p=>p.building===s),installed=world.structures.includes(s),max=structureMaxHp(s);
   if(!max&&cause!=='roof-thick'||!positive(amount)||!installed&&!packed)return false;
   if(external&&(!Number.isFinite(external.rawAmount)||external.rawAmount<0||!Number.isSafeInteger(external.core)||(isCorePhysicalSchema297(Number(world.schemaVersion))?external.core!==effectiveCore297(world):external.core<Math.max(0,(world.tick-1)*10)||external.core>world.tick*10)))return false;
+  // Core Building.PreApplyDamage absorbs every DamageInfo for HiddenConduit.
+  // A thick natural roof alone follows the damage with an unconditional Kill
+  // of remaining destroyable Things, which this combined transaction models.
+  if(s.kind==='hidden-conduit'&&cause!=='roof-thick')return true;
   // Schema 357: an installed IED trap carries Core CompExplosive (never 'never explode').
   const ied=isIedSchema357(world.schemaVersion)&&installed&&isIedTrapKind357(s.kind);
   const core=external?.core??(isCorePhysicalSchema297(Number(world.schemaVersion))?effectiveCore297(world):world.tick*10),explosive=ied||world.schemaVersion>=193&&installed&&s.kind==='mini-turret'&&!!s.turret&&miniTurretExplosive(s.id);

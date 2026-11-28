@@ -9,6 +9,7 @@ import type {AnimalSpeciesId} from '../sim/animal-species';
  * fifth. Numbers only (no texture or text). Presentation only: body size,
  * nutrition and every rule keep reading `bodySizeAtAge`. */
 const CORE_STAGE_DRAW_SIZES:Readonly<Record<AnimalSpeciesId,readonly [number,number,number]>>=Object.freeze({
+ goat:[.6,1.15,1.42],pig:[.6,1.15,1.6],thrumbo:[2.5,4,4.8],
  'alpaca':[1.3,1.9,2.2],'arctic-fox':[1,1.2,1.75],'arctic-wolf':[1.05,1.5,1.95],'bison':[1.5,2.25,3],'boomalope':[1,1.6,2.2],'boomrat':[0.8,1,1.15],
  'capybara':[1,1.25,1.5],'caribou':[1.9,2.8,3.5],'cassowary':[1.1,1.4,1.8],'cat':[0.6,0.8,1],'chinchilla':[0.5,0.75,0.85],'cobra':[1,1.25,1.5],
  'cougar':[1.1,1.4,2.18],'deer':[1.375,1.875,2.25],'donkey':[1.3,1.6,1.9],'dromedary':[1.5,2.25,3],'duck':[0.45,0.75,0.87],'elephant':[1.8,2.6,3.8],

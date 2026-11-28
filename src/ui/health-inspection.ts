@@ -13,6 +13,7 @@ import { BLOOD_UNIT,HP_UNIT,PAIN_UNIT,INJURY_RULES,bloodConsciousness } from '..
 import { medicalBleed,medicalPain,injuryBleed,remainingPartHealth,freshMissing } from '../sim/injury-state';
 import { bodyEfficiencies } from '../sim/body-capacities';
 import { pawnBody } from '../sim/health-rules';
+import {humanConsumedPartAbsent382} from '../sim/corpse-anatomy';
 import type { Pawn,Command,World } from '../sim/types';
 import { MEDICAL_CARE,medicalCare,type MedicalCare } from '../sim/medicine-rules';
 import { createInfectionInspection,updateInfectionInspection,infectionPercent } from './infection-inspection';
@@ -132,6 +133,7 @@ export function healthInjuryRows(pawn:Pawn):ReadonlyArray<{part:string;descripti
   return [
     ...health.injuries.map(i=>({partId:i.part,part:BODY_PARTS[i.part].label,description:`${i.scar?.pain!==undefined?'Cicatrice':INJURY_RULES[i.kind].label} · −${(i.severity/HP_UNIT).toFixed(2)} PV${i.tended!==undefined?` · soignée (${Math.round(i.tended/10)} %)` :''}`})),
     ...health.missing.filter(m=>!artificialPartCovering(health,m.part)).map(m=>({partId:m.part,part:BODY_PARTS[m.part].label,description:`Partie perdue${m.tended?' · plaie soignée':''}`})),
+    ...(pawn.body?.consumedParts382??[]).map(m=>({partId:m.part,part:BODY_PARTS[m.part].label,description:'Partie consommée après le décès'})),
     ...(health.artificialParts??[]).map(added=>({partId:added.part,part:BODY_PARTS[added.part].label,description:`${ARTIFICIAL_PARTS[added.kind].label} · efficacité ${Math.round(ARTIFICIAL_PARTS[added.kind].efficiency*100)} %`})),
     ...(health.ageAilments??[]).map(kind=>kind==='bad-back'
       ?{partId:'spine' as const,part:'Colonne vertébrale',description:'Lumbago'}
@@ -159,6 +161,7 @@ const CAPACITY_HELP:Record<typeof CAPACITY_LABELS[number][0],{body:string;parts:
 /** Snapshot-only inspection projection. Numbers use the same anatomical and
  * condition rules as simulation; no attacker or weapon is guessed from a wound. */
 export function healthPartTooltip(pawn:Pawn,part:BodyPartId):{title:string;body:string;rows:TooltipRow[]} {
+  if(humanConsumedPartAbsent382(pawn,part))return {title:BODY_PARTS[part].label,body:'Cette partie physique est absente à la suite d’une consommation après le décès. Elle ne modifie pas le dossier clinique arrêté au décès.',rows:[{label:'État physique',value:'Absente après le décès'}]};
   const definition=BODY_PARTS[part],efficiency=bodyEfficiencies(anatomyInput(pawn))[BODY_INDEX[part]]!;
   const added=pawn.health?artificialPartCovering(pawn.health,part):undefined;
   if(added&&added.part!==part)return {title:definition.label,body:'Cette partie naturelle est remplacée par la prothèse de son parent ; elle ne constitue pas une nouvelle plaie à soigner.',rows:[{label:'Prothèse',value:ARTIFICIAL_PARTS[added.kind].label},{label:'Efficacité de la prothèse',value:percent(ARTIFICIAL_PARTS[added.kind].efficiency)}]};
@@ -213,6 +216,7 @@ function clinicalRows(pawn:Pawn):ClinicalRow[]{
     ]}};
   });
   for(const missing of health.missing)if(!artificialPartCovering(health,missing.part))rows.push({partId:missing.part,part:BODY_PARTS[missing.part].label,description:'Partie perdue',bleeding:freshMissing(health,missing),tooltip:{title:'Partie perdue',body:'La partie et ses descendants ne contribuent plus aux capacités du corps.',rows:[{label:'Traitement',value:missing.tended?'Plaie soignée':freshMissing(health,missing)?'Plaie fraîche non soignée':'Plaie fermée'}]}});
+  if(pawn.body?.consumedParts382)for(const m of pawn.body.consumedParts382)rows.push({partId:m.part,part:BODY_PARTS[m.part].label,description:'Partie consommée après le décès',bleeding:false,tooltip:healthPartTooltip(pawn,m.part)});
   for(const added of health.artificialParts??[]){const rule=ARTIFICIAL_PARTS[added.kind];rows.push({partId:added.part,part:BODY_PARTS[added.part].label,description:rule.label,bleeding:false,tooltip:{title:rule.label,body:'Cette partie a été remplacée par une prothèse. Sa fonction et les affections ou lésions présentes déterminent ses capacités.',rows:[{label:'Efficacité de la partie',value:percent(rule.efficiency)},{label:'Type',value:isProstheticItem273(added.kind)?'Prothèse industrielle':'Bois'}]}});}
   for(const kind of health.ageAilments??[]){const partId=kind==='bad-back'?'spine':'torso';rows.push({partId,part:BODY_PARTS[partId].label,description:kind==='bad-back'?'Lumbago':'Frêle',bleeding:false,tooltip:{title:kind==='bad-back'?'Lumbago':'Frêle',body:'Affection chronique liée à l’âge.',rows:[{label:'Mouvement',value:'−30 % points'},{label:'Manipulation',value:kind==='bad-back'?'−10 % points':'−30 % points'}]}});}
   return rows.sort((a,b)=>BODY_INDEX[a.partId]-BODY_INDEX[b.partId]);
@@ -311,7 +315,10 @@ export function healthStatusText(pawn:Pawn,world?:World):string {
 export function updateHealthInspection(panel:HTMLElement,pawn:Pawn,world?:World):void {
   const details=panel.querySelector('#health-inspection');if(!details)return;
   const health=pawn.health;
-  const alcohol=alcoholInspection265(pawn),alcoholRow=details.querySelector('[data-health="alcohol"]');if(alcoholRow)alcoholRow.textContent=alcohol.join(' · ');
+  const alcohol=alcoholInspection265(pawn),ambrosia=pawn.health?.ambrosia382;
+  if(ambrosia?.high)alcohol.push(`Douceur d’ambroisie (${Math.round(ambrosia.high.severity*100)} %)`);
+  if(ambrosia?.tolerance)alcohol.push(`Tolérance à l’ambroisie (${Math.round(ambrosia.tolerance.severity*100)} %)`);
+  const alcoholRow=details.querySelector('[data-health="alcohol"]');if(alcoholRow)alcoholRow.textContent=alcohol.join(' · ');
   const anesthetic=details.querySelector('[data-health="anesthetic"]');if(anesthetic)anesthetic.textContent=healthAnestheticText(pawn);
   const crypto=details.querySelector('[data-health="cryptosleep-sickness"]'),sickness=health?.cryptosleepSickness;if(crypto)crypto.textContent=sickness?`${sickness.remainingCore>0?`Mal de cryptosommeil · ${(sickness.remainingCore/2500).toFixed(1)} h restantes`:'Vomissement résiduel'}${sickness.vomit?' · Vomit':''}`:'';
   const surgery=details.querySelector('[data-health="surgery"]');if(surgery?.querySelector('[data-health="surgery-request"]')){

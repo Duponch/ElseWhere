@@ -1,9 +1,10 @@
 import type {Structure} from '../sim/types';
+import {doorLeafTop} from './door-parts';
 
 /** Presentation only. Air transfer, blocking and the one-cell footprint stay
  * entirely in the simulation. A compact unit sits above a solid wall sill. */
-export const WALL_APPLIANCE_BOTTOM=1.05;
-export const WALL_APPLIANCE_TOP=1.85;
+export const WALL_APPLIANCE_TOP=doorLeafTop(false);
+export const WALL_APPLIANCE_BOTTOM=WALL_APPLIANCE_TOP-.48;
 export const isWallAppliance=(kind:Structure['kind']):boolean=>kind==='vent'||kind==='cooler';
 
 /** The appliance is metal; the masonry around it belongs to the wall it

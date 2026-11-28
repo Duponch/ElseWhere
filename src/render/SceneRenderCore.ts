@@ -25,6 +25,8 @@ import { RoomLayer } from './RoomLayer';
 import { parseLightingSettings, type LightingSettings } from './lighting-settings';
 import { DecorOcclusion } from './decor-occlusion';
 import { DeepResourceLayer } from './DeepResourceLayer';
+import {HiddenConduitOverlay382} from './HiddenConduitOverlay382';
+import {isElectrical} from '../sim/power-rules';
 import { AreaPreviewLayer } from './AreaPreviewLayer';
 import {OrderTargetIndex} from './order-target-index';
 import {OrderTargetPreviewLayer} from './OrderTargetPreviewLayer';
@@ -662,6 +664,7 @@ export class SceneRenderCore {
   protected readonly immutableWorlds=new WeakSet<World>();
   protected hasTracks = false;
   protected readonly deepResources = new DeepResourceLayer();
+  private hiddenConduits382:HiddenConduitOverlay382|undefined;
   protected readonly hygiene = new HygieneLayer(this.environmentLighting.configure);
   protected selectedFloor:BuildableFloorKind|undefined;
   protected constructionMaterial:ConstructionMaterial|undefined;
@@ -1764,7 +1767,16 @@ export class SceneRenderCore {
   setSelectedObject(selected:MapObjectSelection|undefined):void {this.setSelectedObjects(selected?[selected]:[]);}
   setSelectedObjects(selected:readonly MapObjectSelection[]):void {this.selectedObjects=selected.map(s=>({...s}));this.selectedObject=this.selectedObjects[0];this.updateSelectedObject();if(this.updateGrowingZones(false)){this.zonesTintDirty=true;this.refreshZonesTint();}this.updateTurretPreview();this.updateFacilityLinks();this.updateDeepResources();}
   protected updateDeepResources():void {
-    if(this.world&&this.deepResources.update(this.world,{selectedId:this.tool==='select'&&this.selectedObject?.kind==='structure'?this.selectedObject.id:undefined,placement:this.tool==='install'?this.furniturePlacement?.kind:this.tool}))this.invalidatePausedShadow();
+    const world=this.world;
+    if(world){
+      const id=this.tool==='select'&&this.selectedObject?.kind==='structure'?this.selectedObject.id:undefined,selected=id===undefined?undefined:world.structures.find(s=>s.id===id),placement=this.tool==='install'?this.furniturePlacement?.kind:this.tool;
+      if(this.deepResources.update(world,{selectedId:id,selectedStructure:selected,placement}))this.invalidatePausedShadow();
+      const power=world.schemaVersion>=382&&(this.tool==='select'?!!selected&&isElectrical(selected.kind):placement==='deconstruct'||isElectrical(placement));
+      if(power){
+        if(!this.hiddenConduits382){this.hiddenConduits382=new HiddenConduitOverlay382();this.scene.add(this.hiddenConduits382.mesh);}
+        this.hiddenConduits382.update(world);
+      }else this.hiddenConduits382?.hide();
+    }
     this.refreshGroundOverlays();
   }
   /** One bridge for all producers. Their records come from the same authored
@@ -2506,14 +2518,14 @@ export class SceneRenderCore {
     }
     const placeable=this.tool in STRUCTURE_DEFINITIONS||['mine','uninstall','deconstruct','chop','harvest','cut'].includes(this.tool);
     const validity = this.tool==='build-roof'?queryArea(this.world,{type:'area',action:'build-roof',from:cell,to:cell}):this.tool==='lay-floor'||this.tool==='remove-floor'||this.tool==='build-bridge'||this.tool==='remove-bridge'?canDesignate(this.world,{type:'designate',kind:this.tool,...cell,...this.tool==='lay-floor'?{floor:this.selectedFloor}:{}}):this.tool==='install'&&this.furniturePlacement?installCommand(this.world,{type:'install',structureId:this.furniturePlacement.id,...cell,orientation:['torch-lamp','sun-lamp','standing-lamp','small-sculpture','large-sculpture'].includes(this.furniturePlacement.kind)?0:this.placementRotation},true):placeable
-      ? canDesignate(this.world, { type:'designate',kind:this.tool as JobKind,...cell,...(this.constructionMaterial?{material:this.constructionMaterial}:{}),orientation:this.tool==='mini-turret'||this.tool==='sandbags'||this.tool==='solar-generator'||this.tool==='geothermal-generator'||this.tool==='power-conduit'||this.tool==='power-switch'||this.tool==='wood-generator'||this.tool==='chemfuel-generator'||this.tool==='torch-lamp'||this.tool==='sun-lamp'||this.tool==='standing-lamp'||this.tool==='table-large'||this.tool==='door'||this.tool==='autodoor'||this.tool==='passive-cooler'?0:this.placementRotation }) : undefined;
+      ? canDesignate(this.world, { type:'designate',kind:this.tool as JobKind,...cell,...(this.constructionMaterial?{material:this.constructionMaterial}:{}),orientation:this.tool==='mini-turret'||this.tool==='sandbags'||this.tool==='barricade'||this.tool==='solar-generator'||this.tool==='geothermal-generator'||this.tool==='power-conduit'||this.tool==='hidden-conduit'||this.tool==='power-switch'||this.tool==='wood-generator'||this.tool==='chemfuel-generator'||this.tool==='torch-lamp'||this.tool==='sun-lamp'||this.tool==='standing-lamp'||this.tool==='table-large'||this.tool==='door'||this.tool==='autodoor'||this.tool==='passive-cooler'?0:this.placementRotation }) : undefined;
     const invalidPlacement=validity?.ok===false||this.tool==='build-roof'&&validity!==undefined&&'cells' in validity&&validity.cells.length===0;
     const color = invalidPlacement ? 0xe46f58 : this.tool === 'cancel' || this.tool === 'remove-stockpile' ? 0xe6876a : this.tool === 'select' ? 0xf9ebae : 0x9dd9ca;
     (this.hover.material as THREE.MeshBasicNodeMaterial).color.setHex(color);
     if (this.tool in STRUCTURE_DEFINITIONS || this.tool==='lay-floor'||this.tool==='build-roof'||this.tool==='build-bridge'||this.tool==='remove-bridge'||this.tool==='install'&&this.furniturePlacement) {
       const orientation:Orientation = this.tool==='install'
         ? ['torch-lamp','sun-lamp','standing-lamp','table-large','small-sculpture','large-sculpture'].includes(kind)?0:this.placementRotation
-        : ['torch-lamp','mini-turret','sandbags','solar-generator','geothermal-generator','power-conduit','power-switch','wood-generator','chemfuel-generator','sun-lamp','standing-lamp','table-large','door','autodoor','passive-cooler'].includes(this.tool)?0:this.placementRotation;
+        : ['torch-lamp','mini-turret','sandbags','barricade','solar-generator','geothermal-generator','power-conduit','hidden-conduit','power-switch','wood-generator','chemfuel-generator','sun-lamp','standing-lamp','table-large','door','autodoor','passive-cooler'].includes(this.tool)?0:this.placementRotation;
       const spec:ConstructionPreviewSpec={...cell,kind:(this.tool==='install'?kind:this.tool) as ConstructionPreviewSpec['kind'],orientation,
         ...(this.constructionMaterial?{material:this.constructionMaterial}:{}),
         ...(this.tool==='lay-floor'?{floor:this.selectedFloor??'wood-planks'}:{}),
@@ -2581,6 +2593,7 @@ export class SceneRenderCore {
     this.hostPort.disposeLabels();
     this.overview.dispose();
     this.deepResources.dispose();
+    this.hiddenConduits382?.dispose();
     this.rocks.dispose();
     this.crops.dispose();
     this.plants.dispose();

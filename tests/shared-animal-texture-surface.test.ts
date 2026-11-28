@@ -55,10 +55,10 @@ function unchanged(g:THREE.BufferGeometry,original:ReturnType<typeof geometryFac
  for(const[name,row]of Object.entries(original.attributes)){const a=g.getAttribute(name);expect(a).toBe(row.attribute);expect(a.array).toBe(row.array);expect(a.array).toEqual(row.bytes);}
 }
 
-test('all53 common models retain complete Source triangle order, anatomy, both exact UV domains and the33-float resident layout before either texture is selected',()=>{
+test('all56 common models retain complete Source triangle order, anatomy, both exact UV domains and the33-float resident layout before either texture is selected',()=>{
  const models=new AnimalModels();
  try{
-  expect(ANIMAL_SPECIES_IDS).toHaveLength(53);
+  expect(ANIMAL_SPECIES_IDS).toHaveLength(56);
   for(const species of ANIMAL_SPECIES_IDS){
    const model=models.get(species),source=commonAnimalPresentationGeometry(1,species,false);if(!source)throw Error('Actual Source species missing: '+species);
    const coatSource=new THREE.BufferGeometry();for(const[name,a]of Object.entries(source.attributes))coatSource.setAttribute(name,a);if(source.index)coatSource.setIndex(source.index);bakeAnimalCoatCoordinates(coatSource,species);
@@ -82,7 +82,7 @@ test('all53 common models retain complete Source triangle order, anatomy, both e
     expect(runtime.userData.animalSurfaceProfileStride).toBe(128);expect(model.geometry.hasAttribute('bakedUv')).toBe(false);expect(model.geometry.userData.origamiWear).toBeUndefined();expect(origamiAnimalCachedWearBytes(species)).toBe(0);
    }finally{runtime.dispose();other.dispose();coatSource.dispose();disposeSource(source);}
   }
-  expect(models.snapshot()).toMatchObject({models:53,leases:0,closing:false});
+  expect(models.snapshot()).toMatchObject({models:56,leases:0,closing:false});
  }finally{models.dispose();}
  expect(models.snapshot()).toMatchObject({models:0,cpuBytes:0,closing:true});
  const tiny=new AnimalModels(1);try{expect(()=>tiny.get('deer')).toThrow(/before allocation/);expect(tiny.snapshot().models).toBe(0);}finally{tiny.dispose();}
@@ -95,7 +95,7 @@ test('actual wildlife changes texture data on the same geometry/material; injury
  try{
   layer.setSelected(new Set([animal.id]));layer.update(world,undefined,true);const mesh=body(layer),geometry=mesh.geometry,material=mesh.material,initial=geometryFacts(geometry),program=material.colorNode,normal=material.normalNode,position=material.positionNode,output=material.outputNode,mask=material.maskNode,version=material.version;
   retiredBody=geometry;geometry.addEventListener('dispose',retiredBodyDispose);
-  const complete=layer.sharedSurfaceStatus();expect(complete.species).toHaveLength(53);expect(complete.species.every(s=>s.pipeline==='shared-paint'&&!s.sourceRibbons)).toBe(true);expect(complete.positiveEffectsTransitional).toBe(false);
+  const complete=layer.sharedSurfaceStatus();expect(complete.species).toHaveLength(56);expect(complete.species.every(s=>s.pipeline==='shared-paint'&&!s.sourceRibbons)).toBe(true);expect(complete.positiveEffectsTransitional).toBe(false);
   expect([material.roughness,material.metalness,material.transparent,material.depthWrite,material.alphaTest]).toEqual([.88,.02,false,true,0]);expect(normal).toBeNull();expect(output).not.toBeNull();expect(mask).not.toBeNull();expect(context.reliefLod).toBeUndefined();
   for(const style of ['origami','default','origami']as const){const before=JSON.stringify(world);context.update({...context.preferences,style});layer.update(world,undefined);unchanged(mesh.geometry,initial);expect(mesh.material).toBe(material);expect(material.colorNode).toBe(program);expect(material.positionNode).toBe(position);expect(material.normalNode).toBe(normal);expect(material.outputNode).toBe(output);expect(material.maskNode).toBe(mask);expect(material.version).toBe(version);expect(context.surfaceEncoding.value).toBe(style==='origami'?1:0);expect(JSON.stringify(world)).toBe(before);}
   for(const child of layer.mesh.children)if(child instanceof THREE.Mesh)expect(child.children.some(c=>c instanceof THREE.Mesh&&(c.material as THREE.Material).userData.origamiBrush)).toBe(false);
@@ -119,7 +119,7 @@ test('positive optional effects retain the same body and black-stroke program fa
  try{
   layer.update(world,undefined,true);const mesh=body(layer),geometry=mesh.geometry,material=mesh.material,position=material.positionNode,partTable=layer.sharedSurfaceStatus().species.find(s=>s.species==='deer')!;
   context.update({...context.preferences,impasto:.5,edges:.65,wear:.75});expect(mesh.geometry).toBe(geometry);expect(mesh.material).toBe(material);expect(material.positionNode).toBe(position);expect(material.normalNode).not.toBeNull();expect(layer.sharedSurfaceStatus().species.find(s=>s.species==='deer')!.modelKey).toBe(partTable.modelKey);
-  const wear=mesh.children.find(c=>c instanceof THREE.Mesh&&c.name.includes('optional physical paint wear')) as Body;expect(wear).toBeInstanceOf(THREE.Mesh);expect(wear.visible).toBe(false);expect(Reflect.get(context,'wearGeometries').size).toBe(53);expect(wear.geometry.getAttribute('aFrom')).toBe(geometry.getAttribute('aFrom'));
+  const wear=mesh.children.find(c=>c instanceof THREE.Mesh&&c.name.includes('optional physical paint wear')) as Body;expect(wear).toBeInstanceOf(THREE.Mesh);expect(wear.visible).toBe(false);expect(Reflect.get(context,'wearGeometries').size).toBe(56);expect(wear.geometry.getAttribute('aFrom')).toBe(geometry.getAttribute('aFrom'));
   const wearGeometry=wear.geometry,wearMaterial=wear.material,bodyVersion=material.version,wearVersion=wearMaterial.version;context.update({...context.preferences,style:'origami'});expect(wear.visible).toBe(true);context.update({...context.preferences,style:'default'});expect(wear.visible).toBe(false);expect(wear.geometry).toBe(wearGeometry);expect(wear.material).toBe(wearMaterial);expect(material.version).toBe(bodyVersion);expect(wearMaterial.version).toBe(wearVersion);
   const disposeGeometry=vi.fn(),disposeMaterial=vi.fn();wearGeometry.addEventListener('dispose',disposeGeometry);wearMaterial.addEventListener('dispose',disposeMaterial);context.update({...context.preferences,impasto:0,wear:0});expect(mesh.geometry).toBe(geometry);expect(mesh.material).toBe(material);expect(material.normalNode).toBeNull();expect(context.reliefLod).toBeUndefined();expect(mesh.children).not.toContain(wear);expect(disposeGeometry).toHaveBeenCalledOnce();expect(disposeMaterial).toHaveBeenCalledOnce();expect(Reflect.get(context,'wearGeometries').size).toBe(0);expect(Reflect.get(context,'brushGeometries').size).toBe(0);for(const species of ANIMAL_SPECIES_IDS)expect(origamiAnimalCachedWearBytes(species),species+'/wear zero').toBe(0);
  }finally{owner.close();}

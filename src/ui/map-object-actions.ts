@@ -74,10 +74,10 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
   const cell = cells[0];
   if (!cell) return [];
   const actions: MapObjectAction[] = [];
-  const blocked = (kind: Job['kind']|Structure['kind'], targets: readonly Cell[], deconstruct = false) => world.jobs.some(job => !isRoofJob(job)
+  const blocked = (kind: Job['kind']|Structure['kind'], targets: readonly Cell[], deconstruct = false,orientation?:number) => world.jobs.some(job => !isRoofJob(job)
     && !(deconstruct&&job.wallDoor296?.manual===false)
     && !(deconstruct && ['repair', 'fix-breakdown', 'flick'].includes(job.kind))
-    && sharesConstructionLayer(job.furniture?.kind ?? job.deconstruction?.kind ?? job.flick?.kind ?? job.fixBreakdown?.kind ?? job.kind, kind)
+    && sharesConstructionLayer(job.furniture?.kind ?? job.deconstruction?.kind ?? job.flick?.kind ?? job.fixBreakdown?.kind ?? (world.schemaVersion>=382&&job.repair?world.structures.find(s=>s.id===job.repair!.structureId)?.kind:undefined) ?? job.kind, kind,world.schemaVersion,job.orientation,orientation)
     && footprintCells(job).some(at => targets.some(target => same(at, target))));
   const designate = (id: 'mine' | 'chop' | 'harvest' | 'cut', label: string) => {
     const plant=['chop','cut','harvest'].includes(id);
@@ -117,7 +117,7 @@ function actionsFor(world: World, selected: MapObjectSelection, cells: readonly 
   } else if (selected.kind === 'structure') {
     const structure = lookups?.structures ? lookups.structures.get(selected.id) : world.structures.find(structure => structure.id === selected.id);
     if(structure&&roadPropCanClaim256(world,structure))actions.push({id:'claim',label:'Revendiquer',command:{type:'claim-road-prop',structureId:structure.id}});
-    if (structure && roadPropCanDeconstruct256(world,structure)&&!world.jobs.some(job => job.furniture?.structureId === structure.id) && !blocked(structure.kind, cells, true)) {
+    if (structure && roadPropCanDeconstruct256(world,structure)&&!world.jobs.some(job => job.furniture?.structureId === structure.id) && !blocked(structure.kind, cells, true,structure.orientation)) {
       actions.push({ id: 'deconstruct', label: structure.kind==='sleeping-spot'||structure.kind==='double-sleeping-spot'?'Retirer l’emplacement':'Déconstruire',
         command: { type: 'designate', kind: 'deconstruct', targetId: structure.id, x: structure.x, z: structure.z } });
     }

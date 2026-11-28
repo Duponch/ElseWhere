@@ -40,8 +40,8 @@ export function tableLargeCells363(anchor:Cell):Cell[] {
 export const tableLargeContains363=(anchor:Cell,cell:Cell):boolean=>Math.abs(cell.x-anchor.x)<=1&&Math.abs(cell.z-anchor.z)<=1;
 
 const DIRECTIONS=[[0,1],[1,0],[0,-1],[-1,0]] as const;
-/** Placeworker_AttachedToWall: the lamp stands on a free cell and hangs on the
- * wall in front of its rotation (Rot4.FacingCell), drawn 0.9 cell towards it. */
+/** Placeworker_AttachedToWall: the lamp occupies the adjacent cell (which
+ * may also hold non-full furniture) and is drawn 0.9 cell towards its wall. */
 export function wallLampWallCell363(lamp:Cell&{orientation?:number}):Cell {
   const d=DIRECTIONS[(((lamp.orientation??0)%4)+4)%4]!;return {x:lamp.x+d[0],z:lamp.z+d[1]};
 }

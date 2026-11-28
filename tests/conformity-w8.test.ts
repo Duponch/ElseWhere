@@ -233,10 +233,10 @@ describe('the research view reads the simulation’s prerequisites (one source)'
       // The words of a prerequisite are its node title.
       expect(RESEARCH_PARENT_LABELS[project.id]).toBe(project.title);
     }
-    expect(researchPrerequisiteLabels.get('machining')).toEqual(['Électricité (acquise au départ)','Forge']);
+    expect(researchPrerequisiteLabels.get('machining')).toEqual(['Électricité','Forge']);
     expect(researchPrerequisiteLabels.get('vitals-monitor')).toEqual(['Multi-analyseur','Lit d’hôpital']);
     expect(researchPrerequisiteLabels.get('flak-armor')).toEqual(['Usinage','Armure de plaques']);
-    expect(researchPrerequisiteLabels.get('batteries')).toEqual(['Électricité (acquise au départ)']);
+    expect(researchPrerequisiteLabels.get('batteries')).toEqual(['Électricité']);
   });
 
   test('the simulation refuses a project from the same table, first missing parent first',()=>{

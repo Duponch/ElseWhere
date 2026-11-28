@@ -13,6 +13,10 @@ export interface AnimalAgeConditionBindings256 {
  tryStartConfused(source:AnimalAgeConditionCase256,atCore:number):boolean;
  destroyPart(part:BodyPartId,atCore:number):void;
  reconcileHealth(atCore:number):void;
+ forgetHumanMemory?():void;
+ /** Native human AgeTickInterval follows HealthTickInterval; an age condition
+  * created at this macro boundary must not receive the already elapsed health pass. */
+ deferNewCondition?(condition:AnimalAgeConditionCase256):boolean;
 }
 export function unresolvedAnimalConditionBindings256(record:AnimalAgeMedical256,bindings:Partial<AnimalAgeConditionBindings256>):string[] {
  const kinds=new Set(record.animalAgeConditions?.cases.map(c=>c.kind)),missing:string[]=[];
@@ -36,11 +40,12 @@ export function advanceAnimalAgeConditionInterval256(record:AnimalAgeMedical256,
  const missing=unresolvedAnimalConditionBindings256(record,input.bindings);if(missing.length)throw Error('Unresolved animal condition bindings: '+missing.join(', '));
  const {actorId,atCore,deltaCore,random}=input,bindings=input.bindings as AnimalAgeConditionBindings256;
  const snapshot=[...record.animalAgeConditions.cases];
- for(const c of snapshot){if(record.death)return;if(!record.animalAgeConditions.cases.includes(c))continue;
+ for(const c of snapshot){if(record.death)return;if(!record.animalAgeConditions.cases.includes(c)||bindings.deferNewCondition?.(c))continue;
   if(!Number.isSafeInteger(c.ageCore+deltaCore))throw Error('Condition age exhausted');c.ageCore+=deltaCore;
   const stage=animalConditionStage256(c.kind,c.severity),hash=(period:number)=>groupPawnInterval256(actorId,input.civilCore??atCore,period,deltaCore);
   if(stage.heartAttackMtb&&hash(60)&&animalConditionMtbEvent256(stage.heartAttackMtb,60,random))tryApplyAnimalAgeCondition256(record,'HeartAttack',random);
   if(stage.confusionMtb&&hash(60)&&!bindings.inMentalState()&&animalConditionMtbEvent256(stage.confusionMtb,60,random))bindings.tryStartConfused(c,atCore);
+  if(c.kind==='Alzheimers'&&bindings.forgetHumanMemory&&hash(400)&&animalConditionMtbEvent256(c.severity>=f(.8)?1:c.severity>=f(.5)?2:c.severity>=f(.2)?4:7,400,random))bindings.forgetHumanMemory();
   // Real animals have neither skills nor a Mood memory tracker. The primary
   // SkillDecay/forget-memory branches therefore perform no mutation/draw here.
   if(stage.destroyPart)bindings.destroyPart(c.part,atCore);

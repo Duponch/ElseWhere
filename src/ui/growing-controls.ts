@@ -6,6 +6,7 @@ import {isSchema291OrLater} from '../sim/schema-compatibility-257.ts';
 import {devilstrandUnlocked358} from '../sim/devilstrand-358.ts';
 
 const CULTURE_HELP:Record<CropKind,string>={
+  tinctoria:'Plante tinctoriale : sol et hydroponie, semis de 54 ticks ; 2 jours pondérés de croissance, 12 jours de vie, fertilité minimale 70 %, produit une teinture. La peinture des surfaces reste à raccorder.',
   devilstrand:'Champignon modifié qui tisse une soie robuste. Culture 10 pour semer ; pleine terre seulement, sans hydroponie. Un plant mûr donne jusqu’à 6 soies du diable, selon le récolteur. Cycle très long : 22,5 jours de croissance pondérée, fertilité minimale 50 %, sensibilité à la fertilité de 100 % ; la lumière, le froid et la nuit allongent la durée réelle. Jamais touché par la rouille des cultures. Semis 40 ticks, récolte 20 ticks nominaux. Disponible après la recherche Soie du diable.',
   hops:'Culture 3 pour semer ; sol et hydroponie. Un plant mûr peut donner 8 houblons. Cinq jours de croissance pondérée et sensibilité à la fertilité de 70 % ; la lumière, le froid et la nuit modifient la durée réelle. Le houblon se conserve 30 jours à température ambiante. La recherche Brassage de bière débloque la brasserie et le tonneau, sans conditionner le semis du houblon.',
   haygrass:'Le foin mûr donne jusqu’à 18 unités. Sept jours de croissance pondérée, sensibilité à la fertilité de 60 %. Sol uniquement, sans hydroponie. Semis 17 ticks et récolte 20 ticks nominaux ; la durée et le rendement dépendent du récolteur et du milieu. Le foin nourrit les herbivores et entre dans les croquettes, mais ne se mange pas par les humains. Conservation : 60 jours à température ambiante.',
@@ -23,9 +24,9 @@ export const growingCultureHelp=(kind:GrowingPlant291,_world?:World):string=>{
 };
 /** Schema 358: devilstrand is listed once its research is complete (Core
  * Command_SetPlantToGrow.IsPlantAvailable), on the ground only. */
-const cropChoices=(world?:World):readonly CropKind[]=>CROP_KINDS.filter(kind=>kind!=='devilstrand'||!!world&&devilstrandUnlocked358(world));
+const cropChoices=(world?:World):readonly CropKind[]=>CROP_KINDS.filter(kind=>(kind!=='tinctoria'||!world||world.schemaVersion>=382)&&(kind!=='devilstrand'||!!world&&devilstrandUnlocked358(world)));
 export const growingCultureChoices=(zone:Pick<GrowingZone,'basinId'>,world?:World):readonly GrowingPlant291[]=>
-  zone.basinId===undefined?[...cropChoices(world),...(world?forestSowingChoices291(world):[])]:CROP_KINDS.filter(kind=>kind!=='corn'&&kind!=='haygrass'&&kind!=='devilstrand');
+  zone.basinId===undefined?[...cropChoices(world),...(world?forestSowingChoices291(world):[])]:CROP_KINDS.filter(kind=>kind!=='corn'&&kind!=='haygrass'&&kind!=='devilstrand'&&(kind!=='tinctoria'||!world||world.schemaVersion>=382));
 
 export function growingControls(zone: GrowingZone, send: (command: Command) => void,world?:World): HTMLElement {
   const panel = document.createElement('div'); panel.className = 'storage-settings';

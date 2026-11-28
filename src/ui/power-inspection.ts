@@ -1,3 +1,4 @@
+import {isConduitKind} from '../sim/conduit-kinds-382.ts';
 import { PowerTopologyCache, connectedPowerGroups } from '../sim/power-topology';
 import { isElectrical, isPowerActive, isPowerTrader, powerWatts, powerDemand } from '../sim/power-rules';
 import { batteryWattDays } from '../sim/power-battery';
@@ -123,8 +124,8 @@ export function powerInspection(world: World, structure: Structure, compact=fals
     detail = `Stockage ${batteryWattDays(structure.battery ?? {stored: 0}).toFixed(2)} / 600 W·j · rendement de charge 50 % · autodécharge 5 W${structure.breakdown ? ' · Batterie hors service' : ''}`;
   } else if (structure.kind === 'power-switch') {
     detail = structure.power.switchOn === false ? 'Interrupteur ouvert · liaison interrompue sur cette case' : 'Interrupteur fermé · liaison établie sur cette case';
-  } else if (structure.kind === 'power-conduit') {
-    detail = 'Conducteur passif · transmet le courant entre cellules voisines · aucun remboursement à la déconstruction';
+  } else if (isConduitKind(structure.kind)) {
+    detail = structure.kind==='hidden-conduit'?'Conducteur dissimulé · 100 PV · incombustible · protégé des attaques et des courts-circuits · aucun remboursement à la déconstruction':'Conducteur passif · transmet le courant entre cellules voisines · aucun remboursement à la déconstruction';
   } else {
     const off = structure.power.switchOn === false;
     const state = structure.breakdown ? 'En panne' : off ? 'Arrêt manuel' : structure.kind === 'wood-generator'

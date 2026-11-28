@@ -1,4 +1,4 @@
-// Explicit authored adaptations. None of these seven species has a literal
+// Explicit authored adaptations. None of these species has a literal
 // model in the supplied HTML. Parent recipes/materials remain unchanged.
 // Only construction-time geometry; no renderer, World, rule, RNG or animation.
 import type * as Three from 'three/webgpu';
@@ -20,6 +20,8 @@ export const BESTIARY_ADAPTATION_MANIFEST=Object.freeze({
   monkey:{parent:'raccoon',label:'Singe',changes:['upright leaning trunk','long front arms and separate palms','short rear legs and feet','short muzzle and front-facing eyes','rounded closed ears','curved narrow tail'],legs:4,antlers:0,bodyLength:.56},
   rat:{parent:'guinea_pig',label:'Rat',changes:['long low trunk','tapered muzzle and pink nose','rounded closed ears','long narrow bare tail','four existing small-mammal leg pivots','surface-anchored eyes'],legs:4,antlers:0,bodyLength:.6665},
   'arctic-wolf':{parent:'timber_wolf',label:'Loup arctique',changes:['snow source palette','broader taller chest and longer legs','blunter long muzzle','closed triangular ears','full tail','surface-anchored eyes'],legs:4,antlers:0,bodyLength:1.518},
+  goat:{parent:'ibex',label:'Chèvre',changes:['cream domestic coat','compact swept horns','ears and chin beard','raised short tail','surface-anchored eyes'],legs:4,antlers:0},
+  pig:{parent:'boar',label:'Cochon',changes:['pink domestic coat','rounded head and flat snout without tusks','triangular ears','raised curled tail','surface-anchored eyes'],legs:4,antlers:0},
  }),
  bounds:'Each build records its actual full transformed Box3, head/leg/tail pivots and measured trunk X span. Nominal bodyLength values above describe the authored recipe, not gameplay size.',
  anatomy:'Visual ownership hints only. Insect six-leg order and monkey front-arm roles require mapping to existing clinical records during integration; no clinical member is added here.',
@@ -196,11 +198,36 @@ export function createBestiaryAdaptations(THREE:ThreeAPI,registerMaterial?:Regis
   const tail=tailOf(root);tail.position.set(-.74,.78,0);tail.scale.set(1.02,1.10,1.10);for(const child of tail.children)requireMesh(child).material=snow;
   root.userData.primaryMaterial=snow;return root;
  }
- const builders:Readonly<Record<BestiaryAdaptationId,()=>BestiaryGroup>>=Object.freeze({cat,megascarab,elk,'arctic-fox':arcticFox,monkey,rat,'arctic-wolf':arcticWolf});
+ function goat():BestiaryGroup{
+  const root=canonical.build('ibex'),trunk=body(root),coat=cream;recolor(root,root.userData.primaryMaterial,coat);
+  trunk.scale.set(.94,.94,1.04);
+  const h=head(root);clear(h);
+  const skull=box([.32,.30,.29],coat,[.08,0,0],'head','head');
+  h.add(skull,mesh(tapered(.24,.20,.23,.64,.78,-.035),coat,{pos:[.28,-.055,0]},'muzzle','jaw'),box([.035,.055,.11],charcoal,[.40,-.065,0],'nose','nose'),box([.09,.21,.10],snow,[.22,-.17,0],'beard','jaw',[0,0,-.18]));
+  ears(h,coat,{x:.02,y:.09,z:.14,width:.18,height:.13});
+  for(const side of [-1,1])chain(h,[[.04,.14,side*.09],[-.035,.27,side*.12],[-.17,.31,side*.14]],.065,charcoal,'horn','head');
+  eyes(root,skull);
+  const tail=new THREE.Group();tail.position.set(-.48,.95,0);root.add(tail);root.userData.tailGroup=tail;
+  chain(tail,[[0,0,0],[-.11,.11,0],[-.15,.20,0]],.105,coat,'tail','tail');
+  root.userData.primaryMaterial=coat;return root;
+ }
+ function pig():BestiaryGroup{
+  const root=canonical.build('boar'),trunk=body(root),coat=pink;recolor(root,root.userData.primaryMaterial,coat);
+  trunk.scale.set(1.02,1.10,1.16);
+  const h=head(root);clear(h);
+  const skull=mesh(tapered(.34,.32,.33,.85,.84),coat,{pos:[.09,.015,0]},'head','head');
+  h.add(skull,box([.20,.17,.20],coat,[.29,-.035,0],'muzzle','jaw'),box([.065,.18,.23],coat,[.40,-.035,0],'snout','nose'));
+  for(const side of [-1,1])h.add(box([.012,.045,.035],charcoal,[.436,-.035,side*.055],'nostril','nose'));
+  ears(h,coat,{x:-.025,y:.10,z:.145,width:.18,height:.17});eyes(root,skull);
+  const tail=new THREE.Group();tail.position.set(-.53,.71,0);root.add(tail);root.userData.tailGroup=tail;
+  chain(tail,[[0,0,0],[-.10,.02,0],[-.16,.09,0],[-.13,.16,0],[-.06,.15,0],[-.06,.09,0]],.045,coat,'tail','tail');
+  root.userData.primaryMaterial=coat;return root;
+ }
+ const builders:Readonly<Record<BestiaryAdaptationId,()=>BestiaryGroup>>=Object.freeze({cat,megascarab,elk,'arctic-fox':arcticFox,monkey,rat,'arctic-wolf':arcticWolf,goat,pig});
  const admitted=(id:string):id is BestiaryAdaptationId=>Object.hasOwn(builders,id);
  return Object.freeze({ids:Object.freeze(Object.keys(builders)),materialRecords:canonical.materialRecords,manifest:BESTIARY_ADAPTATION_MANIFEST,
   build(id:string):BestiaryGroup{
-   if(!admitted(id))throw Error('Not one of the seven declared adaptations: '+id);
+   if(!admitted(id))throw Error('Not a declared adaptation: '+id);
    const root=builders[id]();root.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(root),trunk=body(root),trunkBounds=new THREE.Box3().setFromObject(trunk);
    // Pronotum plus both wing covers form one scarab torso. Head/tail/limbs
    // never inflate the adult body conversion anchor. Decorative source fur

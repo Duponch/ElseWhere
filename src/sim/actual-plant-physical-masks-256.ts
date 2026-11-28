@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {blockedCells} from './pathfinding.ts';
 import {geyserCells256} from './local-geyser-state-256.ts';
 import {STRUCTURE_DEFINITIONS,footprintCells} from './definitions.ts';
@@ -31,7 +32,7 @@ export function actualPlantPhysicalMasks256(world:World):PlantPhysicalMasks256 {
  for(const structure of world.structures){
   if(!Object.hasOwn(STRUCTURE_SHOT_FILL,structure.kind)||!Object.hasOwn(STRUCTURE_DEFINITIONS,structure.kind))throw Error('Missing physical plant structure metadata');
   const fill=STRUCTURE_SHOT_FILL[structure.kind];
-  if(fill<.01&&structure.kind!=='power-conduit'&&!ZERO_FILL_EDIFICES.has(structure.kind))throw Error('Unresolved zero-fill edifice metadata');
+  if(fill<.01&&!isConduitKind(structure.kind)&&!ZERO_FILL_EDIFICES.has(structure.kind))throw Error('Unresolved zero-fill edifice metadata');
   const edifice=ZERO_FILL_EDIFICES.has(structure.kind);
   // This existing catalog resolves SupportsPlants before fill/edifice, exactly
   // BlocksPlanting(false). coverOrEdifice is deliberately independent.
@@ -39,7 +40,7 @@ export function actualPlantPhysicalMasks256(world:World):PlantPhysicalMasks256 {
   for(const cell of footprintCells(structure)){
    const i=index(cell);if(fill>.99)fullFill[i]=1;if(fill>=.01||edifice)coverOrEdifice[i]=1;if(blocks)blocksPlanting[i]=1;
    if(STRUCTURE_DEFINITIONS[structure.kind].blocksMovement)normalWalkable[i]=0;
-   if(isPassageDoor(structure.kind))door[i]=1;else if(structure.kind==='fence')fence[i]=1;
+   if(isPassageDoor(structure.kind))door[i]=1;else if((structure.kind==='fence'||structure.kind==='barricade'))fence[i]=1;
   }
  }
  for(const job of world.jobs)if(job.construction==='frame'){

@@ -7,6 +7,9 @@ import { writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { defaultWorldGenerationSettings } from '../src/sim/world-generation-settings';
 import { startingOriginalRequestFromRoster256 } from '../src/sim/starting-original-request-256';
+import { createStartingCandidateRoster } from '../src/sim/starting-candidates';
+import {ResidentVegetationAssembler} from '../src/bridge/resident-vegetation-assembler';
+import {readResidentWorkerMessage} from '../src/bridge/resident-protocol';
 
 const [sizeArg = '250', seed = 'probe', out] = process.argv.slice(2);
 const size = Number(sizeArg);
@@ -37,7 +40,8 @@ const generated = await request({ type: 'world-draft-generate', generation: 1, r
 if (!generated.reply.ok) throw Error('generate: ' + generated.reply.reason);
 const preview = messages.find(m => m.data?.type === 'world-draft-preview')!.data;
 let ticket: any, confirmMs = 0, tries = 0;
-for (let tile = 0; tile < 20000 && !ticket; tile++) {
+const explicitTile=process.env.CREATION_TILE===undefined?undefined:Number(process.env.CREATION_TILE);
+for (let tile = explicitTile??0; tile < (explicitTile===undefined?20000:explicitTile+1) && !ticket; tile++) {
   const site = { generation: 1, key: preview.key, tile, size, season: 'auto' };
   const r = await request({ type: 'world-draft-confirm', request: site, geographyId: preview.geography.id }); tries++;
   if (r.reply.ok) { ticket = JSON.parse(r.reply.data); confirmMs = r.ms; }
@@ -49,17 +53,36 @@ if (out) {
   const post = (m: string, p?: object) => new Promise<any>((ok, ko) => session!.post(m, p ?? {}, (e, r) => e ? ko(e) : ok(r)));
   await post('Profiler.enable'); await post('Profiler.setSamplingInterval', { interval: 500 }); await post('Profiler.start');
 }
-const party = startingOriginalRequestFromRoster256(7, Array.from({ length: 8 }, (_, i) => ({ serial: i + 1, generation: i, nameOverride: 'Original ' + (i + 1) })));
+const teamSeed=Number(process.env.CREATION_PARTY_SEED??7);
+const party = startingOriginalRequestFromRoster256(teamSeed, process.env.CREATION_PARTY_SEED===undefined
+  ?Array.from({ length: 8 }, (_, i) => ({ serial: i + 1, generation: i, nameOverride: 'Original ' + (i + 1) }))
+  :createStartingCandidateRoster(teamSeed));
 const started = await request({ type: 'world-draft-start', ticket, startingParty: party, maxSettlements: 1, threatPauseMode: 'major' });
 if (session) {
   const { profile } = await new Promise<any>((ok, ko) => session!.post('Profiler.stop', (e, r) => e ? ko(e) : ok(r)));
   writeFileSync(out!, JSON.stringify(profile));
 }
 const lastProgress = started.progress.at(-1)?.at ?? 0;
+let adoption:unknown;
+if(process.env.CHECK_CREATION_ADOPTION==='1'){
+  if(!started.reply.ok)throw Error('start: '+started.reply.reason);
+  const reader=new ResidentVegetationAssembler(),prepared=reader.prepareDraftPreview(structuredClone(preview.geography));
+  reader.authorizeDraftPreview(prepared);
+  const initial=messages.find(m=>m.data?.type==='resident-publication'&&m.data.publication?.type==='snapshot');
+  if(!initial)throw Error('No initial resident snapshot');
+  const packet=readResidentWorkerMessage(structuredClone(initial.data));
+  if(packet.type!=='snapshot')throw Error('Unexpected resident packet');
+  const result=reader.adopt(packet);
+  if(result.status!=='applied'||!result.replaced)throw Error('Initial checkpoint not adopted: '+result.status);
+  const arrival=result.world.startingArrival;
+  const held=arrival&&arrival.phase!=='opened'?arrival.pods.length:0;
+  if(result.world.tick!==0||result.world.pawns.length+held!==3)throw Error('Initial checkpoint does not contain three colonists');
+  adoption={status:result.status,pawns:result.world.pawns.length,held,tick:result.world.tick,replaced:result.replaced};
+}
 console.log(JSON.stringify({
   size, seed, generateMs: +generated.ms.toFixed(0), generatePhases: summary(generated.progress),
   confirmTries: tries, confirmMs: +confirmMs.toFixed(0),
   startMs: +started.ms.toFixed(0), startOk: started.reply.ok, startReason: started.reply.reason,
-  startPhases: summary(started.progress), afterLastProgressMs: +(started.ms - lastProgress).toFixed(0),
+  startPhases: summary(started.progress), afterLastProgressMs: +(started.ms - lastProgress).toFixed(0),adoption,
 }, null, 1));
 process.exit(0);

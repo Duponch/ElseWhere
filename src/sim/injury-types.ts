@@ -26,6 +26,8 @@ export interface MedicalRecord {
   civilTick271?:number;
   /** Prospective only, created by an actually ingested beer in schema265. */
   alcohol?:import('./alcohol-state-265.ts').AlcoholState265;
+  /** Native AmbrosiaHigh / AmbrosiaTolerance, independent of alcohol. */
+  ambrosia382?:import('./ambrosia-clinical-382.ts').AmbrosiaClinical382;
   scaria261?:import('./animal-scaria-261.ts').AnimalScaria261;
   /** Prospective nativeHuman current scale, parent checked against actual biological age. */
   humanHealthScale?:number;

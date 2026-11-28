@@ -6,6 +6,7 @@ import {geothermalParts264} from './geothermal-parts264';
 import { isPowerActive } from '../sim/power-rules';
 import { sunLampActive } from '../sim/sun-lamp';
 import { isPowerTransmitter } from '../sim/power-grid';
+import { connectorCell382 } from '../sim/power-topology';
 import { footprintCells } from '../sim/definitions';
 import type { Structure, World } from '../sim/types';
 import { WORLD_SCALE } from '../world/scale';
@@ -14,19 +15,19 @@ import {WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from './wall-appliance';
 
 /** Parts share the prepared furniture batch. Light is a shared field, never
  * a PointLight or shadow map per appliance. */
-export function electricalParts(world:World,cutaway=false,subjects:readonly Structure[]=world.structures):Placement[] {
+export function electricalParts(world:World,cutaway=false,subjects:readonly Structure[]=world.structures,showHidden=false):Placement[] {
   const out:Placement[]=[];
   const byId=new Map(world.structures.map(s=>[s.id,s]));
   const transmitters=new Set<number>();
   for(const s of world.structures)if(isPowerTransmitter(s.kind))for(const c of footprintCells(s))transmitters.add(c.z*world.width+c.x);
   for(const s of subjects) {
     const on=s.kind==='sun-lamp'?sunLampActive(world,s):isPowerActive(s);
-    if(s.kind==='power-conduit') {
-      out.push({targetId:s.id,x:s.x,z:s.z,y:.055,sx:.18,sy:.07,sz:.18,color:0xac8258});
+    if(s.kind==='power-conduit'||showHidden&&s.kind==='hidden-conduit') {
+      const hidden=s.kind==='hidden-conduit';out.push({targetId:s.id,x:s.x,z:s.z,y:.055,sx:.18,sy:.07,sz:.18,color:hidden?0x79b4b4:0xac8258});
       for(const [dx,dz] of [[-1,0],[1,0],[0,-1],[0,1]]) {
         const x=s.x+dx!,z=s.z+dz!;
         if(x<0||z<0||x>=world.width||z>=world.height||!transmitters.has(z*world.width+x))continue;
-        out.push({targetId:s.id,x:s.x+dx!*.25,z:s.z+dz!*.25,y:.06,sx:dx?.55:.085,sy:.055,sz:dz?.55:.085,color:0xa7784d});
+        out.push({targetId:s.id,x:s.x+dx!*.25,z:s.z+dz!*.25,y:.06,sx:dx?.55:.085,sy:.055,sz:dz?.55:.085,color:hidden?0x79b4b4:0xa7784d});
       }
     } else if(s.kind==='power-switch') {
       const closed=s.power?.switchOn!==false;
@@ -114,9 +115,9 @@ export function electricalParts(world:World,cutaway=false,subjects:readonly Stru
   // proximity. Reconnection changes only this resident furniture batch.
   for(const s of subjects)if(s.power?.parentId!=null) {
     const parent=byId.get(s.power.parentId);if(!parent)continue;
-    const nearest=footprintCells(parent).reduce((a,b)=>(a.x-s.x)**2+(a.z-s.z)**2<=(b.x-s.x)**2+(b.z-s.z)**2?a:b);
-    const dx=nearest.x-s.x,dz=nearest.z-s.z,length=Math.hypot(dx,dz);if(!length)continue;
-    out.push({targetId:s.id,x:(s.x+nearest.x)/2,z:(s.z+nearest.z)/2,y:.065,sx:.025,sy:.025,sz:length,ry:Math.atan2(dx,dz),color:0x9d8665});
+    const origin=connectorCell382(s,world.schemaVersion),nearest=footprintCells(parent).reduce((a,b)=>(a.x-origin.x)**2+(a.z-origin.z)**2<=(b.x-origin.x)**2+(b.z-origin.z)**2?a:b);
+    const dx=nearest.x-origin.x,dz=nearest.z-origin.z,length=Math.hypot(dx,dz);if(!length)continue;
+    out.push({targetId:s.id,x:(origin.x+nearest.x)/2,z:(origin.z+nearest.z)/2,y:.065,sx:.025,sy:.025,sz:length,ry:Math.atan2(dx,dz),color:0x9d8665});
   }
   return out;
 }

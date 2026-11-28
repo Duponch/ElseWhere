@@ -46,6 +46,17 @@ test('resident overlay refreshes counts, hides exhausted reserves and preserves 
   }finally{layer.dispose();}
 });
 
+test('uranium and jade have finite overlay cells and remain separate resources',()=>{
+  const {world,drill}=fixture();world.deepResources!.cells[0]!.item='uranium';world.deepResources!.cells[1]!.item='jade';
+  const layer=new DeepResourceLayer();
+  try{
+    expect(deepResourceOverlayCells(world,{selectedId:drill.id}).map(c=>c.item)).toEqual(['uranium','jade']);
+    expect(layer.update(world,{selectedId:drill.id})).toBe(true);expect(layer.mesh.activeCount).toBe(2);
+    expect(layer.surfaces).toHaveLength(2);
+    expect(layer.update(world,{selectedId:drill.id})).toBe(false);
+  }finally{layer.dispose();}
+});
+
 test('deep work reuses a control-panel pose only during real work',()=>{
   const {world,drill}=fixture(),pawn=world.pawns[0]!;pawn.deepWork={kind:'drill',structureId:drill.id,spot:{x:12,z:11}};
   pawn.state='moving';expect(pawnWorkPose(pawn,undefined,'deep-drill')).toBe(0);

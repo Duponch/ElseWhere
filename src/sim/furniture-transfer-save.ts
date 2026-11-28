@@ -94,7 +94,7 @@ export function validateFurniture(world:World,version:number,ids:Set<number>,sha
     }
   }
   for(const j of world.jobs)if(j.kind==='install'&&world.resources.some(r=>r.kind==='rock'&&footprintCells(j).some(c=>c.x===r.x&&c.z===r.z)))errors.push('Installation overlaps a rock resource.');
-  for(const j of world.jobs)if(j.kind==='install'&&world.structures.some(s=>s.id!==j.furniture?.structureId&&sharesConstructionLayer(s.kind,j.furniture!.kind)&&footprintCells(s).some(c=>footprintCells(j).some(d=>c.x===d.x&&c.z===d.z))))errors.push('Installation overlaps another building.');
+  for(const j of world.jobs)if(j.kind==='install'&&world.structures.some(s=>s.id!==j.furniture?.structureId&&sharesConstructionLayer(s.kind,j.furniture!.kind,version,s.orientation,j.orientation)&&footprintCells(s).some(c=>footprintCells(j).some(d=>c.x===d.x&&c.z===d.z))))errors.push('Installation overlaps another building.');
   return errors;
 }
 

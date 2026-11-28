@@ -183,6 +183,7 @@ describe('Gear tab (ITab_Pawn_Gear)', () => {
     expect(find(card, 'gear-drop:gun')).toMatchObject({ x: inner - 48, w: 24 });
     expect(find(card, 'gear-ingest:meal').x).toBe(inner - 48);
     expect(find(card, 'gear-row:gun').w).toBe(inner - 48 - 60);
+    expect(card.items.filter(item=>item.k==='glyph'&&item.glyph==='item')).toHaveLength(spec.sections.reduce((n,section)=>n+section.rows.length,0));
     expect(gearMassLabel(1500)).toBe('1.5 kg'); expect(gearMassLabel(250)).toBe('0.25 kg');
     expect(GEAR_SIZE).toMatchObject({ width: 460, height: 450, row: 28, icon: 28, labelX: 36, massWidth: 60 });
   });

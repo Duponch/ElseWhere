@@ -9,7 +9,7 @@ import {surfaceTileHash} from './world-site-geography.ts';
 import {plantSeasonRange256} from './plant-season-range-256.ts';
 import {FLORA_DEFINITIONS,isPlantSpeciesInVersion} from './biome-flora.ts';
 import {WILD_PLANT_GENERATION_FACTS_256 as FACTS} from './wild-plant-generation-data-256.ts';
-import {runtimePlantCell256,runtimePlantDef256,type WildPlantMapReader256} from './wild-plant-runtime-256.ts';
+import {runtimePlantCell256,runtimePlantDef256,runtimePlantNonStump382,type WildPlantMapReader256} from './wild-plant-runtime-256.ts';
 import {actualPlantPhysicalMasks256} from './actual-plant-physical-masks-256.ts';
 import {createActualPlantSpatialSpawner256} from './actual-plant-spatial-session-256.ts';
 import {registerActualPlantRuntimeSession256} from './wild-plant-runtime-session-256.ts';
@@ -74,7 +74,7 @@ export function createWildPlantMapReader256(physical:(world:World)=>PlantPhysica
    regionTypes[c]=masks.door[c]?2:masks.fence[c]?3:masks.normalWalkable[c]?1:masks.fullFill[c]?0:4;
    walkableNoDoor[c]=masks.normalWalkable[c]&&!masks.door[c]?1:0;
   }
-  const existing=world.resources.flatMap(resource=>{const defId=runtimePlantDef256(resource);return defId===undefined?[]:[{cell:resource.z*world.width+resource.x,defId,nonStump:true}];}).concat(actualAdditionalPlantOwners256(world));
+  const existing=world.resources.flatMap(resource=>{const defId=runtimePlantDef256(resource);return defId===undefined?[]:[{cell:resource.z*world.width+resource.x,defId,nonStump:runtimePlantNonStump382(resource)}];}).concat(actualAdditionalPlantOwners256(world));
   return {schemaVersion:world.schemaVersion,width:world.width,height:world.height,worldSeed:planet.generationSeed,tileHash:surfaceTileHash(site.tileId),rules,densityFactor:Math.fround(densityFactor(world)),tileMinTemperature:range.min,tileMaxTemperature:range.max,
    fertility,naturalRoof,water,baseWater,terrainDefIds,terrainTags,regionTypes,walkableNoDoor,occupied:masks.coverOrEdifice,blocksPlanting:masks.blocksPlanting,snowDepth,sandDepth:masks.sandDepth,existing,
    hasDefinition:(def,species)=>Object.hasOwn(FACTS,def)&&FACTS[def].species===species&&isPlantSpeciesInVersion(species,world.schemaVersion)&&Object.hasOwn(FLORA_DEFINITIONS,species)};

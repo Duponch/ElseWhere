@@ -17,13 +17,13 @@ const species:Record<string,DefMapping<AnimalSpeciesId>>={Hare:exact('hare'),Sno
  Gazelle:exact('gazelle'),Dromedary:exact('dromedary'),Fox_Red:exact('red-fox')};
 for(const [core,id] of Object.entries(CORE_ANIMAL_IDS_256))species[core]=exact(id as AnimalSpeciesId);
 Object.assign(species,{
- Pig:adapt('wild-boar','Cochon : devient un sanglier (espèce la plus proche d’Elsewhere).'),
- Goat:adapt('ibex','Chèvre : devient un bouquetin (espèce la plus proche d’Elsewhere).'),
+ Pig:exact('pig'),
+ Goat:exact('goat'),
  Sheep:adapt('alpaca','Mouton : devient un alpaga (animal à laine le plus proche).'),
  Cow:adapt('yak','Vache : devient un yak (animal laitier le plus proche).'),
  Chicken:adapt('turkey','Poule : devient une dinde (volaille la plus proche).'),
  Goose:adapt('duck','Oie : devient un canard (volaille la plus proche).'),
- Thrumbo:drop('Thrumbo : espèce absente d’Elsewhere.'),Alphabeaver:drop('Castor alpha : espèce absente.'),Mammoth:drop('Mammouth : espèce absente.'),
+ Thrumbo:exact('thrumbo'),Alphabeaver:drop('Castor alpha : espèce absente.'),Mammoth:drop('Mammouth : espèce absente.'),
 });
 export const ANIMAL_MAP:Readonly<Record<string,DefMapping<AnimalSpeciesId>>>=species;
 
@@ -123,7 +123,7 @@ export const HUMAN_PART_MAP:readonly (BodyPartId|undefined)[]=CORE_HUMAN_BODY_PA
  return base?(side?`${side}-${base}`:base) as BodyPartId:undefined;
 });
 export const INJURY_MAP:Readonly<Record<string,DefMapping<InjuryKind>>>={
- Cut:exact('cut'),SurgicalCut:adapt('cut','Incision chirurgicale : devient une coupure.'),Scratch:adapt('cut','Griffure : devient une coupure (Elsewhere n’a pas de griffure).'),
+ Cut:exact('cut'),SurgicalCut:exact('surgical-cut'),Scratch:exact('scratch'),
  Bite:exact('bite'),Stab:exact('stab'),Gunshot:exact('gunshot'),Crush:exact('crush'),Crack:exact('crack'),Bruise:exact('bruise'),Burn:exact('burn'),
  Shredded:exact('shredded'),Frostbite:drop('Gelure : blessure réservée à d’autres personnes dans Elsewhere.'),
  ChemicalBurn:adapt('burn','Brûlure chimique : devient une brûlure.'),ElectricalBurn:adapt('burn','Brûlure électrique : devient une brûlure.'),

@@ -22,7 +22,7 @@ import type { MaterialPile,Pawn,World } from './types.ts';
 export interface CommercialMass {grams:number;capacityGrams:number}
 const FIXED:Readonly<Partial<Record<ItemId,number>>>=Object.freeze({
   pemmican:18,hay:14,kibble:15,chemfuel:50,'nutrient-paste-meal':440,silver:8,'survival-meal':300,medicine:500,neutroamine:20,component:600,cloth:26,'muffalo-wool':28,devilstrand:32,
-  revolver:1400,'bolt-action-rifle':3500,'plasteel-knife':500,'emp-launcher':3400,'short-bow':800,'pump-shotgun':3400,'recurve-bow':BOW_FACTS_326['recurve-bow'].massGrams,greatbow:BOW_FACTS_326.greatbow.massGrams,autopistol:BLOWBACK_FACTS_340.autopistol.massGrams,'machine-pistol':BLOWBACK_FACTS_340['machine-pistol'].massGrams,'chain-shotgun':GUNS_FACTS_342['chain-shotgun'].massGrams,'heavy-smg':GUNS_FACTS_342['heavy-smg'].massGrams,lmg:GUNS_FACTS_342.lmg.massGrams,'assault-rifle':GUNS_FACTS_342['assault-rifle'].massGrams,'sniper-rifle':GUNS_FACTS_342['sniper-rifle'].massGrams,
+  'thrumbo-horn':3000,revolver:1400,'bolt-action-rifle':3500,'plasteel-knife':500,'emp-launcher':3400,'short-bow':800,'pump-shotgun':3400,'recurve-bow':BOW_FACTS_326['recurve-bow'].massGrams,greatbow:BOW_FACTS_326.greatbow.massGrams,autopistol:BLOWBACK_FACTS_340.autopistol.massGrams,'machine-pistol':BLOWBACK_FACTS_340['machine-pistol'].massGrams,'chain-shotgun':GUNS_FACTS_342['chain-shotgun'].massGrams,'heavy-smg':GUNS_FACTS_342['heavy-smg'].massGrams,lmg:GUNS_FACTS_342.lmg.massGrams,'assault-rifle':GUNS_FACTS_342['assault-rifle'].massGrams,'sniper-rifle':GUNS_FACTS_342['sniper-rifle'].massGrams,
   'shell-high-explosive':1250,'shell-incendiary':1250,
   'flak-vest':4000,'flak-helmet':1200,'flak-pants':4000,'plasteel-flak-helmet':1200,'recon-helmet':1000,'recon-armor':9000,uranium:1000,
 });
@@ -43,6 +43,7 @@ export function commercialItemMassGrams(item:ItemId,version:number=SCHEMA_VERSIO
   if(isSmithingApparel267(item))return version>=267?smithingApparelMass267(item):undefined;
   if(version<256&&isCoreStartingApparel256(item))return undefined;
   // Schema 337: Core Penoxycyline weighs 0.005 kg.
+  if(item==='ambrosia'||item==='dye')return version>=382?(item==='ambrosia'?100:300):undefined;
   if(item==='penoxycyline')return isPenoxycyline337(version)?5:undefined;
   if(item==='hops'||item==='wort'||item==='beer')return version>=265?(item==='hops'?30:item==='wort'?800:300):undefined;
   if(item==='jade')return version>=256?500:undefined;

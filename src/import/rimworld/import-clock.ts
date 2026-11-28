@@ -9,6 +9,7 @@ import {createDeteriorationState} from '../../sim/deterioration-content.ts';
 import {createApparelWearCalendar} from '../../sim/apparel-renewal.ts';
 import {newBreakdownCalendar} from '../../sim/breakdowns.ts';
 import {enableCassandraRaids,INTRO_RAID_TICK} from '../../sim/cassandra-raids.ts';
+import {validNativePhoebeCycle382} from '../../sim/phoebe-native-cycle-382.ts';
 import {enableVisitors} from '../../sim/visitors.ts';
 import {adoptFluIncidents,adoptImmuneDiseaseIncidents} from '../../sim/flu-incidents.ts';
 import {adoptMiscIncidents,adoptWeatherIncidents} from '../../sim/cassandra-misc.ts';
@@ -26,6 +27,23 @@ import {num,text} from './xml.ts';
 import {importWildFloraSnapshot} from './convert-environment.ts';
 import {nativeHumanBiologicalCore256} from '../../sim/native-human-identity-256.ts';
 
+/** Profile adoption is independent of physical clock/owners. A plain-local
+ * fallback does not own the geographic profile; that loss is explicit. */
+export function adoptRwsProfile382({w,save,notes}:Pick<ImportContext,'w'|'save'|'notes'>):void {
+ if(!w.gameProfile){
+  if(save.storyteller)notes.def('world',`Conteur : ${save.storyteller}`,'dropped',undefined,'La carte locale de repli n’a pas de propriétaire de conteur géographique.',1,'model');
+  if(save.difficulty)notes.def('world',`Difficulté : ${save.difficulty}`,'dropped',undefined,'La carte locale de repli n’a pas de propriétaire de difficulté Core.',1,'model');
+  return;
+ }
+ const narrator=save.storyteller==='Cassandra'?'cassandra-partial':save.storyteller==='Phoebe'?'phoebe-partial':undefined;
+ const difficulty=save.difficulty==='Medium'?'adventure-story':save.difficulty==='Easy'?'community-builder':save.difficulty==='Rough'?'strive-to-survive':undefined;
+ if(w.schemaVersion>=382&&narrator)w.gameProfile.storyteller=narrator;
+ if(w.schemaVersion>=382&&difficulty)w.gameProfile.difficulty=difficulty;
+ if(save.storyteller)notes.def('world',`Conteur : ${save.storyteller}`,narrator?'adapted':'dropped',w.gameProfile.storyteller,narrator?'Profil et cycles de menaces Core repris ; les tirages globaux, agendas et incidents incomplets restent adaptés.':'Conteur absent du modèle actuel ; le profil Cassandra existant est utilisé.',1,narrator?'both':'model');
+ if(save.difficulty)notes.def('world',`Difficulté : ${save.difficulty}`,difficulty?'exact':'adapted',w.gameProfile.difficulty,difficulty?undefined:'Difficulté Core non encore représentée.',1,difficulty?undefined:'model');
+ if(difficulty&&difficulty!=='adventure-story')notes.def('world',`Règles de difficulté : ${save.difficulty}`,'adapted',w.gameProfile.difficulty,'Les multiplicateurs d’humeur, santé, productivité, adaptation, menaces et maladies pris en charge sont actifs ; tous les incidents, restrictions et paramètres Core ne sont pas encore modélisés.',1,'model');
+}
+
 export function adoptRwsClock(ctx:ImportContext):void {
  const {w,save,notes}=ctx,core=save.ticksGame;
  if(!Number.isSafeInteger(core)||core<0||!Number.isSafeInteger(save.gameStartAbsTick+core))throw Error('Horloge RimWorld invalide.');
@@ -35,10 +53,7 @@ export function adoptRwsClock(ctx:ImportContext):void {
  const manual=text(save.game,'playSettings/useWorkPriorities')==='True';
  if(manual)delete w.simpleWorkTab344;else w.simpleWorkTab344=true;
  notes.def('pawn-state','Priorités manuelles de travail','exact',manual?'activées':'désactivées');
- if(w.gameProfile){
-  if(save.storyteller)notes.def('world',`Conteur : ${save.storyteller}`,save.storyteller==='Cassandra'?'adapted':'dropped',w.gameProfile.storyteller,save.storyteller==='Cassandra'?'Cassandra existe ; ses tirages et son agenda Core ne sont pas repris.':'Conteur absent du modèle actuel ; le profil Cassandra existant est utilisé.',1,save.storyteller==='Cassandra'?'both':'model');
-  if(save.difficulty)notes.def('world',`Difficulté : ${save.difficulty}`,save.difficulty==='Medium'?'exact':'adapted',w.gameProfile.difficulty,save.difficulty==='Medium'?undefined:'Cette combinaison conteur/difficulté n’est pas admise par le modèle actuel.',1,save.difficulty==='Medium'?undefined:'model');
- }
+ adoptRwsProfile382(ctx);
  if(w.worldPawns){
   const s=w.worldPawns;s.atCore=macro;s.physicalClockCore297=core;
   // The initial five owner templates are replaced by actual source owners.
@@ -59,7 +74,15 @@ export function adoptRwsClock(ctx:ImportContext):void {
  // These calendars are our own deterministic streams, not serialized Core
  // RNG. Schedule prospectively, skipping elapsed opportunities. Never claim
  // that synthetic events took place before the conversion.
- if(w.raids){delete w.raids;enableCassandraRaids(w,tick>=INTRO_RAID_TICK);}
+ if(w.raids){
+  // Two actual identities feed the Core-only OnOffCycle components. The
+  // importer does not synthesize either when the source lacks it.
+  const source={worldRandom:num(save.world?.node,'info/persistentRandomValue'),mapUniqueId:num(ctx.map.node,'uniqueID')};
+  const settledAt=text(save.game,'tickManager/lastSettleTicks');
+  const native=(settledAt===undefined||num(save.game,'tickManager/lastSettleTicks')===0)&&w.gameProfile?.storyteller==='phoebe-partial'&&validNativePhoebeCycle382(source)?source:undefined;
+  delete w.raids;enableCassandraRaids(w,tick>=INTRO_RAID_TICK,native);
+  if(native)notes.def('world','Phoebe : graines des cycles Core','exact','Valeur persistante du monde et uniqueID de la carte');
+ }
  if(w.visitors){delete w.visitors;enableVisitors(w,false,true);}
  if(w.fluIncidents){delete w.fluIncidents;adoptFluIncidents(w);adoptImmuneDiseaseIncidents(w);}
  if(w.miscIncidents){delete w.miscIncidents;adoptMiscIncidents(w);if(tick>0){adoptWeatherIncidents(w);adoptShortCircuits(w);adoptCropBlights(w);adoptToxicFallout294(w);}}
@@ -95,9 +118,7 @@ export function finalizeRwsClock(ctx:ImportContext):void {
  if(quest){quest.knownColonistIds=w.pawns.filter(freeColonist).map(p=>p.id);const days=num(save.game,'storyWatcher/watcherPopAdaptation/adaptDays');if(days!==undefined&&Number.isFinite(days)&&days>=0)quest.populationAdaptationDays=days;}
 }
 
-/** The current native clinical owner has an explicit unsupported birthday
- * frontier in human-age.ts. Do not silently promise indefinite playback, or
- * downgrade a real identity in order to hide the missing engine feature. */
+/** Runtime qualification is distinct from identical future Core RNG draws. */
 export function reportRwsLifetimeLimits(ctx:ImportContext):void {
  const {w,notes}=ctx;
  const actual=[...w.pawns,...(w.worldPawns?.owners??[]).flatMap(r=>r.kind==='human'&&r.mode==='active'?[r.actor]:[])];
@@ -106,6 +127,6 @@ export function reportRwsLifetimeLimits(ctx:ImportContext):void {
  });
  if(!birthdays.length)return;
  const next=Math.min(...birthdays);
- const warning=`Vieillissement natif des humains : ElseWhere n’a pas encore raccordé les règles de passage d’un anniversaire biologique Core. Le premier anniversaire estimé des personnes actives importées est dans ${next} ticks locaux (${(next/6000).toFixed(2)} jours de jeu). Le moteur peut interrompre la simulation à cette frontière ; sauvegardez avant elle. Ce manque relève du moteur, et non de la traduction du fichier.`;
- notes.warnings.push(warning);notes.def('pawn-state','Anniversaire biologique natif','adapted',undefined,warning,1,'model');
+ const warning=`Vieillissement natif actif : les neuf affections d’anniversaire Core peuvent apparaître. Premier anniversaire estimé dans ${next} ticks locaux (${(next/6000).toFixed(2)} jours). La cadence locale et le flux aléatoire d’ElseWhere ne garantissent pas les mêmes tirages que RimWorld ; l’ordre global des souvenirs d’Alzheimer reste adapté.`;
+ notes.def('pawn-state','Anniversaire biologique natif','adapted',undefined,warning,1,'model');
 }

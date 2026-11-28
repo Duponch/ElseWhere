@@ -43,6 +43,7 @@ export function pileMarketValue(pile:Pick<MaterialPile,'item'|'weapon'|'apparel'
   }
   if(pile.item==='ai-core'){const damage=pile.damage??0;if(!Number.isInteger(damage)||damage<0||damage>=100)return undefined;if(entry.healthAffectsPrice)value*=tradeHealthFactor((100-damage)/100);}
   if(isProstheticItem273(pile.item)&&entry.healthAffectsPrice)value*=tradeHealthFactor((entry.maxHitPoints-(pile.damage??0))/entry.maxHitPoints);
+  if(pile.item==='thrumbo-horn'){if(!pile.weapon||pile.weapon.quality!=='normal'||pile.weapon.hitPoints<1||pile.weapon.hitPoints>150)return undefined;value*=tradeHealthFactor(pile.weapon.hitPoints/150);}
   return value>200?roundTradeSilver(value/5)*5:value;
 }
 /** Pricing is separate from permission, source reachability and the atomic transfer.

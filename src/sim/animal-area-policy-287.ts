@@ -11,6 +11,7 @@ import type {Cell,World} from './types.ts';
 /** Resolved Core1.6 default profiles: roamers retain their existing pen owner. */
 const supported=new Set<AnimalSpeciesId>(['grizzly-bear','polar-bear','boomrat','cat','cobra','cougar','elephant','arctic-fox','fennec-fox','red-fox','guinea-pig','hare','husky','iguana','labrador-retriever','lynx','megascarab','megasloth','megaspider','monkey','panther','raccoon','rat','rhinoceros','snow-hare','spelopede','squirrel','tortoise','warg','arctic-wolf','timber-wolf','yorkshire-terrier']);
 export const ANIMAL_OUTSIDE_AREA_COST_287=60000;
+supported.add('thrumbo');
 export const supportsAnimalAreas287=(species:AnimalSpeciesId):boolean=>supported.has(species);
 /** Canonical preference remains visible while a real collective job masks it. */
 export function currentAnimalAreaChoice287(w:World,a:WildAnimal):AnimalAreaChoice287|null {

@@ -12,7 +12,7 @@ import {NATIVE_INK,NATIVE_LINE} from './native-ui-scale';
  * 28 with the icon at x = 4, the label at x = 36, the mass in a column of 60 on
  * the right (right-aligned), the ingest and drop buttons of 24 before it and the
  * info-card button of 24 last. */
-export interface GearRowSpec {id:string;label:string;grams?:number;hint:string;info?:NativeControl;drop?:NativeControl;ingest?:NativeControl}
+export interface GearRowSpec {id:string;label:string;icon?:string;grams?:number;hint:string;info?:NativeControl;drop?:NativeControl;ingest?:NativeControl}
 export interface GearSectionSpec {id:string;label:string;rows:readonly GearRowSpec[]}
 export interface GearSpec {
   type:'gear';mass?:{text:string;hint:string};comfort?:{text:string;hint:string};armor?:readonly {id:string;label:string;value:string}[];
@@ -53,6 +53,7 @@ export function layoutGearTab(spec:GearSpec,measure:CardMeasure):NativeTabCard{
       if(row.ingest){right-=G.button;builder.glyph('ingest',right,y,G.button,G.button,{region});builder.target({id:'gear-ingest:'+row.id,x:right,y,w:G.button,h:G.button,hint:row.ingest.hint,control:row.ingest,region});}
       if(row.grams!==undefined){right-=G.massWidth;builder.label(right,y,G.massWidth,gearMassLabel(row.grams),{region,align:'right',ink:NATIVE_INK.subtle,h:G.row});}
       const labelWidth=Math.max(20,right-G.labelX);
+      builder.glyph('item',4,y,G.icon,G.icon,{region,itemIcon:row.icon??'stockpile'});
       builder.label(G.labelX,y,labelWidth,row.label,{region,truncate:true,h:G.row});
       builder.target({id:'gear-row:'+row.id,x:0,y,w:right,h:G.row,hint:row.hint,region,highlight:true});
       y+=G.row;

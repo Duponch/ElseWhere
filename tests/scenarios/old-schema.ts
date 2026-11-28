@@ -4,6 +4,7 @@ import {isTextileApparelItem308,isTextileMaterial308} from '../../src/sim/textil
 import {isGarmentItem312,isHatItem353} from '../../src/sim/apparel-definitions.ts';
 import {isCookingAnimalProduct353} from '../../src/sim/cooking-ingredients-353.ts';
 import {isDevilstrandItem358} from '../../src/sim/devilstrand-358.ts';
+import {unavailableEcologyItem} from '../../src/sim/cave-products-256.ts';
 import {deserializeWorld,serializeWorld} from '../../src/sim/serialization.ts';
 import type {World} from '../../src/sim/types.ts';
 const FIRST_DAYS_KINDS_343=['slept-in-cold','slept-in-heat','slept-outside','slept-on-ground','soaking-wet','darkness'];
@@ -50,6 +51,13 @@ function strip(value:unknown,version:number):void {
   if(Array.isArray(value)){for(const v of value)strip(v,version);return;}
   if(!value||typeof value!=='object')return;
   const o=value as Record<string,unknown>;
+  if(version<382&&o.research&&typeof o.research==='object'&&!Array.isArray(o.research)){
+    const research=o.research as Record<string,unknown>;delete research.electricity;delete research.passiveCooler;
+  }
+  // Schema 382 introduces an opt-in dye storage category. A fixture of an
+  // older newly created zone/shelf keeps its own flags and no future key.
+  if(version<382&&o.filters&&typeof o.filters==='object'&&!Array.isArray(o.filters))delete (o.filters as Record<string,unknown>).dye;
+  if(version<382&&Array.isArray(o.allowed)&&typeof o.name==='string'&&Number.isSafeInteger(o.id))o.allowed=o.allowed.filter(id=>!unavailableEcologyItem(id,version));
   // A custom title can be omitted; a real banishment/departure or queued
   // intent cannot be erased to manufacture a historical save.
   if(version<378&&o.identity378&&typeof o.identity378==='object'&&!Object.hasOwn(o.identity378,'banishedAt'))delete o.identity378;
@@ -142,7 +150,7 @@ export function stripFutureContent(value:unknown,version:number):void {
   if(version<352&&value&&typeof value==='object'&&!Array.isArray(value))delete (value as Record<string,unknown>).letters352;
   // Schema 349: the lessons' record of a tutorial game.
   if(version<349&&value&&typeof value==='object'&&!Array.isArray(value)){const tutorial=((value as Record<string,{tutorial347?:Record<string,unknown>}>).gameProfile)?.tutorial347;if(tutorial)delete tutorial.lessons349;}
-  if(version<378)strip(value,version);
+  if(version<382)strip(value,version);
 }
 
 /** The reference for a number-only migration step from `version`: the same

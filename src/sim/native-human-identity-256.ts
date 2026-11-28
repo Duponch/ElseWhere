@@ -11,15 +11,22 @@ export interface NativeHumanIdentity256 {
  readonly name:AncientHumanNameTriple256;
  /** Actual birth biologicalCore%10, not a clock or inferred old-age value. */
  readonly biologicalCoreRemainder:number;
+ /** Positive Core ThingIDNumber read from an actual RWS, not the local id. */
+ readonly sourceThingId382?:number;
 }
 function data(v:unknown,keys:readonly string[]):v is Record<string,unknown>{
  if(!v||typeof v!=='object'||Object.getPrototypeOf(v)!==Object.prototype)return false;
  return Reflect.ownKeys(v).length===keys.length&&keys.every(k=>{const d=Object.getOwnPropertyDescriptor(v,k);return !!d&&d.enumerable===true&&Object.hasOwn(d,'value');});
 }
 const word=(v:unknown):v is string=>typeof v==='string'&&v.length<=80&&!/[\u0000-\u001f\u007f]/.test(v);
+const HUMAN_IDENTITY_FIELDS_256=['revision','gender','name','biologicalCoreRemainder'] as const;
+const HUMAN_IDENTITY_FIELDS_382=[...HUMAN_IDENTITY_FIELDS_256,'sourceThingId382'] as const;
+const HUMAN_NAME_FIELDS_256=['first','nick','last','nickSet'] as const;
 export function validNativeHumanIdentity256(value:unknown):value is NativeHumanIdentity256 {
- if(!data(value,['revision','gender','name','biologicalCoreRemainder'])||value.revision!==1||typeof value.gender!=='string'||!['None','Male','Female'].includes(value.gender)||typeof value.biologicalCoreRemainder!=='number'||!Number.isInteger(value.biologicalCoreRemainder)||value.biologicalCoreRemainder<0||value.biologicalCoreRemainder>9)return false;
- const n=value.name;return data(n,['first','nick','last','nickSet'])&&word(n.first)&&word(n.nick)&&word(n.last)&&typeof n.nickSet==='boolean'&&!!(n.first||n.nick||n.last);
+ const source=!!value&&typeof value==='object'&&Object.hasOwn(value,'sourceThingId382');
+ if(!data(value,source?HUMAN_IDENTITY_FIELDS_382:HUMAN_IDENTITY_FIELDS_256)||value.revision!==1||value.gender!=='None'&&value.gender!=='Male'&&value.gender!=='Female'||typeof value.biologicalCoreRemainder!=='number'||!Number.isInteger(value.biologicalCoreRemainder)||value.biologicalCoreRemainder<0||value.biologicalCoreRemainder>9)return false;
+ if(source&&(!Number.isInteger(value.sourceThingId382)||Number(value.sourceThingId382)<1||Number(value.sourceThingId382)>2147483647))return false;
+ const n=value.name;return data(n,HUMAN_NAME_FIELDS_256)&&word(n.first)&&word(n.nick)&&word(n.last)&&typeof n.nickSet==='boolean'&&!!(n.first||n.nick||n.last);
 }
 /** Same biological owner in map, caravan, suspension and terminal records.
  * No fallback for an old Pawn and no use of health.tick/chronological age. */
@@ -32,7 +39,7 @@ export function nativeHumanBiologicalCore256(pawn:{age?:{biologicalTicks:number}
 export function validNativeHumanField256(raw:unknown,version:number):boolean {
  if(!raw||typeof raw!=='object'||Array.isArray(raw))return false;
  const d=Object.getOwnPropertyDescriptor(raw,'nativeHuman');if(!d)return !('nativeHuman'in raw);
- if(!isSchema256Or257(version)||!d.enumerable||!Object.hasOwn(d,'value')||!validNativeHumanIdentity256(d.value)||'mechKind'in raw)return false;
+ if(!isSchema256Or257(version)||!d.enumerable||!Object.hasOwn(d,'value')||!validNativeHumanIdentity256(d.value)||version<382&&Object.hasOwn(d.value,'sourceThingId382')||'mechKind'in raw)return false;
  const label=Object.getOwnPropertyDescriptor(raw,'name');return !!label&&label.enumerable===true&&Object.hasOwn(label,'value')&&typeof label.value==='string'&&label.value.length>0&&label.value.length<=80&&label.value===ancientHumanNameLabel256(d.value.name);
 }
 /** Contextual gate; the third argument is accepted by River's coordinated

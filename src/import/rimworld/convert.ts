@@ -1,3 +1,4 @@
+import {isConduitKind} from '../../sim/conduit-kinds-382.ts';
 /** Converts a read RimWorld save into an Elsewhere World at the current
  * schema, with no new field: what Elsewhere cannot hold is adapted or left
  * out, and every such case is counted in the notes. */
@@ -35,6 +36,7 @@ import {importProductionBills,importHaulDesignations,importUnfinishedWorks} from
 import {importConstructionPlans} from './convert-construction.ts';
 import {importAllowedAreas} from './convert-allowed-areas.ts';
 import {footprintCells} from '../../sim/definitions.ts';
+import {sharesConstructionLayer,surfacePriority382} from '../../sim/power-grid.ts';
 import {occupancyOf} from '../../sim/occupancy.ts';
 import {builtDoorState,isPassageDoor} from '../../sim/door-rules.ts';
 import {designateRoofArea} from '../../sim/roofing.ts';
@@ -275,9 +277,9 @@ function describeTerrain(spec:TerrainSpec|undefined):string|undefined {
 }
 
 // ---- Buildings ------------------------------------------------------------------------
-const BLOCKING=new Set<StructureKind>(['wall','door','autodoor','fence','fence-gate','sandbags']);
+const BLOCKING=new Set<StructureKind>(['wall','door','autodoor','fence','fence-gate','sandbags','barricade']);
 function importBuildings(ctx:ImportContext):void {
- const {map,w,notes}=ctx,occupied=new Map<number,Structure>();
+ const {map,w,notes}=ctx,occupied=new Map<number,Structure>(),attachments=new Map<number,Structure[]>();
  importNaturalGeysers(ctx);
  const structures:{thing:RwsThing;spec:BuildingSpec}[]=[];
  for(const t of map.things){
@@ -290,8 +292,8 @@ function importBuildings(ctx:ImportContext):void {
   if(isDropped(m)){notes.def('buildings',t.def,'dropped',undefined,m.drop);continue;}
   structures.push({thing:t,spec:m.to});
  }
- // Walls and doors first (wall lamps need their wall), wall lamps last: in
- // the game they hang over furniture, in Elsewhere they take their cell.
+ // Walls and doors first (wall lamps need their wall), then floor buildings,
+ // then independent attachments. Never replace the primary floor owner.
  const rank=(k:StructureKind)=>BLOCKING.has(k)?0:k==='wall-lamp'?2:1;
  structures.sort((a,b)=>rank(a.spec.kind)-rank(b.spec.kind));
  for(const {thing:t,spec} of structures){
@@ -299,11 +301,15 @@ function importBuildings(ctx:ImportContext):void {
   if(!placed){notes.def('buildings',t.def,'dropped',spec.kind,'Emprise impossible à reproduire dans Elsewhere.');continue;}
   const s=buildStructure(ctx,t,spec.kind,placed);if(!s)continue;
   const cells=footprintCells(s);
-  if(cells.some(c=>!ctx.inside(c)||occupied.has(ctx.index(c))&&spec.kind!=='power-conduit'&&occupied.get(ctx.index(c))!.kind!=='power-conduit'||w.tiles[ctx.index(c)]!.terrain==='rock'||isWaterTerrain(w.tiles[ctx.index(c)]!.terrain)&&!w.tiles[ctx.index(c)]!.bridge)){
-   notes.def('buildings',t.def,'dropped',spec.kind,spec.kind==='wall-lamp'?'Lampe murale au-dessus d’un meuble : Elsewhere ne superpose pas une lampe et un meuble ; lampe omise.':'Emplacement occupé ou sur roche/eau dans Elsewhere.');continue;
+  if(cells.some(c=>{
+   if(!ctx.inside(c))return true;
+   const i=ctx.index(c),other=occupied.get(i),tile=w.tiles[i]!;
+   return tile.terrain==='rock'||isWaterTerrain(tile.terrain)&&!tile.bridge||!!other&&(spec.kind==='wall-lamp'||other.kind==='wall-lamp'?sharesConstructionLayer(other.kind,s.kind,w.schemaVersion,other.orientation,s.orientation):!isConduitKind(spec.kind)&&!isConduitKind(other.kind))||spec.kind==='wall-lamp'&&(attachments.get(i)?.some(a=>sharesConstructionLayer(a.kind,s.kind,w.schemaVersion,a.orientation,s.orientation))??false);
+  })){
+   notes.def('buildings',t.def,'dropped',spec.kind,spec.kind==='wall-lamp'?'Applique murale : cellule pleine, terrain incompatible ou face déjà occupée.':'Emplacement occupé ou sur roche/eau dans Elsewhere.');continue;
   }
   if(!admitImportedStructureOwner(ctx,t,s)||!admitImportedNaturalBuilding(ctx,t,s))continue;
-  w.structures.push(s);for(const c of cells){if(spec.kind!=='power-conduit'||!occupied.has(ctx.index(c)))occupied.set(ctx.index(c),s);if(BLOCKING.has(spec.kind))ctx.blocked.add(ctx.index(c));}
+  w.structures.push(s);for(const c of cells){const i=ctx.index(c),old=occupied.get(i);if(!old||surfacePriority382(s.kind,w.schemaVersion)>=surfacePriority382(old.kind,w.schemaVersion))occupied.set(i,s);if(s.kind==='wall-lamp'){const list=attachments.get(i);if(list)list.push(s);else attachments.set(i,[s]);}if(BLOCKING.has(spec.kind))ctx.blocked.add(i);}
   importGatheringPolicy(ctx,t,s);
   if(spec.kind==='hydroponics-basin'){initializeHydroponicBasin(w,s);importHydroponicPolicy(ctx,t,s);}
   if(spec.kind==='firefoam-popper')initializeFirefoamPopper290(w,s);
@@ -319,7 +325,7 @@ export function buildStructure(ctx:ImportContext,t:RwsThing,kind:StructureKind,p
  // Material from stuff, validated by Elsewhere's own rules.
  const allowed=constructionMaterials(kind);
  if(allowed.length){
-  const stuff=t.stuff?lookup(STUFF_MAP,t.stuff):undefined,wanted=stuff&&!isDropped(stuff)?stuff.to.construction:undefined;
+  const stuff=t.stuff?lookup(STUFF_MAP,t.stuff):undefined,raw=kind==='barricade'&&t.stuff?lookup(ITEM_MAP,t.stuff):undefined,wanted=raw&&!isDropped(raw)&&validConstructionMaterial(kind,raw.to,w.schemaVersion)?raw.to as ConstructionMaterial:stuff&&!isDropped(stuff)?stuff.to.construction:undefined;
   let material:ConstructionMaterial|undefined=wanted&&validConstructionMaterial(kind,wanted,w.schemaVersion)?wanted:undefined;
   if(!material){material=allowed.find(m=>validConstructionMaterial(kind,m,w.schemaVersion));if(t.stuff&&material)ctx.notes.def('buildings',`${t.def} (${t.stuff})`,'adapted',`${kind} en ${material}`,'Matière non admise pour ce bâtiment dans Elsewhere : matière par défaut.');}
   if(material)s.material=material;
@@ -386,9 +392,9 @@ function importPlants(ctx:ImportContext):void {
   kind!=='flower-pot'&&isConstructionLightPlant(r)&&!constructionFinalWipesPlants(kind)||kind==='animal-sleeping-spot'||kind==='sleeping-spot'&&r.kind!=='tree';
  for(const t of map.things){
   if(!t.pos)continue;
-  if(Object.hasOwn(DEAD_PLANT_MAP,t.def)){notes.countBefore('plants');notes.def('plants',t.def,'dropped',undefined,(DEAD_PLANT_MAP[t.def] as {drop:string}).drop);continue;}
-  if(t.cls!=='Plant')continue;notes.countBefore('plants');
-  const m=lookup(PLANT_MAP,t.def);if(!m||isDropped(m)){notes.def('plants',t.def,m?'dropped':'unknown',undefined,m&&isDropped(m)?m.drop:'Plante inconnue.');continue;}
+  const dead=Object.hasOwn(DEAD_PLANT_MAP,t.def);
+  if(t.cls!=='Plant'&&!dead)continue;notes.countBefore('plants');
+  const m=lookup(dead?DEAD_PLANT_MAP:PLANT_MAP,t.def);if(!m||isDropped(m)){notes.def('plants',t.def,m?'dropped':'unknown',undefined,m&&isDropped(m)?m.drop:'Plante inconnue.');continue;}
   if('pot' in m.to){if(!importPottedDaylily(ctx,t,pots))notes.def('plants',t.def,'dropped',undefined,'Aucun pot de fleurs compatible à cette case.');continue;}
   const local=ctx.coordinates.cell(t.pos),i=ctx.index(local),tile=w.tiles[i]!,growth=Math.max(0,Math.min(1,num(t.node,'growth')??1));
   const probe='wild' in m.to?{kind:FLORA_DEFINITIONS[m.to.wild].kind,species:m.to.wild}:{kind:m.to.crop};
@@ -444,20 +450,24 @@ export function placeGear(ctx:ImportContext,t:RwsThing,owner:MaterialPile['owner
  const {w,notes}=ctx,isApparel=Object.hasOwn(APPAREL_MAP,t.def),family=isApparel?'apparel':'weapons';notes.countBefore(family);
  const resolved=isApparel?resolveApparel(t):resolveWeapon(t);
  if('drop' in resolved){notes.def(family,t.def,resolved.status,undefined,resolved.drop);return undefined;}
+ // ResourceVerbBase horns stack in Core. Our weapon owner is individual;
+ // preserve the actual count as distinct objects, with reported adaptation.
+ const quantity=t.def==='ThrumboHorn'&&owner.type!=='equipment'&&owner.type!=='apparel'?t.stack:1;
  const before=w.piles.length;
  try{
-  if(owner.type==='ground'&&!(canAdd(w,owner,resolved.item as ItemId)&&materialCanFit(w,isApparel?'apparel':'weapon',1,owner,resolved.item as ItemId)))addGroundMaterial(w,isApparel?'apparel':'weapon',1,owner,resolved.item as ItemId);
-  else addMaterial(w,isApparel?'apparel':'weapon',1,owner,resolved.item as ItemId);
+  if(owner.type==='ground'&&!(canAdd(w,owner,resolved.item as ItemId)&&materialCanFit(w,isApparel?'apparel':'weapon',quantity,owner,resolved.item as ItemId)))addGroundMaterial(w,isApparel?'apparel':'weapon',quantity,owner,resolved.item as ItemId);
+  else addMaterial(w,isApparel?'apparel':'weapon',quantity,owner,resolved.item as ItemId);
  }catch(error){notes.def(family,t.def,'dropped',resolved.item,`Refusé par Elsewhere (${error instanceof Error?error.message.slice(0,80):''}).`);return undefined;}
  const pile=w.piles.slice(before).find(p=>p.item===resolved.item)??w.piles.at(-1)!;
  const quality=t.quality?QUALITY_MAP[t.quality]:undefined;
  const state=pile.apparel??pile.weapon;
  if(state){if(quality)state.quality=quality;if(t.hp!==undefined){const max=state.hitPoints;state.hitPoints=Math.max(1,Math.min(max,Math.round(t.hp)));}}
+ if(quantity>1)for(const horn of w.piles.slice(before)){if(horn.item!=='thrumbo-horn'||!horn.weapon)continue;horn.weapon.hitPoints=pile.weapon!.hitPoints;if(t.forbidden&&horn.owner.type==='ground')setMaterialForbidden256(horn,true);}
  if(pile.apparel&&text(t.node,'wornByCorpse')==='True'&&'corpseWear284' in pile.apparel)pile.apparel.corpseWear284=true;
  importRwsGearExtras(ctx,t,pile);
  if(t.forbidden&&owner.type==='ground')setMaterialForbidden256(pile,true);
  ctx.thingIds.set(t.id,pile.id);notes.countAfter(family);
- notes.def(family,t.stuff?`${t.def} (${t.stuff})`:t.def,resolved.note?'adapted':'exact',resolved.item,resolved.note);
+ notes.def(family,t.stuff?`${t.def} (${t.stuff})`:t.def,resolved.note||quantity>1?'adapted':'exact',resolved.item,quantity>1?'Pile Core de cornes conservée sous formes de cornes individuelles ; références et regroupement ne sont pas identiques.':resolved.note);
  return pile;
 }
 type Resolved={item:string;note?:string}|{drop:string;status:'dropped'|'unknown'};
@@ -546,7 +556,11 @@ function importZones(ctx:ImportContext):void {
 
 // ---- Research -------------------------------------------------------------------------------
 function importResearch(ctx:ImportContext):void {
- const {save,w,notes}=ctx;w.research??={project:null,points:0};
+ const {save,w,notes}=ctx;
+ // Replace all provisional starting research with the actual source. Never
+ // retain the synthetic ClassicStart grant after importing a nonclassic or
+ // a partially researched colony. A source without points is genuinely locked.
+ w.research={project:null,points:0,...w.schemaVersion>=382?{electricity:{points:0},passiveCooler:{points:0}}:{}};
  const progress=new Map<ResearchProject,{points:number;def:string}>();
  for(const [def,points] of save.research.progress){
   if(points<=0)continue;const m=lookup(RESEARCH_MAP,def);notes.countBefore('research');

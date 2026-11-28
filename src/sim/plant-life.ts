@@ -14,6 +14,12 @@ import { structuresOfKind } from './structure-navigation.ts';
 import { terrainJournalReadOwner } from './terrain-read-scope.ts';
 import { verifyTerrainWriteCaches } from './terrain-mutation-journal.ts';
 import {markResourceChanged,captureResourceJournal,readResourceJournal,resourceMembershipUnchanged,type ResourceJournalCursor} from './resource-mutation-journal.ts';
+import {DEAD_STUMP_FACTS_382,isDeadStump382} from './native-special-plants-382.ts';
+import {terrainExtraDeterioration256} from './natural-terrain-runtime-256.ts';
+import {weatherRainRate} from './weather.ts';
+import {toxicFalloutActive294} from './toxic-fallout-state-294.ts';
+import {healthRandom} from './health.ts';
+import {TICKS_PER_DAY} from './types.ts';
 
 /** since starts observation. bornAt exists only when actual sowing is known. */
 export interface PlantLife {
@@ -47,6 +53,7 @@ export const plantLeafless=(world:Pick<World,'tick'>,plant:Resource):boolean=>
  * Exposed frost and an equally cold enclosed greenhouse are distinct rules. */
 export function applyPlantFrost(world:World,plant:Resource,usesOutside:boolean,temperature:number):boolean {
   const life=plant.plantLife;if(!life||!isPlant(plant))return false;
+  if(isDeadStump382(plant.species))return false;
   if(usesOutside&&temperature<plantFrostThreshold(plant.id)) {
     if(!plant.species&&plant.kind!=='berries'&&plant.kind!=='healroot')return damageResource(world,plant,100000,'frost');
     if(plant.species&&!FLORA_DEFINITIONS[plant.species].coldLeafless)return false;
@@ -54,6 +61,19 @@ export function applyPlantFrost(world:World,plant:Resource,usesOutside:boolean,t
     life.leaflessAt=world.tick;recordResumedTreeFrost(plant);markResourceChanged(world,plant);
   } else if(life.leaflessAt!==undefined&&world.tick-life.leaflessAt>=6000){delete life.leaflessAt;clearResumedTreeLeafless(plant);markResourceChanged(world,plant);}
   return false;
+}
+
+/** Only actual stumps reached by the existing plant agenda incur a read.
+ * Core's SteadyEnvironmentEffects samples map cells instead; the local
+ * cadence and RNG are explicitly still an adaptation of these rate factors. */
+function deteriorateStump382(world:World,plant:Resource,elapsed:number,outdoors:boolean):void {
+ if(!isDeadStump382(plant.species)||!world.deterioration)return;
+ const cell=plant.z*world.width+plant.x,roofed=isRoofed(world,cell),terrain=terrainExtraDeterioration256(world.tiles[cell]!);
+ const rate=DEAD_STUMP_FACTS_382[plant.species].deterioration*((roofed?0:.5)+(outdoors?.5:0)+terrain)*(roofed?1:1+4*weatherRainRate(world))*(!roofed&&toxicFalloutActive294(world)?3:1);
+ if(rate<=0||elapsed<=0)return;
+ const amount=rate*elapsed/TICKS_PER_DAY,whole=Math.floor(amount);
+ const damage=whole+(healthRandom(world.deterioration)<amount-whole?1:0);
+ if(damage)damageResource(world,plant,damage,'rotting');
 }
 
 interface LifeIndex {source:Resource[];cursor?:ResourceJournalCursor;buckets:Resource[][];owner:object|undefined}
@@ -118,14 +138,15 @@ export function advancePlantLife(world:World,layout:ThermalLayout,providedLight?
     life.nextCheck+=PLANT_LIFE_INTERVAL;life.age+=elapsed;recordResumedTreeCheck(plant,world.tick);
     markResourceChanged(world,plant);
     const cell=plant.z*world.width+plant.x,outdoors=layout.indices[cell]!<0;
+    if(isDeadStump382(plant.species)){deteriorateStump382(world,plant,elapsed,outdoors);continue;}
     if(applyPlantFrost(world,plant,outdoors,outside))continue;
     if(needsArtificial&&!environment)environment=typeof providedLight==='function'?providedLight():providedLight;
     const glow=environment?environment.lightAt(plant):isRoofed(world,cell)?0:light;
     const cave=isCavePlant256(plant.species,world.schemaVersion);
-    const sufficientlyLit=Math.max(0,(glow-.51)/.49)>.001;
+    const sufficientlyLit=(plant.kind==='tinctoria'?Math.max(0,(glow-.3)/.7):Math.max(0,(glow-.51)/.49))>.001;
     life.darkTicks=cave||sufficientlyLit?0:life.darkTicks+elapsed;
     const definition=plant.species?FLORA_DEFINITIONS[plant.species]:PLANT_DEFINITIONS[plant.kind as keyof typeof PLANT_DEFINITIONS];
-    const aged=effectivePlantAgeCore256(life)>definition.growDays*(plant.species?FLORA_DEFINITIONS[plant.species].lifespanMultiplier:8)*60000;
+    const aged=effectivePlantAgeCore256(life)>definition.growDays*(plant.species?FLORA_DEFINITIONS[plant.species].lifespanMultiplier:plant.kind==='tinctoria'?6:8)*60000;
     const caveDamage=cave?caveLightDamage256(environment?environment.lightAtIgnoringCavePlants(plant):isRoofed(world,cell)?0:light):0;
     if(aged||life.darkTicks>45000||caveDamage)damageResource(world,plant,Math.max(aged||life.darkTicks>45000?10:0,caveDamage),aged?'age':cave?'rotting':'darkness');
   }

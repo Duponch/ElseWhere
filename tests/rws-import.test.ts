@@ -101,14 +101,14 @@ describe('Analysis and report',()=>{
   expect(analysis.compatible).toBe(true);
   expect(analysis.summary).toMatchObject({mapSize:'20×20',colonists:2,days:6,scenario:'Petite colonie'});
   const rows=(family:Parameters<typeof n.tallies.get>[0])=>[...(n.tallies.get(family)?.values()??[])];
-  expect(rows('animals').find(r=>r.def.startsWith('Thrumbo'))?.status).toBe('dropped');
+  expect(rows('animals').find(r=>r.def.startsWith('Thrumbo'))?.status).toBe('exact');
   expect(rows('animals').find(r=>r.def==='Husky (colonie)')?.status).toBe('exact');
   expect(rows('buildings').find(r=>r.def==='Wall')).toMatchObject({status:'exact',to:'wall',count:23});
   expect(rows('traits').find(r=>r.def==='Pyromaniac')).toMatchObject({status:'exact',to:'pyromaniac'});
   expect(rows('traits').find(r=>r.def==='SpeedOffset (2)')).toMatchObject({status:'exact',to:'jogger'});
   expect(rows('research').find(r=>r.def==='Electricity')).toBeUndefined();
   const report=frenchReport({title:'Essai',analysis});
-  expect(report).toContain('## Bilan par famille (analyse)');expect(report).toContain('Thrumbo : espèce absente');expect(report).toContain('Compatibilité : importable');
+  expect(report).toContain('## Bilan par famille (analyse)');expect(report).toContain('| Thrumbo (sauvage) | 1 | repris |');expect(report).toContain('Compatibilité : importable');
  });
 });
 
@@ -144,7 +144,7 @@ describe('Conversion of the small colony',()=>{
   // MedicalAssistant12 disables Firefighting in Core: the save's priority 1 cannot be kept.
   expect(alma.priorities).toMatchObject({firefight:0,patient:1,doctor:2,bedrest:3,basic:3,grow:1,haul:3,clean:3});
   expect(alma.bedId).toBe(w.structures.find(s=>s.kind==='bed')!.id);
-  expect(alma.health?.injuries).toEqual([expect.objectContaining({part:'torso',kind:'cut',severity:3000,scar:{threshold:3000,pain:1}})]);
+  expect(alma.health?.injuries).toEqual([expect.objectContaining({part:'torso',kind:'scratch',severity:3000,scar:{threshold:3000,pain:1}})]);
   expect(alma.health?.missing).toEqual([expect.objectContaining({part:'left-pinky'})]);
   expect(bruno.health?.artificialParts).toEqual([expect.objectContaining({part:'left-leg',kind:'peg-leg'})]);
   const gear=(id:number,type:string)=>w.piles.filter(p=>p.owner.type===type&&'pawnId' in p.owner&&p.owner.pawnId===id).map(p=>p.item);
@@ -155,7 +155,7 @@ describe('Conversion of the small colony',()=>{
  it('imports the colony animal with its name, master and bond, and the wild animal',()=>{
   const animals=w.wildlife?.animals??[],husky=animals.find(a=>a.species==='husky')!,bruno=w.pawns.find(p=>p.name.startsWith('Bruno'))!;
   expect(husky.domestic).toBeDefined();expect(husky.startingPet).toMatchObject({name:'Neige',masterId:bruno.id,bondedPawnId:bruno.id});
-  expect(animals.find(a=>a.species==='hare')?.domestic).toBeUndefined();expect(animals).toHaveLength(2);
+  expect(animals.find(a=>a.species==='hare')?.domestic).toBeUndefined();expect(animals.find(a=>a.species==='thrumbo')?.domestic).toBeUndefined();expect(animals).toHaveLength(3);
  });
  it('keeps items, stockpile, growing zone, home area and research',()=>{
   const ground=(item:string)=>w.piles.filter(p=>p.item===item&&p.owner.type==='ground').reduce((s,p)=>s+p.quantity,0);

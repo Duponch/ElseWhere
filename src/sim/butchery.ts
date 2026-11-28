@@ -1,7 +1,7 @@
 import {pileById,appendPileEntries} from './pile-identity-directory.ts';
 import {planAnimalBodyRetirement256} from './animal-body-retirement-256.ts';
 import { butcherStationEfficiency } from './food-workstations.ts';
-import { corpseFresh,corpseProducts } from './corpses.ts';
+import { corpseFresh,corpseProducts,thrumboHornFromCorpse382 } from './corpses.ts';
 import { butcheryEfficiency,completedCookingSkill,roundYield } from './cooking-statistics.ts';
 import { freshRot } from './food-preservation.ts';
 import { planGroundPlacement } from './ground-placement.ts';
@@ -35,7 +35,7 @@ export function finishButchery(world:World,pawn:Pawn,bill:CookingBill,context:Pr
     for(const entry of plan){if(!materialCanFit(projected,ITEM_DEFINITIONS[item].kind,entry.quantity,{type:'ground',...entry.cell},item))return false;placements.push({item,...entry});addMaterial(projected,ITEM_DEFINITIONS[item].kind,entry.quantity,{type:'ground',...entry.cell},item);}
     return true;
   };
-  if(!reserve(meatItem,meat-primaryQuantity)||(leather>0&&(leatherItem===null||!reserve(leatherItem,leather))))return false;
+  if(!reserve(meatItem,meat-primaryQuantity)||(leather>0&&(leatherItem===null||!reserve(leatherItem,leather)))||world.schemaVersion>=382&&!reserve('thrumbo-horn',thrumboHornFromCorpse382(corpse.corpse)))return false;
   const identities=(primaryQuantity?1:0)+projected.nextId-world.nextId;
   if(piles.length+identities>32768||!Number.isSafeInteger(world.nextId+identities))return false;
   // From this point nothing can fail: no actor, source, RNG or learning was

@@ -9,6 +9,7 @@ import {constructionGhostParts,constructionPreviewParts} from '../src/render/con
 import {WALL_APPLIANCE_BOTTOM,WALL_APPLIANCE_TOP} from '../src/render/wall-appliance';
 import {WORLD_SCALE} from '../src/world/scale';
 import {WallLayer} from '../src/render/WallLayer';
+import {doorLeafTop} from '../src/render/door-parts';
 
 function fixture(kind:'vent'|'cooler',orientation:Structure['orientation']=0,material:Structure['material']='wood'){
   const world=createWorld(17,16,16),s:Structure={id:50,kind,x:7,z:7,orientation,footprint:'standard',material:'steel',vent:kind==='vent'?{open:true}:undefined};
@@ -18,6 +19,8 @@ function fixture(kind:'vent'|'cooler',orientation:Structure['orientation']=0,mat
 }
 
 test('the two wall appliances keep their real depth, fixed compact height, rotation and resident part counts',()=>{
+  expect(WALL_APPLIANCE_TOP).toBe(doorLeafTop(false));
+  expect(WALL_APPLIANCE_TOP-WALL_APPLIANCE_BOTTOM).toBeCloseTo(.48,10);
   for(const kind of ['vent','cooler'] as const)for(const orientation of [0,1,2,3] as const){
     const {world,s}=fixture(kind,orientation),before=JSON.stringify(world),parts=kind==='vent'?ventParts(world):electricalParts(world,false,[s]);
     expect(parts).toHaveLength(kind==='vent'?13:7);

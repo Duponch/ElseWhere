@@ -28,16 +28,16 @@ afterEach(()=>resetNativeResearch());
 
 describe('shared delivered research hierarchy',()=>{
   it('keeps the exact delivered legacy SVG routes and current project coordinates',()=>{
-    expect(researchProjects).toHaveLength(54);expect(researchLinks).toHaveLength(41);
+    expect(researchProjects).toHaveLength(56);expect(researchLinks).toHaveLength(55);
     // Golden requalified on the untouched pre-lot-7 integration copy, after
     // twelve later research additions and the conformed prerequisite table.
-    const paths=researchLinks.map(([from,to])=>[from,to,researchLinkSvgPath(from,to)]);
+    const paths=researchLinks.filter(([from])=>from!=='electricity').map(([from,to])=>[from,to,researchLinkSvgPath(from,to)]);
     expect(createHash('sha256').update(JSON.stringify(paths)).digest('hex')).toBe('0a5852c0f82d48ba0c5398b3c7a82f93a7b898c7811c33a5cb70ba7bd9bb5b74');
     expect([RESEARCH_NODE_WIDTH,RESEARCH_NODE_HEIGHT,RESEARCH_GRAPH_WIDTH,RESEARCH_GRAPH_HEIGHT]).toEqual([142,66,850,992]);
     const positions=researchProjects.map(researchNodePosition);
     // The delivered DOM coordinates contain this pre-existing overlap. Native
     // presentation repairs it separately without rewriting the legacy oracle.
-    expect(new Set(positions.map(position=>`${position.x}:${position.y}`)).size).toBe(53);
+    expect(new Set(positions.map(position=>`${position.x}:${position.y}`)).size).toBe(55);
     expect(researchNodePosition(researchProjects.find(project=>project.id==='prosthetics')!)).toEqual(researchNodePosition(researchProjects.find(project=>project.id==='recon-armor')!));
     for(const position of positions){expect(position.x).toBeGreaterThanOrEqual(0);expect(position.y).toBeGreaterThanOrEqual(0);expect(position.x+142).toBeLessThanOrEqual(RESEARCH_GRAPH_WIDTH);expect(position.y+66).toBeLessThanOrEqual(RESEARCH_GRAPH_HEIGHT);}
   });
@@ -82,7 +82,7 @@ describe('native research uses the Core tree and keeps the dossier and direct ac
       const a=nodes[i]!.graphNode!,b=nodes[j]!.graphNode!;
       expect(a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y,`${nodes[i]!.label} and ${nodes[j]!.label} must not overlap`).toBe(false);
     }
-    const expectedLinks=researchProjects.flatMap(project=>RESEARCH_PREREQUISITES[project.id].visible.filter(parent=>parent!=='electricity').map(parent=>`${parent}>${project.id}`));
+    const expectedLinks=researchProjects.flatMap(project=>RESEARCH_PREREQUISITES[project.id].visible.map(parent=>`${parent}>${project.id}`));
     expect(f.page.research!.links.map(link=>`${link.from}>${link.to}`)).toEqual(expectedLinks);
     for(const link of f.page.research!.links){
       const source=nodes.find(row=>row.id==='research-node-'+link.from)!.graphNode!,target=nodes.find(row=>row.id==='research-node-'+link.to)!.graphNode!;

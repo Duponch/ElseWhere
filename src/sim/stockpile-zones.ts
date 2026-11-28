@@ -81,6 +81,7 @@ export function validStockpileZones(world:Pick<World,'stockpiles'|'nextId'>,vers
   const policies=new Map<number,StockpileCell>();
   for(const cell of world.stockpiles){
     if(!validAiCoreStorageFilters298(cell.filters,version))return false;
+    if(Object.hasOwn(cell.filters,'dye')&&(version<382||typeof cell.filters.dye!=='boolean'))return false;
     if(version<219){if(Object.hasOwn(cell,'zoneId'))return false;continue;}
     const zoneId=cell.zoneId===undefined?cell.id:cell.zoneId;
     if(!Number.isSafeInteger(zoneId)||zoneId<1||zoneId>=world.nextId)return false;

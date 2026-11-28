@@ -5,7 +5,7 @@ import {isCavePlant256} from './cave-flora-256.ts';
 import { TICKS_PER_DAY, type Pawn, type Resource, type World } from './types.ts';
 import { plantHarvestYield } from './plant-skills.ts';
 import { isRoofed, roofIndex } from './roof-rules.ts';
-import { annualGrowingLightIntegral } from './environment.ts';
+import { annualGrowingLightIntegral,tinctoriaGrowingLightIntegral382 } from './environment.ts';
 import { climateTick,type ClimateWorld } from './site-climate.ts';
 import { soilFertility } from './soil.ts';
 import { isCropKind, type CropKind } from './crops.ts';
@@ -13,8 +13,10 @@ import { FLORA_DEFINITIONS } from './biome-flora.ts';
 import { resourceMaxHp } from './thing-damage-rules.ts';
 import { hydroponicFertility } from './hydroponics.ts';
 import { DEVILSTRAND_PLANT_358 } from './devilstrand-358.ts';
+import {isDeadStump382} from './native-special-plants-382.ts';
 
 export const PLANT_DEFINITIONS = Object.freeze({
+  tinctoria:{label:'Tinctoria',growDays:2,minFertility:.7,sensitivity:1,afterHarvest:0,yield:1},
   hops:{label:'Houblon',growDays:5,minFertility:.7,sensitivity:.7,afterHarvest:0,yield:8},
   // Schema 358: Core Plant_Devilstrand (growDays 22.5, fertilityMin 0.5, sensitivity 1, yield 6).
   devilstrand:{label:DEVILSTRAND_PLANT_358.label,growDays:DEVILSTRAND_PLANT_358.growDays,minFertility:DEVILSTRAND_PLANT_358.fertilityMin,sensitivity:DEVILSTRAND_PLANT_358.fertilitySensitivity,afterHarvest:0,yield:DEVILSTRAND_PLANT_358.harvestYield},
@@ -28,7 +30,7 @@ export const PLANT_DEFINITIONS = Object.freeze({
 });
 export const isPlant = (plant: Resource): boolean => plant.species!==undefined || plant.kind === 'berries' || isCropKind(plant.kind);
 export const isCrop = (plant: Pick<Resource,'kind'>): plant is Pick<Resource,'kind'>&{kind:CropKind} => isCropKind(plant.kind);
-export const harvestProductLabel = (plant:Resource):string => plant.species?FLORA_DEFINITIONS[plant.species].product==='wood'?'bois':FLORA_DEFINITIONS[plant.species].product==='agave-fruit'?'agave':FLORA_DEFINITIONS[plant.species].product==='berries'?'baies':FLORA_DEFINITIONS[plant.species].product==='herbal-medicine'?'dose de médicament à base de plantes':FLORA_DEFINITIONS[plant.species].label:
+export const harvestProductLabel = (plant:Resource):string => plant.kind==='tinctoria'?'teinture':plant.species?FLORA_DEFINITIONS[plant.species].product==='wood'?'bois':FLORA_DEFINITIONS[plant.species].product==='agave-fruit'?'agave':FLORA_DEFINITIONS[plant.species].product==='berries'?'baies':FLORA_DEFINITIONS[plant.species].product==='herbal-medicine'?'dose de médicament à base de plantes':FLORA_DEFINITIONS[plant.species].label:
   plant.kind==='tree'?'bois':plant.kind==='hops'?'houblon':plant.kind==='devilstrand'?'soie du diable':plant.kind==='haygrass'?'foin':plant.kind==='healroot'?'dose de médicament à base de plantes':plant.kind==='cotton'?'tissu':plant.kind==='rice'?'riz':plant.kind==='potato'?'pommes de terre':plant.kind==='corn'?'maïs':'baies';
 
 export const BERRY_GROW_DAYS = 6;
@@ -96,6 +98,7 @@ function readPlantGrowth(world:World,plant:Resource,inputs?:GrowthPassInputs):nu
   if ((plant.growth ?? 1) === 1) return 1;
   if (!isPlant(plant)) return 1;
   const base = plant.growth ?? 1;
+  if(isDeadStump382(plant.species))return base;
   if(plant.blight)return base;
   const cave=isCavePlant256(plant.species,world.schemaVersion);
   if(!cave&&(plant.growthLight==='dark'||plant.growthLight!=='artificial-full'&&isRoofed(world,roofIndex(world,plant))))return base;
@@ -103,7 +106,7 @@ function readPlantGrowth(world:World,plant:Resource,inputs?:GrowthPassInputs):nu
   const def = plant.species?FLORA_DEFINITIONS[plant.species]:PLANT_DEFINITIONS[plant.kind as keyof typeof PLANT_DEFINITIONS], fertility = inputs?inputs.fertility(plant):plantFertility(world, plant);
   const ignoreFertility=plantCompletelyIgnoresFertility256(plant.species,world.schemaVersion);
   if(!ignoreFertility&&fertility<def.minFertility||world.schemaVersion>=256&&(inputs?inputs.allowed(plant):plantSubstrateAllowed256(plant.species,world.schemaVersion,naturalPlantSubstrate256(world.tiles[plant.z*world.width+plant.x]!)))===false)return base;
-  const integral=cave||plant.growthLight==='artificial-full'?fullGrowingLightIntegral:annualGrowingLightIntegral;
+  const integral=cave||plant.growthLight==='artificial-full'?fullGrowingLightIntegral:plant.kind==='tinctoria'?tinctoriaGrowingLightIntegral382:annualGrowingLightIntegral;
   const lightTime = inputs?inputs.lightTime(plant,cave||plant.growthLight==='artificial-full'):integral(world) - integral(world, plant.growthTick ?? world.tick);
   const factor = (plant.growthThermalFactor ?? 1) * (ignoreFertility?1:1 - def.sensitivity + fertility * def.sensitivity);
   return clamp(base + lightTime * factor / (def.growDays * TICKS_PER_DAY));
@@ -122,7 +125,7 @@ const GROWTH_BOUND_FERTILITY=3;
  * bound. Two ticks of margin absorb the rounding of the division. */
 export function plantGrowthExceedTickBound(plant:Resource,target:number):number {
   const base=plant.growth??1;
-  if(base===1||!isPlant(plant)||plant.blight||plant.growthTick===undefined||!(target<1))return Infinity;
+  if(base===1||!isPlant(plant)||plant.blight||plant.growthTick===undefined||!(target<1)||isDeadStump382(plant.species))return Infinity;
   if(target<base)return -Infinity;
   const def=plant.species?FLORA_DEFINITIONS[plant.species]:PLANT_DEFINITIONS[plant.kind as keyof typeof PLANT_DEFINITIONS];
   if(!def)return -Infinity;
@@ -156,6 +159,7 @@ function createPlantGrowthInputs(world:World):GrowthPassInputs {
     recentTerrain=terrain;recentStone=stone;recentLayer=layer;return recent=value;
   };
   const annual=new Map<number,number>(),full=new Map<number,number>();
+  let tinctoria:Map<number,number>|undefined;
   const integral=(tick:number,artificial:boolean):number=>{
     const values=artificial?full:annual,old=values.get(tick);if(old!==undefined)return old;
     const value=(artificial?fullGrowingLightIntegral:annualGrowingLightIntegral)(world,tick);values.set(tick,value);return value;
@@ -173,7 +177,13 @@ function createPlantGrowthInputs(world:World):GrowthPassInputs {
       const substrate=entry.substrate??(entry.substrate=naturalPlantSubstrate256(world.tiles[plant.z*world.width+plant.x]!));
       const value=plantSubstrateAllowed256(species,world.schemaVersion,substrate);entry.allowed.set(species,value);return value;
     },
-    lightTime(plant,artificial){return integral(world.tick,artificial)-integral(plant.growthTick??world.tick,artificial);},
+    lightTime(plant,artificial){
+      if(!artificial&&plant.kind==='tinctoria'){
+        const values=tinctoria??=new Map();const read=(t:number)=>{let v=values.get(t);if(v===undefined){v=tinctoriaGrowingLightIntegral382(world,t);values.set(t,v);}return v;};
+        return read(world.tick)-read(plant.growthTick??world.tick);
+      }
+      return integral(world.tick,artificial)-integral(plant.growthTick??world.tick,artificial);
+    },
   };
   return inputs;
 }
@@ -199,9 +209,9 @@ export function createPlantGrowthForecastReader(world:World):(plant:Resource,tic
   const probe={...world},inputs=createPlantGrowthInputs(probe);
   return (plant,tick)=>{probe.tick=tick;return readPlantGrowth(probe,plant,inputs);};
 }
-export const choppable=(world:World,plant:Resource):boolean=>plant.kind==='tree'&&(!plant.species||plantGrowth(world,plant)>=FLORA_DEFINITIONS[plant.species].harvestMinGrowth);
+export const choppable=(world:World,plant:Resource):boolean=>isDeadStump382(plant.species)?(plant.growth??1)>0:plant.kind==='tree'&&(!plant.species||plantGrowth(world,plant)>=FLORA_DEFINITIONS[plant.species].harvestMinGrowth);
 export const harvestable = (world: World, plant: Resource,readGrowth?:()=>number): boolean => !plant.blight&&isPlant(plant)&&plant.kind!=='tree'&&
-  (!plant.species||FLORA_DEFINITIONS[plant.species].product!==null)&&(readGrowth?readGrowth():plantGrowth(world,plant)) > (plant.species?FLORA_DEFINITIONS[plant.species].harvestMinGrowth:HARVEST_MIN_GROWTH);
+  (!plant.species||!isDeadStump382(plant.species)&&FLORA_DEFINITIONS[plant.species].product!==null)&&(readGrowth?readGrowth():plantGrowth(world,plant)) > (plant.species?FLORA_DEFINITIONS[plant.species].harvestMinGrowth:HARVEST_MIN_GROWTH);
 export function berryYield(world: World, plant: Resource): number {
   if(plant.blight)return 0;
   const growth = plantGrowth(world, plant);
@@ -241,7 +251,7 @@ export function harvestRoll(world: World, plant: Resource, worker?:Pawn): { quan
     const random=()=>{rng^=rng<<13;rng^=rng>>>17;rng^=rng<<5;rng>>>=0;return rng/0x100000000;};
     const round=(value:number)=>Math.floor(value)+(random()<value%1?1:0);
     const efficiency=plantHarvestYield(worker,undefined,world.schemaVersion);
-    if(plant.kind!=='tree'&&random()>efficiency)return {quantity:0,rng};
+    if(plant.kind!=='tree'&&!isDeadStump382(plant.species)&&random()>efficiency)return {quantity:0,rng};
     let quantity=round(berryYield(world,plant));
     if(efficiency>1)quantity=round(quantity*efficiency);
     return {quantity,rng};

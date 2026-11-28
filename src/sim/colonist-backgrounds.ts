@@ -57,6 +57,15 @@ const WORK_TAGS:Readonly<Record<WorkType,readonly BackgroundWorkTag[]>>={
 const CORE_EXTRA_WORK_TAGS=Object.fromEntries((Object.keys(WORK_TAGS) as WorkType[]).map(work=>[work,CORE_WORK_TYPE_TAGS_370[work].filter(tag=>!WORK_TAGS[work].includes(tag))])) as unknown as Readonly<Record<WorkType,readonly BackgroundWorkTag[]>>;
 const SKILL_TAGS:Readonly<Record<BackgroundSkillId,readonly BackgroundWorkTag[]>>={shooting:['violent'],melee:['violent'],construction:['manual-skilled'],mining:['manual-skilled'],cooking:['manual-skilled'],plants:['manual-skilled','plant-work'],animals:['animals'],crafting:['manual-skilled'],artistic:['artistic'],medicine:['caring'],social:['social'],intellectual:['intellectual']};
 
+// Definitions are frozen logical facts. Compile their refusal texts once,
+// not a per-pawn cache: a changed actual background is still read on the
+// very next call, including raw fixtures and replacements.
+type TagReasons=Readonly<Partial<Record<BackgroundWorkTag,string>>>;
+function refusalTable(definitions:Readonly<Record<string,BackgroundDefinition>>):ReadonlyMap<string,TagReasons>{
+ return new Map(Object.entries(definitions).map(([id,story])=>[id,Object.freeze(Object.fromEntries(story.disables.map(tag=>[tag,`Incapacité liée au passé : ${story.label}.`]))) as TagReasons]));
+}
+const CHILD_REFUSALS=refusalTable({...CHILDHOODS,...CORE_BACKSTORIES_370}),ADULT_REFUSALS=refusalTable({...ADULTHOODS,...CORE_BACKSTORIES_370});
+
 export function backgroundDefinitions(pawn:BackgroundBearer):readonly BackgroundDefinition[] {
   const b=pawn.background;
   return b?[childhoodDefinition(b.childhood),...(b.adulthood?[adulthoodDefinition(b.adulthood)]:[])]:[];
@@ -64,9 +73,13 @@ export function backgroundDefinitions(pawn:BackgroundBearer):readonly Background
 export function backgroundTagRefusal(pawn:BackgroundBearer,tag:BackgroundWorkTag):string|undefined {
   const b=pawn.background;
   if(b){
-    const childhood=childhoodDefinition(b.childhood),adulthood=b.adulthood?adulthoodDefinition(b.adulthood):undefined;
-    const cause=childhood.disables.includes(tag)?childhood:adulthood?.disables.includes(tag)?adulthood:undefined;
-    if(cause)return `Incapacité liée au passé : ${cause.label}.`;
+    const child=CHILD_REFUSALS.get(b.childhood),adult=b.adulthood?ADULT_REFUSALS.get(b.adulthood):undefined;
+    if(child&&(b.adulthood===undefined||adult)){const reason=child[tag]??adult?.[tag];if(reason)return reason;}
+    else {
+      const childhood=childhoodDefinition(b.childhood),adulthood=b.adulthood?adulthoodDefinition(b.adulthood):undefined;
+      const cause=childhood.disables.includes(tag)?childhood:adulthood?.disables.includes(tag)?adulthood:undefined;
+      if(cause)return `Incapacité liée au passé : ${cause.label}.`;
+    }
   }
   // Schema 368: a trait's disabledWorkTags (Pyromaniac: Firefighting).
   const trait=traitDisablingWorkTag(pawn,tag);

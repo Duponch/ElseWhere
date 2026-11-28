@@ -27,6 +27,8 @@ export type MechCorpseItem=typeof MECH_CORPSE_ITEMS[number];
  * rules are tracked in docs/development/food-items.md. Nutrition uses integer
  * hundredths here; the actor's 0..100 meter represents one nutrition unit. */
 export const ITEM_DEFINITIONS = Object.freeze({
+  ambrosia:Object.freeze({label:'Ambroisie',kind:'drug',stackLimit:150,nutrition:20,maxIngest:1,color:0xbf9860}),
+  dye:Object.freeze({label:'Teinture',kind:'dye',stackLimit:75,nutrition:0,maxIngest:0,color:0x858cae}),
   'ai-core':Object.freeze({label:'Cœur d’IA',kind:'ai-core',stackLimit:1,nutrition:0,maxIngest:0,color:0x8ba3a5}),
   novel:Object.freeze({label:'Roman',kind:'book',stackLimit:1,nutrition:0,maxIngest:0,color:0x7e9f8b}),
   ...SHELL_ITEM_DEFINITIONS_357,
@@ -113,6 +115,7 @@ export const ITEM_DEFINITIONS = Object.freeze({
   'recurve-bow':Object.freeze({label:'Arc recourbé',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326['recurve-bow'].color}),
   greatbow:Object.freeze({label:'Grand arc',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:BOW_FACTS_326.greatbow.color}),
   'plasteel-knife':Object.freeze({label:'Couteau en plastacier',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0xa0b2b5}),
+  'thrumbo-horn':Object.freeze({label:'Corne de thrumbo',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0xe2dccb}),
   revolver:Object.freeze({label:'Revolver',kind:'weapon',stackLimit:1,nutrition:0,maxIngest:0,color:0x606b72}),
   'herbal-medicine':Object.freeze({label:'Plantes médicinales',kind:'medicine',stackLimit:25,nutrition:0,maxIngest:0,color:0x7d985c}),
   medicine:Object.freeze({label:'Médicaments',kind:'medicine',stackLimit:25,nutrition:0,maxIngest:0,color:0x91c6cc}),
@@ -169,10 +172,10 @@ export const ITEM_DEFINITIONS = Object.freeze({
 export type ItemId = keyof typeof ITEM_DEFINITIONS;
 /** These raw foods cause the shared raw-meal thought, independently of policy. */
 export const rawFoodThought = (item: ItemId): boolean => item === 'rice' || item === 'potato' || item === 'corn' || item === 'agave-fruit' || item === 'raw-fungus' || isAnimalMeat(item)||!!eggSpeciesForItem256(item);
-export const legacyItem = (kind: MaterialKind): ItemId => kind==='ai-core'?'ai-core':kind==='book'?missingEquipmentType():kind==='wort'?'wort':kind==='beer'?'beer':kind==='chemfuel'?'chemfuel':kind==='neutroamine'?'neutroamine':kind==='drug'?'penoxycyline':kind==='silver'?'silver':kind==='uranium'?'uranium':kind==='corpse'||kind==='mech-corpse'?missingEquipmentType():kind==='prosthesis'?missingEquipmentType():kind==='unfinished'?missingEquipmentType():kind==='textile'?'cloth':kind==='apparel'||kind==='weapon'?missingEquipmentType():kind==='medicine'?missingMedicineType():kind==='component'?'component':kind==='advanced-component'?'advanced-component':kind==='jade'?'jade':kind==='gold'?'gold':kind==='plasteel'?'plasteel':kind==='blocks'?missingBlockType(): kind === 'steel' ? 'steel' : kind === 'wood' ? 'wood' : kind === 'chunk' ? 'legacy-chunk' : 'legacy-portion';
+export const legacyItem = (kind: MaterialKind): ItemId => kind==='ai-core'?'ai-core':kind==='book'?missingEquipmentType():kind==='wort'?'wort':kind==='beer'?'beer':kind==='chemfuel'?'chemfuel':kind==='neutroamine'?'neutroamine':kind==='dye'?'dye':kind==='drug'?'penoxycyline':kind==='silver'?'silver':kind==='uranium'?'uranium':kind==='corpse'||kind==='mech-corpse'?missingEquipmentType():kind==='prosthesis'?missingEquipmentType():kind==='unfinished'?missingEquipmentType():kind==='textile'?'cloth':kind==='apparel'||kind==='weapon'?missingEquipmentType():kind==='medicine'?missingMedicineType():kind==='component'?'component':kind==='advanced-component'?'advanced-component':kind==='jade'?'jade':kind==='gold'?'gold':kind==='plasteel'?'plasteel':kind==='blocks'?missingBlockType(): kind === 'steel' ? 'steel' : kind === 'wood' ? 'wood' : kind === 'chunk' ? 'legacy-chunk' : 'legacy-portion';
 export const nutritionOf = (pile: MaterialPile): number => ITEM_DEFINITIONS[pile.item].nutrition * pile.quantity;
 export function availableNutrition(world: World): number {
-    return world.piles.reduce((sum, pile) => sum + (pile.item==='hay'||pile.item==='hops'||pile.item==='beer'||pile.owner.type === 'job'||pile.owner.type==='inventory'||pile.owner.type==='pawn'&&!world.pawns.some(p=>p.id===('pawnId' in pile.owner?pile.owner.pawnId:-1)&&(p.faction??'colony')==='colony') ? 0 : nutritionOf(pile)), 0) / 100;
+    return world.piles.reduce((sum, pile) => sum + (pile.item==='hay'||pile.item==='hops'||pile.item==='beer'||pile.item==='ambrosia'||pile.owner.type === 'job'||pile.owner.type==='inventory'||pile.owner.type==='pawn'&&!world.pawns.some(p=>p.id===('pawnId' in pile.owner?pile.owner.pawnId:-1)&&(p.faction??'colony')==='colony') ? 0 : nutritionOf(pile)), 0) / 100;
 }
 /** Unity's midpoint-to-even rounding, used by the reference stack calculation. */
 function roundEven(value: number): number {
@@ -181,7 +184,7 @@ function roundEven(value: number): number {
 }
 export function mealQuantity(pawn: Pawn, pile: MaterialPile, available: number): number {
   const item = ITEM_DEFINITIONS[pile.item];
-  if (pile.item==='hay' || pile.item==='hops'||pile.item==='beer'||!item.nutrition || available <= 0) return 0;
+  if (pile.item==='hay' || pile.item==='hops'||pile.item==='beer'||pile.item==='ambrosia'||!item.nutrition || available <= 0) return 0;
   return Math.min(available, item.maxIngest, Math.max(1, roundEven((100 - pawn.hunger) / item.nutrition)));
 }
 

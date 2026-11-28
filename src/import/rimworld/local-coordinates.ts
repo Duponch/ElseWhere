@@ -41,9 +41,9 @@ export function coreOccupiedCells(pos:Cell,rot:number,size:readonly [number,numb
  * reflected rectangle can still be placed by choosing its correct anchor;
  * never give a non-rotatable structure Rot4.South just because Z changed. */
 const FIXED_IMPORT_ORIENTATION=new Set<StructureKind>([
- 'wall','door','autodoor','fence','fence-gate','pen-marker','sandbags','animal-sleeping-spot','flower-pot',
+ 'wall','door','autodoor','fence','fence-gate','pen-marker','sandbags','barricade','animal-sleeping-spot','flower-pot',
  'small-sculpture','large-sculpture','table-large','poker-table','hoopstone-ring','horseshoes',
- 'power-conduit','power-switch','wood-generator','chemfuel-generator','solar-generator','geothermal-generator',
+ 'power-conduit','hidden-conduit','power-switch','wood-generator','chemfuel-generator','solar-generator','geothermal-generator',
  'standing-lamp','sun-lamp','torch-lamp','heater','passive-cooler','firefoam-popper','mini-turret',
  'orbital-beacon','multi-analyzer','spike-trap','ied-high-explosive','ied-incendiary','campfire','hopper','butcher-spot','crafting-spot',
  'egg-box','column','urn','stele-large','stele-grand','ship-chunk','insect-hive','glow-pod','ancient-road-lamp','ship-computer','ship-sensors'

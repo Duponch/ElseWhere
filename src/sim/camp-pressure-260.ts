@@ -6,17 +6,18 @@ import type {World} from './types.ts';
 import {registeredCampaign,registeredMap,flushRegisteredMap} from './world-map-context.ts';
 import {raidRandom} from './raid-state.ts';
 import {computeThreatPoints,summaryHealthPercent} from './threat-points.ts';
+import {storytellerIncidents347,threatModifiers382} from './game-profile.ts';
 import {isColonist} from './affiliation.ts';
 import {TICKS_PER_DAY} from './types.ts';
 import {createCampPressureMechanoidRaid260} from './mechanoid-raids.ts';
 const notice=(root:CampaignState,map:World,message:string)=>{for(const rows of [map.events,root.worldGroups!.events]){rows.push({tick:root.tick,type:'command',message});if(rows.length>80)rows.splice(0,rows.length-80);}};
 /** Real local values, same explicitly adapted AdventureStory threat helper as raids. */
 export function campThreatPoints260(w:World):number|undefined {
- if(!w.economy||w.gameProfile?.difficulty!=='adventure-story')return;
+ if(!w.economy||!storytellerIncidents347(w))return;
  const free=w.pawns.filter(p=>isColonist(p)&&p.state!=='dead'&&!p.prisoner&&!p.visitor);
  return computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:w.economy.wealth.knownStorytellerWealth,freeColonists:free.length,
   colonistHealthSum:free.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/TICKS_PER_DAY,
-  adaptationDays:w.economy.adaptationDays,seedBucket:Math.floor(w.tick/250)}).points*1.5;
+  adaptationDays:w.economy.adaptationDays,seedBucket:Math.floor(w.tick/250),difficulty:threatModifiers382(w)}).points*1.5;
 }
 /** Once per real campaign tick, after local actors, in stable map order. No catch-up loop. */
 export function advanceCampPressure260(input:CampaignState):void {

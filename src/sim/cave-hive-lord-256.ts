@@ -108,7 +108,7 @@ export function processHivePriority256(w:World,a:WildAnimal,getNav:()=>ReturnTyp
   if(route){delete a.meal;delete a.predation;if(a.wander)delete a.wander.job;a.hiveJob={kind:'attack',targetId:route.targetId};a.path=route.path;a.nextDecision=w.tick+25;}
   else if(target)releaseHiveMaintenance256(w,a);
   if(!route&&assault){
-   const player=w.worldFactions?.playerFactionId,buildings=w.structures.filter(s=>s.kind!=='insect-hive'&&s.kind!=='glow-pod'&&(s.factionId===undefined||s.factionId===player)).sort((x,y)=>square(a,x)-square(a,y));
+   const player=w.worldFactions?.playerFactionId,buildings=w.structures.filter(s=>s.kind!=='hidden-conduit'&&s.kind!=='insect-hive'&&s.kind!=='glow-pod'&&(s.factionId===undefined||s.factionId===player)).sort((x,y)=>square(a,x)-square(a,y));
    for(const building of buildings){const path=nav.route(a,contacts(w,building));if(!path)continue;delete a.meal;if(a.wander)delete a.wander.job;a.hiveJob={kind:'attack',targetId:building.id,structure:true};a.path=path;a.nextDecision=w.tick+25;break;}
   }
  }

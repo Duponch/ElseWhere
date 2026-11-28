@@ -44,5 +44,6 @@ export const V91_ITEM_IDS:readonly string[]=Object.freeze(Object.keys(BIOME_ITEM
 export const ANIMAL_MEAT_ITEMS=['hare-meat','snow-hare-meat','deer-meat','muffalo-meat','gazelle-meat','dromedary-meat','red-fox-meat',...ANIMAL_MEAT_ITEMS_256] as const;
 export const ANIMAL_CORPSE_ITEMS=['hare-corpse','snow-hare-corpse','deer-corpse','muffalo-corpse','gazelle-corpse','dromedary-corpse','red-fox-corpse',...ANIMAL_CORPSE_ITEMS_256] as const;
 export const ANIMAL_LEATHER_ITEMS=['light-leather','plainleather','bluefur','camelhide','foxfur',...ANIMAL_LEATHER_ITEMS_256] as const;
-export const isAnimalMeat=(item:string):item is typeof ANIMAL_MEAT_ITEMS[number] => (ANIMAL_MEAT_ITEMS as readonly string[]).includes(item);
-export const isAnimalCorpseItem=(item:string):item is typeof ANIMAL_CORPSE_ITEMS[number] => (ANIMAL_CORPSE_ITEMS as readonly string[]).includes(item);
+const animalMeatIds=new Set<string>(ANIMAL_MEAT_ITEMS),animalCorpseIds=new Set<string>(ANIMAL_CORPSE_ITEMS);
+export const isAnimalMeat=(item:string):item is typeof ANIMAL_MEAT_ITEMS[number]=>animalMeatIds.has(item);
+export const isAnimalCorpseItem=(item:string):item is typeof ANIMAL_CORPSE_ITEMS[number]=>animalCorpseIds.has(item);

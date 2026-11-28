@@ -21,7 +21,7 @@ import type {ResearchProject} from './research.ts';
  *  - HospitalBed hides SterileMaterials in Core; Elsewhere does not ask for it.
  *  - GunTurrets needs BlowbackOperation as in Core from schema 340 only;
  *    before, the delivered adaptation kept Gunsmithing. */
-export type ResearchParent=ResearchProject|'electricity';
+export type ResearchParent=ResearchProject;
 export interface ResearchPrerequisites {
   readonly visible:readonly ResearchParent[];
   readonly hidden:readonly ResearchProject[];
@@ -31,6 +31,7 @@ const of=(visible:readonly ResearchParent[],hidden:readonly ResearchProject[]=[]
 
 /** Every project, from schema 340 on (see researchPrerequisitesAt). */
 export const RESEARCH_PREREQUISITES:Readonly<Record<ResearchProject,ResearchPrerequisites>>=Object.freeze({
+  electricity:none,'passive-cooler':none,
   'complex-furniture':none,stonecutting:none,'complex-clothing':none,smithing:none,'drug-production':none,brewing:none,pemmican:none,
   'tree-sowing':none,'recurve-bow':none,devilstrand:none,'carpet-making':none,
   // Core PackagedSurvivalMeal: NutrientPaste (declared adaptation above).
@@ -81,13 +82,13 @@ export function researchPrerequisitesAt(project:ResearchProject,schemaVersion:nu
  * ones in Core order, then the hidden ones; Electricity is always known. */
 export function researchParentProjects(project:ResearchProject,schemaVersion:number):ResearchProject[] {
   const p=researchPrerequisitesAt(project,schemaVersion);
-  return [...p.visible.filter((parent):parent is ResearchProject=>parent!=='electricity'),...p.hidden];
+  return [...p.visible.filter(parent=>schemaVersion>=382||parent!=='electricity'),...p.hidden];
 }
 
 /** French labels of the parents, as the refusal and the research view name
  * them (the node titles of the research view use the same words). */
 export const RESEARCH_PARENT_LABELS:Readonly<Record<ResearchParent,string>>=Object.freeze({
-  electricity:'Électricité (acquise au départ)',
+  electricity:'Électricité','passive-cooler':'Refroidisseur passif',
   'complex-furniture':'Mobilier complexe',stonecutting:'Taille de pierre','complex-clothing':'Vêtements complexes',smithing:'Forge',
   'drug-production':'Production de drogues',brewing:'Brassage de bière',pemmican:'Pemmican','tree-sowing':'Semis d’arbres',
   'recurve-bow':'Arc recourbé',devilstrand:'Soie du diable','carpet-making':'Fabrication de tapis','packaged-survival-meals':'Repas de survie',

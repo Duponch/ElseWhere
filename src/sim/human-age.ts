@@ -1,6 +1,11 @@
 import {isSchema256Or257} from './schema-compatibility-257.ts';
 import {nativeHumanBiologicalCore256,type NativeHumanIdentity256} from './native-human-identity-256.ts';
 import {syncNativeHumanClinicalScale256} from './native-human-clinical-scale-256.ts';
+import {ANIMAL_BIRTHDAY_KINDS_256,animalBirthdayChance256} from './animal-age-condition-data-256.ts';
+import {tryApplyAnimalAgeCondition256} from './animal-birthday-application-256.ts';
+import {animalClinicalRandom256} from './animal-condition-medical-frontier-256.ts';
+import {sendLetter352} from './letters-352.ts';
+import {isColonist} from './affiliation.ts';
 import { createMedicalRecord } from './injury-state.ts';
 import { TICKS_PER_DAY, type Pawn, type World } from './types.ts';
 
@@ -79,7 +84,27 @@ export function initialHumanAilments(seed:number,id:number,age:HumanAge):HumanAg
   return found;
 }
 
-export interface HumanAgeContext {tick:number;schemaVersion:number;random():number;notice(message:string):void}
+export interface HumanAgeContext {tick:number;schemaVersion:number;random():number;notice(message:string):void;notifyBirthday?:boolean;world?:World;birthdayNotice?(message:string):void}
+function nativeBirthday382(pawn:Pawn,years:number,c:HumanAgeContext):void {
+  const record=pawn.health;
+  if(!record||record.humanHealthScale===undefined)throw Error('Native birthday lacks its actual clinical record');
+  const random=animalClinicalRandom256(c.random),fraction=Math.fround(Math.fround(years)/Math.fround(HUMAN_LIFE_EXPECTANCY)),added:string[]=[];
+  for(const kind of ANIMAL_BIRTHDAY_KINDS_256){
+    if(!(random.value()<animalBirthdayChance256(kind,fraction)))continue;
+    const result=tryApplyAnimalAgeCondition256(record,kind,random);
+    if(result.status==='blocked')throw Error('Native human birthday anatomy is unavailable');
+    if(result.status==='applied'){
+      for(const condition of result.added)condition.bornAt=c.tick-((record.civilTick271??record.tick)-record.tick);
+      added.push(kind);
+    }
+  }
+  if(added.length&&isColonist(pawn)){
+    const message=`${pawn.name} : ${years} ans, nouvelles affections : ${added.join(', ')}.`;
+    if(c.world)sendLetter352(c.world,{cls:'negative',title:`Anniversaire : ${pawn.name}`,text:message,targets:[{kind:'actor',id:pawn.id}]});
+    else if(c.birthdayNotice)c.birthdayNotice(message);
+    else if(c.notifyBirthday)c.notice(message);
+  }
+}
 function birthdayAt(pawn:Pawn,years:number,c:HumanAgeContext):void {
   const fraction=years/HUMAN_LIFE_EXPECTANCY;
   const ailments=pawn.health?.ageAilments??[];
@@ -104,23 +129,28 @@ export function advanceHumanAges(world:World):void {
 export function advanceHumanAge(world:World,pawn:Pawn):void {
   advanceHumanAgeAt(pawn,{tick:world.tick,schemaVersion:world.schemaVersion,random:()=>ageRandom(world),notice:message=>{
     world.events.push({tick:world.tick,type:'need',message});if(world.events.length>80)world.events.splice(0,world.events.length-80);
-  }});
+  },world});
 }
 export function advanceHumanAgeAt(pawn:Pawn,c:HumanAgeContext):void {
   if((pawn.cryptosleepHeldAt271!==undefined||pawn.shipCryptosleepHeldAt277!==undefined))return;
   if(c.schemaVersion<138)return;
     const age=pawn.age;if(!age)return;
+    let nativeBirthday:number|undefined,nativeAfter:number|undefined;
     if(pawn.nativeHuman&&pawn.state!=='dead'&&!pawn.health?.death){
       const before=nativeHumanBiologicalCore256(pawn),after=before+10;
-      if(pawn.health?.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers'))throw Error('Actual native Human Alzheimer memory/conditional-thought owner is not bound');
+      if(c.schemaVersion<382&&pawn.health?.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers'))throw Error('Actual native Human Alzheimer memory/conditional-thought owner is not bound');
       if(!Number.isSafeInteger(after))throw Error('Native biological age exhausted');
-      if(Math.floor(before/3600000)!==Math.floor(after/3600000))throw Error('Actual native Human living birthday/notification frontier is not bound; historical birthdayAt is not a substitute');
+      nativeAfter=after;
+      if(Math.floor(before/3600000)!==Math.floor(after/3600000)){
+        if(c.schemaVersion<382)throw Error('Actual native Human living birthday/notification frontier is not bound; historical birthdayAt is not a substitute');
+        nativeBirthday=Math.floor(after/3600000);
+      }
     }
     if(age.chronologicalTicks<Number.MAX_SAFE_INTEGER)age.chronologicalTicks++;
     if(pawn.state==='dead'||age.biologicalTicks>=Number.MAX_SAFE_INTEGER)return;
     age.biologicalTicks++;
-    if(pawn.nativeHuman)syncNativeHumanClinicalScale256(pawn,nativeHumanBiologicalCore256(pawn));
-    if(age.biologicalTicks%HUMAN_YEAR_TICKS===0)birthdayAt(pawn,biologicalYears(age),c);
+    if(pawn.nativeHuman){syncNativeHumanClinicalScale256(pawn,nativeAfter??nativeHumanBiologicalCore256(pawn));if(nativeBirthday!==undefined)nativeBirthday382(pawn,nativeBirthday,c);}
+    else if(age.biologicalTicks%HUMAN_YEAR_TICKS===0)birthdayAt(pawn,biologicalYears(age),c);
 }
 
 export function validHumanAge(value:unknown,version:number,native?:NativeHumanIdentity256):boolean {

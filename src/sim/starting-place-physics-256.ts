@@ -20,7 +20,7 @@ export function captureStartingPlacePhysics256(world:World,arrival:CoreStartingA
  for(const structure of world.structures){const extra=STARTING_PLACE_STRUCTURES_256[structure.kind as keyof typeof STARTING_PLACE_STRUCTURES_256],base=START_STRUCTURE_PHYSICS_256[structure.kind];if(!base||!extra)throw Error('Starting placement lacks actual structure flags: '+structure.kind);
   for(const c of footprintCells(structure)){const i=c.z*w+c.x;if(base.fullFill)full[i]=1;if(base.door)doors[i]=1;if(extra.workTable)work[i]=1;if(extra.preventDropping)prevent[i]=1;}
  }
- for(const resource of world.resources){const id=resource.species??resource.kind,extra=STARTING_PLACE_PLANTS_256[id as keyof typeof STARTING_PLACE_PLANTS_256];if(!extra)throw Error('Starting placement lacks actual plant selection flag: '+id);if(extra.selectable)plants[resource.z*w+resource.x]=1;}
+ for(const resource of world.resources){const id=resource.species??resource.kind,extra=STARTING_PLACE_PLANTS_256[id as keyof typeof STARTING_PLACE_PLANTS_256];if(!extra&&!['ambrosia','tinctoria','burned-stump','chopped-stump','smashed-stump'].includes(id))throw Error('Starting placement lacks actual plant selection flag: '+id);if(!extra||extra.selectable)plants[resource.z*w+resource.x]=1;}
  const occupied=new Map<number,{downed:boolean}[]>(),add=(c:Readonly<Cell>,downed:boolean)=>{const i=c.z*w+c.x,list=occupied.get(i)??[];list.push({downed});occupied.set(i,list);};
  for(const pawn of world.pawns)if(!(pawn.state==='dead'&&pawn.body?.pileId!==undefined))add(pawn,pawn.state==='downed');
  for(const animal of world.wildlife?.animals??[])if(animal.state!=='dead')add(animal,animal.state==='downed');

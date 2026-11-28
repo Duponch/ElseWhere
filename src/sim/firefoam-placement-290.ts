@@ -19,9 +19,9 @@ export function canPlaceFirefoamPopper290(world:World,command:DesignateCommand,i
  if(foggedCell256(world,z*world.width+x))return fail('missing-target','Cette cellule n’est pas encore découverte.');
  const same=(c:{x:number;z:number})=>c.x===x&&c.z===z;
  if(!marshSupportsFootprint(world,[{x,z}],{kind:'firefoam-popper',material:'steel'}))return fail('occupied','Le terrain ne porte pas cet appareil.');
- if(world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.deconstruction?.kind??j.flick?.kind??j.fixBreakdown?.kind??j.kind,'firefoam-popper')&&footprintCells(j).some(same))
+ if(world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.deconstruction?.kind??j.flick?.kind??j.fixBreakdown?.kind??j.kind,'firefoam-popper',world.schemaVersion,j.orientation,0)&&footprintCells(j).some(same))
   ||world.tiles[z*world.width+x]!.terrain==='rock'||world.resources.some(r=>r.kind==='rock'&&same(r))
-  ||world.structures.some(s=>sharesConstructionLayer(s.kind,'firefoam-popper')&&footprintCells(s).some(same))
+  ||world.structures.some(s=>sharesConstructionLayer(s.kind,'firefoam-popper',world.schemaVersion,s.orientation,0)&&footprintCells(s).some(same))
   ||world.pawns.some(p=>p.haul?.destination.type==='aside'&&same(p.haul.destination))||cookingCellReserved(world,command))return fail('occupied','Construction impossible : terrain, ouvrage ou réservation incompatible.');
  return {ok:true};
 }

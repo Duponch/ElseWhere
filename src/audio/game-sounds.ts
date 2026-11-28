@@ -37,6 +37,7 @@ export const ANIMAL_EAT_CLASSES: readonly AnimalEatClass[] = ['herbivore', 'bird
 /** Core voice of each species' adult stage; null: Core plays none (foxes, the
  * adult big birds). Cougar, lynx and panther have no idle call in Core. */
 const VOICE: Readonly<Record<AnimalSpeciesId, AnimalVoiceFamily | null>> = {
+  goat: 'cervid', pig: 'boar', thrumbo: 'pachyderm',
   hare: 'rodent', 'snow-hare': 'rodent', deer: 'cervid', muffalo: 'bovine', gazelle: 'cervid', dromedary: 'equine',
   'red-fox': null, megascarab: 'insect', spelopede: 'insect', megaspider: 'insect', cat: 'feline',
   'yorkshire-terrier': 'canine', 'labrador-retriever': 'canine', husky: 'canine', alpaca: 'cervid', 'grizzly-bear': 'bear',
@@ -49,6 +50,7 @@ const VOICE: Readonly<Record<AnimalSpeciesId, AnimalVoiceFamily | null>> = {
   yak: 'bovine',
 };
 const EAT: Readonly<Record<AnimalSpeciesId, AnimalEatClass>> = {
+  goat: 'herbivore', pig: 'herbivore', thrumbo: 'herbivore',
   hare: 'rodent', 'snow-hare': 'rodent', deer: 'herbivore', muffalo: 'herbivore', gazelle: 'herbivore', dromedary: 'herbivore',
   'red-fox': 'predator-small', megascarab: 'insect', spelopede: 'insect', megaspider: 'insect', cat: 'predator-small',
   'yorkshire-terrier': 'predator-small', 'labrador-retriever': 'predator-small', husky: 'predator-small', alpaca: 'herbivore',
@@ -197,7 +199,7 @@ export function meleeCue(actor: 'human' | 'animal' | 'mechanical', outcome: stri
 /** Core soundMeleeHitPawn per race: Pawn_Melee_BigBash_HitPawn or SmallScratch. */
 const BIG_BASH: ReadonlySet<string> = new Set(['deer', 'muffalo', 'gazelle', 'dromedary', 'megaspider', 'alpaca', 'grizzly-bear',
   'polar-bear', 'bison', 'boomalope', 'caribou', 'cougar', 'donkey', 'elephant', 'elk', 'horse', 'ibex', 'lynx', 'megasloth',
-  'panther', 'rhinoceros', 'yak']);
+  'panther', 'rhinoceros', 'yak', 'thrumbo']);
 export const bigBashAnimal = (species: string): boolean => BIG_BASH.has(species);
 
 /** A missing specific take falls back on the cue it refines, so a manifest

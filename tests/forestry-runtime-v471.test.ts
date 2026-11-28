@@ -114,6 +114,9 @@ test('a prepared mature checkpoint yields physical wood, hauls it to storage and
  const w=forestryCamp471(),source=preparedPlant(w,{kind:'tree',species:'poplar',growth:1,sown291:true});const storage={x:17,z:10};expect(applyCommand(w,{type:'stockpile',enabled:true,...storage,filters:{wood:true,food:false}}).ok).toBe(true);let carried:string|undefined;
  until(w,()=>{if(w.pawns[0]!.haul?.phase==='deliver')carried??=serializeWorld(w);return !w.resources.some(r=>r.id===source.id)&&w.piles.some(p=>p.item==='wood'&&p.owner.type==='ground'&&p.owner.x===storage.x&&p.owner.z===storage.z);},2600);
  expect(w.piles.filter(p=>p.item==='wood').reduce((n,p)=>n+p.quantity,0)).toBe(27);expect(carried).toBeDefined();
+ // Core 1.6 leaves a real DeadPlant on a mature chop: the next forest
+ // sowing must clear its own stump first, not silently erase it.
+ expect(w.resources.find(r=>r.species==='chopped-stump')).toMatchObject({x:source.x,z:source.z,growth:1,amount:4});
  const a=deserializeWorld(carried!),b=deserializeWorld(carried!);stepWorld(a,24);stepWorld(b,24);expect(serializeWorld(a)).toBe(serializeWorld(b));
- until(w,()=>w.resources.some(r=>r.sown291&&r.id!==source.id),1800);expect(w.resources.filter(r=>r.kind==='tree')).toHaveLength(1);expect(w.piles.filter(p=>p.item==='wood').reduce((n,p)=>n+p.quantity,0)).toBe(27);
+ until(w,()=>w.resources.some(r=>r.sown291&&r.id!==source.id),1800);expect(w.resources.filter(r=>r.kind==='tree')).toHaveLength(1);expect(w.resources.some(r=>r.species==='chopped-stump')).toBe(false);expect(w.piles.filter(p=>p.item==='wood').reduce((n,p)=>n+p.quantity,0)).toBe(30);
 });

@@ -14,7 +14,7 @@ import {advanceCaravanRaid261} from './caravan-raid-261.ts';
 import { chooseMechanoidOpportunity,createMechanoidRaid,advanceMechanoidRaid } from './mechanoid-raids.ts';
 import { isColonist } from './affiliation.ts';
 import { carrierOf } from './rescue-state.ts';
-import { CASSANDRA_CYCLE_START,consumeCassandraOpportunity,INTRO_RAID_TICK } from './cassandra-raids.ts';
+import { consumeCassandraOpportunity,INTRO_RAID_TICK } from './cassandra-raids.ts';
 import { raidEntries,atMapEdge } from './raid-space.ts';
 import { RAID_ROLE_COST,pirateMaxPawnCost,raidRandom,raidStaging330,type PirateRaidComposition,type PirateRaidRole } from './raid-state.ts';
 import { createRaidGroup,RAID_ROLE_OPTIONS } from './raid-spawn.ts';
@@ -28,7 +28,7 @@ import { computeThreatPoints,summaryHealthPercent } from './threat-points.ts';
 import { cancelShooting } from './shooting-state.ts';
 import { cancelMelee } from './melee-state.ts';
 import { TICKS_PER_DAY,type World,type Pawn } from './types.ts';
-import {tutorialMode347,tutorialOrigin347} from './game-profile.ts';
+import {tutorialMode347,tutorialOrigin347,homeThreatCycle382,threatModifiers382} from './game-profile.ts';
 
 const log=(w:World,message:string)=>{w.events.push({tick:w.tick,type:'command',message});if(w.events.length>80)w.events.splice(0,w.events.length-80);};
 /** Local projection of a Core pirate group, using only physical weapon types
@@ -117,11 +117,11 @@ export function advanceRaids(w:World):void {
     colonistHealthSum:freeColonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),
     elapsedDays:w.tick/TICKS_PER_DAY,
     adaptationDays:w.economy!.adaptationDays,
-    seedBucket:Math.floor(w.tick/250),
+    seedBucket:Math.floor(w.tick/250),difficulty:threatModifiers382(w),
   }).points:undefined;
   if(cassandra&&w.schemaVersion>=328&&w.tick!==INTRO_RAID_TICK){
     // Core suppresses the cycle at DaysPassed <= minDaysPassed (day 11.0).
-    if(w.tick===CASSANDRA_CYCLE_START)return;
+    if(w.tick===homeThreatCycle382(w).start)return;
     // Schema 341: the absent big threats carry their recent-incident factor,
     // and a drawn one joins the home record as if it had fired.
     const recent=homeRecentFactor341(w),threat=drawBigThreat328(Math.floor(w.tick/TICKS_PER_DAY),points,()=>raidRandom(s),recent);

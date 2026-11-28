@@ -5,7 +5,7 @@ import {hasPausedTreeClock} from './tree-transfer-clock.ts';
 const MAX_DENSE_CELLS=1048576,MAX_ANCHOR=Number.MAX_SAFE_INTEGER-3,ID_CAPACITY=65536;
 const integerAnchor=(value:unknown):value is number=>Number.isSafeInteger(value)&&Math.abs(Number(value))<=MAX_ANCHOR;
 const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
-const hydroCrop=(kind:string):boolean=>kind==='rice'||kind==='potato'||kind==='cotton'||kind==='healroot';
+const hydroCrop=(kind:string,version:number):boolean=>kind==='rice'||kind==='potato'||kind==='cotton'||kind==='healroot'||kind==='hops'&&version>=265||kind==='tinctoria'&&version>=382;
 type Presence=Map<number,Set<number>>;
 type ResourceIndex={width:number;height:number;presence?:Uint8Array;outside:Presence;hydro?:Uint32Array;hydroOutside:Map<number,number>;ids:ValidationIdentityMembership;namespace?:OwnedResourceNamespaceFacts;candidates:number[]};
 
@@ -101,7 +101,7 @@ function createReader(world:World,reusedIndex?:ResourceIndex):{reader:OwnedValid
       else {
         let row=candidate.outside.get(z);if(!row)candidate.outside.set(z,row=new Set());row.add(x);
       }
-      if(!hydroCrop(kind)){
+      if(!hydroCrop(kind,world.schemaVersion)){
         // Hydro has historical linear aliases; presence uses strict x/z.
         const cell=z*width+x;
         if(candidate.hydro&&Number.isInteger(cell)&&cell>=0&&cell<size)candidate.hydro[cell]!++;
@@ -132,7 +132,7 @@ function createReader(world:World,reusedIndex?:ResourceIndex):{reader:OwnedValid
     },
     hydroOverlapCount(linkedCells){
       const index=capture();let count=0;
-      if(!index){for(const resource of world.resources)if(linkedCells.has(resource.z*world.width+resource.x)&&!hydroCrop(resource.kind))count++;return count;}
+      if(!index){for(const resource of world.resources)if(linkedCells.has(resource.z*world.width+resource.x)&&!hydroCrop(resource.kind,world.schemaVersion))count++;return count;}
       for(const cell of linkedCells.keys())count+=index.hydro&&Number.isInteger(cell)&&cell>=0&&cell<index.hydro.length?index.hydro[cell]!:index.hydroOutside.get(cell)??0;
       return count;
     },

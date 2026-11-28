@@ -692,21 +692,21 @@ export class NativeHudCards {
     for(const node of STORAGE_FILTER_TREE)visit(node,0);
     if(!rows.length)rows.push({id:'empty',label:'Stocks connus',value:'0',color:PALETTE.creamPaper,level:0,activate:()=>this.showResources()});
     if(this.leftHudBottom<76)rows.splice(0,rows.length,{id:'compact',label:'Stocks · ouvrir',value:'',color:PALETTE.ochre,level:0,activate:()=>this.showResources()});
-    const width=Math.min(224,this.cornerWidth()),limit=Math.min(this.viewportHeight-144,this.leftHudBottom-8-28);
-    const capacity=Math.max(1,Math.floor(limit/28)),pages=Math.max(1,Math.ceil(rows.length/capacity));
+    const rowHeight=23,width=Math.min(192,this.cornerWidth()),limit=Math.min(this.viewportHeight-144,this.leftHudBottom-8-rowHeight);
+    const capacity=Math.max(1,Math.floor(limit/rowHeight)),pages=Math.max(1,Math.ceil(rows.length/capacity));
     this.resourcePage=Math.min(this.resourcePage,pages-1);
     const previous=new Map(this.tags.map(tag=>[tag.id,tag]));
     this.tags.length=0;
     const visible=rows.slice(this.resourcePage*capacity,(this.resourcePage+1)*capacity);
-    const add=(row:Row,index:number,x=1.12,width=2.24):void=>{
+    const add=(row:Row,index:number,x=.96,width=1.92):void=>{
       const seed=1100+index*17,signature=JSON.stringify([row.label,row.value,row.color,row.item,row.level,row.branch?.open]);
       let tag=previous.get(row.id);previous.delete(row.id);
       // The index supplies the literal brush seed, so a reordered row needs a
       // fresh cut/paint just as the original layout did.
-      if(tag&&(tag.seed!==seed||tag.piece.userData.w!==width||tag.piece.userData.h!==.28)){this.dropPiece(tag.piece);tag=undefined;}
+      if(tag&&(tag.seed!==seed||tag.piece.userData.w!==width||tag.piece.userData.h!==rowHeight/100)){this.dropPiece(tag.piece);tag=undefined;}
       if(!tag){
         const live={id:row.id,label:row.label,value:row.value,color:row.color,item:row.item,level:row.level,branch:row.branch,seed,screenWidth:width*100,signature} as ResourceTag;
-        live.piece=this.makePiece({w:width,h:.28,depth:.001,paper:false,seed,hasBorder:false,interactive:true,
+        live.piece=this.makePiece({w:width,h:rowHeight/100,depth:.001,paper:false,seed,hasBorder:false,interactive:true,
           drawFn:(ctx,w,h,rng)=>this.drawResource(live,ctx,w,h,rng),onClick:row.activate});
         tag=live;this.resourcesGroup.add(tag.piece);
       }else{
@@ -717,7 +717,7 @@ export class NativeHudCards {
       tag.piece.userData.nativeId=`hud:resource:${row.id}`;
       tag.piece.userData.onClick=row.activate;
       tag.piece.userData.tooltip=row.id==='compact'?'Ouvrir tous les stocks connus et leurs propriétaires':row.branch?`${row.branch.open?'Replier':'Déplier'} ${row.label}`:`${row.label} · ${row.value} comptabilisé(s) · détails des propriétaires`;
-      this.placePiece(tag.piece,x,-.14-index*.28,.02);this.tags.push(tag);
+      this.placePiece(tag.piece,x,-rowHeight/200-index*rowHeight/100,.02);this.tags.push(tag);
       if(row.item&&!this.resourceImages.has(row.item)){
         const item=row.item,image=new Image();this.resourceImages.set(item,image);
         image.onload=()=>{if(!this.disposed&&this.resourceImages.get(item)===image)for(const current of this.tags)if(current.item===item&&this.ownedPieces.has(current.piece))current.piece.redraw();};
@@ -733,21 +733,21 @@ export class NativeHudCards {
     for(const tag of previous.values())this.dropPiece(tag.piece);
   }
   private drawResource(res:Omit<ResourceTag,'piece'>,ctx:CanvasRenderingContext2D,w:number,h:number,rng:()=>number):void {
-    const screenWidth=res.screenWidth??224;
-    ctx.save();ctx.scale(w/screenWidth,h/28);ctx.strokeStyle='#19242b';ctx.lineWidth=3;ctx.lineJoin='round';
-    const indent=Math.min(30,(res.level??0)*9),iconX=12+indent;
+    const screenWidth=res.screenWidth??192;
+    ctx.save();ctx.scale(w/screenWidth,h/23);ctx.strokeStyle='#19242b';ctx.lineWidth=2.5;ctx.lineJoin='round';
+    const indent=Math.min(24,(res.level??0)*7),iconX=10+indent;
     if(res.branch){
-      ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle='#fff8e9';ctx.textAlign='center';const glyph=res.branch.open?'⌄':'›';ctx.strokeText(glyph,iconX,19);ctx.fillText(glyph,iconX,19);
+      ctx.font=`bold ${NATIVE_TEXT.small}px ${FONT}`;ctx.fillStyle='#fff8e9';ctx.textAlign='center';const glyph=res.branch.open?'⌄':'›';ctx.strokeText(glyph,iconX,16);ctx.fillText(glyph,iconX,16);
     }else{
       const image=res.item?this.resourceImages.get(res.item):undefined;
-      if(image?.complete&&image.naturalWidth>0)ctx.drawImage(image,indent,2,24,24);
-      else {drawPicto(ctx,res.item?'item-'+res.item:'stockpile',iconX,14,9);}
+      if(image?.complete&&image.naturalWidth>0)ctx.drawImage(image,indent,2,19,19);
+      else {drawPicto(ctx,res.item?'item-'+res.item:'stockpile',iconX,11.5,8);}
     }
     ctx.font=`${res.branch?'bold ':''}${NATIVE_TEXT.small}px ${FONT}`;ctx.textAlign='left';ctx.fillStyle='#fff8e9';
-    const textX=29+indent,valueWidth=res.value?Math.min(68,ctx.measureText(res.value).width+7):0,labelWidth=Math.max(35,screenWidth-textX-valueWidth-8);
+    const textX=23+indent,valueWidth=res.value?Math.min(68,ctx.measureText(res.value).width+7):0,labelWidth=Math.max(35,screenWidth-textX-valueWidth-8);
     let label=res.label;while(label.length>1&&ctx.measureText(label+(label!==res.label?'…':'')).width>labelWidth)label=label.slice(0,-1);if(label!==res.label)label=label.trimEnd()+'…';
-    ctx.strokeText(label,textX,19);ctx.fillText(label,textX,19);
-    if(res.value){ctx.textAlign='right';ctx.strokeText(res.value,screenWidth-2,19,68);ctx.fillText(res.value,screenWidth-2,19,68);}
+    ctx.strokeText(label,textX,16);ctx.fillText(label,textX,16);
+    if(res.value){ctx.textAlign='right';ctx.strokeText(res.value,screenWidth-2,16,68);ctx.fillText(res.value,screenWidth-2,16,68);}
     ctx.restore();
   }
 

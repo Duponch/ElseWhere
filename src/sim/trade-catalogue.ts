@@ -45,6 +45,8 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   })),
   // Schema 358: Core DevilstrandCloth MarketValue 5.5 (Textiles, no visitor stock generator).
   devilstrand:value(5.5,false),
+  // Core meat base and Leather_Thrumbo's actual textile market price.
+  'goat-meat':value(2),'thrumbo-meat':value(2),thrumbofur:value(14),'thrumbo-horn':value(800,false,{healthAffectsPrice:true,maxHitPoints:150}),
   hops:value(1.3,false),wort:value(2.5,false,{playerCanBuy:false,playerCanSell:false}),beer:value(12,false,{maxHitPoints:50}),
   pemmican:value(1.4),
   jade:value(5,false,{playerCanBuy:false,playerCanSell:false}),
@@ -75,6 +77,7 @@ export const TRADE_CATALOGUE:Readonly<Partial<Record<ItemId,TradeCatalogueEntry>
   // Schema 326: Core Bow_Recurve (40 wood, 5000 work) and Bow_Great (60 wood,
   // 9000 work), wood x 1.2 + work x 0.0036.
   'recurve-bow':gear(BOW_FACTS_326['recurve-bow'].baseValue,100,true,true),greatbow:gear(BOW_FACTS_326.greatbow.baseValue,100,true,true),
+  ambrosia:value(15,false,{playerCanBuy:false}),dye:value(2.65,false),
 });
 export const tradeCatalogueEntry=(item:ItemId):TradeCatalogueEntry|undefined=>TRADE_CATALOGUE[item];
 import {MACE_ITEMS_269,maceBaseValue269,maceMaxHitPoints269} from './mace-content-269.ts';

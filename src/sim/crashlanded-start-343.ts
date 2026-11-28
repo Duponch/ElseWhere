@@ -2,6 +2,7 @@ import {isFirstDays343} from './first-days-memories-343.ts';
 import {NEW_COLONY_START_343} from './world-map-lost.ts';
 import {CRASHED_TOGETHER_OPINION,socialSeed} from './social-state.ts';
 import {NUTRIENT_PASTE_RESEARCH_COST} from './research.ts';
+import {grantFoundationalResearch382} from './foundational-research-382.ts';
 import type {Pawn,World} from './types.ts';
 
 /** Schema 343, Crashlanded creation only (tick 0, never a load or a
@@ -22,9 +23,10 @@ export function giveCrashlandedStartThoughts343(world:World,colonists:readonly P
 /** Factions_Player PlayerColony startingResearchTags ClassicStart: the seven
  * projects tagged ClassicStart are completed at start (ResearchUtility.
  * ApplyPlayerStartingResearch). Elsewhere already completes Stonecutting,
- * Complex furniture, Complex clothing and Air conditioning; Electricity and
- * the passive cooler need no project here. Schema 343 adds NutrientPaste. */
+ * Complex furniture, Complex clothing, Air conditioning, Electricity and
+ * PassiveCooler. Schema 343 adds NutrientPaste, 382 the two actual projects. */
 export function grantClassicStartResearch343(world:World):void {
  if(!isFirstDays343(world.schemaVersion)||!world.research)return;
  world.research.nutrientPaste??={points:NUTRIENT_PASTE_RESEARCH_COST,completedAt:0};
+ if(world.schemaVersion>=382)grantFoundationalResearch382(world.research);
 }

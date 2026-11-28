@@ -13,7 +13,7 @@ const x=(why:string)=>drop<BuildingSpec>(why);
 
 export const BUILDING_MAP:Readonly<Record<string,DefMapping<BuildingSpec>>>={
  Wall:b('wall'),Door:b('door'),Autodoor:b('autodoor'),Fence:b('fence'),FenceGate:b('fence-gate'),PenMarker:b('pen-marker'),Sandbags:b('sandbags'),
- Barricade:a('sandbags','Barricade : devient des sacs de sable.'),AnimalFlap:x('Chatière : porte à animaux absente d’Elsewhere.'),
+ Barricade:b('barricade'),AnimalFlap:x('Chatière : porte à animaux absente d’Elsewhere.'),
  Bed:b('bed',1,2),DoubleBed:b('double-bed',2,2),HospitalBed:b('hospital-bed',1,2),RoyalBed:a('double-bed','Lit royal : devient un lit double.',2,2),
  Bedroll:b('bedroll',1,2),BedrollDouble:b('double-bedroll',2,2),SleepingSpot:b('sleeping-spot',1,2),DoubleSleepingSpot:b('double-sleeping-spot',2,2),
  AnimalSleepingSpot:b('animal-sleeping-spot'),AnimalSleepingBox:a('animal-sleeping-spot','Panier pour animal : devient une place de couchage pour animal.'),
@@ -34,7 +34,7 @@ export const BUILDING_MAP:Readonly<Record<string,DefMapping<BuildingSpec>>>={
  DrugLab:b('drug-lab',3,1),Brewery:b('brewery',3,1),FermentingBarrel:b('fermenting-barrel'),ElectricSmelter:b('electric-smelter',3,1),
  BiofuelRefinery:b('biofuel-refinery',3,2),ElectricCrematorium:b('electric-crematorium',3,2),
  SculptureSmall:b('small-sculpture'),SculptureLarge:b('large-sculpture'),SculptureGrand:a('large-sculpture','Sculpture monumentale : devient une grande sculpture.',2,2),
- PowerConduit:b('power-conduit'),HiddenConduit:a('power-conduit','Conduit enterré : devient un conduit ordinaire.'),
+ PowerConduit:b('power-conduit'),HiddenConduit:b('hidden-conduit'),
  WaterproofConduit:a('power-conduit','Conduit étanche : devient un conduit ordinaire.'),PowerSwitch:b('power-switch'),Battery:b('battery',1,2),
  WoodFiredGenerator:b('wood-generator',2,2),ChemfuelPoweredGenerator:b('chemfuel-generator',2,2),SolarGenerator:b('solar-generator',4,4),
  WindTurbine:b('wind-turbine',7,2),GeothermalGenerator:b('geothermal-generator',6,6),

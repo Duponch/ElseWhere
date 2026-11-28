@@ -16,8 +16,8 @@ export function geothermalPlacementRefusal264(world:World,building:Cell&{orienta
   if(cells.some(c=>foggedCell256(world,c.z*world.width+c.x)))return 'Toute l’empreinte de la centrale doit être découverte.';
   if(!marshSupportsFootprint(world,cells,candidate))return 'Le terrain doit porter une construction lourde sur les 36 cases.';
   const overlaps=(other:Parameters<typeof footprintCells>[0])=>footprintCells(other).some(c=>footprintContains(candidate,c));
-  if(world.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte géothermique.';
-  if(world.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte géothermique.';
+  if(world.structures.some(s=>sharesConstructionLayer(s.kind,candidate.kind,world.schemaVersion,s.orientation,candidate.orientation)&&overlaps(s)))return 'Un ouvrage occupe déjà l’empreinte géothermique.';
+  if(world.jobs.some(j=>j.id!==ignoredJobId&&(j.kind==='install'||Object.hasOwn(STRUCTURE_DEFINITIONS,j.kind))&&sharesConstructionLayer(j.furniture?.kind??j.kind,candidate.kind,world.schemaVersion,j.orientation,candidate.orientation)&&overlaps(j)))return 'Un plan ou cadre occupe déjà l’empreinte géothermique.';
   if(world.resources.some(r=>r.kind==='rock'&&footprintContains(candidate,r)))return 'Dégagez les roches de l’empreinte géothermique.';
   if(world.pawns.some(p=>p.haul?.destination.type==='aside'&&footprintContains(candidate,p.haul.destination)))return 'Une livraison réserve encore l’empreinte géothermique.';
   return undefined;

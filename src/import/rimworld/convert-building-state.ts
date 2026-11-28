@@ -217,7 +217,7 @@ export function restoreImportedPowerState(ctx:ImportContext):void {
   traders++;
   if(isPowerConnector(s.kind)){
    const parent=text(t.node,'parentThing')?.replace(/^Thing_/,''),mapped=parent?ctx.thingIds.get(parent):undefined;
-   if(mapped!==undefined&&validPowerParent(topology,s,mapped)){s.power.parentId=mapped;parents++;}
+   if(mapped!==undefined&&validPowerParent(topology,s,mapped,ctx.w.schemaVersion)){s.power.parentId=mapped;parents++;}
    else if(!parent){s.power.parentId=null;disconnected++;}
    else{reconnected++;notes.adapted('buildings',`${t.def} : parent électrique ${parent} non représentable, connexion admissible recalculée.`);}
   }

@@ -20,7 +20,7 @@ function dataRecord(value:unknown,allowUndefined=false,depth=0):value is Record<
 }
 export function validLinkedShelfPolicy286(value:unknown,version:number=SCHEMA_VERSION):value is ShelfStorageSettings{
  return isSchema286OrLater(version)&&dataRecord(value)&&['filters','priority','capacity'].every(k=>Object.hasOwn(value,k))&&Reflect.ownKeys(value).every(k=>typeof k==='string'&&keys.includes(k))&&dataRecord(value.filters)&&validNovelStorageFilters295(value.filters,version)&&validAiCoreStorageFilters298(value.filters,version)
-  &&Object.entries(value.filters).every(([key,v])=>filterKeys.has(key)&&typeof v==='boolean')
+  &&Object.entries(value.filters).every(([key,v])=>filterKeys.has(key)&&(key!=='dye'||version>=382)&&typeof v==='boolean')
   &&Number.isInteger(value.priority)&&Number(value.priority)>=1&&Number(value.priority)<=5&&value.capacity===500
   &&validStorageItems(value.items,isSchema298OrLater(version)?version:(version===295||(version===296||isCorePhysicalSchema297(version)))?295:286)&&validStorageConditions(value,286);
 }

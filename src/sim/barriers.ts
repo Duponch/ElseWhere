@@ -1,4 +1,5 @@
 import {structureDamageChanged379} from './structure-family-379.ts';
+import {BARRICADE_382,barricadeStuff382} from './barricade-382.ts';
 import {filterPileEntries} from './pile-identity-directory.ts';
 import { coolerSalvage } from './cooler-salvage.ts';
 import { releaseStructureMelee } from './melee-state.ts';
@@ -16,10 +17,10 @@ import type { ResourceKind } from './types.ts';
 import type { ItemId } from './items.ts';
 
 /** Damageable defense structures; low cover is traversable, unlike a breach. */
-export const isBarrier=(s:Pick<Structure,'kind'>):boolean=>s.kind==='wall'||isRoomDoor(s.kind)||(s.kind==='cooler'||s.kind==='vent')||s.kind==='sandbags';
+export const isBarrier=(s:Pick<Structure,'kind'>):boolean=>s.kind==='wall'||isRoomDoor(s.kind)||(s.kind==='cooler'||s.kind==='vent')||s.kind==='sandbags'||s.kind==='barricade';
 export const isBreachableBarrier=(s:Pick<Structure,'kind'>):boolean=>s.kind==='wall'||isRoomDoor(s.kind)||(s.kind==='cooler'||s.kind==='vent');
 const FACTORS:Readonly<Partial<Record<ConstructionMaterial,number>>>={wood:.65,steel:1,'granite-blocks':1.7,'limestone-blocks':1.55,'marble-blocks':1.2,'sandstone-blocks':1.4,'slate-blocks':1.3,cloth:1,'light-leather':1};
-export const barrierMaxHp=(s:Pick<Structure,'kind'|'material'>):number=>(s.kind==='cooler'||s.kind==='vent')?100:Math.round((isRoomDoor(s.kind)?160:300)*(FACTORS[s.material??'wood']??NaN));
+export const barrierMaxHp=(s:Pick<Structure,'kind'|'material'>):number=>s.kind==='barricade'?Math.round(BARRICADE_382.maxHp*(barricadeStuff382(s.material)?.hp??NaN)):(s.kind==='cooler'||s.kind==='vent')?100:Math.round((isRoomDoor(s.kind)?160:300)*(FACTORS[s.material??'wood']??NaN));
 export const barrierHp=(s:Structure):number=>barrierMaxHp(s)-(s.damage??0);
 export interface DestructionLedger { natural?:import('./cave-hive-loss-256.ts').HiveNaturalLoss256; count:number; lost:Partial<Record<ConstructionMaterial|'gold'|'ai-core'|'plasteel'|'component'|'advanced-component'|'uranium'|'wort'|'beer',number>>;fuelTicksLost?:number;fuelTicksBurned?:number;batteryEnergyLost?:number;items?:Partial<Record<ItemId,number>>;resources?:Partial<Record<ResourceKind,number>>;woodPotentialLost?:number }
 
@@ -29,7 +30,7 @@ export function damageBarrier(world:World,s:Structure,amount:number,rng=world.rn
   if(!isBarrier(s)||!world.structures.includes(s)||!Number.isSafeInteger(amount)||amount<1)return false;
   const damage=(s.damage??0)+amount;
   if(damage<barrierMaxHp(s)){s.damage=damage;structureDamageChanged379(world,s);world.rng=rng;return true;}
-  const salvage=(s.kind==='cooler'||s.kind==='vent')||s.kind==='sandbags'?coolerSalvage(world,s,rng):undefined;if(salvage===null)return false;
+  const salvage=(s.kind==='cooler'||s.kind==='vent')||s.kind==='sandbags'||s.kind==='barricade'?coolerSalvage(world,s,rng):undefined;if(salvage===null)return false;
   const ledger=world.destroyed??{count:0,lost:{}};
   const lost={...ledger.lost};
   for(const c of constructionRecipe(s).ingredients){const id=c.item as ConstructionMaterial;lost[id]=(lost[id]??0)+c.quantity-(salvage?.returned.get(c.item)??0);}

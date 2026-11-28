@@ -38,6 +38,7 @@ export function validStorageSettings(settings: StorageSettings,version:number=SC
   if(filters?filters.enumerable!==true||!Object.hasOwn(filters,'value'):'filters'in settings)return false;
   if(!validNovelStorageFilters295(filters?.value,version)||!validAiCoreStorageFilters298(filters?.value,version))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'prosthesis')&&(!isSchema273OrLater(version)||typeof settings.filters.prosthesis!=='boolean'))return false;
+  if(settings.filters&&Object.hasOwn(settings.filters,'dye')&&(version<382||typeof settings.filters.dye!=='boolean'))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'drug')&&(!isPenoxycyline337(version)||typeof settings.filters.drug!=='boolean'))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'jade')&&(version<256||typeof settings.filters.jade!=='boolean'))return false;
   if(settings.filters&&Object.hasOwn(settings.filters,'plant')&&(version<235||typeof settings.filters.plant!=='boolean'))return false;

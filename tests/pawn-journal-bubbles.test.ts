@@ -88,6 +88,7 @@ test('speech backgrounds, icons and text share one resident draw; moving an acti
     batch.update([{x:1,y:2,z:3,ownerId:1,icon:'romance',label:'Ada et Noé deviennent partenaires.'}]);batch.present(camera,600,32,12);
     const geometry=batch.mesh.geometry,offsets=geometry.getAttribute('labelOffset'),glyphs=geometry.getAttribute('labelGlyph'),before=offsets.array.slice(),count=geometry.instanceCount;
     expect(batch.mesh.visible).toBe(true);expect(count).toBeGreaterThan(3);expect(geometry.hasAttribute('labelSize')).toBe(true);expect(ordinary.mesh.geometry.hasAttribute('labelSize')).toBe(false);
+    const sizes=geometry.getAttribute('labelSize');expect([sizes.getX(2),sizes.getY(2)]).toEqual([28,32]);
     batch.syncSpeechAnchors(()=>({x:7,y:2,z:9}));expect(batch.mesh.geometry).toBe(geometry);expect(geometry.getAttribute('labelGlyph')).toBe(glyphs);expect(offsets.array).toEqual(before);expect(geometry.instanceCount).toBe(count);
     const positions=geometry.getAttribute('labelAnchor');for(let i=0;i<count;i++)expect([positions.getX(i),positions.getY(i),positions.getZ(i)]).toEqual([7,2,9]);
     batch.update([]);expect(batch.mesh.visible).toBe(false);expect(geometry.instanceCount).toBe(0);

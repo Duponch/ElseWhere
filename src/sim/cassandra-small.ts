@@ -1,6 +1,6 @@
 import {recordHomeIncident341} from './recent-incidents-341.ts';
 import {journalLetter352,actors352} from './letter-producers-352.ts';
-import {storytellerIncidents347} from './game-profile.ts';
+import {storytellerIncidents347,homeThreatCycle382,threatModifiers382} from './game-profile.ts';
 import {homeAnimalThreatPoints329} from './animal-threat-points-329.ts';
 import {homeIncidentsBlocked261} from './temp-map-incidents-261.ts';
 import { isColonist } from './affiliation.ts';
@@ -9,6 +9,7 @@ import { startAnimalManhunter } from './animal-manhunter.ts';
 import { computeThreatPoints,summaryHealthPercent } from './threat-points.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
+import {phoebeCoreSmallHit382} from './phoebe-native-cycle-382.ts';
 
 export const SMALL_INTRO_TICK=204*TICKS_PER_DAY/60;
 export const SMALL_CHECK_INTERVAL=100;
@@ -41,11 +42,12 @@ function random(state:CassandraSmallCalendar):number {
   state.rng=value>>>0;
   return state.rng/0x100000000;
 }
-export function smallCycleAt(tick:number):number {
-  return tick<SMALL_CYCLE_START?-1:Math.floor((tick-SMALL_CYCLE_START)/SMALL_CYCLE_TICKS);
+export function smallCycleAt(tick:number,world:Pick<World,'gameProfile'>={}):number {
+  const rule=homeThreatCycle382(world);
+  return tick<rule.start?-1:Math.floor((tick-rule.start)/rule.cycle);
 }
-export function smallNextCheck(tick:number):number {
-  return Math.max(SMALL_CYCLE_START,(Math.floor(tick/SMALL_CHECK_INTERVAL)+1)*SMALL_CHECK_INTERVAL);
+export function smallNextCheck(tick:number,world:Pick<World,'gameProfile'>={}):number {
+  return Math.max(homeThreatCycle382(world).start,(Math.floor(tick/SMALL_CHECK_INTERVAL)+1)*SMALL_CHECK_INTERVAL);
 }
 export function smallAcceptance(points:number):number {
   return Math.max(0,Math.min(1,(2800-points)/2000));
@@ -56,9 +58,13 @@ export function smallAcceptance(points:number):number {
 export function adoptSmallIncidents(world:World):void {
   if(homeIncidentsBlocked261(world)||world.schemaVersion<183||!storytellerIncidents347(world)||world.smallIncidents)return;
   world.smallIncidents={profile:'cassandra-small-v1',adoptedAt:world.tick,
-    rng:((world.seed^0x5a11c201)>>>0)||1,nextCheck:smallNextCheck(world.tick),
-    cycle:smallCycleAt(world.tick),pending:[],introDone:world.tick>=SMALL_INTRO_TICK,
+    rng:((world.seed^0x5a11c201)>>>0)||1,nextCheck:smallNextCheck(world.tick,world),
+    cycle:smallCycleAt(world.tick,world),pending:[],introDone:world.tick>=SMALL_INTRO_TICK,
     opportunities:0,incidents:0};
+  const native=world.raids?.cassandra?.nativePhoebe382,state=world.smallIncidents;
+  // A saved seed identifies a still-future hit in the current cycle, unlike
+  // the private prospective stream whose current cycle cannot be reconstructed.
+  if(native&&state.cycle>=0){const hit=phoebeCoreSmallHit382(native,state.cycle);if(hit&&hit.tick>world.tick)state.pending=[hit.tick];}
 }
 
 /** Sleep, ordinary fleeing and food hunting do not make a wild Core animal
@@ -102,23 +108,25 @@ function acceptanceNow(world:World):number {
     freeColonists:colonists.length,
     colonistHealthSum:colonists.reduce((sum,p)=>sum+(p.health?summaryHealthPercent(p.health):1),0),
     elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,
-    seedBucket:Math.floor(world.tick/250)}).points);
+    seedBucket:Math.floor(world.tick/250),difficulty:threatModifiers382(world)}).points);
 }
 
 /** Core's RoundRandom(uniform(.2,1)) yields zero/one, expectation .6. The date
  * is drawn before acceptance. Persisting acceptance at cycle opening adapts
  * Core's repeated seeded regeneration using the current threat points. */
 function prepareCycle(world:World,state:CassandraSmallCalendar):void {
+  const native=world.raids?.cassandra?.nativePhoebe382;
+  if(native){const hit=phoebeCoreSmallHit382(native,state.cycle);if(hit&&hit.tick!==homeThreatCycle382(world).start)state.pending=[hit.tick];return;}
   const fractionalCount=.2+.8*random(state);
   const count=random(state)<fractionalCount?1:0;
   if(!count)return;
-  const start=SMALL_CYCLE_START+state.cycle*SMALL_CYCLE_TICKS;
-  const time=start+Math.floor(random(state)*(SMALL_ACTIVE_TICKS/SMALL_CHECK_INTERVAL))*SMALL_CHECK_INTERVAL;
+  const rule=homeThreatCycle382(world),start=rule.start+state.cycle*rule.cycle;
+  const time=start+Math.floor(random(state)*(rule.active/SMALL_CHECK_INTERVAL))*SMALL_CHECK_INTERVAL;
   const acceptance=acceptanceNow(world);
   if(acceptance<1&&random(state)>=acceptance)return;
   // The storyteller suppresses controls at DaysPassed <= minDaysPassed.
   // Keep the first cycle's slot zero silent instead of moving its date.
-  if(time===SMALL_CYCLE_START)return;
+  if(time===rule.start)return;
   state.pending=[time];
 }
 
@@ -133,15 +141,24 @@ export function advanceSmallIncidents(world:World):void {
     if(world.tick===SMALL_INTRO_TICK)consumeOpportunity(world,state);
   }
   if(world.tick<state.nextCheck)return;
-  state.nextCheck=smallNextCheck(world.tick);
-  const cycle=smallCycleAt(world.tick);
+  state.nextCheck=smallNextCheck(world.tick,world);
+  const cycle=smallCycleAt(world.tick,world);
   if(cycle!==state.cycle){
     state.cycle=cycle;state.pending=[];
-    if(world.tick===SMALL_CYCLE_START+cycle*SMALL_CYCLE_TICKS)prepareCycle(world,state);
+    const rule=homeThreatCycle382(world);
+    if(world.tick===rule.start+cycle*rule.cycle)prepareCycle(world,state);
   }
   if(state.pending[0]!==undefined&&state.pending[0]<=world.tick){
     const due=state.pending[0]===world.tick;
     state.pending=[];
-    if(due)consumeOpportunity(world,state);
+    if(due){
+      const native=world.raids?.cassandra?.nativePhoebe382;
+      if(!native){consumeOpportunity(world,state);return;}
+      // Core re-evaluates acceptPercentFactorPerThreatPointsCurve at hit
+      // time, but the same seeded draw is replayed. No ordinary RNG draw
+      // is consumed for a rejected candidate.
+      const hit=phoebeCoreSmallHit382(native,state.cycle);
+      if(hit){const acceptance=acceptanceNow(world);if(acceptance>=1||hit.acceptanceDraw<acceptance)consumeOpportunity(world,state);}
+    }
   }
 }

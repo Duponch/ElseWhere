@@ -6,7 +6,7 @@ import type {Job,JobKind,Resource,StructureKind,World} from './types.ts';
 /** Resolved Core1.6.4871 harvestWork metadata, not the clone's timed cut work.
  * In particular Grass40Core cannot be inferred from clearingDuration60local. */
 const FLORA_WORK:Readonly<Record<PlantSpecies,number>>=Object.freeze({
-  glowstool:200,agarilux:200,bryolux:200,
+  ambrosia:200,'burned-stump':180,'chopped-stump':90,'smashed-stump':180,glowstool:200,agarilux:200,bryolux:200,
   grass:40,'tall-grass':60,brambles:60,moss:60,'berry-bush':250,
   oak:1400,poplar:800,pine:710,birch:800,agave:300,saguaro:210,drago:660,'healroot-wild':400,
   'alocasia':200,'astragalus':200,'bush':200,'chokevine':150,'clivia':200,'dandelion':200,'pincushion-cactus':200,'rafflesia':200,'low-shrub':60,'bamboo':460,'cecropia':510,'cypress':1800,'maple':800,'palm':510,'teak':1800,'willow':800,
@@ -14,7 +14,7 @@ const FLORA_WORK:Readonly<Record<PlantSpecies,number>>=Object.freeze({
 const LEGACY_WORK:Readonly<Record<string,number>>=Object.freeze({
   tree:800,berries:250,rice:200,potato:200,corn:200,cotton:200,haygrass:200,healroot:400,
   // Schema 358: Plant_Devilstrand keeps the PlantBaseNonEdible harvestWork 200.
-  devilstrand:200,
+  devilstrand:200,tinctoria:200,
 });
 export const plantHarvestWorkCore=(resource:Pick<Resource,'kind'|'species'>):number=>
   resource.species===undefined?LEGACY_WORK[resource.kind]??Infinity:FLORA_WORK[resource.species]??Infinity;
@@ -85,7 +85,7 @@ export function constructionPlantBlocks(job:Job,resource:Resource):boolean {
  * these explicit no-wipe kinds have SupportsPlants or conduit fill0/non-edifice.
  * Validate this catalog before adding future structures. */
 const KEEP_PLANTS:ReadonlySet<StructureKind>=new Set([
-  'power-conduit','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot',
+  'power-conduit','hidden-conduit','sleeping-spot','double-sleeping-spot','animal-sleeping-spot','crafting-spot','butcher-spot',
   'hydroponics-basin','flower-pot',
 ]);
 export const constructionFinalWipesPlants=(kind:JobKind|StructureKind):boolean=>

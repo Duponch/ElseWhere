@@ -4,6 +4,7 @@ import {toxicCorpseRot256} from './toxic-victim-256.ts';
 import {prepareLinkedShelfRetirement286} from './linked-storage-lifecycle-286.ts';
 import { constructionRecipe,type ConstructionMaterial } from './construction-materials.ts';
 import { corpseStage } from './corpses.ts';
+import type {ConsumedPart} from './corpse-anatomy.ts';
 import { rotAge,rotRateAtTemperature,type RotState } from './food-preservation.ts';
 import { groundCapacity } from './ground-placement.ts';
 import { adjacent } from './pathfinding.ts';
@@ -16,7 +17,7 @@ import { TICKS_PER_DAY,type Cell,type MaterialOwner,type MaterialPile,type Pawn,
 import { structureById } from './structure-navigation.ts';
 
 /** The person survives as a reference. Only the physical body can be lost. */
-export interface HumanBodyState {observedAt:number;pileId?:number;lostAt?:number;rot?:RotState;damage?:number}
+export interface HumanBodyState {observedAt:number;pileId?:number;lostAt?:number;rot?:RotState;damage?:number;consumedParts382?:ConsumedPart[]}
 export interface HumanCorpseState {pawnId:number;nextBileTick?:number}
 export const HUMAN_CORPSE_MAX_HP=100;
 export const humanCorpse=(p:MaterialPile):boolean=>p.item==='human-corpse'&&!!p.humanCorpse;

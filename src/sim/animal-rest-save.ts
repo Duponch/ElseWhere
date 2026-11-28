@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {effectiveCore297,effectiveLocal297,validationCore297} from './core-phase-297.ts';
 import {validCapturedCoreMove297} from './core-move-save-297.ts';
@@ -63,8 +64,8 @@ function validSpot(w:World,s:Structure,version:number):boolean {
     &&id(s.id,w.nextId-1)&&Number.isSafeInteger(s.x)&&s.x>=0&&s.x<w.width&&Number.isSafeInteger(s.z)&&s.z>=0&&s.z<w.height
     &&s.orientation===0&&s.footprint==='standard'&&(!Object.hasOwn(s,'medical')||s.medical===true)
     &&!['rock','water'].includes(w.tiles[s.z*w.width+s.x]!.terrain)&&!w.resources.some(r=>same(r,s)&&r.kind==='rock')
-    &&!w.structures.some(other=>other!==s&&other.kind!=='power-conduit'&&footprintCells(other).some(c=>same(c,s)))
-    &&!w.jobs.some(j=>isConstruction(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,s.kind)&&footprintCells(j).some(c=>same(c,s)));
+    &&!w.structures.some(other=>other!==s&&!isConduitKind(other.kind)&&(version<382||sharesConstructionLayer(other.kind,s.kind,version,other.orientation,s.orientation))&&footprintCells(other).some(c=>same(c,s)))
+    &&!w.jobs.some(j=>isConstruction(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,s.kind,version,j.orientation,s.orientation)&&footprintCells(j).some(c=>same(c,s)));
 }
 function actorExclusive(w:World,p:Pawn):boolean {
   return isColonist(p)&&!p.prisoner&&!p.visitor&&!p.raid&&!p.podRescue&&!p.draft&&!p.mental?.crisis&&!p.flee&&!p.burning

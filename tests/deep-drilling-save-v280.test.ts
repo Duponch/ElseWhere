@@ -39,6 +39,14 @@ test('acquired reserves and both physical building histories round trip without 
     expect(validateWorld(w)).toEqual([]);expect(checkpoint(w).status).toBe('applied');}
 });
 
+test('uranium and jade are valid finite reserves in current saves and snapshots, but not before 382',()=>{
+  const {w}=camp();w.deepResources!.cells=[{index:10,item:'uranium',count:285},{index:11,item:'jade',count:7}];
+  expect(validDeepDrillingTransport(w,381)).toBe(false);expect(validDeepDrillingTransport(w,w.schemaVersion)).toBe(true);
+  expect(validateWorld(w)).toEqual([]);expect(deserializeWorld(serializeWorld(w))).toEqual(w);
+  const result=checkpoint(w);expect(result.status).toBe('applied');
+  if(result.status==='applied')expect(result.world.deepResources).toEqual(w.deepResources);
+});
+
 test('drilling and scanning retain their actual station claims at approach and working checkpoints',()=>{
   for(const kind of ['drill','scan'] as const)for(const working of [false,true]){
     const {w,actor}=camp(kind,working);expect(validateWorld(w)).toEqual([]);expect(deserializeWorld(serializeWorld(w))).toEqual(w);

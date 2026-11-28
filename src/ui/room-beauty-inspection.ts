@@ -68,7 +68,7 @@ export class RoomBeautyInspection {
     values.push('packed');
     for(const pack of world.packed)if(pack.owner.type==='ground'&&contains(index(pack.owner)))values.push(-4);
     values.push('frames');
-    for(const job of world.jobs)if(job.construction==='frame'&&job.kind!=='power-conduit'&&job.kind!=='lay-floor')
+    for(const job of world.jobs)if(job.construction==='frame'&&job.kind!=='power-conduit'&&job.kind!=='hidden-conduit'&&job.kind!=='lay-floor')
       for(const c of footprintCells(job))if(cells.has(index(c)))values.push(index(c));
     return values;
   }

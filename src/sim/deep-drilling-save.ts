@@ -2,6 +2,7 @@ import type {PackedFurniture} from './furniture-rules.ts';
 import { isColonist } from './affiliation.ts';
 import { deepWorkSpot } from './deep-drilling-rules.ts';
 import { serviceCell } from './service-reservations.ts';
+import { deepResourceKindAvailable } from './deep-resources.ts';
 import type { World } from './types.ts';
 
 const obj=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
@@ -33,7 +34,7 @@ export function validDeepDrillingTransport(w:World|Pick<World,'tick'|'width'|'he
       let last=-1;
       for(const c of state.cells){
         if(!obj(c)||!keys(c,['index','item','count'])||!int(c.index,0,w.width*w.height-1)||c.index<=last
-          ||!['steel','gold','silver','plasteel'].includes(String(c.item))||!int(c.count,1,300))return false;
+          ||!deepResourceKindAvailable(c.item,version)||!int(c.count,1,300))return false;
         last=c.index;
       }
     }else if(Object.hasOwn(local!,'deepResources'))return false;

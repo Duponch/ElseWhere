@@ -73,9 +73,9 @@ test('quota-derived work has no authority in the old schema or without a matchin
   expect(deserializeWorld(serializeWorld(w))).toEqual(w);expect(checkpoint(w).status).toBe('applied');
 });
 
-test('configuration fields are exact, bounded safe integers and five distinct supported species',()=>{
+test('configuration fields are exact, bounded safe integers and distinct supported species',()=>{
   const mutations:((value:Record<string,unknown>)=>void)[]=[
-    c=>{c.species='red-fox';},c=>{c.species='snow-hare';},c=>{c.maxTotal=-2;},c=>{c.maxMales=.5;},
+    c=>{c.species='unknown-species';},c=>{c.species='human';},c=>{c.maxTotal=-2;},c=>{c.maxMales=.5;},
     c=>{c.maxMalesYoung=Number.MAX_SAFE_INTEGER+1;},c=>{c.maxFemales=Infinity;},
     c=>{c.maxFemalesYoung=NaN;},c=>{c.maxTotal='0';},c=>{c.allowPregnant=1;},
     c=>{delete c.maxTotal;},c=>{c.allowPregnant=undefined;},c=>{c.selectedIds=[];},

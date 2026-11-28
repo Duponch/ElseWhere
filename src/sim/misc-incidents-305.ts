@@ -125,7 +125,7 @@ const FARM_BODY_TOTAL305=2.5;
 function farmKinds305(world:World):{fact:InitialAnimalFact256;weight:number}[] {
   const season=seasonTemperature(siteClimateDefinition(world).latitude,siteClimateDefinition(world).meanTemperature,climateTick(world)),outdoor=outdoorTemperature(world);
   const out:{fact:InitialAnimalFact256;weight:number}[]=[];
-  for(const def of FARM_DEFS305){
+  for(const def of world.schemaVersion>=382?[...FARM_DEFS305,'Goat','Pig']:FARM_DEFS305){
     const fact=(INITIAL_ANIMAL_FACTS_256 as Record<string,InitialAnimalFact256>)[def];if(!fact||!isAnimalSpecies256(fact.species))continue;
     const wild=animalCore256(fact.species).stats.Wildness;if(!(wild<.35))continue;
     if(season<fact.comfyMin||season>fact.comfyMax||outdoor<fact.comfyMin||outdoor>fact.comfyMax)continue;

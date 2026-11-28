@@ -128,6 +128,8 @@ export function nativeClinicalConditionRows(health: MedicalRecord | undefined, s
   if (health.foodPoisoning) rows.push(row('food-poisoning', 'Intoxication alimentaire', `Gravité ${percent(health.foodPoisoning.severity / FOOD_POISON_UNIT)}`, health.foodPoisoning.vomit ? 'Vomit' : undefined));
   if (health.toxicBuildup) rows.push(row('toxic-buildup', 'Charge toxique', percent(health.toxicBuildup.severity), health.toxicBuildup.vomit || health.toxicBuildup.vomitRequestedAt !== undefined ? 'Nausée ou vomissement engagé' : undefined));
   if (health.anesthetic) rows.push(row('anesthetic', 'Anesthésie', percent(health.anesthetic.severity / ANESTHETIC_UNIT), suspended ? 'Dissipation suspendue pendant le cryptosommeil' : 'Dissipation selon le temps clinique actif'));
+  if(health.ambrosia382?.high)rows.push(row('ambrosia-high','Douceur d’ambroisie',percent(health.ambrosia382.high.severity)));
+  if(health.ambrosia382?.tolerance)rows.push(row('ambrosia-tolerance','Tolérance à l’ambroisie',percent(health.ambrosia382.tolerance.severity)));
   if (health.alcohol) {
     const alcohol = health.alcohol;
     rows.push(row('alcohol-high', 'Alcoolémie', percent(alcohol.high)), row('alcohol-tolerance', 'Tolérance à l’alcool', percent(alcohol.tolerance)), row('alcohol-hangover', 'Gueule de bois', percent(alcohol.hangover)), row('alcohol-doses', 'Doses aujourd’hui', String(alcohol.dosesToday)));

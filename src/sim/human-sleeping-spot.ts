@@ -22,8 +22,8 @@ export function canPlaceHumanSleepingSpot(world:World,c:DesignateCommand):Comman
   if(cells.some(p=>(['rock','water'].includes(world.tiles[p.z*world.width+p.x]!.terrain)||isWetTerrain(world.tiles[p.z*world.width+p.x]!.terrain)&&!world.tiles[p.z*world.width+p.x]!.bridge)
     ||world.resources.some(r=>(r.kind==='rock'||r.kind==='tree')&&same(r,p))))
     return {ok:false,code:'occupied',reason:'Dégager la roche ou l’arbre et choisir un sol praticable.'};
-  if(world.structures.some(s=>sharesConstructionLayer(s.kind,c.kind)&&footprintCells(s).some(p=>cells.some(q=>same(p,q))))
-    ||world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,c.kind)&&footprintCells(j).some(p=>cells.some(q=>same(p,q)))))
+  if(world.structures.some(s=>sharesConstructionLayer(s.kind,c.kind,world.schemaVersion,s.orientation,c.orientation)&&footprintCells(s).some(p=>cells.some(q=>same(p,q))))
+    ||world.jobs.some(j=>!isRoofJob(j)&&sharesConstructionLayer(j.furniture?.kind??j.kind,c.kind,world.schemaVersion,j.orientation,c.orientation)&&footprintCells(j).some(p=>cells.some(q=>same(p,q)))))
     return {ok:false,code:'occupied',reason:'Un ouvrage ou son plan occupe le couchage.'};
   if(!Number.isSafeInteger(world.nextId+1)||world.structures.length>=world.width*world.height)
     return {ok:false,code:'invalid-command',reason:'Limite des emplacements atteinte.'};

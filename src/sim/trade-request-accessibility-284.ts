@@ -107,7 +107,7 @@ export function captureTradeRequestAvailability284(root:CampaignState,home:World
   if(map)stations.push({map,building:s});
   // The represented recovery contract uses half-cost (zero for these spent
   // structures); no stochastic deconstruction producer is invoked here.
-  if(!['campfire','passive-cooler','torch-lamp','power-conduit','ship-chunk','glow-pod','sleeping-spot','double-sleeping-spot','animal-sleeping-spot'].includes(s.kind)){
+  if(!['campfire','passive-cooler','torch-lamp','power-conduit','hidden-conduit','ship-chunk','glow-pod','sleeping-spot','double-sleeping-spot','animal-sleeping-spot'].includes(s.kind)){
    for(const cost of constructionRecipe(s).ingredients)add(cost.item,roundEven284(cost.quantity*.5));
   }
   if(s.casket){for(const p of s.casket.humans)human(p);for(const a of s.casket.animals)animal(a);for(const p of s.casket.items)pile(p);}

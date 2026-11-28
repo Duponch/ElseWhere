@@ -6,6 +6,7 @@ import {validInitialPlantAge256} from './initial-plant-age-256.ts';
 import {validPausedTreeLife,hasPausedTreeClock} from './tree-transfer-clock.ts';
 import { isPlant } from './plants.ts';
 import { PLANT_LIFE_INTERVAL } from './plant-life.ts';
+import {isDeadStump382} from './native-special-plants-382.ts';
 import type { Resource,World } from './types.ts';
 
 const record=(v:unknown):v is Record<string,unknown>=>typeof v==='object'&&v!==null&&!Array.isArray(v);
@@ -14,6 +15,7 @@ const integer=(v:unknown,min:number,max=Number.MAX_SAFE_INTEGER):v is number=>ty
 export function validOrdinaryPlantLife(plant:Partial<Resource>,version:number,world:Pick<World,'tick'|'climate'>):boolean {
   if(!validSownResource291(plant,version))return false;
   if(plant.species!==undefined&&!isPlantSpeciesInVersion(plant.species,version))return false;
+  if(plant.kind==='tinctoria'&&version<382||isDeadStump382(plant.species)&&plant.kind!=='wild-plant')return false;
   if(plant.kind==='healroot'&&version<182)return false;
   if(plant.species==='healroot-wild'&&version<167)return false;
   const life:unknown=plant.plantLife;

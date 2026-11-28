@@ -1,6 +1,7 @@
 import type {NativeControl} from './native-contract';
 import type {JournalPictogram} from '../ui/journal-events';
 import {drawJournalPictogram} from '../ui/journal-pictograms';
+import {drawPictoInBox} from '../ui/picto-artwork';
 import {NATIVE_INK,NATIVE_LINE,NATIVE_TEXT,NATIVE_WINDOW,type NativeTextRole} from './native-ui-scale';
 
 /** The inner pages of the inspector tabs (RimWorld `ITab_Pawn_*`,
@@ -29,8 +30,8 @@ export interface CardBar extends CardBase {
   /** `CurInstantLevel`: a small triangle under the bar. */
   marker?:number;
 }
-export type CardGlyphKind='info'|'drop'|'ingest'|'bleed'|'tend'|'check'|'radio'|'copy'|'journal';
-export interface CardGlyph extends CardBase {k:'glyph';glyph:CardGlyphKind;x:number;y:number;w:number;h:number;on?:boolean;disabled?:boolean;journalIcon?:JournalPictogram}
+export type CardGlyphKind='info'|'drop'|'ingest'|'bleed'|'tend'|'check'|'radio'|'copy'|'journal'|'item';
+export interface CardGlyph extends CardBase {k:'glyph';glyph:CardGlyphKind;x:number;y:number;w:number;h:number;on?:boolean;disabled?:boolean;journalIcon?:JournalPictogram;itemIcon?:string}
 export interface CardButton extends CardBase {k:'button';x:number;y:number;w:number;h:number;label:string;disabled?:boolean;active?:boolean;dropdown?:boolean;ink?:string}
 export type CardItem=CardText|CardFill|CardLine|CardPanel|CardBar|CardGlyph|CardButton;
 export interface CardTarget {id:string;x:number;y:number;w:number;h:number;hint?:string;control?:NativeControl;region?:string;highlight?:boolean}
@@ -86,7 +87,7 @@ export class CardBuilder {
   line(x:number,y:number,w:number,color:string=NATIVE_INK.line,region?:string):void{this.items.push({k:'line',x,y,w,color,region});}
   panel(x:number,y:number,w:number,h:number,region?:string):void{this.items.push({k:'panel',x,y,w,h,region});}
   bar(item:Omit<CardBar,'k'>):void{this.items.push({k:'bar',...item});}
-  glyph(glyph:CardGlyphKind,x:number,y:number,w:number,h:number,options:{on?:boolean;disabled?:boolean;region?:string;journalIcon?:JournalPictogram}={}):void{this.items.push({k:'glyph',glyph,x,y,w,h,on:options.on,disabled:options.disabled,region:options.region,journalIcon:options.journalIcon});}
+  glyph(glyph:CardGlyphKind,x:number,y:number,w:number,h:number,options:{on?:boolean;disabled?:boolean;region?:string;journalIcon?:JournalPictogram;itemIcon?:string}={}):void{this.items.push({k:'glyph',glyph,x,y,w,h,on:options.on,disabled:options.disabled,region:options.region,journalIcon:options.journalIcon,itemIcon:options.itemIcon});}
   button(x:number,y:number,w:number,h:number,label:string,options:{disabled?:boolean;active?:boolean;dropdown?:boolean;ink?:string;region?:string}={}):void{this.items.push({k:'button',x,y,w,h,label,disabled:options.disabled,active:options.active,dropdown:options.dropdown,ink:options.ink,region:options.region});}
   target(target:CardTarget):void{this.targets.push(target);}
   region(id:string,x:number,y:number,w:number,h:number,contentHeight:number):void{this.regions.push({id,x,y,w,h,contentHeight});}
@@ -167,6 +168,7 @@ function paintBar(ctx:CanvasRenderingContext2D,bar:CardBar,ox:number,oy:number):
 export function paintCardGlyph(ctx:CanvasRenderingContext2D,item:CardGlyph,ox:number,oy:number):void{
   const x=ox+item.x,y=oy+item.y,w=item.w,h=item.h,cx=x+w/2,cy=y+h/2,s=Math.min(w,h),ink=item.disabled?NATIVE_INK.disabled:NATIVE_INK.text;
   if(item.glyph==='journal'){drawJournalPictogram(ctx,item.journalIcon??'command',cx,cy,s*.42,ink);return;}
+  if(item.glyph==='item'){if(!drawPictoInBox(ctx,item.itemIcon??'stockpile',x+2,y+2,w-4,h-4,ink))drawPictoInBox(ctx,'stockpile',x+2,y+2,w-4,h-4,ink);return;}
   ctx.save();ctx.strokeStyle=ink;ctx.fillStyle=ink;ctx.lineWidth=1.6;ctx.lineJoin='round';ctx.lineCap='round';
   switch(item.glyph){
     case 'info':

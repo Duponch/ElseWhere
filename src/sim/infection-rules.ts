@@ -29,7 +29,7 @@ export function infectionModifiers(record:MedicalRecord):InfectionModifiers {
 }
 export function injuryInfectionChance(record:MedicalRecord,injury:Pick<Injury,'kind'|'part'|'scar'>):number {
   if(injury.scar?.pain!==undefined||medicalPartInjuryRule(record,injury.part).solid)return 0;
-  const chance=injury.kind==='shredded'?.2:(injury.kind==='bite'||injury.kind==='burn')?.3:['stab','cut','crush','gunshot'].includes(injury.kind)?.15:0;
+  const chance=injury.kind==='shredded'?.2:(injury.kind==='bite'||injury.kind==='burn')?.3:['stab','cut','scratch','crush','gunshot'].includes(injury.kind)?.15:0;
   return chance*(record.body?.1:1);
 }
 export function infectionContractAllowed(record:MedicalRecord,part:BodyPartId):boolean {

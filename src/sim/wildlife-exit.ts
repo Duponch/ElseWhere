@@ -17,8 +17,9 @@ export function cancelAnimalExit(w:World,a:WildAnimal):void {
   if(a.state==='moving'&&!a.path.length&&(a.motion?.end??0)<=w.tick)a.state='idle';
   a.nextDecision=Math.min(a.nextDecision,w.tick);
 }
-export const exitSuppressed=(a:WildAnimal)=>!!(a.domestic||a.meal||a.predation||a.manhunter||a.confusion||a.burning||a.flee||a.threat||a.retaliation||a.strike||a.stun)
-  ||a.food>0||['downed','dead','sleeping','eating'].includes(a.state);
+export const timedThrumboExit382=(a:WildAnimal,tick:number):boolean=>a.exitAtCore382!==undefined&&tick*10>=a.exitAtCore382;
+export const exitSuppressed=(a:WildAnimal,tick=0)=>!!(a.domestic||a.meal||a.predation||a.manhunter||a.confusion||a.burning||a.flee||a.threat||a.retaliation||a.strike||a.stun)
+  ||a.food>0&&!timedThrumboExit382(a,tick)||['downed','dead','sleeping','eating'].includes(a.state);
 
 /** Stop targeting without deleting an already committed recovery. */
 export function stopExitTargeting(w:World,id:number):boolean {
@@ -49,7 +50,7 @@ export function finishAnimalExits(w:World,departures:ReadonlySet<number>):void {
   const s=w.wildlife;if(!s||!departures.size)return;
   const count=s.exitedAnimals??0;
   if(!Number.isSafeInteger(count+departures.size))return;
-  const actual=s.animals.filter(a=>departures.has(a.id)&&a.exiting&&!exitSuppressed(a)
+  const actual=s.animals.filter(a=>departures.has(a.id)&&a.exiting&&!exitSuppressed(a,w.tick)
     &&atMapEdge(w,a)&&!a.path.length&&(a.motion?.end??0)<=w.tick);
   if(!actual.length)return;
   const ids=new Set(actual.map(a=>a.id));

@@ -1,5 +1,6 @@
 import {artificialPartCovering} from '../sim/artificial-parts-rules';
 import { partMissing } from '../sim/injury-state';
+import { humanConsumedPartAbsent382 } from '../sim/corpse-anatomy';
 import type { Pawn } from '../sim/types';
 
 /** Bind-space convention matches the authored left hair/temple pieces: left
@@ -14,7 +15,8 @@ export const HUMAN_LIMB_VISUALS=Object.freeze([
 
 /** Snapshot-adoption projection only. Missing parents (e.g. shoulder) hide
  * their limb subtree; a missing hand/foot never removes its present parent. */
-export function humanLimbVisualMask(pawn:Pick<Pawn,'health'>):number {
+export function humanLimbVisualMask(pawn:Pick<Pawn,'health'|'body'>):number {
+  if(pawn.body?.consumedParts382)return HUMAN_LIMB_VISUALS.reduce((mask,{part,bit})=>mask+(humanConsumedPartAbsent382(pawn,part)||!!pawn.health&&partMissing(pawn.health,part)&&!artificialPartCovering(pawn.health,part)?bit:0),0);
   return pawn.health?HUMAN_LIMB_VISUALS.reduce((mask,{part,bit})=>mask+(partMissing(pawn.health!,part)&&!artificialPartCovering(pawn.health!,part)?bit:0),0):0;
 }
 

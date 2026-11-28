@@ -1,6 +1,6 @@
 import type { Cell } from './types.ts';
 
-export const LINE_BUILD_KINDS = ['wall', 'fence', 'power-conduit'] as const;
+export const LINE_BUILD_KINDS = ['wall', 'fence', 'power-conduit', 'hidden-conduit'] as const;
 export type LineBuildKind = typeof LINE_BUILD_KINDS[number];
 export const isLineBuildKind = (kind: unknown): kind is LineBuildKind =>
   LINE_BUILD_KINDS.includes(kind as LineBuildKind);

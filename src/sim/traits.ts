@@ -114,6 +114,7 @@ export const TRAITS = Object.freeze({
 export type TraitId=keyof typeof TRAITS;
 /** The degrees with Core disabledWorkTags (schema 368: Pyromaniac). */
 const WORK_DISABLING_TRAITS:ReadonlySet<string>=new Set((Object.keys(TRAITS) as TraitId[]).filter(id=>TRAITS[id].disabledWorkTags?.length));
+const WORK_TAGS_DISABLED_BY_TRAITS:ReadonlySet<BackgroundWorkTag>=new Set([...WORK_DISABLING_TRAITS].flatMap(id=>TRAITS[id as TraitId].disabledWorkTags??[]));
 export type TraitBearer=Pick<Pawn,'traits'>;
 /** The nine pre-361 ids, in their historical key order. */
 export const LEGACY_TRAIT_IDS:readonly TraitId[]=Object.freeze(['optimist','pessimist','steadfast','nervous','fast-learner','slow-learner','kind','abrasive','bloodlust']);
@@ -197,6 +198,7 @@ export function traitDefsConflict(a:CoreTraitDefName,b:CoreTraitDefName):boolean
  * (schema 368, Firefighting) has one, so no older save meets it. Tolerant of
  * raw save data, as some readers run during validation. */
 export function traitDisablingWorkTag(pawn:{readonly traits?:readonly TraitId[]}|undefined,tag:BackgroundWorkTag):TraitId|undefined {
+  if(!WORK_TAGS_DISABLED_BY_TRAITS.has(tag))return undefined;
   const traits=pawn?.traits;if(!Array.isArray(traits)||!traits.length)return undefined;
   // In the pawn's trait order (Core's order); a hot reader: the few degrees
   // with disabled work are listed once.

@@ -113,7 +113,7 @@ import {validGeographicSiteBinding256} from '../sim/site-geographic-256.ts';
 import {validEggPile256} from '../sim/animal-egg-save-v256.ts';
 import {eggSpeciesForItem256} from '../sim/animal-egg-content-v256.ts';
 import {isEggBoxSchema374,EGG_BOX_MAX_CONTENT_374} from '../sim/egg-box-state-374.ts';
-import {isFutureEcologyItem256} from '../sim/cave-products-256.ts';
+import {unavailableEcologyItem} from '../sim/cave-products-256.ts';
 import {registerProjectedFactionOwners256} from '../sim/world-faction-projection-save-256.ts';
 import {captureFactionInitializations256,sameFactionInitializations256,type ConfirmedFactionInitializations256} from '../sim/world-faction-no-expansion-ideo-256.ts';
 import {PlanetGeographyTransportEncoder256,PlanetGeographyTransportDecoder256,type PlanetGeographyTransport256} from './planet-geography-transport-256.ts';
@@ -900,7 +900,7 @@ function validPile(pile:MaterialPile,world:World|DynamicWorld,deferAnimalHolder=
   }else return false;
   if(Object.keys(pile).some(key=>!['id','kind','item','quantity','owner','rot','foodPoison','corpse','humanCorpse','mechCorpse','damage','unfinished','gunWork','flakWork','componentWork','artWork','smithingWork','prostheticWork273','apparel','weapon','haulRequested','innerResource','plantPack','egg','eggForbidden','forbidden',...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['book']:[])].includes(key)))return false;
   if(!validMaterialPermission256(pile,world.schemaVersion))return false;
-  if(!validEggPile256(pile,world.schemaVersion,heldDuckInventoryClock256(world,pile,world.schemaVersion,world.tick),world.nextId)||world.schemaVersion<256&&isFutureEcologyItem256(pile.item))return false;
+  if(!validEggPile256(pile,world.schemaVersion,heldDuckInventoryClock256(world,pile,world.schemaVersion,world.tick),world.nextId)||unavailableEcologyItem(pile.item,world.schemaVersion))return false;
   if(world.schemaVersion<194&&Object.hasOwn(pile,'mechCorpse'))return false;
   if(pile.haulRequested!==undefined&&(world.schemaVersion<28||pile.kind!=='chunk'||pile.haulRequested!==true))return false;
   if(pile.damage!==undefined&&(world.schemaVersion<87||!Number.isSafeInteger(pile.damage)||pile.damage<(pile.kind==='book'?0:1)||pile.damage>=pileMaxHp(pile,world.schemaVersion)))return false;
@@ -914,7 +914,7 @@ function validPile(pile:MaterialPile,world:World|DynamicWorld,deferAnimalHolder=
     &&validMechCorpseShape(pile,world.schemaVersion,world.tick)
     &&(pile.item==='human-corpse'?validHumanCorpseShape(pile.humanCorpse,world.schemaVersion,world.tick):pile.humanCorpse===undefined)
     &&(pile.item==='human-corpse'||validCorpseShape(record,world.schemaVersion))
-    &&(!pile.corpse||validCorpseConsumption(pile.corpse,world.tick))
+    &&(!pile.corpse||validCorpseConsumption(pile.corpse,world.tick,world.schemaVersion,pile.corpse.consumedParts?.some(m=>m.atCore382!==undefined)?effectiveCore297(world):undefined))
     &&(world.schemaVersion>=178||!V190_ITEM_IDS.includes(pile.item))
     &&validUnfinishedShape(record,world.schemaVersion)&&validGunWorkShape(record,world.schemaVersion)
     &&validArtWorkShape(record,world.schemaVersion)&&validFlakWorkShape(record,world.schemaVersion)&&validComponentWorkShape(record,world.schemaVersion)
@@ -1849,7 +1849,7 @@ export class SnapshotDecoder {
     if(!validWildlifeExitState(next,next.schemaVersion))return resync('Départ de faune invalide.');
     if(next.jobs.some(j=>isAncientGeneratedFloor256(j.floor)&&(next.schemaVersion<256||j.kind!=='remove-floor'||next.tiles[j.z*next.width+j.x]?.floor!==j.floor)))return resync('Invalid generated ancient floor work.');
     if(next.jobs.some(j=>!validFrameDamage256(j,next.schemaVersion)))return resync('Dégâts de cadre invalides ou futurs.');
-    for(const pawn of next.pawns)if(pawn.body&&Object.hasOwn(pawn.body,'damage')&&(!validHumanBodyShape(pawn.body,next.schemaVersion,next.tick,pawn.health)||pawn.state!=='dead'||!pawn.health?.death||pawn.body.observedAt<pawn.health.death.tick))return resync('Dégâts de corps retenu invalides.');
+    for(const pawn of next.pawns)if(pawn.body&&(Object.hasOwn(pawn.body,'damage')||Object.hasOwn(pawn.body,'consumedParts382'))&&(!validHumanBodyShape(pawn.body,next.schemaVersion,next.tick,pawn.health,Object.hasOwn(pawn.body,'consumedParts382')?effectiveCore297(next):undefined)||pawn.state!=='dead'||!pawn.health?.death||pawn.body.observedAt<pawn.health.death.tick))return resync('Dégâts de corps retenu invalides.');
     if(next.pawns.some(p=>!validNativeHumanField256(p,next.schemaVersion)))return resync('Identité humaine native retenue invalide ou future.');
     if(next.pawns.some(p=>!validArrivalRotation256(p,next.schemaVersion)))return resync('Orientation d’arrivée retenue invalide ou future.');
     if(!validAnimalTrainingWorld282(next))return resync('Dressage ou transport animal incohérent.');

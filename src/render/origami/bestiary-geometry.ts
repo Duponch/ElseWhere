@@ -15,13 +15,13 @@ import type {BestiaryGroup,BestiaryMesh,BestiaryMaterial,Triple} from './bestiar
 import {ANIMAL_APPENDAGE} from '../actor-idle-gestures';
 
 export const BESTIARY_NEW_SPECIES:Readonly<Record<string,string>>=Object.freeze({
- boomalope:'boomalope',boomrat:'boomrat',megasloth:'megasloth',megaspider:'megaspider',spelopede:'spelopede',warg:'warg',
+ thrumbo:'thrumbo',boomalope:'boomalope',boomrat:'boomrat',megasloth:'megasloth',megaspider:'megaspider',spelopede:'spelopede',warg:'warg',
  'grizzly-bear':'grizzly','polar-bear':'polar_bear',cougar:'cougar',panther:'panther',lynx:'lynx','timber-wolf':'timber_wolf','fennec-fox':'fennec',
  bison:'bison',yak:'yak',rhinoceros:'rhino',horse:'horse',donkey:'donkey',alpaca:'alpaca',caribou:'caribou',ibex:'ibex','wild-boar':'boar',
  ostrich:'ostrich',emu:'emu',cassowary:'cassowary',turkey:'turkey',duck:'duck',tortoise:'tortoise',iguana:'iguana',cobra:'cobra',
  capybara:'capybara',chinchilla:'chinchilla',raccoon:'raccoon',squirrel:'squirrel','guinea-pig':'guinea_pig',
 });
-const ADAPTED_SPECIES=new Set(['cat','megascarab','elk','arctic-fox','monkey','rat','arctic-wolf']);
+const ADAPTED_SPECIES=new Set(['cat','megascarab','elk','arctic-fox','monkey','rat','arctic-wolf','goat','pig']);
 const LEG_DEFS=new Set(['Leg','InsectLeg','BirdLeg','TurtleLeg']);
 const FOOT_DEFS=new Set(['Paw','Hoof','Foot','Hand','BirdFoot','TurtleFoot','InsectClaw']);
 export interface NativeSourcePart {

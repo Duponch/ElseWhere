@@ -33,7 +33,7 @@ export function validGameProfile(value:unknown,version:number,scenario:unknown,e
     return (tutor||handed)&&validTutorialState347(value.tutorial347,handed,tick,version);
   }
   return Object.keys(value).length===4&&Object.keys(value).every(k=>['revision','storyteller','difficulty','saveMode'].includes(k))&&
-    value.storyteller==='cassandra-partial'&&value.difficulty==='adventure-story';
+    (version>=382?(value.storyteller==='cassandra-partial'||value.storyteller==='phoebe-partial')&&(value.difficulty==='adventure-story'||value.difficulty==='community-builder'||value.difficulty==='strive-to-survive'):value.storyteller==='cassandra-partial'&&value.difficulty==='adventure-story');
 }
 export function validateGameProfile(world:World,temporaryTarget263=false):string[] {
   if(temporaryTarget263&&isSchema263OrLater(Number(world.schemaVersion)))return [];

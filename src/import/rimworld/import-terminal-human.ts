@@ -20,7 +20,7 @@ const pain:Readonly<Record<string,ScarPain>>={Painless:0,LowPain:1,MediumPain:3,
 const partOf=(h:XmlNode):BodyPartId|undefined=>text(h,'part/body')==='Human'?HUMAN_PART_MAP[num(h,'part/index')??-1]:undefined;
 const partAncestor=(part:BodyPartId,target:BodyPartId):boolean=>{let p:BodyPartId|null=BODY_PARTS[part]?.parent??null;while(p){if(p===target)return true;p=BODY_PARTS[p].parent;}return false;};
 const medicalValid=(m:MedicalRecord,version:number)=>validateMedicalRecord(m,true,true,true,true,false,false,true,true,true,true,true,version,true)===null;
-export function importTerminalHumanMedical(ctx:ImportContext,p:Pawn,node:XmlNode,deathTick:number,downed=false,deathCore=deathTick*10+9):boolean {
+export function importTerminalHumanMedical(ctx:ImportContext,p:Pawn,node:XmlNode,deathTick:number,downed=false,deathCore=deathTick*10+9,hasPhysicalCorpseOwner=false):boolean {
  const sourceState=text(node,'healthTracker/healthState');
  if(sourceState!==(downed?'Down':'Dead')||!Number.isSafeInteger(deathTick)||deathTick<0||deathTick>ctx.w.tick||!Number.isSafeInteger(deathCore)||deathCore<0)return false;
  const rows=items(node,'healthTracker/hediffSet/hediffs'),record=createMedicalRecord(deathTick),{notes,w}=ctx;
@@ -34,7 +34,7 @@ export function importTerminalHumanMedical(ctx:ImportContext,p:Pawn,node:XmlNode
   return tick===undefined?0:Math.max(0,Math.floor(tick/10));
  };
  const eligible=rows.filter(h=>born(h)!==undefined);
- if(eligible.length!==rows.length)notes.def('health','Anatomie après décès','dropped',undefined,'Blessures corporelles postérieures à l’heure réelle de la mort non admises dans le dossier clinique terminal.',rows.length-eligible.length);
+ if(!hasPhysicalCorpseOwner&&eligible.length!==rows.length)notes.def('health','Anatomie après décès','dropped',undefined,'Blessures corporelles postérieures à l’heure réelle de la mort non admises dans le dossier clinique terminal.',rows.length-eligible.length);
  let current=record;
  const tryEdit=(write:(draft:MedicalRecord)=>boolean):boolean=>{
   const draft=structuredClone(current);delete draft.death;

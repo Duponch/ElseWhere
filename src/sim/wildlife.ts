@@ -62,7 +62,7 @@ import { processAnimalRest } from './animal-rest.ts';
 import { animalFeedingInProgress } from './animal-feeding.ts';
 import { veterinaryCareSpeciesAllowed,veterinaryNeedsRest } from './veterinary-rules.ts';
 import { adultAgeTicks, advanceAnimalLife, animalFoodPerDay, animalLifeStage, animalNutritionMax } from './animal-life.ts';
-import { atMapEdge,cancelAnimalExit,exitSuppressed,finishAnimalExits,stopExitTargeting,WILDLIFE_EXIT_FOOD_CHECK } from './wildlife-exit.ts';
+import { atMapEdge,cancelAnimalExit,exitSuppressed,finishAnimalExits,stopExitTargeting,timedThrumboExit382,WILDLIFE_EXIT_FOOD_CHECK } from './wildlife-exit.ts';
 import { animalPreyCandidates,animalPredationTarget,reconcileAnimalPredation,cancelAnimalPredation } from './wildlife-predation.ts';
 import {foodRouting379 as foodRouting} from './animal-food-routing-379.ts';
 import {closedResourceIdentityLookup} from './resource-mutation-journal.ts';
@@ -176,7 +176,7 @@ export function reconcileWildlife(world:World,resourcesById?:ReadonlyMap<number,
   for(const a of animals){
     if(a.animalThermalRefuge288)reconcileAnimalThermalRefuge288(world,a,readArea(a),(c)=>(refugeNav??=createAnimalNavigationReader(world,undefined,readArea))(a).free(c));
     if(a.predation)reconcileAnimalPredation(world,a);
-    if(a.exiting&&exitSuppressed(a))cancelAnimalExit(world,a);
+    if(a.exiting&&exitSuppressed(a,world.tick))cancelAnimalExit(world,a);
     if(a.meal&&!animalMealTarget(world,a,resourcesById,workCells,readArea)){delete a.meal;a.path=[];a.state=a.motion&&a.motion.end>world.tick?'moving':'idle';a.nextDecision=world.tick;}
     if(a.mating){
       const female=mates?.get(a.mating.femaleId);
@@ -250,7 +250,7 @@ function advanceWildlifePass379(world:World,duckFlyerServices:DuckFlyerServices2
     // Burning prevents all new attacks; its reaction can begin at the first
     // local boundary after recovery. Other blows expire in the Core substep.
     if(a.burning&&a.strike&&a.strike.untilCore<=world.tick*10)delete a.strike;
-    if(a.exiting&&exitSuppressed(a))cancelAnimalExit(world,a);
+    if(a.exiting&&exitSuppressed(a,world.tick))cancelAnimalExit(world,a);
     if(a.state==='dead')continue;
     if(a.health)bleedFilth(world,a,medicalBleed(a.health),a.state==='downed'||a.state==='sleeping',.4);
     // Clinical capacities retain their pre-decision snapshot. A healthy
@@ -381,14 +381,18 @@ function advanceWildlifePass379(world:World,duckFlyerServices:DuckFlyerServices2
       }
       if(!a.path.length){delete a.meal;a.state='idle';a.nextDecision=world.tick;}
     }
+    if(!a.exiting&&a.species==='thrumbo'&&timedThrumboExit382(a,world.tick)&&!exitSuppressed(a,world.tick)&&searches<1){
+      searches++;const route=getNav(a).foodOrExitRoute(a,[]);
+      if(route?.kind==='exit'){delete a.wander?.job;a.path=route.path;a.exiting={destination:{...(a.path.at(-1)??a)},nextFoodCheck:world.tick+WILDLIFE_EXIT_FOOD_CHECK};a.state=a.path.length?'moving':'idle';}
+    }
     if(a.exiting){
       const arrived=atMapEdge(world,a)&&!a.path.length;
       // A committed blow must finish recovery while its identity still exists.
       if(arrived&&stopExitTargeting(world,a.id))continue;
-      let checked=false;
+      const timed=timedThrumboExit382(a,world.tick);let checked=timed&&arrived;
       if((arrived||!a.path.length||world.tick>=a.exiting.nextFoodCheck)&&a.nextDecision<=world.tick&&searches<1){
         searches++;
-        const food=animalFoods(world,a,readArea),routing=foodRouting(world,a,food),route=species.predator
+        const food=timed?[]:animalFoods(world,a,readArea),routing=foodRouting(world,a,food),route=species.predator
           ?getNav(a).foodPreyOrExitRoute(a,routing.goals,animalPreyCandidates(world,a),true,routing.rank)
           :getNav(a).foodOrExitRoute(a,routing.goals,routing.rank);
         if(route?.kind==='prey'){

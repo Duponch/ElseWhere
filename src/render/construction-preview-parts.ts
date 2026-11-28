@@ -1,3 +1,4 @@
+import {isConduitKind} from '../sim/conduit-kinds-382.ts';
 import * as THREE from 'three/webgpu';
 import { constructionMaterials, type ConstructionMaterial } from '../sim/construction-materials';
 import { STRUCTURE_DEFINITIONS } from '../sim/definitions';
@@ -99,14 +100,14 @@ export function constructionPreviewParts(world: World, specs: readonly Construct
       if ((name !== 'furniture'&&name!=='sandbags')||authored.has(name)) throw new Error('Unexpected construction furniture batch');
       authored.set(name,parts);
     } };
-    buildFurniture(subjectWorld, group, cutaway, sink as BoxBatches, contextWorld);
+    buildFurniture(subjectWorld, group, cutaway, sink as BoxBatches, contextWorld,true);
     if (!authored.has('furniture')||!authored.has('sandbags')) throw new Error('Construction builder produced no furniture batch');
     return [...authored.get('furniture')!,...authored.get('sandbags')!];
   };
   // Lines contain mono-cellular objects. Their authored pieces remain within
   // the owning cell, so one capture can retain the preview key by its anchor.
   // Context indexes (conduits, boundary axes, frames) are built once per line.
-  const linearSubjects = subjects.filter(s => s.kind === 'wall' || s.kind === 'fence' || s.kind === 'power-conduit');
+  const linearSubjects = subjects.filter(s => s.kind === 'wall' || s.kind === 'fence' || isConduitKind(s.kind));
   const lineModels = new Map<number, Placement[]>();
   if (linearSubjects.length) {
     const byCell = new Map(linearSubjects.map(s => [`${s.x}:${s.z}`, s.id]));

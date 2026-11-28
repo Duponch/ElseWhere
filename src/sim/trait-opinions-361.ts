@@ -1,6 +1,8 @@
 import { pawnBody } from './health-rules.ts';
 import { appearanceOf } from './pawn-appearance.ts';
 import { artificialPartCount361,pawnBeauty361,traitDegree } from './traits.ts';
+import {coreAlzheimerNullifies382} from './human-alzheimer-382.ts';
+import {coreSocialSituationIndex382} from './core-thought-indices-382.ts';
 import type { Pawn,World } from './types.ts';
 
 /** Schema 361: the situational social thoughts of the Core trait set
@@ -58,6 +60,19 @@ export function traitOpinionCauses361(world:World,pawn:Pawn,other:Pawn,known:boo
   if(drug!==undefined&&otherDrug!==undefined){
     if(drug<0&&otherDrug>0)out.push(cause('teetotaler-vs-chemical',otherDrug===1?-20:-30,'Abstinent contre amateur de drogues','Cet abstinent désapprouve son goût pour les drogues.'));
     if(drug>0&&otherDrug<0)out.push(cause('chemical-vs-teetotaler',drug===1?-20:-30,'Amateur de drogues contre abstinent','Son abstinence agace cet amateur de drogues.'));
+  }
+  // Core Thought_SituationalSocial.OpinionOffset is zero when its owner has a
+  // nullifying hediff, just like mood effects. Relationship defs and memory
+  // opinions are not filtered here. Ordinary actors allocate no extra data.
+  if(Number(world.schemaVersion)>=382&&out.length&&pawn.health?.animalAgeConditions?.cases.some(c=>c.kind==='Alzheimers')){
+    for(let i=out.length-1;i>=0;i--){
+      const index=coreSocialSituationIndex382(out[i]!.kind);
+      if(index!==undefined&&coreAlzheimerNullifies382(pawn,index)){
+        // Keep the active thought in the social explanation (Core does so),
+        // but with a zero contribution and the explicit nullifying condition.
+        out[i]!.value=0;out[i]!.description+=' (Annulé par la maladie d’Alzheimer.)';
+      }
+    }
   }
   return out;
 }

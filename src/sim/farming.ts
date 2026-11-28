@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import { resourceArrayDelta } from './resource-array-delta.ts';
 import {markResourceArrayChanged} from './resource-mutation-journal.ts';
 import {extractTreeDefinition} from './tree-transfer-rules.ts';
@@ -22,6 +23,7 @@ import {isRoofed} from './roof-rules.ts';
 import {FLORA_DEFINITIONS} from './biome-flora.ts';
 import {choppable,plantCanYieldNow} from './plants.ts';
 import {isForestrySpecies291,forestSowingChoices291,growingPlantMinFertility291,growingPlantSowSkill291,growingPlantSowTicks291} from './forestry-content-291.ts';
+import {isDeadStump382} from './native-special-plants-382.ts';
 import type { GrowingZone, Job, JobKind, Pawn, Resource, World } from './types.ts';
 
 export const FARM_SCAN_INTERVAL = 10;
@@ -103,7 +105,7 @@ function sowBlocker291(world:World,zone:GrowingZone,cell:number,resources:Map<nu
  const forest=isForestrySpecies291(zone.plant);
  for(const next of adjacentCells291(world,cell)){
   const resource=resources.get(next);
-  if(resource&&(resource.kind==='tree'||forest&&(isCrop(resource)||resource.sown291===true)))return {cell:next,resource};
+  if(resource&&(resource.kind==='tree'||isDeadStump382(resource.species)||forest&&(isCrop(resource)||resource.sown291===true)))return {cell:next,resource};
   for(const job of sows.get(next)??[]){if(job.id===ownJob||job.reservedBy===null)continue;const other=zoneCells(world).byId.get(job.growingZoneId!);if(other&&(forest||isForestrySpecies291(other.plant)))return {cell:next};}
  }return;
 }
@@ -132,6 +134,7 @@ export function jobDuration(world: World, job: Job, capturedResource?:Resource|n
   if(job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='healroot')return 80;
   // Schema 358: Core Plant_Devilstrand sowWork 400 (only sown from 358).
   if(job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='devilstrand')return growingPlantSowTicks291('devilstrand');
+  if(world.schemaVersion>=382&&job.kind==='sow'&&job.growingZoneId!==undefined&&zoneCells(world).byId.get(job.growingZoneId)?.plant==='tinctoria')return growingPlantSowTicks291('tinctoria');
   if(world.schemaVersion>=291&&job.kind==='sow'&&job.growingZoneId!==undefined){const plant=zoneCells(world).byId.get(job.growingZoneId)?.plant;if(plant&&isForestrySpecies291(plant))return growingPlantSowTicks291(plant);}
   if(job.kind==='build-bridge'||job.kind==='remove-bridge'||job.kind==='lay-floor'||job.kind==='remove-floor'||job.kind==='grave')return constructionRecipe(job).work;
   if(job.kind==='mine'&&job.pickTicks!==undefined)return job.pickTicks/10;
@@ -156,7 +159,7 @@ export function jobDuration(world: World, job: Job, capturedResource?:Resource|n
 }
 interface CellSet { has(cell:number):boolean }
 interface Context { resources: Map<number, Resource>; fixed: CellSet; hydroBlocked?:CellSet; temperatures:TemperatureView;sows:Map<number,Job[]>;forestry:ReadonlySet<string> }
-const notConduit=(s:World['structures'][number])=>s.kind!=='power-conduit',notConduitOrBasin=(s:World['structures'][number])=>s.kind!=='power-conduit'&&s.kind!=='hydroponics-basin';
+const notConduit=(s:World['structures'][number])=>!isConduitKind(s.kind),notConduitOrBasin=(s:World['structures'][number])=>!isConduitKind(s.kind)&&s.kind!=='hydroponics-basin';
 /* The placed structures' cells for each of the two predicates above, per
  * shared structure geometry: it stands for one membership of the structures
  * array, whose kinds and footprints never change. Never mutated; the planned
@@ -173,7 +176,7 @@ function placedAndPlannedCells(world:World,planned:readonly Job[],placed:(s:Worl
   return {has:cell=>fixed.has(cell)||jobs.has(cell)};
 }
 function context(world: World, queriedCells?:readonly number[]): Context {
-  const planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||j.kind!=='power-conduit'&&j.kind in STRUCTURE_DEFINITIONS);
+  const planned=world.jobs.filter(j => j.kind==='replant-tree'||j.kind==='install'||!isConduitKind(j.kind)&&j.kind in STRUCTURE_DEFINITIONS);
   // Placed footprints come from the shared structure index (same cells as
   // footprintCells/footprintContains); only planned jobs are scanned here.
   // Validation asks about at most five cells: point queries, no expansion.
@@ -196,6 +199,7 @@ function intention(world: World, zone: GrowingZone, cell: number, ctx: Context, 
   if (ctx.fixed.has(cell)&&(!basin||ctx.hydroBlocked?.has(cell))||!basin&&(world.tiles[cell]!.floor||world.tiles[cell]!.bridge&&terrainHasProspectiveRules256(world.tiles[cell]!.terrain,world))) return null;
   const plant = ctx.resources.get(cell);
   if(plant?.blight)return zone.allowCut?{kind:'cut',cell}:null;
+  if(isDeadStump382(plant?.species))return zone.allowSow&&zone.allowCut?{kind:'cut',cell}:null;
   const forest=world.schemaVersion>=291&&isForestrySpecies291(zone.plant);
   if(world.schemaVersion>=291&&plant?.kind==='tree'&&(sameGrowingPlant291(plant,zone)||zone.allowCut)&&plantGrowth(world,plant)>.999&&plantCanYieldNow(world,plant))return {kind:'chop',cell};
   if(forest&&plant&&sameGrowingPlant291(plant,zone))return null;

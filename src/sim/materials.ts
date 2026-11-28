@@ -11,7 +11,7 @@ import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {isNovelBook295} from './book-state-295.ts';
 import {animalContentsOwner256,animalContentsLocation256} from './animal-local-contents-256.ts';
 import {animalHaulContents282} from './animal-haul-contents-282.ts';
-import {isFutureEcologyItem256} from './cave-products-256.ts';
+import {unavailableEcologyItem} from './cave-products-256.ts';
 import {canMergeEggPile256} from './animal-egg-permission-v256.ts';
 import {validEggPile256} from './animal-egg-save-v256.ts';
 import { groupReservedQuantities,groupReservedQuantity } from './group-reservations.ts';
@@ -56,6 +56,29 @@ export function deliveredStock(world: World, jobId: number): Stock {
   return stock;
 }
 export function refreshStock(world: World): void {
+  if(terrainJournalReadOwner()){
+    // A confirmed worker macro sees the actual pile owners. The vast majority
+    // of jobs have no delivered wood/food: allocate a balance only for an
+    // identity with a real delivery. Keep an unchanged balance object, so a
+    // large blueprint list does not manufacture thousands of identical
+    // objects at each macro boundary. Public mutable callers below retain
+    // their exhaustive historical projection.
+    const stock:Stock={wood:0,food:0},delivered=new Map<number,Stock>();
+    for(const pile of world.piles){
+      if(pile.kind!=='wood'&&pile.kind!=='food')continue;
+      if(pile.owner.type==='job'){
+        const id=pile.owner.jobId;let value=delivered.get(id);
+        if(!value){value={wood:0,food:0};delivered.set(id,value);}
+        value[pile.kind]+=pile.quantity;
+      }else if(colonyPile(world,pile))stock[pile.kind]+=pile.quantity;
+    }
+    if(world.stock.wood!==stock.wood||world.stock.food!==stock.food)world.stock=stock;
+    for(const job of world.jobs){
+      const value=delivered.get(job.id),wood=value?.wood??0,food=value?.food??0;
+      if(job.escrow.wood!==wood||job.escrow.food!==food)job.escrow=value??{wood:0,food:0};
+    }
+    return;
+  }
   const stock: Stock = { wood: 0, food: 0 };
   const delivered = new Map(world.jobs.map(job => [job.id, { wood: 0, food: 0 }]));
   for (const pile of world.piles) {
@@ -90,7 +113,7 @@ export function materialCanFit(world: World, kind: MaterialKind, quantity: numbe
   if(kind==='book'||item==='novel'){
     if(world.schemaVersion<295||kind!=='book'||item!=='novel'||quantity!==1||!subject||subject.item!==item||subject.kind!==kind||subject.quantity!==1||!isNovelBook295(subject.book)||owner.type==='job'||owner.type==='equipment'||owner.type==='apparel'||owner.type==='grave')return false;
   }
-  if(world.schemaVersion<256&&(isFutureEcologyItem256(item)||item==='slag-steel-chunk')||!validOrbitalOwner(world,owner))return false;
+  if((unavailableEcologyItem(item,world.schemaVersion)||world.schemaVersion<256&&item==='slag-steel-chunk')||!validOrbitalOwner(world,owner))return false;
   if((kind==='prosthesis'||kind==='corpse'||kind==='mech-corpse'||kind==='weapon'||kind==='apparel')&&owner.type==='job')return false;
   if(owner.type==='apparel'&&(kind!=='apparel'||quantity!==1||!isApparelItem(item)||world.piles.some(p=>p.owner.type==='apparel'&&p.owner.pawnId===owner.pawnId&&!apparelCompatible(APPAREL[p.item as keyof typeof APPAREL].coverage,APPAREL[item].coverage))))return false;
   if(owner.type==='equipment'&&(kind!=='weapon'||quantity!==1||world.piles.some(p=>p.owner.type==='equipment'&&p.owner.pawnId===owner.pawnId)))return false;
@@ -103,7 +126,7 @@ export function materialCanFit(world: World, kind: MaterialKind, quantity: numbe
 export function addMaterial(world: World, kind: MaterialKind, quantity: number, owner: MaterialOwner, item: ItemId = legacyItem(kind),condition:Pick<MaterialPile,'egg'|'eggForbidden'>={}): void {
   if((kind==='ai-core'||item==='ai-core')&&(!isSchema298OrLater(world.schemaVersion)||kind!=='ai-core'||item!=='ai-core'))throw Error('AI cores require their current singleton content domain.');
   if(kind==='book'||item==='novel')throw new Error('A Novel requires an original generated book.');
-  if(world.schemaVersion<256&&(isFutureEcologyItem256(item)||item==='slag-steel-chunk'))throw Error('Future animal item.');
+  if((unavailableEcologyItem(item,world.schemaVersion)||world.schemaVersion<256&&item==='slag-steel-chunk'))throw Error('Future animal item.');
   if(kind==='plant')throw new Error('A minified tree requires an original Resource.');
   if(kind==='corpse'||kind==='mech-corpse')throw new Error('A corpse requires an existing dead owner identity.');
   if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > MAX_STACK * 32768) throw new Error('Material quantity exceeds supported range.');

@@ -1,3 +1,4 @@
+import {isConduitKind} from './conduit-kinds-382.ts';
 import {footprintCells} from './definitions.ts';
 import {terrainJournalReadOwner} from './terrain-read-scope.ts';
 import {verifyTerrainWriteCaches} from './terrain-mutation-journal.ts';
@@ -17,7 +18,7 @@ function build(world:World,owner:object):Capture {
  const byCell=new Map<number,Job[]>(),standDenied=new Set<number>();
  for(const job of world.jobs)if(job.construction==='frame'&&job.kind!=='lay-floor'&&job.kind!=='build-bridge')for(const c of footprintCells(job)){
   const i=c.z*world.width+c.x,rows=byCell.get(i);if(rows)rows.push(job);else byCell.set(i,[job]);
-  if(job.kind!=='power-conduit')standDenied.add(i);
+  if(!isConduitKind(job.kind))standDenied.add(i);
  }
  const source=world.jobs;return {owner,version:versions.get(source)??0,width:world.width,height:world.height,count:source.length,first:source[0],last:source[source.length-1],byCell,standDenied};
 }

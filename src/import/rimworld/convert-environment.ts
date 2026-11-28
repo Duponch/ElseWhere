@@ -24,7 +24,7 @@ import {adoptWeather} from '../../sim/weather.ts';
 import {reconcileTemperature} from '../../sim/temperature.ts';
 import {validateWeather} from '../../sim/weather-save.ts';
 import type {WeatherKind} from '../../sim/weather-definitions.ts';
-import {adoptDeepResources,DEEP_RESOURCES,type DeepResourceCell,type DeepResourceKind} from '../../sim/deep-resources.ts';
+import {adoptDeepResources,deepResourceKindAvailable,type DeepResourceCell,type DeepResourceKind} from '../../sim/deep-resources.ts';
 
 const safeInteger=(n:number|undefined,min=0):n is number=>n!==undefined&&Number.isSafeInteger(n)&&n>=min;
 
@@ -157,8 +157,8 @@ export function importSnow(ctx:ImportContext):void {
  if(dropped)notes.def('snow','Neige (profondeur)','dropped',undefined,'Support de neige non admis par Elsewhere.',dropped);
 }
 
-const deepDefs=new Map<string,DeepResourceKind>([['Steel','steel'],['Gold','gold'],['Silver','silver'],['Plasteel','plasteel']]);
-const deepNames=shortHashTable([...deepDefs.keys(),'Uranium','Jade']);
+const deepDefs=new Map<string,DeepResourceKind>([['Steel','steel'],['Gold','gold'],['Silver','silver'],['Plasteel','plasteel'],['Uranium','uranium'],['Jade','jade']]);
+const deepNames=shortHashTable(deepDefs.keys());
 export function importDeepResources(ctx:ImportContext):void {
  const {map,w,notes,coordinates}=ctx,grid=child(map.node,'deepResourceGrid'),n=map.width*map.height;
  const defs=ushortGrid(grid,'defGrid',n),counts=ushortGrid(grid,'countGrid',n);
@@ -168,7 +168,7 @@ export function importDeepResources(ctx:ImportContext):void {
   const count=counts[i]!;if(!count)continue;
   const name=deepNames.get(defs[i]!)??`#${defs[i]}`,item=deepDefs.get(name);
   notes.countBefore('deep-resources');
-  if(!item||!w.deepResources||!Object.hasOwn(DEEP_RESOURCES,item)||count>300){
+  if(!w.deepResources||!deepResourceKindAvailable(item,w.schemaVersion)||count>300){
    notes.def('deep-resources',name,'dropped',undefined,`Gisement de ${count} unités : type ou quantité non représentable.`);continue;
   }
   cells.push({index:coordinates.index(i),item,count});notes.countAfter('deep-resources');notes.def('deep-resources',name,'exact',item);

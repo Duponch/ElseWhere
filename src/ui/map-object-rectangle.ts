@@ -13,7 +13,7 @@ import { selectableMapJobs296 } from './wall-door-selection-296';
 /** Core ThingDef.neverMultiSelect among Elsewhere's buildings: Wall, Fence,
  * PowerConduit, Sandbags, Barricade and Hopper (natural rock RockBase and the
  * plants PlantBaseNonEdible are never offered by the box either). */
-export const NEVER_MULTI_SELECT_STRUCTURES: ReadonlySet<string> = new Set<StructureKind | string>(['wall', 'fence', 'power-conduit', 'sandbags', 'barricade', 'hopper']);
+export const NEVER_MULTI_SELECT_STRUCTURES: ReadonlySet<string> = new Set<StructureKind | string>(['wall', 'fence', 'power-conduit', 'hidden-conduit', 'sandbags', 'barricade', 'hopper']);
 
 /** Core ThingDef.CountAsResource (resourceReadoutPriority set): the stock
  * items of the resource readout, not corpses, chunks, weapons, apparel,

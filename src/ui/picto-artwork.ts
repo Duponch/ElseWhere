@@ -17,7 +17,7 @@ const aliases:Readonly<Record<string,string>>={
  pointer:'select',clock:'planning',people:'assignations',leaf:'growing',layers:'zones',eye:'eye',chop:'axe',cut:'scissors','haul-chunks':'haul','build-roof':'roof','ignore-roof':'roof-ignore','snow-clear':'snow',
  'remove-growing':'growing-remove','remove-stockpile':'stockpile-remove','remove-home':'home-remove','remove-roof':'roof-remove','remove-snow-clear':'snow-remove','remove-floor':'floor-remove','build-bridge':'bridge','remove-bridge':'bridge-remove',
  'extract-tree':'extract','replant-tree':'replant',allow:'check',forbid:'forbid',strip:'shirt',close:'cancel',delete:'cancel',remove:'cancel',settings:'settings',options:'settings',resume:'play',start:'play',info:'information',
- 'dining-chair':'chair','standing-lamp':'lamp','tube-television':'television','chess-table':'chess','power-conduit':'wire','wind-turbine':'wind','solar-generator':'solar','pen-marker':'pen',
+ 'dining-chair':'chair','standing-lamp':'lamp','tube-television':'television','chess-table':'chess','power-conduit':'wire','hidden-conduit':'hidden-wire','wind-turbine':'wind','solar-generator':'solar','pen-marker':'pen',
  'ship-cryptosleep-casket':'ship-casket','cryptosleep-casket':'casket','art-bench':'art-workbench','tailor-bench':'tailor','electric-tailor-bench':'electric-tailor','research-bench':'research-desk','hi-tech-research-bench':'hi-tech-desk',
  'fueled-stove':'wood-stove','electric-stove':'electric-stove','butcher-table':'butcher','butcher-spot':'butcher-spot','crafting-spot':'crafting','machining-table':'machining','fabrication-bench':'fabrication',
  'fueled-smithy':'smithy','electric-smithy':'electric-smithy','hydroponics-basin':'hydroponics','firefoam-popper':'foam','electric-crematorium':'crematorium','electric-smelter':'smelter','nutrient-paste-dispenser':'paste-dispenser',
@@ -213,6 +213,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'fence':case 'fence-gate':for(const x of[10,29,48])d.shape([[x,54],[x,17],[x+4,11],[x+8,17],[x+8,54]],P.wood);d.rect(7,25,50,5,P.wood);d.rect(7,41,50,5,P.wood);if(id==='fence-gate'){d.line([[20,48],[43,22]],2);d.ellipse(43,32,2,2,P.ink,0);}break;
  case 'pen':d.line([[13,56],[14,12]],3,P.wood);d.rect(14,12,40,30,P.paper);paw(d,34,26,.55);break;
  case 'sandbags':for(const[x,y]of[[9,39],[31,39],[20,25],[41,25],[9,11],[31,11]]){d.path(`M ${x} ${y+3} Q ${x+11} ${y-2} ${x+21} ${y+3} L ${x+22} ${y+13} Q ${x+11} ${y+17} ${x} ${y+13} Z`,P.wood);d.line([[x+4,y+4],[x+17,y+4]],1,P.paper);}break;
+ case 'barricade':d.path('M 7 24 L 58 19 L 59 49 L 8 54 Z',P.wood);d.line([[9,35],[57,31]],2,P.paper);d.line([[17,23],[18,53],[12,51],[12,24]],4,P.ink);d.line([[49,20],[50,50],[55,49],[54,20]],4,P.ink);break;
  case 'spike-trap':d.rect(7,41,49,10,P.wood);for(const x of[12,27,42])d.shape([[x,41],[x+6,12],[x+12,41]],P.silver);break;
  case 'mini-turret':d.rect(15,49,35,6,P.stone);d.shape([[25,49],[25,34],[39,34],[42,49]],P.stone);d.rect(17,24,28,12,P.sage);d.rect(42,24,17,6,P.darkBlue);d.ellipse(25,30,3,3,P.ochre);d.line([[27,24],[23,17]],2);break;
  case 'bed':case 'double-bed':case 'hospital-bed':case 'sleeping-spot':case 'animal-sleeping-spot':case 'bedroll':case 'double-sleeping-spot':case 'double-bedroll':bed(d,id);break;
@@ -245,6 +246,7 @@ export function pictoArtwork(input:string):PictoArtwork|undefined {
  case 'flame':case 'campfire':case 'torch-lamp':d.path('M 18 42 Q 7 31 25 21 Q 30 14 28 5 Q 44 13 41 28 Q 48 24 47 18 Q 62 40 43 49 Q 29 57 18 42 Z',P.red);d.path('M 24 43 Q 23 36 32 28 Q 44 42 35 48 Z',P.ochre,1.2);if(id==='torch-lamp')d.rect(26,48,12,12,P.wood);else{d.line([[14,57],[48,49]],4,P.wood);d.line([[16,49],[49,57]],4,P.wood);}break;
  case 'power':bolt(d);break;
  case 'wire':d.line([[6,49],[16,49],[16,16],[49,16],[49,48],[58,48]],3,P.darkBlue);d.ellipse(16,49,3,3,P.ochre);d.ellipse(49,16,3,3,P.ochre);break;
+ case 'hidden-wire':d.line([[6,49],[16,49],[16,39]],3,P.darkBlue);d.line([[16,32],[16,22]],3,P.darkBlue);d.line([[16,16],[26,16]],3,P.darkBlue);d.line([[33,16],[43,16]],3,P.darkBlue);d.line([[49,16],[49,27]],3,P.darkBlue);d.line([[49,34],[49,48],[58,48]],3,P.darkBlue);d.ellipse(16,49,3,3,P.sage);d.ellipse(49,16,3,3,P.sage);break;
  case 'power-switch':d.rect(14,13,36,41,P.stone);d.ellipse(32,38,9,9,P.darkBlue);d.shape([[29,39],[24,13],[31,11],[36,37]],P.red);d.ellipse(28,12,5,4,P.red);break;
  case 'battery':d.rect(12,17,40,37,P.sage);d.rect(19,11,8,6,P.stone);d.rect(38,11,8,6,P.stone);d.line([[20,31],[29,31]],2);d.line([[24,27],[24,35]],2);d.line([[38,31],[46,31]],2);break;
  case 'solar':d.shape([[12,17],[49,17],[57,44],[6,44]],P.blue);for(const x of[23,36])d.line([[x,18],[x+4,43]],1.2,P.paper);d.line([[10,30],[52,30]],1.2,P.paper);d.line([[25,45],[22,56],[42,56],[38,45]],2);d.ellipse(50,8,4,4,P.ochre);break;

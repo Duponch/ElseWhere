@@ -19,6 +19,7 @@ import {advancePsychic350,eligiblePsychic350,resolveSelectedPsychic350} from './
 import {isMoodPool350} from './mood-pool-memories-350.ts';
 import {homeRecentFactor341,recordHomeIncident341,type HomeRecentIncident341} from './recent-incidents-341.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
+import {eligibleThrumboPasses382,resolveSelectedThrumboPasses382} from './thrumbo-passes-382.ts';
 
 /** A deliberately fixed local envelope for the Core Misc category. Core
  * filters and storyteller population intent change the effective weights;
@@ -71,6 +72,7 @@ export interface CassandraMiscCalendar {
   volcanicWinters310?:number;lastVolcanicWinterStart310?:number;volcanicWinter310?:import('./volcanic-winter-state-310.ts').VolcanicWinter310;
   /** Schema 341: the home map's last incidents, newest first (recent-incidents-341). */
   recent341?:string[];
+  lastThrumboPassAt382?:number;
   /** Schema 350: psychic drone and soothe counts, last starts (local ticks) and the active condition. */
   psychicDrones350?:number;psychicSoothes350?:number;lastPsychicDrone350?:number;lastPsychicSoothe350?:number;
   psychic350?:import('./psychic-state-350.ts').PsychicEmanation350;
@@ -164,7 +166,7 @@ export function miscLotteryRows329(world:World,state:CassandraMiscCalendar):Misc
     {id:'ambrosia-sprout',weight:1,population:null},
     {id:'farm-animals',weight:.4,population:null,resolve:()=>resolveSelectedFarmAnimals305(world,seed())},
     {id:'wanderer-join',weight:.4,population:-.4},
-    {id:'thrumbo-passes',weight:.7,population:null},
+    world.schemaVersion>=382?{id:'thrumbo-passes',weight:.7,population:null,eligible:()=>eligibleThrumboPasses382(world),resolve:()=>resolveSelectedThrumboPasses382(world,seed())}:{id:'thrumbo-passes',weight:.7,population:null},
     {id:'ransom-demand',weight:2,population:.4,eligible:()=>false},
     {id:'meteorite',weight:.5,population:null},
     {id:'herd-migration',weight:1,population:null},

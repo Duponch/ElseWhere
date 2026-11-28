@@ -62,7 +62,11 @@ function makeAtlas(bubbles=false): { map: THREE.Texture; glyphs: ReadonlyMap<str
         context.fill();context.stroke();context.restore();return;
       }
       const icon=JOURNAL_PICTOGRAMS.find(icon=>journalGlyph(icon)===character);
-      if(icon){drawJournalPictogram(context as CanvasRenderingContext2D,icon,x,y,8);return;}
+      if(icon){
+        context.save();context.fillStyle='#e4c58e';context.strokeStyle='#64523f';context.lineWidth=.8;
+        context.beginPath();context.roundRect(x-9,y-10,18,20,3);context.fill();context.stroke();context.restore();
+        drawJournalPictogram(context as CanvasRenderingContext2D,icon,x,y,8,'#30261e');return;
+      }
       context.save();context.fillStyle='#44392f';context.fillText(character,x,y);context.restore();return;
     }
     context.strokeText(character, x, y); context.fillText(character, x, y);
@@ -211,7 +215,7 @@ export class MapLabelBatch {
       }
       if(line)lines.push(line);
       if(lines.length>3){lines.length=3;lines[2]=lines[2]!.replace(/\s+\S*$/,'')+'…';}
-      return{entry,lines,width:Math.max(60,...lines.map(widthOf))+38,height:Math.max(1,lines.length)*16+12};
+      return{entry,lines,width:Math.max(60,...lines.map(widthOf))+48,height:Math.max(1,lines.length)*16+14};
     });
     const count=records.reduce((sum,r)=>sum+3+r.lines.reduce((n,line)=>n+Array.from(line).filter(c=>c!==' ').length,0),0);
     if(count>this.capacity){this.capacity=2**Math.ceil(Math.log2(count));const old=this.mesh.geometry;this.mesh.geometry=geometryFor(this.capacity,false,true);old.dispose();}
@@ -222,9 +226,9 @@ export class MapLabelBatch {
       const add=(character:string,x:number,y:number,w=GLYPH_WIDTH,h=GLYPH_HEIGHT)=>{anchors.setXYZ(index,entry.x,entry.y,entry.z);offsets.setXY(index,x,y);glyphs.setX(index,(this.atlas.glyphs.get(character)??fallback).index);sizes.setXY(index,w,h);index++;};
       add(BUBBLE_BACKGROUND,0,base+height/2,width+3,height+3);
       add(BUBBLE_TAIL,-4,base-3,18,18);
-      add(journalGlyph(entry.icon??'chat'),-width/2+15,base+height-14,20,24);
+      add(journalGlyph(entry.icon??'chat'),-width/2+18,base+height-15,28,32);
       for(let row=0;row<lines.length;row++){
-        let x=-width/2+30;
+        let x=-width/2+40;
         for(const c of lines[row]!){const advance=(this.atlas.glyphs.get(c)??fallback).advance;if(c!==' ')add(c,x+advance/2,base+height-14-row*16);x+=advance;}
       }
       this.bubbleRanges.push({entry,start,count:index-start,x:entry.x,y:entry.y,z:entry.z});

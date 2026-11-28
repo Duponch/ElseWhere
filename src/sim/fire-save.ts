@@ -1,5 +1,5 @@
 import {isIedSchema357,isShellItem357} from './ied-traps-357.ts';
-import {isFutureEcologyItem256} from './cave-products-256.ts';
+import {unavailableEcologyItem} from './cave-products-256.ts';
 import { ITEM_DEFINITIONS,V219_ITEM_IDS } from './items.ts';
 import { isColonist } from './affiliation.ts';
 import { medicalWorkRefusal } from './health-rules.ts';
@@ -14,7 +14,7 @@ const cell=(w:World,c:unknown,strict=true):c is {x:number;z:number}=>object(c)&&
 /** Sparse loss keys have their own schema gate, even when no plant remains. */
 export function validFireResourceLosses(value:unknown,version:number):boolean {
   return object(value)&&Object.entries(value).every(([kind,count])=>
-    (['tree','berries','rice','potato','corn','cotton'].includes(kind)||version>=91&&kind==='wild-plant'||version>=182&&kind==='healroot'||version>=227&&kind==='haygrass'||version>=265&&kind==='hops'||version>=358&&kind==='devilstrand')&&int(count,1));
+    (['tree','berries','rice','potato','corn','cotton'].includes(kind)||version>=91&&kind==='wild-plant'||version>=182&&kind==='healroot'||version>=227&&kind==='haygrass'||version>=265&&kind==='hops'||version>=358&&kind==='devilstrand'||version>=382&&kind==='tinctoria')&&int(count,1));
 }
 export function validBurningReaction(w:World,v:unknown,version:number):v is BurningReaction {
   return version>=87&&object(v)&&keys(v,['phase','remainingCore','target'])&&['panic','extinguish'].includes(String(v.phase))&&int(v.remainingCore,0,v.phase==='extinguish'?150:10)&&(v.target===undefined||v.phase==='panic'&&cell(w,v.target));
@@ -42,7 +42,7 @@ export function validateFires(w:World,version:number,ids?:Set<number>):string[] 
   for(const e of s.embers){if(!object(e)||!keys(e,['id','from','to','impactCore'])||!cell(w,e.from)||!cell(w,e.to)||!int(e.impactCore,now+1,now+130)||Math.hypot(e.to.x-e.from.x,e.to.z-e.from.z)>Math.sqrt(5)+1e-9){errors.push('Invalid fire ember.');continue;}identity(e.id);}
   const wicks=new Set<number>();for(const wick of s.batteryWicks){if(!object(wick)||!keys(wick,['structureId','endCore'])||!int(wick.structureId,1,w.nextId-1)||!int(wick.endCore,now+1,now+150)||wicks.has(wick.structureId)||!w.structures.some(b=>b.kind==='battery'&&b.id===wick.structureId))errors.push('Invalid battery fire fuse.');else wicks.add(wick.structureId);}
   const l=s.ledger;
-  if(!object(l)||!keys(l,['items','resources','structures','extinguished','ignitions','batteryEnergyLost','fuelTicksLost','fuelTicksBurned','woodPotentialLost'])||!object(l.items)||!object(l.resources)||!int(l.woodPotentialLost)||!int(l.fuelTicksLost)||!int(l.fuelTicksBurned)||!int(l.structures)||!int(l.extinguished)||!int(l.ignitions)||!finite(l.batteryEnergyLost,0,Number.MAX_SAFE_INTEGER)||!Number.isSafeInteger(l.batteryEnergyLost*2)||Object.entries(l.items).some(([k,v])=>!Object.hasOwn(ITEM_DEFINITIONS,k)||!isIedSchema357(version)&&isShellItem357(k)||version<256&&(isFutureEcologyItem256(k)||k==='slag-steel-chunk')||version<235&&k==='minified-tree'||version<227&&['hay','kibble'].includes(k)||version<206&&k==='neutroamine'||version<194&&k==='scyther-corpse'||version<197&&V219_ITEM_IDS.some(item=>item===k)||version<152&&k==='fine-meal'||version<154&&k==='lavish-meal'||version<155&&k==='vegetarian-fine-meal'||version<156&&k==='carnivore-fine-meal'||version<157&&k==='vegetarian-lavish-meal'||version<159&&k==='carnivore-lavish-meal'||!int(v,1))||!validFireResourceLosses(l.resources,version))errors.push('Invalid fire loss ledger.');
+  if(!object(l)||!keys(l,['items','resources','structures','extinguished','ignitions','batteryEnergyLost','fuelTicksLost','fuelTicksBurned','woodPotentialLost'])||!object(l.items)||!object(l.resources)||!int(l.woodPotentialLost)||!int(l.fuelTicksLost)||!int(l.fuelTicksBurned)||!int(l.structures)||!int(l.extinguished)||!int(l.ignitions)||!finite(l.batteryEnergyLost,0,Number.MAX_SAFE_INTEGER)||!Number.isSafeInteger(l.batteryEnergyLost*2)||Object.entries(l.items).some(([k,v])=>!Object.hasOwn(ITEM_DEFINITIONS,k)||!isIedSchema357(version)&&isShellItem357(k)||(unavailableEcologyItem(k,version)||version<256&&k==='slag-steel-chunk')||version<235&&k==='minified-tree'||version<227&&['hay','kibble'].includes(k)||version<206&&k==='neutroamine'||version<194&&k==='scyther-corpse'||version<197&&V219_ITEM_IDS.some(item=>item===k)||version<152&&k==='fine-meal'||version<154&&k==='lavish-meal'||version<155&&k==='vegetarian-fine-meal'||version<156&&k==='carnivore-fine-meal'||version<157&&k==='vegetarian-lavish-meal'||version<159&&k==='carnivore-lavish-meal'||!int(v,1))||!validFireResourceLosses(l.resources,version))errors.push('Invalid fire loss ledger.');
   // Active fires and recorded extinctions are disjoint subsets of ignitions.
   // The subtraction avoids overflow and reserves an exact counter increment
   // for every remaining fire, even at the safe-integer boundary.

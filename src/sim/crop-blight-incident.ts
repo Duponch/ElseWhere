@@ -4,6 +4,7 @@ import { freeColonist } from './colony-economy.ts';
 import { cropBlightable,infectCrop } from './plant-blight.ts';
 import { RoomTopologyCache } from './room-topology.ts';
 import { computeThreatPoints,summaryHealthPercent } from './threat-points.ts';
+import {threatModifiers382} from './game-profile.ts';
 import { TICKS_PER_DAY,type World } from './types.ts';
 
 export const CROP_BLIGHT_COOLDOWN=30*TICKS_PER_DAY;
@@ -16,7 +17,7 @@ export function cropBlightIncidentPoints(world:World):number {
   const colonists=world.pawns.filter(freeColonist);
   return computeThreatPoints({timeFactorWholeDays:world.schemaVersion>=328,animalPoints:homeAnimalThreatPoints329(world),knownWealth:world.economy.wealth.knownStorytellerWealth,
     freeColonists:colonists.length,colonistHealthSum:colonists.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),
-    elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,seedBucket:Math.floor(world.tick/250)}).points;
+    elapsedDays:world.tick/TICKS_PER_DAY,adaptationDays:world.economy.adaptationDays,seedBucket:Math.floor(world.tick/250),difficulty:threatModifiers382(world)}).points;
 }
 export function cropBlightRadiusFactor(points:number):number {
   if(points<=100)return .6;

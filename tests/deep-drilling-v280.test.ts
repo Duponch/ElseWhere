@@ -1,6 +1,8 @@
 import { expect,test } from 'vitest';
 import { deepDrillingCamp } from './helpers/deep-drilling-v280.ts';
-import { DEEP_RADIAL,DEEP_RESOURCES,adoptDeepResources,addDeepDeposit,deepResourceAt,nextDeepResource,discoverDeepDeposit,deepScannerOverlayPowered } from '../src/sim/deep-resources.ts';
+import { CORE_DEEP_RADIAL_382,DEEP_RADIAL,DEEP_RESOURCES,adoptDeepResources,addDeepDeposit,deepResourceAt,nextDeepResource,discoverDeepDeposit,deepScannerOverlayPowered,deepRockItem } from '../src/sim/deep-resources.ts';
+import {monoIntrospectiveSort} from '../src/sim/mono-sort.ts';
+import {VerseRand,hashCombineInt} from '../src/sim/verse-rand.ts';
 import { deepWorkReason,deepWorkSpot } from '../src/sim/deep-drilling-rules.ts';
 import { deepWorkProposal,startDeepWork,processDeepWork,reconcileDeepWork } from '../src/sim/deep-drilling.ts';
 import { blockedCells,reachableCells,routeToCell } from '../src/sim/pathfinding.ts';
@@ -36,11 +38,19 @@ test('strict10000 work threshold, physical output, raw reserve debit and Mining 
 });
 
 test('every delivered ore portion debits finite raw stock and a depleted drill produces one local-stone chunk',()=>{
-  for(const item of ['steel','gold','silver','plasteel'] as const){
+  for(const item of ['steel','gold','silver','plasteel','uranium','jade'] as const){
     const {w,p,d}=camp();w.deepResources!.cells=[];addDeepDeposit(w,item,[d],7);begin(w,p,d);
     d.deepDrill={progress:10000,yieldPct:1,rng:123};processDeepWork(w,p,context(w,p));expect(deepResourceAt(w,d)).toBeUndefined();expect(quantity(w,item)).toBe(7);
     d.deepDrill={progress:10000,yieldPct:1,rng:1};processDeepWork(w,p,context(w,p));expect(w.piles.filter(i=>i.kind==='chunk').reduce((n,i)=>n+i.quantity,0)).toBe(1);
     expect(DEEP_RESOURCES[item].portion).toBeGreaterThanOrEqual(7);
+  }
+});
+
+test('uranium and jade extract their Core 15-unit portions and keep the real remainder',()=>{
+  for(const item of ['uranium','jade'] as const){
+    const {w,p,d}=camp();w.deepResources!.cells=[];expect(addDeepDeposit(w,item,[d])).toBe(1);begin(w,p,d);
+    d.deepDrill={progress:10000,yieldPct:1,rng:12345};processDeepWork(w,p,context(w,p));
+    expect(quantity(w,item)).toBe(15);expect(deepResourceAt(w,d)).toMatchObject({item,count:285});expect(validateWorld(w)).toEqual([]);
   }
 });
 
@@ -78,6 +88,57 @@ test('discovery is deterministic and cannot overwrite reserves or create ore in 
   const {w}=camp(),copy=structuredClone(w);expect(discoverDeepDeposit(w)).toBe(true);expect(discoverDeepDeposit(copy)).toBe(true);expect(w.deepResources).toEqual(copy.deepResources);
   expect(w.deepResources!.cells.every(c=>c.index%w.width>=5&&c.index%w.width<w.width-5&&Math.floor(c.index/w.width)>=5&&Math.floor(c.index/w.width)<w.height-5)).toBe(true);
   const previous=structuredClone(w.deepResources!.cells);w.tiles=w.tiles.map(()=>({terrain:'water'}));expect(discoverDeepDeposit(w)).toBe(false);expect(w.deepResources!.cells).toEqual(previous);
+});
+
+test('schema 382 uses all six discovery weights; a pre-382 world retains the four-kind draw and admission',()=>{
+  for(const [seed,item,min,max,legacyItem] of [[51,'uranium',4,10,'silver'],[56,'jade',1,4,'plasteel']] as const){
+    const {w}=camp();w.tiles=w.tiles.map(()=>({terrain:'grass'}));w.deepResources!.cells=[];w.deepResources!.rng=seed;
+    const historical=structuredClone(w);historical.schemaVersion=381 as World['schemaVersion'];
+    expect(addDeepDeposit(historical,item,[{x:10,z:10}])).toBe(0);
+    expect(discoverDeepDeposit(historical)).toBe(true);expect(historical.deepResources!.cells.every(c=>c.item===legacyItem)).toBe(true);
+    expect(discoverDeepDeposit(w)).toBe(true);expect(w.deepResources!.cells.length).toBeGreaterThanOrEqual(min);expect(w.deepResources!.cells.length).toBeLessThanOrEqual(max);
+    expect(w.deepResources!.cells.every(c=>c.item===item&&c.count===300)).toBe(true);
+  }
+});
+
+test('a successful first interior random-cell attempt does not traverse the full map',()=>{
+  const {w}=camp();w.deepResources!.cells=[];w.deepResources!.rng=51;
+  let reads=0;w.tiles=new Proxy(w.tiles.map(()=>({terrain:'grass' as const})),{get(target,key,receiver){if(typeof key==='string'&&/^\d+$/.test(key))reads++;return Reflect.get(target,key,receiver);}});
+  expect(discoverDeepDeposit(w)).toBe(true);expect(reads).toBeLessThanOrEqual(11);
+});
+
+test('native radial drilling uses the complete Core Mono tie order reflected with the imported map',()=>{
+  const native=Array.from({length:25600},(_,i)=>({x:Math.floor(i/160)-80,z:i%160-80}));
+  monoIntrospectiveSort(native,(a,b)=>a.x*a.x+a.z*a.z-b.x*b.x-b.z*b.z);
+  expect(CORE_DEEP_RADIAL_382).toEqual(native.slice(0,60).map(c=>({x:c.x,z:-c.z||0})));
+  const {w,d}=camp();w.deepResources!.cells=[];addDeepDeposit(w,'steel',[{x:d.x-1,z:d.z}]);addDeepDeposit(w,'gold',[{x:d.x+1,z:d.z}]);
+  expect(nextDeepResource(w,d)!.item).toBe('gold');w.schemaVersion=381 as World['schemaVersion'];expect(nextDeepResource(w,d)!.item).toBe('steel');
+});
+
+test('modern scanning requires the drill terrain affordance, not merely a terrain name different from water',()=>{
+  const {w}=camp();w.deepResources!.cells=[];
+  for(const terrain of ['water-deep','ocean-deep','water-shallow','river-shallow','mud','marsh'] as const){
+    w.tiles=w.tiles.map(()=>({terrain}));const before=structuredClone(w.deepResources);
+    expect(discoverDeepDeposit(w)).toBe(false);expect(w.deepResources).toEqual(before);
+  }
+  w.tiles=w.tiles.map(()=>({terrain:'water-shallow',bridge:true}));
+  expect(discoverDeepDeposit(w)).toBe(true);
+});
+
+test('geographic fallback uses the real base stone or the local Core seeded rock selection, and sea ice has no bedrock',()=>{
+  const {w,p,r,d,s}=camp(),before=w.rng;
+  w.site={revision:3,biome:'temperate-forest',stones:['granite','slate','limestone']} as NonNullable<World['site']>;
+  const index=d.z*w.width+d.x;w.tiles[index]={terrain:'rough-stone',stone:'slate'};
+  expect(deepRockItem(w,d)).toBe('slate-chunk');
+  w.tiles[index]={terrain:'soil-natural'};
+  const seed=hashCombineInt(hashCombineInt(hashCombineInt(0,d.x),0),w.height-1-d.z);
+  expect(deepRockItem(w,d)).toBe(`${w.site.stones[new VerseRand(seed).range(0,3)]}-chunk`);expect(w.rng).toBe(before);
+  w.site={...w.site,biome:'sea-ice'} as NonNullable<World['site']>;
+  expect(deepRockItem(w,d)).toBeUndefined();const reserves=structuredClone(w.deepResources);
+  expect(discoverDeepDeposit(w)).toBe(false);expect(w.deepResources).toEqual(reserves);
+  expect(deepWorkReason(w,r,s)).toBe('Absence de socle rocheux.');
+  expect(deepWorkReason(w,p,d)).toBeUndefined();w.deepResources!.cells=[];
+  expect(deepWorkReason(w,p,d)).toBe('Absence de socle rocheux.');
 });
 
 test('the real planner moves an operator, resumes a mid-portion save and exhausts the same finite reserve deterministically',()=>{

@@ -2,7 +2,7 @@ import {expect,test} from 'vitest';
 import {applyCommand,createWorld} from '../src/sim/index';
 import type {Job,MaterialPile,Structure} from '../src/sim/types';
 import {footprintCells,footprintContains} from '../src/sim/definitions';
-import {FURNITURE_DEFINITIONS,FURNITURE_MATERIALS} from '../src/sim/furniture-stats';
+import {FURNITURE_DEFINITIONS,FURNITURE_MATERIALS,isFurnitureMaterial} from '../src/sim/furniture-stats';
 import {constructionMaterials,constructionRecipe,validConstructionMaterial} from '../src/sim/construction-materials';
 import {structureMaxHp} from '../src/sim/thing-damage-rules';
 import {FURNITURE_TRAVEL,canStandAt} from '../src/sim/furniture-travel';
@@ -17,6 +17,7 @@ test.each(['shelf','small-shelf'] as const)('%s uses ordinary stuff factors with
   expect(def).toMatchObject({stuff:amount,coreWork:work,maxHitPoints:hp,quality:false,research:'complex-furniture',constructionSkill:0});
   expect(constructionMaterials(kind)).toEqual(['wood','steel','granite-blocks','limestone-blocks','marble-blocks','sandstone-blocks','slate-blocks']);
   for(const material of constructionMaterials(kind)){
+    if(!isFurnitureMaterial(material))throw Error('Shelf admitted a material outside its native furniture catalogue');
     const factors=FURNITURE_MATERIALS[material],recipe=constructionRecipe({kind,material});
     expect(recipe.ingredients).toEqual([{item:material,quantity:amount}]);
     expect(recipe.coreWork).toBe(Math.round(work*factors.workFactor+factors.workOffset));

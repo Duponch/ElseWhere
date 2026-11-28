@@ -9,6 +9,7 @@ import {carrierOf} from './rescue-state.ts';
 import {kidnapCarrierOf261} from './caravan-kidnap-261.ts';
 import {isColonist} from './affiliation.ts';
 import {computeThreatPoints,summaryHealthPercent} from './threat-points.ts';
+import {storytellerIncidents347,threatModifiers382} from './game-profile.ts';
 import {colonyWealth} from './colony-wealth.ts';
 import type {World} from './types.ts';
 import type {CampaignState,WorldMapRecord} from './world-map-state.ts';
@@ -40,10 +41,10 @@ export function adoptTempMapIncidents261(w:World):void {
 /** The clinical/adaptation model is the existing declared AdventureStory one;
  * wealth comes from this actual map, without installing a home agenda. */
 export function tempMapThreatPoints261(w:World):number|undefined {
- if(w.gameProfile?.difficulty!=='adventure-story')return;
+ if(!storytellerIncidents347(w))return;
  const people=w.pawns.filter(p=>isColonist(p)&&!p.prisoner&&!p.visitor&&p.state!=='dead');
  return computeThreatPoints({timeFactorWholeDays:w.schemaVersion>=328,knownWealth:(w.economy?.wealth??colonyWealth(w)).knownStorytellerWealth,freeColonists:people.length,
-  colonistHealthSum:people.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/6000,adaptationDays:w.economy?.adaptationDays??0,seedBucket:Math.floor(w.tick/250)}).points;
+  colonistHealthSum:people.reduce((n,p)=>n+(p.health?summaryHealthPercent(p.health):1),0),elapsedDays:w.tick/6000,adaptationDays:w.economy?.adaptationDays??0,seedBucket:Math.floor(w.tick/250),difficulty:threatModifiers382(w)}).points;
 }
 function visibility(w:World):number {
  const player=registeredCampaign(w).worldFactions!.playerFactionId;
@@ -58,7 +59,7 @@ export function advanceTempMapIncidents261(root:CampaignState):void {
  const records=root.worldMaps.sites.slice().sort((a,b)=>a.id-b.id);
  for(const kind of ['meeting','ambush','manhunter-ambush'] as const)for(const record of records){
   const state=record.tempIncidents261;if(!state||core<=state.adoptedAtCore||record.tile===null||!['camp','battlefield'].includes(record.kind))continue;
-  const w=registeredMap(root,record.id)!;if(w.gameProfile?.storyteller!=='cassandra-partial')continue;
+  const w=registeredMap(root,record.id)!;if(!storytellerIncidents347(w))continue;
   const key=kind==='manhunter-ambush'?'manhunterAmbush':kind,last=state.last[key];if(last!==undefined&&core-last<10200)continue;
   const tile=planetTile(root.planet,record.tile);if(!tile||!Object.hasOwn(CARAVAN_BIOME_MTB_261,tile.biome))continue;
   const random={rng:root.rng},biome=tile.biome as WorldLandBiome;

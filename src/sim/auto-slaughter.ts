@@ -1,5 +1,5 @@
 import { animalLifeStage } from './animal-life.ts';
-import { AUTO_SLAUGHTER_SPECIES,defaultAutoSlaughterConfig,type AutoSlaughterCommand,type AutoSlaughterConfig,type AutoSlaughterSpecies } from './auto-slaughter-state.ts';
+import { autoSlaughterOrder,isAutoSlaughterSpecies,defaultAutoSlaughterConfig,type AutoSlaughterCommand,type AutoSlaughterConfig,type AutoSlaughterSpecies } from './auto-slaughter-state.ts';
 import { validAutoSlaughterConfig } from './auto-slaughter-save.ts';
 import type { CommandResult,World } from './types.ts';
 import type { WildAnimal } from './wildlife-state.ts';
@@ -16,11 +16,9 @@ const older=(a:WildAnimal,b:WildAnimal):number=>b.ageTicks-a.ageTicks||a.id-b.id
  * Batch callers capture this set once and pass it to slaughterIntent below. */
 export function autoSlaughterTargets(w:World,version:number=w.schemaVersion):ReadonlySet<number> {
   if(version<228||!w.autoSlaughter?.some(limited))return EMPTY_TARGETS;
-  const configs=AUTO_SLAUGHTER_SPECIES.flatMap(species=>{
-    const c=w.autoSlaughter!.find(c=>c.species===species);return c&&limited(c)?[c]:[];
-  });
-  const species=new Set(configs.map(c=>c.species));
-  const animals=(w.wildlife?.animals??[]).filter(a=>aliveOwned(a)&&species.has(a.species as AutoSlaughterSpecies));
+  const configs=w.autoSlaughter!.filter(c=>limited(c)&&(version>=382||isAutoSlaughterSpecies(c.species,version))).sort((a,b)=>autoSlaughterOrder(a.species,b.species));
+  const species=new Map(configs.map(c=>[c.species,c]));
+  const animals=(w.wildlife?.animals??[]).filter(a=>aliveOwned(a)&&species.has(a.species)&&(version<382||a.startingPet?.bondedPawnId===undefined||species.get(a.species)?.allowBonded382===true));
   // Immutable scalar captures see mutations within the same tick. Age minus
   // tick remains stable under ordinary biological ageing; stage transitions
   // and relative ages still change the signature. No mutable witness escapes.
@@ -64,7 +62,7 @@ export function autoSlaughterCounts(w:World,species:AutoSlaughterSpecies):AutoSl
   const config=w.schemaVersion>=228?w.autoSlaughter?.find(c=>c.species===species):undefined;
   const counts:AutoSlaughterCounts={total:0,males:0,malesYoung:0,females:0,femalesYoung:0,pregnant:0};
   for(const a of w.wildlife?.animals??[]){
-    if(a.species!==species||!aliveOwned(a))continue;
+    if(a.species!==species||!aliveOwned(a)||w.schemaVersion>=382&&!config?.allowBonded382&&a.startingPet?.bondedPawnId!==undefined)continue;
     const adult=animalLifeStage(a)==='adult';
     if(a.sex==='female'&&adult&&a.pregnancy){counts.pregnant++;if(!config?.allowPregnant)continue;}
     counts.total++;
@@ -77,12 +75,12 @@ export function autoSlaughterCounts(w:World,species:AutoSlaughterSpecies):AutoSl
 /** The engine reconciles ongoing work after a successful policy command,
  * including while paused. Sparse defaults add no historical herd mandate. */
 export function setAutoSlaughterPolicy(w:World,cmd:AutoSlaughterCommand):CommandResult {
-  if(w.schemaVersion<228||!cmd||cmd.type!=='auto-slaughter-policy'||!validAutoSlaughterConfig(cmd.config))
+  if(w.schemaVersion<228||!cmd||cmd.type!=='auto-slaughter-policy'||!validAutoSlaughterConfig(cmd.config,w.schemaVersion))
     return {ok:false,code:'invalid-command',reason:'Politique d’abattage automatique invalide.'};
   const config={...cmd.config},policies=(w.autoSlaughter??[]).filter(c=>c.species!==config.species);
   const defaults=defaultAutoSlaughterConfig(config.species);
-  if(limited(config)||config.allowPregnant!==defaults.allowPregnant)policies.push(config);
-  policies.sort((a,b)=>AUTO_SLAUGHTER_SPECIES.indexOf(a.species)-AUTO_SLAUGHTER_SPECIES.indexOf(b.species));
+  if(limited(config)||config.allowPregnant!==defaults.allowPregnant||config.allowBonded382)policies.push(config);
+  policies.sort((a,b)=>autoSlaughterOrder(a.species,b.species));
   if(policies.length)w.autoSlaughter=policies;else delete w.autoSlaughter;
   for(const pawn of w.pawns)pawn.planCooldown=0;
   return {ok:true};

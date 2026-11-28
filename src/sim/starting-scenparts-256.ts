@@ -25,6 +25,7 @@ import {AIR_CONDITIONING_COST,CLOTHING_RESEARCH_COST,COMPLEX_FURNITURE_RESEARCH_
 import {isColonist} from './affiliation.ts';
 import type {WorldGenerationRandom} from './world-generation-random.ts';
 import {grantClassicStartResearch343} from './crashlanded-start-343.ts';
+import {grantFoundationalResearch382} from './foundational-research-382.ts';
 import type {Cell,World} from './types.ts';
 export const STARTING_SCENPARTS_SEED_PART_256=1561683158;
 /** Exact delivered order, intentionally distinct from a complete Core scenario. */
@@ -89,6 +90,7 @@ export function applyStartingScenParts256(world:World,input:{start850:number;sta
  for(const stack of plan.stacks)addMaterial(world,ITEM_DEFINITIONS[stack.item].kind,stack.quantity,{type:'ground',...stack.cell},stack.item);
  const created=world.piles.slice(firstPile),transported=created.filter(p=>p.item!=='wood'&&p.item!=='steel').map(p=>p.id),ground=created.filter(p=>p.item==='wood'||p.item==='steel').map(p=>p.id);
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
+ if(world.schemaVersion>=382)grantFoundationalResearch382(world.research);
  world.gameProfile=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:plan.landing};
  enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);
  const preview=previewStartingParty(party.seed,party.selected,world.schemaVersion),allocated=new Map(party.selected.map((candidate,index)=>[candidate.serial,pawnIds[index]!]));
@@ -120,6 +122,7 @@ export function applyStartingOriginalScenParts256(world:World,input:{start850:nu
  for(const stack of plan.stacks)addMaterial(world,ITEM_DEFINITIONS[stack.item].kind,stack.quantity,{type:'ground',...stack.cell},stack.item);
  const created=world.piles.slice(firstPile),transported=created.filter(p=>p.item!=='wood'&&p.item!=='steel').map(p=>p.id),ground=created.filter(p=>p.item==='wood'||p.item==='steel').map(p=>p.id);
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
+ if(world.schemaVersion>=382)grantFoundationalResearch382(world.research);
  world.gameProfile=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:plan.landing};
  enableCassandraRaids(world);adoptFluIncidents(world);adoptMiscIncidents(world);enableVisitors(world,true);adoptColonyEconomy(world);
  prepareStartingArrival(world,pawnIds,transported);consumeOriginalStartingRoster256(world,roster);
@@ -133,6 +136,7 @@ export function applyStartingOriginalScenParts256(world:World,input:{start850:nu
 export function adoptDeliveredStartingSystems256(world:World,landing:Cell):void {
  if(!isSchema256Or257(world.schemaVersion)||world.tick!==0||world.site?.revision!==3||world.planet?.revision!==3||!world.startingArrival||Object.hasOwn(world,'gameProfile')&&!validGameProfile(world.gameProfile,Math.max(256,Number(world.schemaVersion)),{id:'crashlanded'})||['scenario','research','raids','visitors','fluIncidents','miscIncidents','economy'].some(k=>Object.hasOwn(world,k)))throw Error('Starting systems already owned');
  world.research={project:null,points:CLOTHING_RESEARCH_COST,completedAt:0,airConditioning:{points:AIR_CONDITIONING_COST,completedAt:0},stonecutting:{points:STONECUTTING_RESEARCH_COST,completedAt:0},complexFurniture:{points:COMPLEX_FURNITURE_RESEARCH_COST,completedAt:0}};
+ if(world.schemaVersion>=382)grantFoundationalResearch382(world.research);
  grantClassicStartResearch343(world);
  world.gameProfile??=crashlandedProfile();world.scenario={id:'crashlanded',revision:ARRIVING_CRASHLANDED_REVISION,landing:{...landing}};
  // Schema 347: the Tutor has no storyteller comps. Its raid agenda is born

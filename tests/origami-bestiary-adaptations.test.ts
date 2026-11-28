@@ -16,7 +16,7 @@ import type {AnimalBodyFact256} from '../src/sim/animal-anatomy-v256';
 import {bestiaryPaintProfile} from '../src/render/origami/reference-profiles';
 
 const ids=Object.keys(BESTIARY_ADAPTATION_MANIFEST.species) as BestiaryAdaptationId[];
-const expectedParents=['cougar','spelopede','caribou','fennec','raccoon','guinea_pig','timber_wolf'];
+const expectedParents=['cougar','spelopede','caribou','fennec','raccoon','guinea_pig','timber_wolf','ibex','boar'];
 const protectedIds=['hare','snow-hare','deer','muffalo','gazelle','dromedary','red-fox','labrador-retriever','husky','yorkshire-terrier','elephant','fox','camel','dog','buffalo'];
 function meshes(root:THREE.Object3D):BestiaryMesh[]{const result:BestiaryMesh[]=[];root.traverse(object=>{if(object instanceof THREE.Mesh)result.push(object as BestiaryMesh);});return result;}
 function dispose(root:THREE.Object3D):void{for(const mesh of meshes(root))mesh.geometry.dispose();root.clear();}
@@ -42,17 +42,17 @@ function pointOnSurface(mesh:BestiaryMesh,point:THREE.Vector3):number{
 }
 interface PrivateContract {readonly name:string;run():void}
 const ADAPTATION_CONTRACTS:readonly PrivateContract[]=[
- {name:'all seven builders call only their declared new parent and reject every protected existing identity',run(){
+ {name:'all nine builders call only their declared new parent and reject every protected existing identity',run(){
   const reference=createBestiaryReference(THREE),called:string[]=[];
   const guarded:BestiaryFactory={ids:reference.ids,materialRecords:reference.materialRecords,build(id){called.push(id);expect(protectedIds).not.toContain(id);return reference.build(id);}};
   const factory=createBestiaryAdaptations(THREE,undefined,undefined,guarded);
   try{expect(factory.ids).toEqual(ids);for(const id of ids){const group=factory.build(id);try{expect(group.userData.referenceAdaptation?.parent).toBe(BESTIARY_ADAPTATION_MANIFEST.species[id].parent);expect(group.userData.referenceAdaptation?.literalCopy).toBe(false);}finally{dispose(group);}}
-   expect(called).toEqual(expectedParents);for(const id of protectedIds)expect(()=>factory.build(id)).toThrow('seven');expect(called).toEqual(expectedParents);
+   expect(called).toEqual(expectedParents);for(const id of protectedIds)expect(()=>factory.build(id)).toThrow('declared adaptation');expect(called).toEqual(expectedParents);
   }finally{materials(reference);}
  }},
  {name:'typed adaptation port retains every raw JS triangle input, material, transform, eye and bound for all seven parents',run(){
   const reference=createBestiaryReference(THREE),typed=createBestiaryAdaptations(THREE,undefined,undefined,reference),raw=createJsAdaptations(THREE,undefined,undefined,reference);
-  try{for(const id of ids){const a=typed.build(id),b=raw.build(id);try{expect(signature(a)).toBe(signature(b));expect(a.userData.referenceAdaptation?.productionIntegrated).toBe(true);expect(b.userData.referenceAdaptation?.productionIntegrated).toBe(false);}finally{dispose(a);dispose(b);}}}finally{materials(reference);}
+  try{for(const id of raw.ids){const a=typed.build(id),b=raw.build(id);try{expect(signature(a)).toBe(signature(b));expect(a.userData.referenceAdaptation?.productionIntegrated).toBe(true);expect(b.userData.referenceAdaptation?.productionIntegrated).toBe(false);}finally{dispose(a);dispose(b);}}}finally{materials(reference);}
  }},
  {name:'two open eyes per adaptation lie on actual carrier triangles and project forward from their surface normals',run(){
   const reference=createBestiaryReference(THREE),factory=createBestiaryAdaptations(THREE,undefined,undefined,reference);
@@ -105,7 +105,7 @@ const ADAPTATION_CONTRACTS:readonly PrivateContract[]=[
    expect(reference.materialRecords.map(row=>({key:row.key,color:row.material.color.getHex(),profile:row.material.userData.referencePaintIndex,config:JSON.stringify(row.config)}))).toEqual(before);
   }finally{materials(reference);}
  }},
- {name:'all seven adaptations accept the separately corrected parent factory without stale source-eye indexing',run(){
+ {name:'all nine adaptations accept the separately corrected parent factory without stale source-eye indexing',run(){
   const literal=createBestiaryReference(THREE),corrected=createBestiaryPresentation(THREE,undefined,undefined,literal),factory=createBestiaryAdaptations(THREE,undefined,undefined,corrected);
   try{for(const id of ids){const root=factory.build(id);try{expect(root.userData.referenceEyeMeshes).toHaveLength(2);expect(root.userData.referenceAdaptation?.parent).toBe(BESTIARY_ADAPTATION_MANIFEST.species[id].parent);
    if(id==='rat'){const tail=root.userData.tailGroup;expect(tail?.parent).toBe(root);expect(tail?.position.toArray()).toEqual([-.36,.24,0]);}
@@ -113,9 +113,9 @@ const ADAPTATION_CONTRACTS:readonly PrivateContract[]=[
  }},
 ];
 
-describe('seven explicitly adapted bestiary species, actual product factories',()=>{
+describe('nine explicitly adapted bestiary species, actual product factories',()=>{
  for(const contract of ADAPTATION_CONTRACTS)it(contract.name,contract.run);
- it('compiles real native masks for all seven, preserving two monkey Arms and Legs plus six scarab limbs across body/brush/wear',()=>{
+ it('compiles real native masks for all nine, preserving two monkey Arms and Legs plus six scarab limbs across body/brush/wear',()=>{
   const source=createBestiaryReference(THREE),factory=createBestiaryAdaptations(THREE,undefined,undefined,source);
   try{for(const id of ids){const root=factory.build(id);let compiled:ReturnType<typeof compileBestiaryAnimalGeometry>|undefined;
    try{

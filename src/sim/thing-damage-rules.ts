@@ -2,6 +2,7 @@ import {isSchema298OrLater} from './schema-compatibility-257.ts';
 import {markPileContentWrite379} from './ordinary-pile-source-379.ts';
 import {isDevilstrandApparel358} from './devilstrand-358.ts';
 import { SCHEMA_VERSION } from './types.ts';
+import {BARRICADE_382,barricadeStuff382} from './barricade-382.ts';
 import {isCorePhysicalSchema297} from './physical-schema-297.ts';
 import {AI_CORE_CONTENT_298} from './ai-core-content-298.ts';
 import {NOVEL_MAX_HIT_POINTS_295} from './book-state-295.ts';
@@ -62,7 +63,7 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'hydroponics-basin':[180,.5,true],
   'mini-turret':[100,.7,true],
   'ancient-road-barrier':[500,0,true],'ancient-road-lamp':[300,0,true],
-  'tube-television':[100,1,true],sandbags:[300,0,true],fence:[100,1,false],'fence-gate':[120,1,false],'pen-marker':[80,1,false],wall:[300,1,false],door:[160,1,false],autodoor:[160,1,false],bed:[140,1,true],'hospital-bed':[150,1,true],table:[75,1,true],stool:[75,1,true],horseshoes:[75,1,true],'chess-table':[100,1,true],'hoopstone-ring':[100,1,true],'billiards-table':[250,1,true],'game-of-ur-board':[90,1,true],'poker-table':[250,1,true],
+  'tube-television':[100,1,true],sandbags:[300,0,true],barricade:[300,1,true],fence:[100,1,false],'fence-gate':[120,1,false],'pen-marker':[80,1,false],wall:[300,1,false],door:[160,1,false],autodoor:[160,1,false],bed:[140,1,true],'hospital-bed':[150,1,true],table:[75,1,true],stool:[75,1,true],horseshoes:[75,1,true],'chess-table':[100,1,true],'hoopstone-ring':[100,1,true],'billiards-table':[250,1,true],'game-of-ur-board':[90,1,true],'poker-table':[250,1,true],
   'torch-lamp':[75,0,false],campfire:[80,0,false],'passive-cooler':[80,1,false],stonecutter:[180,1,true],'butcher-table':[180,1,true],
   'fueled-stove':[180,1,true],'electric-stove':[180,1,true],'tailor-bench':[180,1,true],'research-bench':[250,1,true],
   'machining-table':[180,1,true],
@@ -70,7 +71,7 @@ const BUILDINGS:Readonly<Record<string,readonly [number,number,boolean]>>={
   'art-bench':[180,1,true],'small-sculpture':[90,1,true],'large-sculpture':[150,1,true],
   'electric-tailor-bench':[180,1,true],'table-square':[100,1,true],'table-long':[125,1,true],'table-large':[175,1,true],'double-bedroll':[100,1,true],'wall-lamp':[35,1,false],'dining-chair':[75,1,true],armchair:[120,1,true],couch:[160,1,true],'end-table':[60,1,true],dresser:[100,1,true],'flower-pot':[40,1,true],
   'wood-generator':[300,1,true],'standing-lamp':[50,1,false],'sun-lamp':[50,1,false],cooler:[100,.7,true],vent:[100,1,true],battery:[100,1,true],
-  'power-conduit':[80,.7,false],'power-switch':[120,.5,false],'solar-generator':[300,.7,true],heater:[100,.5,true],'wind-turbine':[150,.5,true],
+  'power-conduit':[80,.7,false],'hidden-conduit':[100,0,false],'power-switch':[120,.5,false],'solar-generator':[300,.7,true],heater:[100,.5,true],'wind-turbine':[150,.5,true],
 };
 const STUFF_HP:Readonly<Record<string,number>>={wood:.65,steel:1,jade:.5,'granite-blocks':1.7,'limestone-blocks':1.55,'marble-blocks':1.2,'sandstone-blocks':1.4,'slate-blocks':1.3};
 const STUFF_BUILDINGS=new Set(['egg-box','shelf','small-shelf','spike-trap','electric-crematorium','double-bed','drug-lab','fence','fence-gate','pen-marker','wall','door','autodoor','bedroll','bed','hospital-bed','table','table-square','table-long','table-large','double-bedroll','stool','dining-chair','end-table','dresser','flower-pot','horseshoes','chess-table','hoopstone-ring','billiards-table','game-of-ur-board','poker-table','stonecutter','butcher-table','fueled-stove','electric-stove','tailor-bench','electric-tailor-bench','research-bench','art-bench','small-sculpture','large-sculpture']);
@@ -80,10 +81,10 @@ const STUFF_BUILDINGS=new Set(['egg-box','shelf','small-shelf','spike-trap','ele
 const BUILDING_HP311:Readonly<Record<string,number>>=Object.freeze({fence:40,'fence-gate':20,'pen-marker':100,'table-long':150,'table-large':175,'double-bedroll':100,'wall-lamp':35,'dining-chair':100,'end-table':75,dresser:120,'flower-pot':75});
 export const HP_CHANGED_KINDS311:readonly string[]=Object.freeze(Object.keys(BUILDING_HP311));
 const buildingBaseHp=(kind:string,version:number):number=>Number(version)>=311&&Object.hasOwn(BUILDING_HP311,kind)?BUILDING_HP311[kind]!:BUILDINGS[kind]?.[0]??0;
-export const structureMaxHp=(s:Pick<Structure,'kind'|'material'>,version:number=SCHEMA_VERSION)=>isAncientMonumentKind256(s.kind)&&ancientMonumentMaterial256(s.kind,s.material,256)?ancientMonumentMaxHp256(s.kind,s.material):Object.hasOwn(s,'factionId')&&(s.kind==='wall'||s.kind==='door'||s.kind==='table'||s.kind==='table-square')&&ancientMonumentMaterial256('column',s.material,256)?ancientNeutralMaxHp256(s.kind,s.material):s.material==='jade'&&isHabitatFurnitureKind(s.kind)?Math.round(FURNITURE_DEFINITIONS[s.kind].maxHitPoints*.5):s.kind==='bedroll'&&isBedrollTextile256(s.material)?Math.round(75*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):s.kind==='couch'&&isBedrollTextile256(s.material)?Math.round(160*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):Math.round(buildingBaseHp(s.kind,version)*(STUFF_BUILDINGS.has(s.kind)?STUFF_HP[s.material??'wood']??1:1));
-export const structureFlammability=(s:Pick<Structure,'kind'|'material'>)=>isAncientMonumentKind256(s.kind)?ANCIENT_MONUMENT_DEFS_256[s.kind].flammability*(s.material==='wood'?1:s.material==='steel'?.4:0):s.material==='jade'?0:(s.kind==='bedroll'||s.kind==='couch')&&isBedrollTextile256(s.material)?BEDROLL_TEXTILES_256[s.material].flammabilityFactor:(BUILDINGS[s.kind]?.[1]??0)*(STUFF_BUILDINGS.has(s.kind)?s.material?.endsWith('-blocks')?0:s.material==='steel'?.4:1:1);
+export const structureMaxHp=(s:Pick<Structure,'kind'|'material'>,version:number=SCHEMA_VERSION)=>s.kind==='barricade'?Math.round(BARRICADE_382.maxHp*(barricadeStuff382(s.material)?.hp??NaN)):isAncientMonumentKind256(s.kind)&&ancientMonumentMaterial256(s.kind,s.material,256)?ancientMonumentMaxHp256(s.kind,s.material):Object.hasOwn(s,'factionId')&&(s.kind==='wall'||s.kind==='door'||s.kind==='table'||s.kind==='table-square')&&ancientMonumentMaterial256('column',s.material,256)?ancientNeutralMaxHp256(s.kind,s.material):s.material==='jade'&&isHabitatFurnitureKind(s.kind)?Math.round(FURNITURE_DEFINITIONS[s.kind].maxHitPoints*.5):s.kind==='bedroll'&&isBedrollTextile256(s.material)?Math.round(75*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):s.kind==='couch'&&isBedrollTextile256(s.material)?Math.round(160*BEDROLL_TEXTILES_256[s.material].hitPointsFactor):Math.round(buildingBaseHp(s.kind,version)*(STUFF_BUILDINGS.has(s.kind)?STUFF_HP[s.material??'wood']??1:1));
+export const structureFlammability=(s:Pick<Structure,'kind'|'material'>)=>s.kind==='barricade'?(barricadeStuff382(s.material)?.flammability??0):isAncientMonumentKind256(s.kind)?ANCIENT_MONUMENT_DEFS_256[s.kind].flammability*(s.material==='wood'?1:s.material==='steel'?.4:0):s.material==='jade'?0:(s.kind==='bedroll'||s.kind==='couch')&&isBedrollTextile256(s.material)?BEDROLL_TEXTILES_256[s.material].flammabilityFactor:(BUILDINGS[s.kind]?.[1]??0)*(STUFF_BUILDINGS.has(s.kind)?s.material?.endsWith('-blocks')?0:s.material==='steel'?.4:1:1);
 export const structureLeavesResources=(s:Pick<Structure,'kind'>)=>isAncientMonumentKind256(s.kind)|| (BUILDINGS[s.kind]?.[2]??false);
-export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='rock'?0:85);
+export const resourceMaxHp=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.hitPoints??(r.kind==='healroot'?60:r.kind==='tree'?200:r.kind==='berries'?120:r.kind==='corn'?150:r.kind==='tinctoria'?100:r.kind==='rock'?0:85);
 export const resourceFlammability=(r:Pick<Resource,'kind'|'species'>)=>floraDefinition(r)?.flammability??(r.kind==='rock'?0:r.kind==='tree'?.8:r.kind==='haygrass'?1.3:1);
 export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem357(p.item)?357:p.item==='devilstrand'?358:p.item==='ai-core'?298:p.item==='novel'?295:isProstheticItem273(p.item)?273:isSmithingApparel267(p.item)?267:193):number {
   if(p.item==='ai-core')return isSchema298OrLater(version)&&p.kind==='ai-core'?AI_CORE_CONTENT_298.maxHitPoints:0;
@@ -93,6 +94,7 @@ export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem
   if(version<256&&(p.item==='flak-pants'||p.item==='plasteel-flak-helmet'))return 0;
   if(p.item==='slag-steel-chunk')return version>=256?300:0;
   if(p.item==='hops'||p.item==='wort'||p.item==='beer')return version>=265?(p.item==='beer'?50:60):0;
+  if(p.item==='dye'||p.item==='ambrosia')return version>=382?50:0;
   if(isShellItem357(p.item))return isIedSchema357(version)&&p.kind==='shell'?SHELL_FACTS_357.maxHitPoints:0;  // Schema 358: Core DevilstrandCloth MaxHitPoints 100.
   if(p.item==='devilstrand')return version>=358&&p.kind==='textile'?100:0;
   if(p.item==='raw-fungus')return version>=256?60:0;
@@ -107,6 +109,7 @@ export function pileMaxHp(p:Pick<MaterialPile,'kind'|'item'>,version=isShellItem
   return p.item==='wood'?150:p.item==='cloth'?80:p.item==='light-leather'?60:p.item==='component'?70:0;
 }
 export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
+  if(p.item==='dye'||p.item==='ambrosia')return 1;
   if(p.item==='ai-core'&&p.kind==='ai-core')return AI_CORE_CONTENT_298.flammability;
   if(p.item==='novel'&&p.kind==='book')return 1;
   if(isProstheticItem273(p.item))return .7;
@@ -124,7 +127,7 @@ export function pileFlammability(p:Pick<MaterialPile,'kind'|'item'>):number {
   if(p.item==='flak-pants')return .6;
   if(p.kind==='apparel')return (p.item==='flak-vest'||p.item==='flak-helmet')?.6:1.2;
   if(p.kind==='mech-corpse')return 0;
-  if(p.kind==='weapon')return p.item==='plasteel-knife'?0:.5;if(p.kind==='corpse')return .7;if(p.kind==='food')return p.item==='pemmican'?.6:p.item==='hay'?1.5:1;
+  if(p.kind==='weapon')return p.item==='thrumbo-horn'?.4:p.item==='plasteel-knife'?0:.5;if(p.kind==='corpse')return .7;if(p.kind==='food')return p.item==='pemmican'?.6:p.item==='hay'?1.5:1;
   if(p.kind==='medicine')return p.item==='herbal-medicine'?1.3:.7;
   if(p.kind==='chemfuel')return 2;if(p.kind==='neutroamine')return .7;if(p.kind==='drug')return .7;
   // Unfinished apparel inherits the default zero stat; its embedded cloth is not a second ground pile.
