@@ -53,7 +53,8 @@ export function validPackagedSurvivalState(w:World,version:number):boolean {
   }
   if(active&&(version<188||!entry))return false;
   const unlocked=version>=188&&entry?.completedAt!==undefined;
-  const bills=(s:Structure):boolean=>!s.bills?.some(b=>b.recipe==='cook-survival-meal')||unlocked&&(s.kind==='fueled-stove'||s.kind==='electric-stove');
+  const bills=(s:Structure):boolean=>!s.bills?.some(b=>b.recipe==='cook-survival-meal'&&(!(s.kind==='fueled-stove'||s.kind==='electric-stove')||
+    !unlocked&&!(w.developerTest381===true&&developerBillPlacement381(w,s,b))));
   for(const s of w.structures)if(!bills(s))return false;
   for(const p of w.packed??[])if(!bills(p.building))return false;
   for(const p of w.pawns){
@@ -63,3 +64,4 @@ export function validPackagedSurvivalState(w:World,version:number):boolean {
   }
   return true;
 }
+import {developerBillPlacement381} from './developer-import-381.ts';

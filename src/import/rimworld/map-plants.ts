@@ -1,10 +1,9 @@
-/** Plant family: wild flora, trees and sown crops. Growth (0 to 1) is kept
- * where Elsewhere has growth; age, leafless state and dying are not. */
+/** Plant family: wild flora, trees, sown crops and existing potted plants. */
 import {exact,adapt,drop,type DefMapping} from './mapping.ts';
 import type {PlantSpecies} from '../../sim/biome-flora.ts';
 import type {CropKind} from '../../sim/crops.ts';
 
-export type PlantSpec={readonly wild:PlantSpecies}|{readonly crop:CropKind};
+export type PlantSpec={readonly wild:PlantSpecies}|{readonly crop:CropKind}|{readonly pot:'daylily'};
 const wild=(s:PlantSpecies)=>exact<PlantSpec>({wild:s});
 const crop=(c:CropKind)=>exact<PlantSpec>({crop:c});
 const none=(why:string)=>drop<PlantSpec>(why);
@@ -20,7 +19,7 @@ export const PLANT_MAP:Readonly<Record<string,DefMapping<PlantSpec>>>={
  Plant_Rice:crop('rice'),Plant_Potato:crop('potato'),Plant_Corn:crop('corn'),Plant_Cotton:crop('cotton'),Plant_Healroot:crop('healroot'),
  Plant_Haygrass:crop('haygrass'),Plant_Hops:crop('hops'),Plant_Devilstrand:crop('devilstrand'),
  Plant_Strawberry:none('Fraisier cultivé : culture absente d’Elsewhere.'),Plant_Ambrosia:none('Ambroisie : plante absente.'),
- Plant_Daylily:none('Hémérocalle (pot de fleurs) : fleur décorative absente ; le pot reste vide.'),Plant_Rose:none('Rosier (pot de fleurs) : fleur décorative absente.'),
+ Plant_Daylily:exact<PlantSpec>({pot:'daylily'}),Plant_Rose:none('Rosier (pot de fleurs) : fleur décorative absente.'),
  Plant_Tinctoria:none('Tinctoria (teinture) : plante absente.'),Plant_Smokeleaf:none('Feuille à fumer : drogue absente.'),Plant_Psychoid:none('Psychoïde : drogue absente.'),
  Plant_TreeCocoa:none('Cacaoyer : arbre absent.'),Plant_Timbershroom:none('Champignon de bois : plante absente.'),Plant_TreeGauranlen:none('Arbre Gauranlen : extension, absent.'),
 };
@@ -34,6 +33,7 @@ export type ZonePlant=import('../../sim/forestry-content-291.ts').GrowingPlant29
 export function zonePlant(def:string|undefined):DefMapping<ZonePlant>|undefined {
  if(!def)return undefined;const m=PLANT_MAP[def];if(!m)return undefined;if('drop' in m)return m;
  if('crop' in m.to)return exact(m.to.crop);
+ if('pot' in m.to)return drop('Hémérocalle : culture en pot, pas en champ dans Elsewhere.');
  const trees:readonly string[]=['oak','poplar','pine','birch','saguaro','drago','bamboo','cecropia','cypress','maple','palm','teak','willow'];
  return trees.includes(m.to.wild)?exact(m.to.wild as ZonePlant):adapt('potato','Plante sauvage choisie pour un champ : le champ cultivera des pommes de terre.');
 }

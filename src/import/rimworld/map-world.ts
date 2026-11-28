@@ -42,4 +42,4 @@ export const WORLD_SCALE:Readonly<Record<string,number>>={
  VeryCold:0,Cold:1,LittleBitColder:2,LittleBitWarmer:4,Hot:5,VeryHot:6,
 };
 export function worldScale(value:string|undefined):number {return value!==undefined&&Object.hasOwn(WORLD_SCALE,value)?WORLD_SCALE[value]!:3;}
-export const RELATION_NOTE=adapt(null,'Relations entre factions étrangères : reprises de la sauvegarde ; leaders et colonies recréés par Elsewhere.');
+export const RELATION_NOTE=adapt(null,'Relations entre factions étrangères reprises de la sauvegarde ; chefs et localités importés selon leurs références et propriétaires effectivement admis.');

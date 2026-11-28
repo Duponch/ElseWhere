@@ -8,7 +8,7 @@ import {PACKED_DIRT_256} from './road-ground-256.ts';
 import {isSchema281OrLater} from './schema-compatibility-257.ts';
 import {isSmoothedStone281,SMOOTHED_STONE_TERRAIN_281,SMOOTHED_STONE_FACTS_281} from './smooth-floor-terrain-281.ts';
 export const NATURAL_TERRAIN_RUNTIME_SCHEMA=256;
-export interface TerrainRuntimeMetadata256 {schemaVersion?:number;site?:{revision:number}}
+export interface TerrainRuntimeMetadata256 {schemaVersion?:number;site?:{revision:number};developerTest381?:true;developerPlacements381?:import('./developer-import-381.ts').DevPlacements381}
 const historical=new Set(['grass','soil','water','rock','rough-stone','rich-soil','gravel','marsh','water-shallow']);
 export function terrainAvailable256(terrain:unknown,version:number):boolean {if(isSmoothedStone281(terrain))return isSchema281OrLater(version);return terrain==='grass'||terrain==='soil'||terrain==='water'||terrain==='rock'||terrain==='rough-stone'&&version>=28||(terrain==='rich-soil'||terrain==='gravel')&&version>=83||terrain==='marsh'&&version>=246||terrain==='water-shallow'&&version>=254||version>=256&&(terrain==='packed-dirt'||isNaturalTerrain256(terrain));}
 export function terrainHasProspectiveRules256(terrain:unknown,w:TerrainRuntimeMetadata256):boolean {if(isSmoothedStone281(terrain))return isSchema281OrLater(w.schemaVersion);return (w.schemaVersion??255)>=256&&(terrain==='packed-dirt'||isNaturalTerrain256(terrain)&&(!historical.has(terrain)||w.site?.revision===3));}

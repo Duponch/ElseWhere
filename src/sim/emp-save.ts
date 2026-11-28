@@ -77,7 +77,7 @@ export function validEmpProductionTransport(w:World|Pick<World,'schemaVersion'|'
   const local='structures'in w?w:undefined;if(!packedRecords&&!local)return false;
   const allowed=version>=208&&microelectronicsUnlocked(w);
   for(const station of packedRecords?packedRecords.map(p=>p.building):[...local!.structures,...(local!.packed??[]).map(p=>p.building)])for(const bill of station.bills??[])
-    if(bill.recipe==='make-emp-launcher'&&(!allowed||station.kind!=='machining-table'||!validBillSettings(bill,bill.recipe,version)))return false;
+    if(bill.recipe==='make-emp-launcher'&&(!allowed&&!(local?.developerTest381===true&&developerBillPlacement381(local,station,bill))||station.kind!=='machining-table'||!validBillSettings(bill,bill.recipe,version)))return false;
   if(packedRecords)return true;
   for(const pile of local!.piles)if(pile.gunWork?.recipe==='make-emp-launcher'&&!allowed)return false;
   for(const p of local!.pawns){
@@ -87,3 +87,4 @@ export function validEmpProductionTransport(w:World|Pick<World,'schemaVersion'|'
   }
   return true;
 }
+import {developerBillPlacement381} from './developer-import-381.ts';

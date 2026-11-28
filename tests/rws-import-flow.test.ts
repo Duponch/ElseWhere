@@ -38,7 +38,7 @@ describe('Import job (what the import Worker runs)',()=>{
  it('summarises each family (repris, adapté, perdu) and names the main losses',()=>{
   const family=(f:string)=>outcome.families.find(c=>c.family===f)!;
   expect(family('buildings')).toMatchObject({label:'Bâtiments'});
-  expect(family('traits').dropped).toBeGreaterThanOrEqual(1);
+  expect(family('traits')).toMatchObject({exact:5,dropped:0});
   expect(outcome.families.every(c=>c.exact+c.adapted+c.dropped+c.unknown>0||c.before!==undefined)).toBe(true);
   expect(outcome.losses.length).toBeGreaterThan(0);expect(outcome.losses.length).toBeLessThanOrEqual(12);
   for(let i=1;i<outcome.losses.length;i++)expect(outcome.losses[i]!.count).toBeLessThanOrEqual(outcome.losses[i-1]!.count);

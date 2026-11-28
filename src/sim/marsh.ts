@@ -9,6 +9,7 @@ import {footprintCells,STRUCTURE_DEFINITIONS} from './definitions.ts';
 import type {Cell,Job,Resource,Tile,World} from './types.ts';
 import type {OwnedResourceReuseWitness,OwnedResourceBaseReuseWitness} from './owned-validation-resources.ts';
 import { structureById } from './structure-navigation.ts';
+import {developerFloorException381,developerSupportPlacement381} from './developer-import-381.ts';
 export const MARSH_SCHEMA_VERSION=246;
 export const MARSH_PATH_COST_CORE=30;
 export const MARSH_PERCEIVED_CORE={ordinary:180,drafted:18} as const;
@@ -19,10 +20,10 @@ export function marshSupportsFootprint(world:Pick<World,'tiles'|'width'>&Terrain
  const need=building&&buildingSupportNeed256(building);
  return cells.every(c=>{const tile=world.tiles[c.z*world.width+c.x];if(!tile)return false;if(building?.kind==='lay-floor')return terrainSupportsFloor256(tile,world);if(building&&isCaveHiveKind256(building.kind))return (world.schemaVersion??255)>=256&&terrainAvailable256(tile.terrain,world.schemaVersion??255);if(need)return terrainSupportsAffordance256(tile,need,world);return !terrainHasProspectiveRules256(tile.terrain,world)&&!isWetTerrain(tile.terrain);});
 }
-export function validMarshTile(tile:Pick<Tile,'terrain'|'floor'|'snowDepth'|'bridge'|'collapsedRock'>,version:number,metadata:TerrainRuntimeMetadata256={}):boolean {
+export function validMarshTile(tile:Pick<Tile,'terrain'|'floor'|'snowDepth'|'bridge'|'collapsedRock'>,version:number,metadata:TerrainRuntimeMetadata256={},index?:number):boolean {
  if(!validCollapsedRock256(tile,version,Number.MAX_SAFE_INTEGER,v=>admittedRoofTerrain256(v,version)))return false;
  if(tile.collapsedRock)tile=excavatedCollapsedRock256(tile as Tile);
- return terrainAvailable256(tile.terrain,version)&&(!isRoadFloor256(tile.floor)||version>=256)&&(tile.floor===undefined||terrainSupportsFloor256(tile,{...metadata,schemaVersion:version}))&&(tile.snowDepth===undefined||terrainHoldsSnow256(tile.terrain,!!tile.bridge));
+ return terrainAvailable256(tile.terrain,version)&&(!isRoadFloor256(tile.floor)||version>=256)&&(tile.floor===undefined||terrainSupportsFloor256(tile,{...metadata,schemaVersion:version})||index!==undefined&&developerFloorException381(metadata,index,tile))&&(tile.snowDepth===undefined||terrainHoldsSnow256(tile.terrain,!!tile.bridge));
 }
 export const marshConstructionJob=(job:Pick<Job,'kind'>):boolean=>job.kind==='install'||job.kind==='lay-floor'||Object.hasOwn(STRUCTURE_DEFINITIONS,job.kind);
 /** Changed tile identities are incremental; object support remains checked
@@ -33,10 +34,11 @@ export function validateMarshTransport(world:World,version:number=world.schemaVe
 /** The private selector is reached only at the original plant frontier. Public
  * callers never supply it and always read the complete current population. */
 function validateMarshTransportResources(world:World,version:number,changedTiles?:readonly number[],selectResources?:()=>readonly Resource[]):string[] {
- const meta={schemaVersion:version,site:world.site},check=(i:number)=>!!world.tiles[i]&&validMarshTile(world.tiles[i]!,version,meta),bad=(s:string)=>[s];
+ const meta=world.developerTest381?{schemaVersion:version,site:world.site,developerTest381:world.developerTest381,developerPlacements381:world.developerPlacements381}:{schemaVersion:version,site:world.site},check=(i:number)=>!!world.tiles[i]&&validMarshTile(world.tiles[i]!,version,meta,i),bad=(s:string)=>[s];
  if(changedTiles?changedTiles.some(i=>!check(i)):world.tiles.some((_,i)=>!check(i)))return bad('Invalid or future natural terrain.');
  const support={tiles:world.tiles,width:world.width,...meta};
- if(world.structures.some(s=>!marshSupportsFootprint(support,footprintCells(s),s)))return bad('Building lacks actual terrain support.');
+ if(world.structures.some(s=>!marshSupportsFootprint(support,footprintCells(s),s)&&
+  !(world.developerTest381&&footprintCells(s).every(c=>marshSupportsFootprint(support,[c],s)||!!world.tiles[c.z*world.width+c.x]&&developerSupportPlacement381(world,s,c.z*world.width+c.x,world.tiles[c.z*world.width+c.x]!)))))return bad('Building lacks actual terrain support.');
  for(const j of world.jobs){if(version<256&&isRoadFloor256(j.floor))return bad('Future road floor work.');if(marshConstructionJob(j)&&!marshSupportsFootprint(support,footprintCells(j),j.kind==='install'?{kind:j.furniture?.kind??'install',material:world.packed.find(p=>p.building.id===j.furniture?.structureId)?.building.material??structureById(world,j.furniture?.structureId)?.material}:j))return bad('Construction lacks actual terrain support.');if(j.kind==='sow'&&j.flowerPotId===undefined&&world.growingZones?.find(z=>z.id===j.growingZoneId)?.basinId===undefined){const t=world.tiles[j.z*world.width+j.x];if(!t||terrainGroundFertility256(t)<=0)return bad('Sowing lacks fertile unlayered terrain.');}}
  const substrate={fertility:0,terrainDefId:'',tags:[] as string[]};
  for(const r of selectResources?selectResources():world.resources){if(r.kind==='rock')continue;const tile=world.tiles[r.z*world.width+r.x];if(!tile)return bad('Plant outside terrain.');const prospective=version>=256&&plantSubstrateAllowed256(r.species,version,readNaturalPlantSubstrate256(tile));if(prospective!==undefined&&prospective!==false){if(tile.bridge||tile.floor)return bad('Plant beneath a built surface.');continue;}if(prospective===false&&version>=256&&r.species!==undefined&&terrainHasProspectiveRules256(tile.terrain,meta))return bad('Plant violates its actual substrate profile.');if(isWetTerrain(tile.terrain))return bad('Plant rooted in incompatible water.');}

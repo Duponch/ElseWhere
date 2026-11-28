@@ -48,13 +48,13 @@ export const ROOF_MAP:Readonly<Record<string,DefMapping<RoofSpec>>>={RoofConstru
 
 /** Natural rock walls and ores, stored in the compressed thing grid (or as
  * things when damaged). */
-export type RockSpec={readonly stone?:StoneKind;readonly ore?:'jade'|'steel'|'machinery'|'gold'|'silver'|'uranium'|'plasteel'};
+export type RockSpec={readonly stone?:StoneKind;readonly ore?:'jade'|'steel'|'machinery'|'gold'|'silver'|'uranium'|'plasteel';readonly collapsed?:true;readonly smoothed?:true};
 const rocks:Record<string,DefMapping<RockSpec>>={
  MineableSteel:exact({ore:'steel'}),MineableSilver:exact({ore:'silver'}),MineableGold:exact({ore:'gold'}),MineableUranium:exact({ore:'uranium'}),
  MineablePlasteel:exact({ore:'plasteel'}),MineableJade:exact({ore:'jade'}),MineableComponentsIndustrial:exact({ore:'machinery'}),
- CollapsedRocks:drop('Éboulis : non recréés (sol dégagé).'),RaisedRocks:drop('Roches surélevées : non recréées.'),
+ CollapsedRocks:exact({collapsed:true}),RaisedRocks:drop('Roches surélevées : non recréées.'),
 };
-for(const stone of STONES)rocks[stone]=exact({stone:stoneId(stone)});
+for(const stone of STONES){rocks[stone]=exact({stone:stoneId(stone)});rocks[`Smoothed${stone}`]=exact({stone:stoneId(stone),smoothed:true});}
 export const ROCK_MAP:Readonly<Record<string,DefMapping<RockSpec>>>=rocks;
 /** Stone chunks may also sit in the compressed grid. */
 export const COMPRESSED_CHUNKS=[...STONES.map(s=>`Chunk${s}`),'ChunkSlagSteel','ChunkMechanoidSlag'] as const;

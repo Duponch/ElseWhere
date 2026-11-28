@@ -18,13 +18,13 @@ export interface RimWorldImportJob {
  /** Stops the Worker at once; `done` settles as `cancelled`. */
  cancel():void;
 }
-export type RimWorldImportStarter=(file:File,onProgress:(progress:RwsImportProgress)=>void)=>RimWorldImportJob;
+export type RimWorldImportStarter=(file:File,onProgress:(progress:RwsImportProgress)=>void,developerTest?:true)=>RimWorldImportJob;
 
 const fileNameOf=(file:File)=>typeof file.name==='string'&&file.name?file.name:'sauvegarde.rws';
 
 /** Starts one import in a fresh Worker from `createWorker`. Without Worker
  * support the import is refused: it never runs on the page thread. */
-export function startRimWorldImport(file:File,onProgress:(progress:RwsImportProgress)=>void,createWorker:()=>Worker|undefined):RimWorldImportJob {
+export function startRimWorldImport(file:File,onProgress:(progress:RwsImportProgress)=>void,createWorker:()=>Worker|undefined,developerTest?:true):RimWorldImportJob {
  let settle!:(result:RimWorldImportResult)=>void,settled=false,worker:Worker|undefined;
  const done=new Promise<RimWorldImportResult>(resolve=>{settle=resolve;});
  const finish=(result:RimWorldImportResult)=>{
@@ -41,7 +41,7 @@ export function startRimWorldImport(file:File,onProgress:(progress:RwsImportProg
   else if(message.type==='done')finish(message.outcome);
  };
  worker.onerror=event=>{event?.preventDefault?.();finish(failed('Le module d’import s’est arrêté de façon inattendue. La colonie actuelle et vos sauvegardes sont conservées.'));};
- try{worker.postMessage({type:'import',file} satisfies RwsImportWorkerRequest);}
+ try{worker.postMessage({type:'import',file,...developerTest===true?{developerTest:true as const}:{}} satisfies RwsImportWorkerRequest);}
  catch(error){finish(failed(`Le fichier n’a pas pu être transmis au module d’import : ${error instanceof Error?error.message:String(error)}`));}
  return {done,cancel:()=>finish({status:'cancelled'})};
 }

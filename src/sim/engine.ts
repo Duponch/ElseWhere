@@ -321,6 +321,7 @@ import { advanceMining } from './mining.ts';
 import { advanceFurniture } from './furniture-transfer.ts';
 import { minifiable, furnitureIntentAt, furnitureSourceCells, packedAt } from './furniture-rules.ts';
 import { designateUninstall, installCommand } from './furniture-commands.ts';
+import {developerLockedBillsAt381} from './developer-bills-381.ts';
 import { deconstructionAt, deconstructionAvailable, designateDeconstruction } from './deconstruction-rules.ts';
 import { finishDeconstruction } from './deconstruction.ts';
 import { advancePriorityWork } from './priority-work.ts';
@@ -700,6 +701,7 @@ export function canDesignate(world: World, command: DesignateCommand|import('./c
   if(target&&command.kind==='deconstruct'&&!roadPropCanDeconstruct256(world,target))return refusal('invalid-command','Ce vestige ne peut pas être déconstruit par cette faction.');
   if(target&&world.jobs.some(j=>j.furniture?.structureId===target.id))return refusal('occupied','Ce meuble a déjà un ordre de déplacement.');
   if(target&&command.kind==='uninstall'&&!targetBuildingPlayerUse263(world,target))return refusal('invalid-command','Ce meuble doit être réellement revendiqué avant sa minification.');
+  if(target&&command.kind==='uninstall'&&developerLockedBillsAt381(world,target))return refusal('invalid-command','Retirez les factures de test verrouillées ou terminez leur recherche avant de désinstaller cet établi.');
   if(command.kind==='uninstall'&&(!minifiable(target!.kind)||target!.kind==='flower-pot'&&!flowerPotCanUninstall(target!.flower??createFlowerPotState())))return refusal('incompatible-resource','Coupez la plante avant de désinstaller ce pot.');
   const cells = footprintCells(target??command);
   if (cells.some(cell => !inBounds(world, cell.x, cell.z))) return refusal('out-of-bounds', 'Empreinte hors de la carte.');

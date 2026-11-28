@@ -6,6 +6,7 @@ import { planCommandDrops, releaseWork } from './work-release.ts';
 import { removeZonesForPlan } from './construction-zones.ts';
 import type { Command, CommandResult, DesignateCommand, Job, Structure, World } from './types.ts';
 import type {NaturalInstallPlan256} from './cave-glowpod-minification-256.ts';
+import {developerLockedBillsAt381} from './developer-bills-381.ts';
 
 export function designateUninstall(world:World,source:Structure):void {
   world.jobs.push({id:world.nextId++,kind:'uninstall',furniture:{structureId:source.id,kind:source.kind},x:source.x,z:source.z,orientation:source.orientation,footprint:source.footprint,progress:0,status:'pending',reservedBy:null,escrow:{wood:0,food:0}});
@@ -18,6 +19,7 @@ export function installCommand(world:World,command:Extract<Command,{type:'instal
   const source=furnitureObject(world,command.structureId);
   if(source&&!targetBuildingPlayerUse263(world,source))return fail('Ce meuble doit être réellement revendiqué avant sa minification.');
   if(!source||!minifiable(source.kind))return fail('Ce meuble ne peut pas être installé.');
+  if(developerLockedBillsAt381(world,source))return fail('Retirez les factures de test verrouillées ou terminez leur recherche avant de déplacer cet établi.');
   if(world.jobs.some(j=>j.flick?.structureId===source.id||j.furniture?.structureId===source.id||j.deconstruction?.structureId===source.id))return fail('Un ordre existe déjà pour ce meuble.');
   const pack=world.packed.find(p=>p.building.id===source.id);
   if(pack?.owner.type==='inventory')return fail('Cette œuvre appartient à un marchand.');

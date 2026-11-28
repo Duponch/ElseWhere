@@ -29,7 +29,7 @@ function fixtureMenu(withImport=true){
  vi.spyOn(URL,'createObjectURL').mockImplementation(blob=>{blobs.push(blob as Blob);return 'blob:report';});
  vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
  const jobs:{file:File;progress:(p:RwsImportProgress)=>void;settle:(r:RimWorldImportResult)=>void;cancelled:boolean}[]=[];
- const startRimWorldImport=vi.fn((file:File,progress:(p:RwsImportProgress)=>void):RimWorldImportJob=>{
+ const startRimWorldImport=vi.fn((file:File,progress:(p:RwsImportProgress)=>void,_developerTest?:true):RimWorldImportJob=>{
   let settle!:(r:RimWorldImportResult)=>void;const done=new Promise<RimWorldImportResult>(r=>{settle=r;});
   const job={file,progress,settle,cancelled:false};jobs.push(job);
   return {done,cancel(){job.cancelled=true;settle({status:'cancelled'});}};
@@ -46,7 +46,7 @@ function fixtureMenu(withImport=true){
  const click=async(id:string)=>{const c=control(id);expect(c.disabled).not.toBe(true);await c.onActivate();};
  const row=(id:string)=>page?.rows.find(r=>r.id===id);
  /** Picks a file in the browser picker opened by the RimWorld import button. */
- const choose=async(file:File)=>{await click('import-rimworld');const picker=pickers.at(-1)!;expect(picker.accept).toBe('.rws');picker.files=[file];picker.dispatchEvent(new Event('change'));};
+ const choose=async(file:File,developerTest=false)=>{await click(developerTest?'import-rimworld-developer':'import-rimworld');const picker=pickers.at(-1)!;expect(picker.accept).toBe('.rws');picker.files=[file];picker.dispatchEvent(new Event('change'));};
  const settle=async(result:RwsImportOutcome)=>{jobs.at(-1)!.settle(result);await Promise.resolve();await Promise.resolve();};
  return {menu,options,jobs,links,blobs,mounted,startRimWorldImport,onLoadConverted,control,click,row,choose,settle,get page(){return page!;}};
 }
@@ -58,6 +58,25 @@ test('the load screen offers the RimWorld import only when the game provides it'
  expect(f.control('import-rimworld').label).toBe('Importer une sauvegarde RimWorld');
  const without=fixtureMenu(false);without.menu.showLoad();
  expect(without.page.actions?.some(c=>c.id==='import-rimworld')).toBe(false);
+});
+
+test('developer test import is a distinct opt-in, and adoption refuses if mode has been disabled',async()=>{
+ if(converted.status!=='converted')throw Error('fixture conversion failed');
+ const f=fixtureMenu();let enabled=false;
+ f.options.developerMode={enabled:()=>enabled,set:value=>{enabled=value;return true;}};
+ f.menu.showLoad();
+ expect(f.page.actions?.some(c=>c.id==='import-rimworld-developer')).toBe(false);
+ enabled=true;f.menu.showLoad();
+ expect(f.control('import-rimworld-developer').label).toBe('Importer une sauvegarde de test RimWorld');
+ await f.choose(rws('test.rws'),true);
+ expect(f.startRimWorldImport).toHaveBeenCalledWith(expect.any(File),expect.any(Function),true);
+ expect(f.page.title).toBe('Importer une sauvegarde de test RimWorld');
+ await f.settle(converted);
+ enabled=false;await f.click('rimworld-play');
+ expect(f.onLoadConverted).not.toHaveBeenCalled();
+ expect(f.row('front-error')?.label).toContain('mode développeur');
+ enabled=true;await f.click('rimworld-play');
+ expect(f.onLoadConverted).toHaveBeenCalledOnce();
 });
 
 test('a chosen .rws starts one job off the page and shows its progress with a cancel button',async()=>{

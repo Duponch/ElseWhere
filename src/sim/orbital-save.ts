@@ -47,7 +47,7 @@ export function validOrbitalTransport(w:World,version:number,powerTopology?:Powe
     const content=[...buildings,...w.jobs,...w.jobs.flatMap(j=>[j.furniture,j.deconstruction,j.flick,j.fixBreakdown].filter(Boolean))];
     if(version<216)return !Object.hasOwn(w,'orbital')&&w.pawns.every(p=>!Object.hasOwn(p,'orbitalTrade'))
       &&content.every(s=>!s||!kinds.includes(s.kind))&&w.piles.every(p=>!orbitalOwner(p.owner));
-    if(content.some(s=>s&&kinds.includes(s.kind))&&!microelectronicsUnlocked(w))return false;
+    if(content.some(s=>s&&kinds.includes(s.kind)&&!(w.developerTest381===true&&developerResearchPlacement381(w,s)))&&!microelectronicsUnlocked(w))return false;
     if(packs.some(p=>p.building.kind==='comms-console')||buildings.some(s=>s.kind==='orbital-beacon'&&s.orientation!==0))return false;
     for(const kind of kinds)if(validatePower(w,version,kind as 'orbital-beacon'|'comms-console',powerTopology).length)return false;
     const state:unknown=w.orbital;
@@ -129,3 +129,4 @@ export function validOrbitalTransport(w:World,version:number,powerTopology?:Powe
     return true;
   }catch{return false;}
 }
+import {developerResearchPlacement381} from './developer-import-381.ts';

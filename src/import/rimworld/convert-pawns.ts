@@ -8,6 +8,7 @@ import {isDropped,lookup,mappingStatus} from './mapping.ts';
 import {ANIMAL_MAP,TRAIT_MAP,traitKey,SKILL_MAP,PASSION_MAP,CORE_WORK_TYPES,WORK_MAP,closestBackgrounds,keptBackstory,HUMAN_PART_MAP,INJURY_MAP,ADDED_PART_MAP,NON_COLONIST_NOTE,OTHER_HEDIFF_NOTE} from './map-pawns.ts';
 import {ITEM_MAP,APPAREL_MAP,WEAPON_MAP} from './map-items.ts';
 import {placeGear,type ImportContext} from './convert.ts';
+import {placeRwsMaterial,placeRwsPacked} from './convert-items.ts';
 import {startingPawn} from '../../sim/starting-pawns.ts';
 import {validTraits,type TraitId} from '../../sim/traits.ts';
 import {childhoodDefinition,adulthoodDefinition,BACKGROUND_ADULT_MIN_TICKS,backgroundWorkRefusal} from '../../sim/colonist-backgrounds.ts';
@@ -17,7 +18,10 @@ import {installArtificialPart} from '../../sim/artificial-parts.ts';
 import {BODY_PARTS,type BodyPartId} from '../../sim/body-definition.ts';
 import {validatePawnHealthRecord} from '../../sim/health-save.ts';
 import {bornWimpRecord362} from '../../sim/wimp-record-362.ts';
-import {HAIR_STYLES} from '../../sim/pawn-appearance.ts';
+import {importHumanAppearance,importHumanName,importHumanNeeds} from './import-human-state.ts';
+import {importActorFilthFeet} from './convert-environment.ts';
+import {importStoredHumanMedicalState,isStoredHumanMedicalDef} from './import-human-medical-state.ts';
+import {importHumanPolicies} from './import-human-policies.ts';
 import {addMaterial} from '../../sim/materials.ts';
 import {validTradeInventoryCustody} from '../../sim/trade-save.ts';
 import {ITEM_DEFINITIONS} from '../../sim/items.ts';
@@ -29,6 +33,7 @@ import {isAnimalSpecies256} from '../../sim/animal-core-v256.ts';
 import {animalMechanicalReadiness256} from '../../sim/animal-readiness-v256.ts';
 import {productKind} from '../../sim/animal-products.ts';
 import {TAMENESS_DECAY} from '../../sim/animal-handling.ts';
+import {importedAnimalId,importAnimalState,finalizeImportedAnimals} from './import-animal-state.ts';
 import {HUMAN_YEAR_TICKS} from '../../sim/human-age.ts';
 import type {ScarPain} from '../../sim/injury-rules.ts';
 
@@ -41,6 +46,7 @@ export function importPeople(ctx:ImportContext):void {
  for(const t of map.things){
   if(t.cls!=='Pawn'||!t.pos)continue;
   const race=t.def,kind=text(t.node,'kindDef')??race;
+  if(race.startsWith('Mech_'))continue; // Actual mechanical owners are handled separately.
   if(race==='Human'){
    notes.countBefore('colonists');
    const guest=child(t.node,'guest'),host=text(guest,'hostFaction'),prisoner=text(guest,'guestStatus')==='Prisoner'||!!host&&host===player&&t.faction!==player;
@@ -67,21 +73,8 @@ export function importPeople(ctx:ImportContext):void {
     if(!two&&slot>0)return;p.bedId=bed.id;if(two)p.bedSlot=slot as BedSlot;notes.mapped('colonists',`Lit attribué à ${p.name}.`);}
   });
  }
- // Animal names, masters and bonds (kept through Elsewhere's starting-pet record).
- for(const {thing,animal} of animals){
-  if(!animal.domestic)continue;
-  const name=text(thing.node,'name/name')??text(thing.node,'name/first');
-  const master=referencedThingId(text(thing.node,'playerSettings/master')),bond=listItems(thing.node,'social/directRelations').find(r=>text(r,'def')==='Bond');
-  const bonded=bond?referencedThingId(text(bond,'otherPawn')):undefined,masterId=master?ctx.thingIds.get(master):undefined,bondedId=bonded?ctx.thingIds.get(bonded):undefined;
-  const learned=listItems(at(thing.node,'training/learned'),'vals').map(n=>n.text.trim()==='True');
-  if(name){
-   animal.startingPet={revision:1,name:name.slice(0,80)};
-   if(masterId!==undefined&&masterId===bondedId&&learned[0]){animal.startingPet.masterId=masterId;animal.startingPet.bondedPawnId=bondedId;animal.startingPet.obedience={steps:3,wanted:true};notes.mapped('animals',`${name} : maître et lien repris.`);}
-   else if(master||bonded)notes.adapted('animals',`${name} : maître ou lien non repris (Elsewhere ne garde un maître que pour un animal lié et obéissant).`);
-  }
- }
- if(animals.some(a=>a.animal.domestic&&listItems(at(a.thing.node,'training/learned'),'vals').some((n,i)=>i>0&&i<4&&n.text.trim()==='True')))
-  notes.adapted('animals','Dressage : seule l’obéissance des animaux liés est reprise ; libération, sauvetage et transport appris ne le sont pas dans cette étape.');
+ finalizeImportedAnimals(ctx,animals);
+ importHumanPolicies(ctx,colonists);
  if(save.game&&text(save.game,'playSettings/useWorkPriorities')==='True')delete ctx.w.simpleWorkTab344;
 }
 
@@ -92,30 +85,16 @@ function displayName(node:XmlNode):string {
  const parts=[first,nick&&nick!==first&&nick!==last?`« ${nick} »`:undefined,last].filter(Boolean).join(' ');
  return (parts||nick||'Colon importé').slice(0,80);
 }
-function parseColor(value:string|undefined):number|undefined {
- const m=value&&/RGBA\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(value);if(!m)return undefined;
- const c=(s:string)=>Math.max(0,Math.min(255,Math.round(Number(s)*255)));return c(m[1]!)<<16|c(m[2]!)<<8|c(m[3]!);
-}
 function importColonist(ctx:ImportContext,t:RwsThing,index:number):Pawn|undefined {
- const {w,notes}=ctx,node=t.node,name=displayName(node);
- const p=startingPawn(w.nextId++,name,t.pos!.x,t.pos!.z,index%3,66,(w.seed+index*7919)>>>0,w.tick,w.schemaVersion);
+ const {w,notes}=ctx,node=t.node,name=displayName(node),local=ctx.coordinates.cell(t.pos!);
+ const p=startingPawn(w.nextId++,name,local.x,local.z,index%3,66,(w.seed+index*7919)>>>0,w.tick,w.schemaVersion);
  ctx.thingIds.set(t.id,p.id);
  // Age (game ticks are ten times Elsewhere's).
  const bio=Math.round((num(node,'ageTracker/ageBiologicalTicks')??0)/10),birth=num(node,'ageTracker/birthAbsTicks');
  const nowAbs=ctx.save.gameStartAbsTick+ctx.save.ticksGame,chrono=birth!==undefined?Math.round((nowAbs-birth)/10):bio;
  const biological=Math.max(MIN_ADULT_TICKS,bio);
- if(bio<MIN_ADULT_TICKS)notes.adapted('colonists',`${name} : moins de 18 ans dans la sauvegarde, importé à 18 ans (Elsewhere n’a pas d’enfants).`);
  p.age={biologicalTicks:biological,chronologicalTicks:Math.max(biological,chrono)};
- // Appearance: sex, body, head, hair.
- const female=text(node,'gender')==='Female';
- if(p.appearance){
-  const a=p.appearance;a.sex=female?'female':'male';
-  const body=text(node,'story/bodyType');a.bodyType=(body==='Thin'||body==='Hulk'||body==='Fat'?body:female?'Female':'Male') as typeof a.bodyType;
-  const head=text(node,'story/headType');a.headType=(head&&new RegExp(`^${female?'Female':'Male'}_(Average|Narrow)(Normal|Pointy|Wide)$`).test(head)?head:`${female?'Female':'Male'}_AverageNormal`) as typeof a.headType;
-  const hair=text(node,'story/hairDef');if(hair&&HAIR_STYLES.some(h=>h.id===hair))a.hair=hair as typeof a.hair;
-  const hairColor=parseColor(text(node,'story/hairColor'));if(hairColor!==undefined)a.hairColor=hairColor;
-  if(female)a.beard='NoBeard';
- }
+ importHumanAppearance(ctx,p,node);
  notes.def('colonists','Colonist','exact','colon',undefined);
  // Traits.
  const traits:TraitId[]=[];
@@ -133,14 +112,18 @@ function importColonist(ctx:ImportContext,t:RwsThing,index:number):Pawn|undefine
  if(childDef)notes.def('backstories',childDef,keptBackstory(childDef,choice.childhood)?'exact':'adapted',choice.childhood,keptBackstory(childDef,choice.childhood)?`Reprise telle quelle : « ${childhoodDefinition(choice.childhood).label} ».`:`Effets les plus proches (écart ${choice.childhoodDistance}) : « ${childhoodDefinition(choice.childhood).label} ».`);
  if(adultDef)notes.def('backstories',adultDef,!choice.adulthood?'dropped':keptBackstory(adultDef,choice.adulthood)?'exact':'adapted',choice.adulthood,!choice.adulthood?'Âge adulte non admis ici : seule l’enfance est reprise.':keptBackstory(adultDef,choice.adulthood)?`Reprise telle quelle : « ${adulthoodDefinition(choice.adulthood).label} ».`:`Effets les plus proches (écart ${choice.adulthoodDistance}) : « ${adulthoodDefinition(choice.adulthood).label} ».`);
  // Skills and passions, exact levels.
- const lastReset=Math.max(-1,Math.min(w.tick,p.skills.lastResetTick));
+ let hasDailyXp=false;
  for(const s of listItems(node,'skills/skills')){
   const id=SKILL_MAP[text(s,'def')??''];if(!id)continue;
   const level=Math.max(0,Math.min(20,Math.round(num(s,'level')??0))),need=xpRequired(level);
-  const xp=Math.max(0,Math.min(level===20?need-1000:need-1,Math.round((num(s,'xpSinceLastLevel')??0)*1000)));
-  p.skills[id]={level,xp,dailyXp:0,passion:PASSION_MAP[text(s,'passion')??'None']??0};
+  const xp=Math.max(level===0?0:-999999,Math.min(level===20?need-1000:need-1,Math.round((num(s,'xpSinceLastLevel')??0)*1000)));
+  const rawDaily=num(s,'xpSinceMidnight')??0,dailyXp=Math.max(-3600000,Math.min(id==='melee'?140000000:39375000,Math.round(rawDaily*1000)));
+  if(rawDaily!==0){hasDailyXp=true;notes.def('skills','Expérience depuis minuit',dailyXp===Math.round(rawDaily*1000)?'exact':'adapted','expérience quotidienne');}
+  p.skills[id]={level,xp,dailyXp,passion:PASSION_MAP[text(s,'passion')??'None']??0};
  }
- p.skills.lastResetTick=lastReset;
+ const xpReset=num(node,'skills/lastXpSinceMidnightResetTimestamp');
+ if(xpReset!==undefined)p.skills.lastResetTick=xpReset<0?-1:Math.min(w.tick,Math.floor(xpReset/10));
+ else if(hasDailyXp)p.skills.lastResetTick=w.tick;
  notes.def('skills','Compétences et passions','exact','niveaux, expérience, passions');
  // Work priorities in the game's saved order.
  const vals=listItems(at(node,'workSettings/priorities'),'vals').map(v=>Number(v.text.trim()));
@@ -149,38 +132,34 @@ function importColonist(ctx:ImportContext,t:RwsThing,index:number):Pawn|undefine
   notes.def('skills','Priorités de travail','exact','priorités');
  }else notes.def('skills','Priorités de travail','dropped',undefined,'Priorités absentes : valeurs par défaut.');
  for(const work of Object.keys(p.priorities) as (keyof Pawn['priorities'])[])if(backgroundWorkRefusal(p,work as never))(p.priorities as Record<string,number>)[work]=0;
- // Needs.
- for(const n of listItems(node,'needs/needs')){
-  const def=text(n,'def'),level=num(n,'curLevel');if(level===undefined)continue;const pct=Math.max(0,Math.min(100,Math.round(level*100)));
-  if(def==='Food')p.hunger=pct;else if(def==='Rest')p.rest=pct;else if(def==='Mood')p.mood=pct;else if(def==='Joy')p.recreation.level=pct;else if(def==='Comfort')p.comfort=pct;else if(def==='Beauty')p.beauty=pct;
- }
+ importHumanNeeds(ctx,p,node);
+ importActorFilthFeet(ctx,p,node,'pawn-state');
  importHealth(ctx,p,node,traits.includes('wimp' as TraitId));
+ importHumanName(ctx,p,node);
+ importStoredHumanMedicalState(ctx,p,node);
+ if(bio<MIN_ADULT_TICKS&&!p.nativeHuman)notes.adapted('colonists',`${name} : âge biologique de moins de 18 ans non admis, importé à 18 ans.`);
  // The person exists before their clothes, weapon and inventory.
  w.pawns.push(p);
  for(const a of listItems(at(node,'apparel/wornApparel/innerList')))placeGear(ctx,readThing(a),{type:'apparel',pawnId:p.id});
  for(const e of listItems(at(node,'equipment/equipment/innerList'))){if(ctx.w.piles.some(pl=>pl.owner.type==='equipment'&&pl.owner.pawnId===p.id))break;placeGear(ctx,readThing(e),{type:'equipment',pawnId:p.id});}
  for(const it of listItems(at(node,'inventory/innerContainer/innerList'))){
-  const thing=readThing(it);notes.countBefore('items');
+  const thing=readThing(it);
+  if(thing.def==='MinifiedThing'){placeRwsPacked(ctx,thing,{type:'inventory',pawnId:p.id});continue;}
   if(Object.hasOwn(APPAREL_MAP,thing.def)||Object.hasOwn(WEAPON_MAP,thing.def)){placeGear(ctx,thing,{type:'inventory',pawnId:p.id});continue;}
-  const m=lookup(ITEM_MAP,thing.def);if(!m||isDropped(m)){notes.def('items',thing.def,m?'dropped':'unknown',undefined,m&&isDropped(m)?m.drop:'Objet inconnu.');continue;}
-  const kind=ITEM_DEFINITIONS[m.to].kind as MaterialKind,quantity=Math.min(thing.stack,ITEM_DEFINITIONS[m.to].stackLimit),owner={type:'inventory' as const,pawnId:p.id};
-  // Elsewhere's own custody rule says what a person may carry.
-  if(!validTradeInventoryCustody(w,{id:0,kind,item:m.to,quantity,owner},w.schemaVersion)){notes.def('items',`${thing.def} (inventaire)`,'dropped',m.to,'Objet qu’Elsewhere ne laisse pas porter dans un inventaire.');continue;}
-  try{addMaterial(w,kind,quantity,owner,m.to);notes.countAfter('items');notes.def('items',`${thing.def} (inventaire)`,mappingStatus(m),m.to,'adapt' in m?m.adapt:undefined);}
-  catch{notes.def('items',`${thing.def} (inventaire)`,'dropped',m.to,'Refusé dans l’inventaire par Elsewhere.');}
+  placeRwsMaterial(ctx,thing,{type:'inventory',pawnId:p.id});
  }
  return p;
 }
 
-function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
+export function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
  const {w,notes}=ctx,record=createMedicalRecord(w.tick);p.health=record;
  const valid=()=>validatePawnHealthRecord(p,w).length===0;
  const hediffs=listItems(at(node,'healthTracker/hediffSet/hediffs'));
+ const bornAt=(h:XmlNode)=>Math.max(0,Math.min(w.tick,Math.floor((num(h,'tickAdded')??(ctx.save.ticksGame-(num(h,'ageTicks')??0)))/10)));
  const partOf=(h:XmlNode):BodyPartId|undefined=>{const body=text(h,'part/body'),index=num(h,'part/index');return body==='Human'&&index!==undefined?HUMAN_PART_MAP[index]:undefined;};
  const ancestors=(part:BodyPartId)=>{const out:BodyPartId[]=[];let parent=BODY_PARTS[part]?.parent;while(parent){out.push(parent);parent=BODY_PARTS[parent].parent;}return out;};
- // Age conditions first.
- const ailments=hediffs.map(h=>text(h,'def')).flatMap(d=>d==='BadBack'?['bad-back' as const]:d==='Frail'?['frail' as const]:[]);
- if(ailments.length){record.ageAilments=[...new Set(ailments)];if(!valid())delete record.ageAilments;}
+ // Native and legacy systemic age conditions are imported after name/scale
+ // adoption, in importStoredHumanMedicalState.
  // Added parts (prostheses) and the sites they replace.
  const covered=new Set<BodyPartId>();
  for(const h of hediffs){
@@ -189,7 +168,11 @@ function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
   if(!part){notes.def('health',def,'dropped',m.to,'Partie du corps introuvable.');continue;}
   const before=JSON.stringify(record);
   if(!record.missing.some(x=>x.part===part))record.missing.push({part,bornAt:w.tick,tended:true});
-  if(installArtificialPart(record,part,m.to)&&valid()){covered.add(part);notes.def('health',def,mappingStatus(m),m.to,'adapt' in m?m.adapt:undefined);}
+  if(installArtificialPart(record,part,m.to)&&valid()){
+   const entry=record.artificialParts?.find(a=>a.part===part);if(entry)entry.installedAt=bornAt(h);
+   for(const stump of record.missing)if(ancestors(stump.part).includes(part)&&stump.nonFresh)stump.bornAt=bornAt(h);
+   covered.add(part);notes.def('health',def,mappingStatus(m),m.to,'adapt' in m?m.adapt:undefined);
+  }
   else{Object.assign(record,JSON.parse(before));notes.def('health',def,'dropped',m.to,'Pose refusée par les règles d’Elsewhere.');}
  }
  // Missing parts: only the outermost ones (children follow).
@@ -198,7 +181,10 @@ function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
  for(const part of missing){
   if(covered.has(part)||ancestors(part).some(a=>missingSet.has(a)||covered.has(a))){continue;}
   if(record.missing.some(x=>x.part===part))continue;
-  record.missing.push({part,bornAt:w.tick,tended:true});
+  const source=hediffs.find(h=>h.attrs?.Class==='Hediff_MissingPart'&&partOf(h)===part)!;
+  // The legacy human clinical owner encodes a healed natural stump by the
+  // closed-bleeding marker; native `nonFresh` requires its scale installed.
+  record.missing.push({part,bornAt:bornAt(source),...text(source,'isFresh')==='True'?{}:{tended:true as const}});
   if(valid())notes.def('health','MissingBodyPart','exact','partie manquante');
   else{record.missing.pop();notes.def('health','MissingBodyPart','dropped',part,'Partie manquante non admise par Elsewhere à cet endroit.');}
  }
@@ -211,7 +197,8 @@ function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
   if(!part||covered.has(part)||missingSet.has(part)||record.missing.some(x=>x.part===part)){notes.def('health',def,'dropped',m.to,'Partie du corps absente ou remplacée.');continue;}
   const max=BODY_PARTS[part].hp*1000,taken=used.get(part)??0,severity=Math.min(Math.max(1,Math.round((num(h,'severity')??1)*1000)),max-taken-1000);
   if(severity<1){notes.def('health',def,'dropped',m.to,'La partie n’a plus assez de points de vie dans Elsewhere.');continue;}
-  const injury:NonNullable<Pawn['health']>['injuries'][number]={id:record.nextInjuryId++,part,kind:m.to,severity,bornAt:w.tick,...permanent?{scar:{threshold:severity,pain:PAIN[text(h,'painCategory')??'Painless']??0}}:{tended:Math.max(0,Math.min(1300,Math.round((num(h,'tendQuality')??.5)*1000)))}};
+  const tendQuality=num(h,'tendQuality'),tendTicks=num(h,'tendTicksLeft');
+  const injury:NonNullable<Pawn['health']>['injuries'][number]={id:record.nextInjuryId++,part,kind:m.to,severity,bornAt:bornAt(h),...permanent?{scar:{threshold:severity,pain:PAIN[text(h,'painCategory')??'Painless']??0}}:tendQuality!==undefined&&(tendTicks??0)>0?{tended:Math.max(0,Math.min(1300,Math.round(tendQuality*1000)))}:{}};
   record.injuries.push(injury);
   if(valid()){used.set(part,taken+severity);notes.def('health',permanent?`${def} (cicatrice)`:def,mappingStatus(m),permanent?`cicatrice ${m.to}`:m.to,'adapt' in m?m.adapt:undefined);}
   else{
@@ -219,24 +206,24 @@ function importHealth(ctx:ImportContext,p:Pawn,node:XmlNode,wimp:boolean):void {
    record.injuries.pop();record.nextInjuryId--;notes.def('health',def,'dropped',m.to,'Refusée par les règles d’Elsewhere (cicatrice impossible sur cette partie).');
   }
  }
- for(const h of hediffs){const cls=h.attrs?.Class;if(cls==='Hediff_Injury'||cls==='Hediff_MissingPart'||cls==='Hediff_AddedPart')continue;const def=text(h,'def')??'?';if(def==='BadBack'||def==='Frail'){notes.def('health',def,'exact',def==='BadBack'?'bad-back':'frail');continue;}notes.def('health',def,'dropped',undefined,OTHER_HEDIFF_NOTE);}
+ for(const h of hediffs){const cls=h.attrs?.Class;if(cls==='Hediff_Injury'||cls==='Hediff_MissingPart'||cls==='Hediff_AddedPart')continue;const def=text(h,'def')??'?';if(isStoredHumanMedicalDef(def))continue;if(def==='BadBack'||def==='Frail'){notes.def('health',def,'exact',def==='BadBack'?'bad-back':'frail');continue;}notes.def('health',def,'dropped',undefined,OTHER_HEDIFF_NOTE);}
  if(wimp)bornWimpRecord362(p,w.tick);
 }
 
 // ---- Animals -----------------------------------------------------------------------------------
 function importAnimal(ctx:ImportContext,t:RwsThing,species:WildAnimal['species'],tame:boolean):WildAnimal|undefined {
- const {w,notes}=ctx,i=ctx.index(t.pos!),tile=w.tiles[i]!;
+ const {w,notes}=ctx,local=ctx.coordinates.cell(t.pos!),i=ctx.index(local),tile=w.tiles[i]!;
  if(isAnimalSpecies256(species)&&!animalMechanicalReadiness256(species).ok){notes.def('animals',t.def,'dropped',species,'Espèce pas encore prise en charge par la simulation d’Elsewhere.');return undefined;}
  if(tile.terrain==='rock'||ctx.blocked.has(i)){notes.def('animals',t.def,'dropped',species,'Animal sur une case infranchissable dans Elsewhere.');return undefined;}
  w.wildlife??={profile:w.site?.revision===3?'geographic-fauna-v3':'temperate-hares-v1',rng:((w.seed^0x784caf31)>>>0)||1,animals:[],eatenPlants:0,eatenNutrition:0,eatenItems:0};
- const age=Math.max(1,Math.round((num(t.node,'ageTracker/ageBiologicalTicks')??adultAgeTicks(species)*10)/10));
- const a:WildAnimal={id:w.nextId++,species,sex:text(t.node,'gender')==='Male'?'male':'female',x:t.pos!.x,z:t.pos!.z,ageTicks:age,food:0,rest:.9,state:'idle',path:[],nextDecision:w.tick+1} as WildAnimal;
+ // Core's Male gender is the omitted XML default. Exact age Core remainder
+ // survives the ten-Core local simulation clock, including a newborn at 0.
+ const rawAge=Math.max(0,Math.round(num(t.node,'ageTracker/ageBiologicalTicks')??adultAgeTicks(species)*10));
+ const a:WildAnimal={id:importedAnimalId(ctx,t),species,sex:text(t.node,'gender')==='Female'?'female':'male',x:local.x,z:local.z,ageTicks:Math.floor(rawAge/10),ageCoreRemainder:rawAge%10,food:0,rest:.9,state:'idle',path:[],nextDecision:w.tick+1};
  if(w.schemaVersion>=256){attachGeneratedAnimalGrowth256(a,w.tick*10,w.schemaVersion);initializeAnimalEggLayer256(a);}
  a.food=animalNutritionMax(a)*.8;
  if(tame)a.domestic={since:w.tick,care:'herbal',tameness:5,nextDecay:w.tick+TAMENESS_DECAY,...productKind(a)?{productFullness:0}:{}};
  w.wildlife.animals.push(a);ctx.thingIds.set(t.id,a.id);
- const all=listItems(at(t.node,'healthTracker/hediffSet/hediffs')),hediffs=all.filter(h=>h.attrs?.Class!=='Hediff_Pregnant');
- if(all.length>hediffs.length)notes.def('animals','Gestation','dropped',undefined,'Gestation en cours : non reprise.');
- if(hediffs.length)notes.def('health',`${t.def} : santé`,'dropped',undefined,'Blessures et parties manquantes des animaux : non reprises dans cette étape.',hediffs.length);
+ importAnimalState(ctx,t,a);
  return a;
 }

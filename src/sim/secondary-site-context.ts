@@ -27,7 +27,7 @@ export function secondaryContext(world:World):World|undefined {
   let cached=contexts.get(root);
   if(!cached||cached.map!==site.map||Object.hasOwn(cached.view,'phaseCore297')!==Object.hasOwn(root,'phaseCore297')){
     const view={...site.map} as World;
-    for(const key of CAMPAIGN_FIELDS)if((key!=='worldPawns'&&key!=='worldFactions'&&key!=='worldSites263'&&key!=='linkedStorage286'&&key!=='phaseCore297')||Object.hasOwn(root,key))Object.defineProperty(view,key,{enumerable:true,configurable:false,
+    for(const key of CAMPAIGN_FIELDS)if((key!=='worldPawns'&&key!=='worldFactions'&&key!=='worldSites263'&&key!=='linkedStorage286'&&key!=='phaseCore297'&&key!=='developerTest381')||Object.hasOwn(root,key))Object.defineProperty(view,key,{enumerable:true,configurable:false,
       get:()=>root[key],set:value=>{(root as unknown as Record<string,unknown>)[key]=value;}});
     authorities.set(view,root);cached={map:site.map,view};contexts.set(root,cached);
   }
@@ -71,7 +71,7 @@ export function secondaryValidationContext(world:World):World|undefined {
     // Reading an imported world must not install a runtime view that could
     // retain old fields while a strictly validated migration edits the map.
     view={...site.map} as World;
-    for(const key of CAMPAIGN_FIELDS)if((key!=='worldSites263'&&key!=='phaseCore297')||Object.hasOwn(root,key))(view as unknown as Record<string,unknown>)[key]=root[key];
+    for(const key of CAMPAIGN_FIELDS)if((key!=='worldSites263'&&key!=='phaseCore297'&&key!=='developerTest381')||Object.hasOwn(root,key))(view as unknown as Record<string,unknown>)[key]=root[key];
   }
   authorities.set(view,root);return view;
 }

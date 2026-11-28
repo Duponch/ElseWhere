@@ -111,6 +111,8 @@ import {validCollapsedRock256,registerCollapsedRockIdentities256,admittedRoofTer
 import {validNaturalRoofState256} from '../sim/roof-save.ts';
 import {validGeographicSiteBinding256} from '../sim/site-geographic-256.ts';
 import {validEggPile256} from '../sim/animal-egg-save-v256.ts';
+import {eggSpeciesForItem256} from '../sim/animal-egg-content-v256.ts';
+import {isEggBoxSchema374,EGG_BOX_MAX_CONTENT_374} from '../sim/egg-box-state-374.ts';
 import {isFutureEcologyItem256} from '../sim/cave-products-256.ts';
 import {registerProjectedFactionOwners256} from '../sim/world-faction-projection-save-256.ts';
 import {captureFactionInitializations256,sameFactionInitializations256,type ConfirmedFactionInitializations256} from '../sim/world-faction-no-expansion-ideo-256.ts';
@@ -135,6 +137,8 @@ import {validVentTransport} from '../sim/vent.ts';
 import {validTundraTransport} from '../sim/tundra-save.ts';
 import {validCampaignPresentation} from '../sim/secondary-site-presentation.ts';
 import {validateMarshTransport,validMarshTile} from '../sim/marsh.ts';
+import {validDeveloperPlacements381,developerBillPlacement381} from '../sim/developer-import-381.ts';
+import {validDeveloperBills381} from '../sim/developer-bills-381.ts';
 import {validTuqueCatalogueTransport} from '../sim/tuque-catalogue-save.ts';
 import {validReconCatalogueTransport} from '../sim/recon-catalogue-save.ts';
 import {validateTreeTransport,registerTreeThingIds,validTreePileShape,validTreeJobShape,validPlantTargetShape} from '../sim/tree-transfer-save.ts';
@@ -181,7 +185,8 @@ import { floorAvailable } from '../sim/flooring.ts';
 import { sterileMaterialsUnlocked } from '../sim/research.ts';
 import { validPlantLife } from '../sim/plant-life-save.ts';
 import { validCropBlight } from '../sim/plant-blight-save.ts';
-import { validDeepResearchTransport,validHospitalSupportTransport,validateResearch,validMedicineResearchTransport } from '../sim/research-save.ts';
+import { validDeepResearchTransport,validHospitalSupportTransport,validateResearch,validMedicineResearchTransport,validPenoxycylineResearchDomain337 } from '../sim/research-save.ts';
+import {isPenoxycyline337,isPenoxycylineRecipe337} from '../sim/penoxycyline-337.ts';
 import { validEmpStructureTransport,validEmpProductionTransport } from '../sim/emp-save.ts';
 import { validFluIncidents } from '../sim/flu-incidents-save.ts';
 import { validateMedicalRecord } from '../sim/injury-validation.ts';
@@ -887,6 +892,11 @@ function validPile(pile:MaterialPile,world:World|DynamicWorld,deferAnimalHolder=
   }else if(owner.type==='grave'){
     if(world.schemaVersion<89||!Number.isSafeInteger(owner.graveId)||owner.graveId<1||!world.structures.some(s=>s.id===owner.graveId&&(s.kind==='grave'||world.schemaVersion>=256&&s.kind==='sarcophagus'))
       ||Object.keys(owner).some(key=>!['type','graveId'].includes(key)))return false;
+  }else if(owner.type==='egg-box374'){
+    if(!isEggBoxSchema374(world.schemaVersion)||!Number.isSafeInteger(owner.structureId)||owner.structureId<1||owner.structureId>=world.nextId
+      ||Object.keys(owner).length!==2||Object.keys(owner).some(key=>!['type','structureId'].includes(key))
+      ||!world.structures.some(s=>s.id===owner.structureId&&s.kind==='egg-box')||!eggSpeciesForItem256(pile.item)||pile.kind!=='food'
+      ||pile.quantity>EGG_BOX_MAX_CONTENT_374||Object.hasOwn(pile,'eggForbidden')||Object.hasOwn(pile,'forbidden'))return false;
   }else return false;
   if(Object.keys(pile).some(key=>!['id','kind','item','quantity','owner','rot','foodPoison','corpse','humanCorpse','mechCorpse','damage','unfinished','gunWork','flakWork','componentWork','artWork','smithingWork','prostheticWork273','apparel','weapon','haulRequested','innerResource','plantPack','egg','eggForbidden','forbidden',...((Number(world.schemaVersion)===295||(Number(world.schemaVersion)===296||isCorePhysicalSchema297(Number(world.schemaVersion))))?['book']:[])].includes(key)))return false;
   if(!validMaterialPermission256(pile,world.schemaVersion))return false;
@@ -916,12 +926,16 @@ function validPile(pile:MaterialPile,world:World|DynamicWorld,deferAnimalHolder=
 /** Only the new pharmaceutical envelope is added to the historical decoder.
  * Ingredient quotas and bill settings share the simulation's pure validators. */
 function validMedicineTransport(world:World):boolean {
+  if(!validPenoxycylineResearchDomain337(world,world.schemaVersion))return false;
+  const penoxyUnlocked=isPenoxycyline337(world.schemaVersion)&&world.research?.penoxycylineProduction?.completedAt!==undefined;
   const int=(v:unknown,min=0,max=Number.MAX_SAFE_INTEGER):v is number=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=min&&v<=max;
   const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
   const cell=(v:unknown)=>record(v)&&Object.keys(v).every(k=>k==='x'||k==='z')&&int(v.x,0,world.width-1)&&int(v.z,0,world.height-1);
   for(const station of [...world.structures,...world.packed.map(p=>p.building)])for(const bill of station.bills??[]){
-    if(station.kind==='drug-lab'&&bill.recipe!=='make-medicine')return false;
+    if(station.kind==='drug-lab'&&bill.recipe!=='make-medicine'&&!(isPenoxycyline337(world.schemaVersion)&&isPenoxycylineRecipe337(bill.recipe)))return false;
     if(bill.recipe==='make-medicine'&&(world.schemaVersion<206||station.kind!=='drug-lab'||!int(bill.id,1,world.nextId-1)||!validBillSettings(bill,'make-medicine',world.schemaVersion)))return false;
+    if(isPenoxycylineRecipe337(bill.recipe)&&(!isPenoxycyline337(world.schemaVersion)||station.kind!=='drug-lab'||!int(bill.id,1,world.nextId-1)||!validBillSettings(bill,bill.recipe,world.schemaVersion)||
+      !penoxyUnlocked&&!(world.developerTest381===true&&developerBillPlacement381(world,station,bill))))return false;
   }
   const taskValid=(value:unknown,pawn:Pawn,queued:boolean):boolean=>{
     if(!record(value)||value.recipe!=='make-medicine')return true;
@@ -961,9 +975,12 @@ function validMedicineTransport(world:World):boolean {
     return validMedicineIngredients('make-medicine',value.ingredients as {item:string;quantity:number}[]);
   };
   for(const pawn of world.pawns){
+    if(!penoxyUnlocked&&isPenoxycylineRecipe337(pawn.cooking?.recipe))return false;
     if(!taskValid(pawn.cooking,pawn,false))return false;
-    for(const order of pawn.orders.queue)if(typeof order==='object'&&order!==null&&'cooking' in order&&order.cooking.recipe==='make-medicine'
-      &&(!validCookingOrder(order,world)||!taskValid(order.cooking,pawn,true)))return false;
+    for(const order of pawn.orders.queue)if(typeof order==='object'&&order!==null&&'cooking' in order){
+      if(!penoxyUnlocked&&isPenoxycylineRecipe337(order.cooking.recipe))return false;
+      if(order.cooking.recipe==='make-medicine'&&(!validCookingOrder(order,world)||!taskValid(order.cooking,pawn,true)))return false;
+    }
   }
   return true;
 }
@@ -1309,6 +1326,7 @@ export class SnapshotDecoder {
     const refuse=()=>({status:'resync' as const,reason:'Campagne sans carte illisible.'});
     if(!Number.isSafeInteger(packet.epoch)||packet.epoch<1||!Number.isSafeInteger(packet.revision)||packet.revision<1||!Number.isFinite(packet.stepMs)||packet.stepMs<0||![0,1,3,6].includes(packet.speed))return refuse();
     if(packet.epoch<this.epoch||packet.epoch===this.epoch&&packet.revision<=this.revision)return {status:'stale'};
+    if('developerPlacements381'in packet.summary||!validDeveloperPlacements381(packet.summary,Number(packet.summary.schemaVersion)))return refuse();
     if('banishedDepartures378'in packet.summary||!validPersonalOrdersTransport378(packet.summary,Number(packet.summary.schemaVersion)))return refuse();
     if(!validConstructionTransport379(packet.summary,Number(packet.summary.schemaVersion)))return refuse();
     if(!validPhaseCore297(packet.summary,packet.summary.schemaVersion)||!validCorePathBudget297(packet.summary,packet.summary.schemaVersion,packet.summary.tick,isCorePhysicalSchema297(Number(packet.summary.schemaVersion))?Number(Object.getOwnPropertyDescriptor(packet.summary,'phaseCore297')?.value):0,false))return refuse();
@@ -1493,7 +1511,9 @@ export class SnapshotDecoder {
     if((message.world.schemaVersion<181&&Object.hasOwn(message.world,'rainElectrical'))
       ||!validRainElectrical(message.world.rainElectrical,message.world.schemaVersion,message.world))return resync('Exposition électrique aux précipitations invalide pour ce snapshot.');
     if(!validPodRescueTransportBindings(message.world))return resync('Secours civil invalide pour ce snapshot.');
-    if(message.kind==='checkpoint'&&(!Array.isArray(message.world.tiles)||message.world.tiles.some(tile=>!tile||!validCollapsedRock256(tile,message.world.schemaVersion,message.world.nextId,v=>admittedRoofTerrain256(v,message.world.schemaVersion))||!validMarshTile(tile,message.world.schemaVersion,message.world)||!validBridgeTile(tile,message.world.schemaVersion)||!validOre(tile,message.world.schemaVersion)||!validMiningDamage(tile,message.world.schemaVersion)||tile.floor!==undefined&&!floorAvailable(tile.floor,message.world.schemaVersion)||tile.floor==='sterile-tile'&&!sterileMaterialsUnlocked(message.world))))return resync('Rendement ou dégâts miniers invalides pour ce snapshot.');
+    if(!validDeveloperPlacements381(message.world,Number(message.world.schemaVersion)))return resync('Provenance développeur invalide.');
+    if(this.current&&message.epoch===this.epoch&&(this.current.developerTest381!==message.world.developerTest381||message.world.developerTest381&&JSON.stringify(this.current.developerPlacements381)!==JSON.stringify(message.world.developerPlacements381)))return resync('Provenance développeur modifiée sur la même carte.');
+    if(message.kind==='checkpoint'&&(!Array.isArray(message.world.tiles)||message.world.tiles.some((tile,index)=>!tile||!validCollapsedRock256(tile,message.world.schemaVersion,message.world.nextId,v=>admittedRoofTerrain256(v,message.world.schemaVersion))||!validMarshTile(tile,message.world.schemaVersion,message.world,index)||!validBridgeTile(tile,message.world.schemaVersion)||!validOre(tile,message.world.schemaVersion)||!validMiningDamage(tile,message.world.schemaVersion)||tile.floor!==undefined&&!floorAvailable(tile.floor,message.world.schemaVersion)||tile.floor==='sterile-tile'&&!sterileMaterialsUnlocked(message.world))))return resync('Rendement ou dégâts miniers invalides pour ce snapshot.');
     let next: World;
     let planetCheck: PlanetPreparation | undefined;
     let reindexResources = message.kind === 'checkpoint';
@@ -1535,7 +1555,7 @@ export class SnapshotDecoder {
           if(!validMineableTile256(candidate,message.world.schemaVersion,message.world.site?.revision===3,message.world.nextId))return resync('Invalid or future Mineable owner.');
           if(!validExplorationTile256(candidate,message.world.schemaVersion,Object.hasOwn(message.world,'exploration')))return resync('Invalid or future fog cell.');
           if(!validCollapsedRock256(candidate,message.world.schemaVersion,message.world.nextId,v=>admittedRoofTerrain256(v,message.world.schemaVersion)))return resync('Invalid or future collapsed rock.');
-          if (!validBridgeTile(candidate,message.world.schemaVersion)||!validMarshTile(candidate,message.world.schemaVersion,message.world)||snowDepth!==undefined&&(message.world.schemaVersion<239||typeof snowDepth!=='number'||!Number.isFinite(snowDepth)||snowDepth<=0||snowDepth>1) || !Number.isInteger(index) || index < 0 || index >= tiles.length || touched.has(index)
+          if (!validBridgeTile(candidate,message.world.schemaVersion)||!validMarshTile(candidate,message.world.schemaVersion,message.world,index)||snowDepth!==undefined&&(message.world.schemaVersion<239||typeof snowDepth!=='number'||!Number.isFinite(snowDepth)||snowDepth<=0||snowDepth>1) || !Number.isInteger(index) || index < 0 || index >= tiles.length || touched.has(index)
             || floor!==undefined&&(message.world.schemaVersion<89||!floorAvailable(floor,message.world.schemaVersion)||floor==='sterile-tile'&&!sterileMaterialsUnlocked(message.world)) ||!validSmoothFloorTile281(candidate,message.world.schemaVersion)|| !validOre({terrain,ore},message.world.schemaVersion) || !validMiningDamage(candidate,message.world.schemaVersion) || !validStoneIdentity(stone,collapsedRock?.terrain??terrain,message.world.schemaVersion)) return resync('Delta de terrain invalide.');
           touched.add(index);
         }
@@ -1779,13 +1799,19 @@ export class SnapshotDecoder {
     if(!validHospitalSupportTransport(next,next.schemaVersion,powerTopology)||next.research?.project==='vitals-monitor'&&validateResearch(next,next.schemaVersion).length)return resync('Soutien hospitalier, recherche ou ingrédients invalides.');
     if(message.kind==='delta'&&this.current&&sterileMaterialsUnlocked(this.current)&&!sterileMaterialsUnlocked(next)&&next.tiles.some(t=>t.floor==='sterile-tile'))return resync('Sol stérile privé de sa recherche acquise.');
     if(!validMedicineResearchTransport(next,next.schemaVersion))return resync('Recherche ou laboratoire pharmaceutique invalide.');
+    if(!validDeveloperBills381(next))return resync('Facture de test sans propriétaire original ou production verrouillée.');
     if(!validMedicineTransport(next))return resync('Production pharmaceutique invalide.');
     if(next.schemaVersion<206&&[next.trade?.bought,next.trade?.sold,next.fires?.ledger?.items,next.destroyed?.items].some(items=>items&&Object.hasOwn(items,'neutroamine'))
       ||next.schemaVersion<206&&Array.isArray(next.trade?.recent)&&next.trade.recent.some(receipt=>receipt&&Array.isArray(receipt.lines)&&receipt.lines.some(line=>line&&typeof line==='object'&&'item' in line&&line.item==='neutroamine')))return resync('Historique de neutroamine futur.');
+    const occupiedEggBoxes=new Set<number>();
     for(const pile of next.piles){
       const owner=pile.owner;
       if(next.schemaVersion>=256&&owner.type==='inventory'&&!next.pawns.some(p=>p.id===owner.pawnId)&&!validPile(pile,next))return resync('Inventaire sans propriétaire animal réel.');
       if(pile.kind==='mech-corpse'||Object.hasOwn(pile,'mechCorpse')){if(mechanicalCorpseIds.has(pile.id)||!validPile(pile,next))return resync('Carcasse mécanique invalide.');mechanicalCorpseIds.add(pile.id);}
+      if(owner.type==='egg-box374'){
+        if(occupiedEggBoxes.has(owner.structureId)||!validPile(pile,next))return resync('Contenu de boîte à œufs invalide.');
+        occupiedEggBoxes.add(owner.structureId);
+      }
     }
     if(validateMiniTurrets(next).length)return resync('Propriétaire ou cible de mini-tourelle invalide.');
     if(validateCommercialRegistry(next,next.schemaVersion).length)return resync('Registre commercial invalide.');

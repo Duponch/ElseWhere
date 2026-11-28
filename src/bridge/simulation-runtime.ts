@@ -62,7 +62,7 @@ import {WorkerTaskScheduler} from './worker-task-scheduler';
 import { PresentationChanges } from './presentation-changes';
 import { queryOrderOptions } from '../sim/player-orders';
 import {queryBillWorkerOptions283} from '../sim/bill-worker-owners-283';
-import { setDevSession,takeDevAdvance } from '../sim/dev-session';
+import { setDevSession,takeDevAdvance,devModeEnabled } from '../sim/dev-session';
 import { applyCommand, deserializeWorld, serializeWorld, stepWorld } from '../sim/index';
 import type { World } from '../sim/types';
 import type { Request, Response, SimulationFault } from './protocol';
@@ -557,6 +557,7 @@ scope.onmessage = ({ data: request }: MessageEvent<Request|ShipRuntimeRequest298
       let restored: CampaignState;
       try { restored = deserializeCampaign(request.data,step=>send({type:'operation-progress',id:request.id,...step})); }
       catch { throw new Error('Cette sauvegarde est illisible ou incompatible avec cette version. La colonie actuelle et vos sauvegardes sont conservées.'); }
+      if(restored.developerTest381===true&&!devModeEnabled())throw new Error('Cette partie de test nécessite le mode développeur. Activez-le dans les Options avant de charger cette sauvegarde. La colonie actuelle et vos sauvegardes sont conservées.');
       const restoredCaravans=prepareCaravans(restored);maxSettlements=request.maxSettlements??maxSettlements;configureSettlementLimit(restored,maxSettlements);const shipBinding298=shipCountdown298.prepareAcceptedOwner(restored);world = restored;caravans=restoredCaravans; adoptedReplacement = true;shipBinding298.commit();neutralResume261=undefined; speed = 0; motion.reset();phasePublisher297.reset();
       threatPauseMode = request.threatPauseMode ?? threatPauseMode;
       urgentThreats.bootstrap(world);

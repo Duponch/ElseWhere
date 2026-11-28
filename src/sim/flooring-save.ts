@@ -3,11 +3,12 @@ import {terrainSupportsFloor256} from './natural-terrain-runtime-256.ts';
 import { isBuildableFloor,isFloorKind,floorAvailable } from './flooring.ts';
 import { footprintContains } from './definitions.ts';
 import {sterileMaterialsUnlocked} from './research.ts';
+import {developerFloorException381} from './developer-import-381.ts';
 import type { World } from './types.ts';
 export function validateFlooring(w:World,version:number):string[] {
   const errors:string[]=[],plans=new Set<number>();
   for(let i=0;i<w.tiles.length;i++){
-    const actual=w.tiles[i]!,tile=actual.collapsedRock?excavatedCollapsedRock256(actual):actual;if(tile.floor!==undefined&&(version<89||!floorAvailable(tile.floor,version)||tile.floor==='sterile-tile'&&(version<211||!sterileMaterialsUnlocked(w))||!terrainSupportsFloor256(tile,{schemaVersion:version,site:w.site})))errors.push('Invalid constructed floor.');
+    const actual=w.tiles[i]!,tile=actual.collapsedRock?excavatedCollapsedRock256(actual):actual;if(tile.floor!==undefined&&(version<89||!floorAvailable(tile.floor,version)||tile.floor==='sterile-tile'&&(version<211||!sterileMaterialsUnlocked(w))||!terrainSupportsFloor256(tile,{schemaVersion:version,site:w.site})&&!developerFloorException381(w,i,tile)))errors.push('Invalid constructed floor.');
   }
   for(const job of w.jobs){
     if(job.kind!=='lay-floor'&&job.kind!=='remove-floor'){if(job.floor!==undefined)errors.push('Unexpected floor target.');continue;}

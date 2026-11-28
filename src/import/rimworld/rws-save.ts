@@ -64,7 +64,7 @@ function bytesAt(node:XmlNode|undefined,label:string):Uint8Array|null {
  const plain=child(node,label);if(plain&&plain.text.trim())return savedBytes(plain.text,false);
  return null;
 }
-function ushortGrid(node:XmlNode|undefined,label:string,cells:number):Uint16Array|null {
+export function ushortGrid(node:XmlNode|undefined,label:string,cells:number):Uint16Array|null {
  const bytes=bytesAt(node,label);if(!bytes)return null;if(bytes.length<cells*2)throw Error(`Grille ${label} trop courte (${bytes.length} octets pour ${cells} cases).`);return readUint16Column(bytes,cells);
 }
 function bitGrid(node:XmlNode|undefined,label:string,cells:number):Uint8Array|null {

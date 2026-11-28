@@ -5,8 +5,11 @@ import type { Cell, JobKind, StructureKind, World } from './types.ts';
 /** Core coexistence rules are distinct from our current planar transit rules.
  * Surface Eat admits existing items, but is not a storage-zone surface. */
 export const OCCUPANCY = Object.freeze({
-  // Local coexistence policy for a traversable device, independent of standability.
-  'firefoam-popper':Object.freeze({clearItems:false,items:true,zones:false,store:false}),
+  // Core FirefoamPopper is PassThroughOnly without a canOverlapZones override
+  // or a surface. ThingDef.CanOverlapZones is true, but
+  // StoreUtility.NoStorageBlockersIn rejects its non-standable/no-surface
+  // cell as an actual storage destination.
+  'firefoam-popper':Object.freeze({clearItems:false,items:true,zones:true,store:false}),
   'tool-cabinet':Object.freeze({clearItems:true,items:false,zones:false,store:false}),
   // Schema 374 EggBox: Standable edifice holding its eggs inside; no floor stack on it.
   'egg-box':Object.freeze({clearItems:true,items:false,zones:true,store:false}),

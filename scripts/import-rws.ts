@@ -1,5 +1,5 @@
 /** Imports a RimWorld 1.6 save (.rws, Core only) into an Elsewhere save.
- * npx tsx scripts/import-rws.ts <file.rws> <out.json> [--ticks 300] [--no-planet] [--report path.md] [--langue French [--jeu <dossier du jeu>]]
+ * npx tsx scripts/import-rws.ts <file.rws> <out.json> [--ticks 300] [--no-planet] [--developer-test] [--report path.md] [--langue French [--jeu <dossier du jeu>]]
  * --langue: when the planet must be regenerated from the seed, its factions and
  * settlements are named with the game's own rule packs, read from the installed
  * game (--jeu, else RIMWORLD_DIR, else the default Steam folder) in the save's
@@ -11,6 +11,7 @@ import {dirname,basename,join,resolve} from 'node:path';
 import {readRwsSave} from '../src/import/rimworld/rws-save.ts';
 import {analyzeRwsSave} from '../src/import/rimworld/analyze.ts';
 import {convertRwsSave} from '../src/import/rimworld/convert.ts';
+import {captureDeveloperImport381} from '../src/import/rimworld/developer-test-import.ts';
 import {frenchReport} from '../src/import/rimworld/report-fr.ts';
 import {validateWorld,serializeWorld,deserializeWorld} from '../src/sim/serialization.ts';
 import {stepWorld} from '../src/sim/engine.ts';
@@ -20,7 +21,7 @@ import {loadGameGrammar} from '../src/import/rimworld/game-grammar.ts';
 const args=process.argv.slice(2),flag=(name:string)=>args.includes(name),option=(name:string)=>{const i=args.indexOf(name);return i<0?undefined:args[i+1];};
 const positional=args.filter((a,i)=>!a.startsWith('--')&&!(i>0&&['--ticks','--report','--langue','--jeu'].includes(args[i-1]!)));
 const [input,output]=positional;
-if(!input||!output){console.error('Usage : import-rws.ts <sauvegarde.rws> <sortie.json> [--ticks 300] [--no-planet] [--report rapport.md] [--langue French [--jeu <dossier>]]');process.exit(2);}
+if(!input||!output){console.error('Usage : import-rws.ts <sauvegarde.rws> <sortie.json> [--ticks 300] [--no-planet] [--developer-test] [--report rapport.md] [--langue French [--jeu <dossier>]]');process.exit(2);}
 const language=option('--langue'),gameDir=option('--jeu')??process.env.RIMWORLD_DIR??DEFAULT_RIMWORLD_DIR,gameCore=language?rimworldCoreFolder(gameDir):undefined;
 if(language&&!gameCore){console.error(`Jeu introuvable : ${gameDir}`);process.exit(2);}
 const names=language&&gameCore?loadGameGrammar(gameCore,language,{resources:rimworldResourcesBytes(gameDir)}):undefined;
@@ -32,7 +33,8 @@ if(!analysis.compatible){
  mkdirSync(dirname(resolve(reportPath)),{recursive:true});writeFileSync(reportPath,frenchReport({title:`Import de ${basename(input)} : refusé`,analysis}));
  console.error(analysis.refusals.join('\n'));process.exit(1);
 }
-const conversion=convertRwsSave(save,{planet:!flag('--no-planet'),...names?{names}:{}}),w=conversion.world;
+const conversion=convertRwsSave(save,{planet:!flag('--no-planet'),developerTest:flag('--developer-test'),...names?{names}:{}}),w=conversion.world;
+if(flag('--developer-test'))captureDeveloperImport381(conversion);
 const errors=validateWorld(w);
 let raw='',roundTrip=false,validAfter=false,ran=0;
 if(!errors.length){

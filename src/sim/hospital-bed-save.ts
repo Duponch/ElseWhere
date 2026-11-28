@@ -1,6 +1,7 @@
 import { isFurnitureQuality } from './furniture-stats.ts';
 import { COMPLEX_FURNITURE_RESEARCH_COST,HOSPITAL_BED_RESEARCH_COST,MICROELECTRONICS_RESEARCH_COST } from './research.ts';
 import type { Structure,World } from './types.ts';
+import {developerResearchPlacement381} from './developer-import-381.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min:number,max:number):boolean=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
@@ -15,7 +16,7 @@ export function validHospitalBedState(w:World,version:number):boolean {
   if((entry!==undefined||active)&&(version<187||!progress(entry,HOSPITAL_BED_RESEARCH_COST,w.tick,active)
     ||!progress(research?.microelectronics,MICROELECTRONICS_RESEARCH_COST,w.tick)||research?.microelectronics?.completedAt===undefined
     ||!progress(research?.complexFurniture,COMPLEX_FURNITURE_RESEARCH_COST,w.tick)||research?.complexFurniture?.completedAt===undefined))return false;
-  const building=(s:Structure):boolean=>s.kind!=='hospital-bed'||version>=187&&unlocked&&s.material==='steel'&&isFurnitureQuality(s.quality)&&s.footprint==='standard'
+  const building=(s:Structure):boolean=>s.kind!=='hospital-bed'||version>=187&&(unlocked||developerResearchPlacement381(w,s))&&s.material==='steel'&&isFurnitureQuality(s.quality)&&s.footprint==='standard'
     &&integer(s.orientation,0,3)&&(s.damage===undefined||integer(s.damage,1,149))
     &&(s.medical===undefined||s.medical===true)&&(s.prisoner===undefined||s.prisoner===true);
   for(const s of w.structures)if(!building(s))return false;

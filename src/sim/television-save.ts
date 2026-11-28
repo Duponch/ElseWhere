@@ -3,6 +3,7 @@ import { isDiningSeat,seatAt } from './dining.ts';
 import { isTelevisionCell,TELEVISION_MAX_PARTICIPANTS } from './television-recreation.ts';
 import { RECREATION_DURATION } from './recreation-rules.ts';
 import type { Pawn,Structure,World } from './types.ts';
+import {developerResearchPlacement381} from './developer-import-381.ts';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const integer=(v:unknown,min:number,max=Number.MAX_SAFE_INTEGER):boolean=>Number.isSafeInteger(v)&&Number(v)>=min&&Number(v)<=max;
@@ -28,7 +29,7 @@ export function validTelevisionState(w:World,version:number):boolean {
   const research=w.research,entry=research?.tubeTelevision,active=research?.project==='tube-television',unlocked=entry?.completedAt!==undefined;
   if((entry!==undefined||active)&&(version<190||!progress(entry,TUBE_TELEVISION_RESEARCH_COST,w.tick,active)
     ||!progress(research?.complexFurniture,COMPLEX_FURNITURE_RESEARCH_COST,w.tick)||research?.complexFurniture?.completedAt===undefined))return false;
-  const building=(s:Structure,packed=false):boolean=>s.kind!=='tube-television'||version>=190&&unlocked&&s.material==='steel'&&s.footprint==='standard'
+  const building=(s:Structure,packed=false):boolean=>s.kind!=='tube-television'||version>=190&&(unlocked||!packed&&developerResearchPlacement381(w,s))&&s.material==='steel'&&s.footprint==='standard'
     &&integer(s.orientation,0,3)&&(s.damage===undefined||integer(s.damage,1,99))
     &&['quality','breakdown','medical','prisoner','bills','fuel','battery','cooler','door','wind','heater','flower','gatherSpot','art','grave','pen'].every(k=>(s as unknown as Record<string,unknown>)[k]===undefined)
     &&object(s.power)&&Object.keys(s.power).every(k=>['on','parentId','switchOn'].includes(k))&&typeof s.power.on==='boolean'

@@ -24,6 +24,7 @@ import {deconstructionCamp} from './scenarios/deconstruction';
 import {asNumberOnly,asOldSchema} from './scenarios/old-schema';
 import {SCHEMA_VERSION,type Command,type MaterialPile,type Pawn,type Structure,type World} from '../src/sim/types';
 import type {WildAnimal} from '../src/sim/wildlife-state';
+import {SnapshotDecoder,SnapshotEncoder} from '../src/bridge/snapshots';
 
 /** Declared fixture: the 32² legacy camp of the deconstruction tests, one
  * free colonist (Transport, Construction), a few storage cells and one tame
@@ -231,6 +232,34 @@ test('strict saves: egg box content, laying target and extraction are refused be
  // Before 374 the box itself is refused: the migration validates the 373 save first.
  const raw=JSON.parse(serializeWorld(w)) as {schemaVersion:number};raw.schemaVersion=373;
  expect(()=>deserializeWorld(JSON.stringify(raw))).toThrow(/373/);
+});
+
+test('checkpoint and delta transport admit a real egg-box pile and reject malformed custody',()=>{
+ const {w,hen}=camp(),b=box(w,24,22),pile=fill(w,b,2,'turkey-egg-fertilized');
+ delete pile.rot;pile.egg={progress:.23,temperatureDamage:0,faction:'player',atTick:w.tick,motherId:hen.id};refreshStock(w);valid(w);
+ const encoder=new SnapshotEncoder(),decoder=new SnapshotDecoder();
+ const checkpoint=structuredClone(encoder.encode(w,0,0));
+ expect(checkpoint.kind).toBe('checkpoint');
+ if(checkpoint.kind!=='checkpoint')throw Error('Checkpoint required');
+ const adopted=decoder.adopt(checkpoint);expect(adopted.status).toBe('applied');
+ if(adopted.status==='applied')expect(adopted.world.piles.find(p=>p.id===pile.id)).toEqual(pile);
+ const rejects=(mutate:(p:MaterialPile,world:typeof checkpoint.world)=>void)=>{
+  const corrupt=structuredClone(checkpoint);mutate(corrupt.world.piles.find(p=>p.id===pile.id)!,corrupt.world);
+  expect(new SnapshotDecoder().adopt(corrupt).status).toBe('resync');
+ };
+ rejects(p=>{p.quantity=EGG_BOX_374.stackLimit+3;});
+ rejects(p=>{p.eggForbidden=true;});
+ rejects(p=>{p.owner={type:'egg-box374',structureId:0};});
+ rejects(p=>{p.owner={type:'egg-box374',structureId:b.id,extra:true} as never;});
+ rejects((p,world)=>{world.piles!.push({...p,id:world.nextId});(world as {nextId:number}).nextId++;});
+ // A real subsequent change to the held contents travels as a delta.
+ pile.quantity=3;const delta=structuredClone(encoder.encode(w,0,0));expect(delta.kind).toBe('delta');
+ const next=decoder.adopt(delta);expect(next.status).toBe('applied');
+ if(next.status==='applied')expect(next.world.piles.find(p=>p.id===pile.id)?.quantity).toBe(3);
+ // A delta removing only the box must not strand the unchanged held pile.
+ w.structures=w.structures.filter(s=>s.id!==b.id);
+ const orphan=structuredClone(encoder.encode(w,0,0));expect(orphan.kind).toBe('delta');
+ expect(decoder.adopt(orphan).status).toBe('resync');
 });
 
 test('373 → 374 changes the number only; below 374 a tame hen ignores an egg box exactly as if there were none',()=>{

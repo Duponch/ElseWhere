@@ -32,9 +32,8 @@ export const STORAGE_PRIORITY:Readonly<Record<string,number>>={Low:1,Normal:2,Pr
 export const ZONE_MAP:Readonly<Record<string,DefMapping<'stockpile'|'growing'>>>={
  Zone_Stockpile:exact('stockpile'),Zone_Growing:exact('growing'),Zone_Fishing:drop('Zone de pêche : absente.'),
 };
-export const AREA_MAP:Readonly<Record<string,DefMapping<'home'|'snow-clear'|'allowed'>>>={
+export const AREA_MAP:Readonly<Record<string,DefMapping<'home'|'snow-clear'|'allowed'|'build-roof'|'remove-roof'>>>={
  Area_Home:exact('home'),Area_SnowOrSandClear:exact('snow-clear'),Area_Allowed:exact('allowed'),
- Area_BuildRoof:drop('Zone « construire un toit » : Elsewhere construit les toits sur ordre, pas par zone permanente.'),
- Area_NoRoof:drop('Zone « pas de toit » : absente.'),
+ Area_BuildRoof:exact('build-roof'),Area_NoRoof:exact('remove-roof'),
 };
-export const TIME_NOTE=adapt(null,'Date : la date du calendrier (année, quadrum, jour, heure) est celle de la sauvegarde ; le compteur interne de la partie repart de la création.');
+export const TIME_NOTE=adapt(null,'Date : compteur Core joué et reste physique conservés ; calendrier civil repris sur une planète géographique.');

@@ -38,7 +38,6 @@ export const NON_COLONIST_NOTE={
 // ---- Traits ---------------------------------------------------------------------
 const traits:Record<string,DefMapping<TraitId>>={};
 for(const id of Object.keys(TRAITS) as TraitId[]){const t=TRAITS[id] as {def:string;degree:number};traits[`${t.def}:${t.degree}`]=exact(id);}
-traits['Pyromaniac:0']=drop('Pyromane : trait absent d’Elsewhere.');
 traits['Industriousness:0']=drop('Trait sans degré connu.');
 export const TRAIT_MAP:Readonly<Record<string,DefMapping<TraitId>>>=traits;
 export const traitKey=(def:string,degree:number|undefined)=>`${def}:${degree??0}`;
@@ -97,10 +96,14 @@ export function closestBackgrounds(childDef:string|undefined,adultDef:string|und
  let best:BackstoryChoice|undefined,bestScore=Infinity;
  for(const c of childCandidates){
   const cd=keptChild?0:effectDistance(child,coreBackstoryEffect(c.id)??c);
-  if(!adult||!allowAdult){if(cd<bestScore){bestScore=cd;best={childhood:c.id as ChildhoodId,childhoodDistance:cd};}continue;}
+  // Do not trade away an actual work entitlement for a closer birth-skill
+  // bonus: saved skill levels have their own authority. In particular a
+  // named Core backstory with no disabled work must not gain one via fallback.
+  const childPenalty=keptChild?0:1000*c.disables.filter(tag=>!child.disables.includes(tag)).length;
+  if(!adult||!allowAdult){if(cd+childPenalty<bestScore){bestScore=cd+childPenalty;best={childhood:c.id as ChildhoodId,childhoodDistance:cd};}continue;}
   for(const a of keptAdult?[keptAdult]:CORE_ADULTHOODS){
    if(!keptAdult&&a.requires.some(t=>c.disables.includes(t)))continue;
-   const ad=keptAdult?0:effectDistance(adult,coreBackstoryEffect(a.id)??a),score=cd+ad;
+   const ad=keptAdult?0:effectDistance(adult,coreBackstoryEffect(a.id)??a),score=cd+ad+childPenalty+(keptAdult?0:1000*a.disables.filter(tag=>!adult.disables.includes(tag)).length);
    if(score<bestScore){bestScore=score;best={childhood:c.id as ChildhoodId,adulthood:a.id as AdulthoodId,childhoodDistance:cd,adulthoodDistance:ad};}
   }
  }

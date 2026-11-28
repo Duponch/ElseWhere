@@ -2,6 +2,7 @@
 import {FAMILIES,FAMILY_LABELS,type ImportNotes,type DefTally} from './notes.ts';
 import {elsewhereTargetLabel} from './labels-fr.ts';
 import type {RwsAnalysis} from './analyze.ts';
+import {gapOrigin,GAP_ORIGIN_LABEL} from './gap-origin.ts';
 
 const STATUS_LABEL={exact:'repris',adapted:'adapté',dropped:'perdu',unknown:'inconnu'} as const;
 const esc=(s:string)=>s.replace(/\|/g,'\\|').replace(/\r?\n/g,' ');
@@ -27,8 +28,8 @@ function familyDetails(notes:ImportNotes):string[] {
   for(const m of messages)out.push(`- ${m.kind==='mapped'?'✔':m.kind==='adapted'?'≈':'✘'} ${m.text}`);
   if(messages.length)out.push('');
   if(rows.length){
-   out.push('| Définition du jeu | Nombre | Statut | Dans Elsewhere | Explication |','|---|---:|---|---|---|');
-   for(const r of mergeRows(rows))out.push(`| ${esc(r.def)} | ${r.count} | ${STATUS_LABEL[r.status]} | ${esc(r.to===undefined?'—':elsewhereTargetLabel(f,r.to))} | ${esc(r.note??'')} |`);
+   out.push('| Définition du jeu | Nombre | Statut | Dans Elsewhere | Origine de l’écart | Explication |','|---|---:|---|---|---|---|');
+   for(const r of mergeRows(rows)){const origin=gapOrigin(f,r);out.push(`| ${esc(r.def)} | ${r.count} | ${STATUS_LABEL[r.status]} | ${esc(r.to===undefined?'—':elsewhereTargetLabel(f,r.to))} | ${origin?GAP_ORIGIN_LABEL[origin]:'—'} | ${esc(r.note??'')} |`);}
    out.push('');
   }
  }
@@ -58,11 +59,12 @@ export function frenchReport(input:{title:string;analysis?:RwsAnalysis;conversio
    ...c.elapsedMs!==undefined?[`- Durée de la conversion : ${(c.elapsedMs/1000).toFixed(1)} s.`]:[],'');
  }
  const notes=input.conversion?.notes??a?.notes;
+ if(notes?.warnings.length)out.push('## Avertissements de jouabilité','',...notes.warnings.map(w=>`- ${w}`),'');
  if(notes){out.push(...familyTable(notes,input.conversion?'Bilan par famille (conversion)':'Bilan par famille (analyse)'));out.push('## Détail par famille','',...familyDetails(notes));}
- out.push('## Ce qui n’est pas repris dans cette étape','',
-  '- Prisonniers, visiteurs, ennemis présents et mécanoïdes ; cadavres ; saletés ; chantiers et plans ; meubles emballés ; ouvrages inachevés.',
-  '- Souvenirs, pensées, relations sociales, emplois du temps, politiques (tenues, nourriture, drogues), factures des établis, dressage autre que l’obéissance.',
-  '- Santé des animaux ; maladies, dépendances et implants des colons ; neige au sol ; aires autorisées personnalisées.',
-  '- Le compteur interne de la partie repart de la création (la date du calendrier est celle de la sauvegarde).','');
+ out.push('## Limites de la fidélité','',
+  '- Les pertes et adaptations détectées pour cette sauvegarde figurent ci-dessus. La validation du format Elsewhere ne constitue pas une preuve de parité complète des états ou des règles.',
+  '- Origine de l’écart : « Importeur » désigne une traduction non réalisée d’un état déjà modélisé ; « Modèle ElseWhere » un état ou une définition non représentable ; « Les deux » une différence mêlant conversion et règle ; « Donnée source insuffisante » un reçu ou une référence manquante. « À expertiser » ne constitue pas une attribution certaine.',
+  '- Le compteur Core écoulé et sa phase physique sont repris ; les dates civiles sont conservées sur la planète. Les historiques qui nécessitent une précision ou des propriétaires absents restent détaillés dans les écarts.',
+  '- Le déroulement futur, les événements, les tirages et les comportements ne sont pas encore garantis identiques à RimWorld.','');
  return out.join('\n');
 }

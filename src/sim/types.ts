@@ -1,6 +1,6 @@
 import type { ItemId } from './items.ts';
 import type { StorageConditions } from './storage-condition.ts';
-export const SCHEMA_VERSION = 380 as const;
+export const SCHEMA_VERSION = 381 as const;
 export const TICKS_PER_SECOND = 6;
 export const TICKS_PER_DAY = 6000;
 
@@ -237,6 +237,10 @@ export interface Pawn extends Cell { /** Schema 351: the Strip job (strip-state-
 }
 export interface WorldEvent { tick: number; type: 'job' | 'need' | 'command'; message: string }
 export interface World {
+  /** Campaign test provenance, independent of the current developer preference. */
+  developerTest381?:true;
+  /** Only this local map's original developer-placed exceptions. */
+  developerPlacements381?:import('./developer-import-381.ts').DevPlacements381;
   /** Sole campaign RAW owner, born only after an actual successful departure. */
   escapedShips298?:import('./ship-escape-state-298.ts').EscapedShips298;
   party292?:import('./party-state-292.ts').PartyState292;

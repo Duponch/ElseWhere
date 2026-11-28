@@ -200,6 +200,14 @@ function intention(world: World, zone: GrowingZone, cell: number, ctx: Context, 
   if(world.schemaVersion>=291&&plant?.kind==='tree'&&(sameGrowingPlant291(plant,zone)||zone.allowCut)&&plantGrowth(world,plant)>.999&&plantCanYieldNow(world,plant))return {kind:'chop',cell};
   if(forest&&plant&&sameGrowingPlant291(plant,zone))return null;
   if (plant?.kind === zone.plant || (!zone.allowSow && zone.allowCut && plant && isPlant(plant)&&(world.schemaVersion<291||plant.kind!=='tree'))) {
+    // Core WorkGiver_GrowerHarvest asks both HarvestableNow and
+    // CanYieldNow; WorkGiver_GrowerSow skips a zone with allowSow=false.
+    // Mature non-yielding wild flora (grass/brambles/etc.) is therefore
+    // neither harvested nor cleared solely because allowCut is enabled.
+    // Check the same product and quantity facts before the growth read:
+    // no extra terrain walk, resource scan, or allocation on this path.
+    if(plant.species?FLORA_DEFINITIONS[plant.species].product===null:plant.kind==='wild-plant')return null;
+    if(plant.amount<=0)return null;
     return plantGrowth(world, plant) >= 1 ? { kind: 'harvest', cell } : null;
   }
   if (!zone.allowSow) return null;

@@ -21,7 +21,7 @@ import type {CoreFactionNames} from '../../sim/world-faction-core-names.ts';
 import {startingOriginalRequestFromRoster256} from '../../sim/starting-original-request-256.ts';
 import {validGeographicCreationSize262,type GeographicCreationSize262} from '../../sim/geographic-creation-options-262.ts';
 import {stableWorldSeedHash} from '../../sim/world-climate-settings.ts';
-import {createWorld,stepWorld} from '../../sim/engine.ts';
+import {createWorld} from '../../sim/engine.ts';
 
 export interface BaseWorld {world:World;planetMode:'save'|'seed'|'none';planet?:PlanetImport}
 const drain=<Y,T>(it:Generator<Y,T,void>):T=>{let s=it.next();while(!s.done)s=it.next();return s.value;};
@@ -35,8 +35,10 @@ function colonyOn(draft:GeographicWorldDraft256,tile:number,size:GeographicCreat
  let step=generation.next();
  while(!step.done){const {completed,total}=step.value;if(total>0)advance(.1+.8*Math.min(1,completed/total));step=generation.next();}
  const w=step.value;advance(.92);
- // The starting pods open after a few ticks; the import replaces their people afterwards.
- for(let i=0;i<600&&(w.startingArrival as {phase?:string}|undefined)?.phase!=='opened';i++)stepWorld(w);
+ // A cold import never plays the artificial delivery: no cache, incident,
+ // inventory aging, or pawn decision may be taken on the provisional clock.
+ // Its unpublished arrival is discarded by clearLocalContent.
+ advance(1);
  return w;
 }
 

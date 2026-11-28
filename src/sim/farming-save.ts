@@ -48,7 +48,8 @@ export function validateHydroponics(world:World,version:number,powerTopology?:Po
   if(raw.packed!==undefined&&!Array.isArray(raw.packed)||packed.some(p=>!record(p)||!record(p.building)||!record(p.owner)))errors.push('Invalid hydroponics ownership collections.');
   if(hasPacked||jobs.some(j=>{if(!record(j)||(j.kind!=='install'&&j.kind!=='uninstall'))return false;const target=j.furniture;
     return record(target)&&(target.kind==='hydroponics-basin'||basins.some(b=>b.id===target.structureId));}))errors.push('Hydroponics basins cannot be packed or installed.');
-  if((basins.length||plans.length||referenced)&&(!record(progress)||progress.points!==HYDROPONICS_RESEARCH_COST||!integer(progress.completedAt,0,world.tick)))errors.push('Locked hydroponics basin.');
+  if((!record(progress)||progress.points!==HYDROPONICS_RESEARCH_COST||!integer(progress.completedAt,0,world.tick))&&
+    (plans.length||referenced||(world.developerTest381===true?basins.some(b=>!developerResearchPlacement381(world,b)):basins.length)))errors.push('Locked hydroponics basin.');
   const basinById=new Map<number,Record<string,unknown>>(),geometry=new Map<number,number[]>();
   for(const b of [...basins,...plans]){
     if(!integer(b.id,1,world.nextId-1)||!integer(b.x,0,world.width-1)||!integer(b.z,0,world.height-1)||!integer(b.orientation,0,3)
@@ -178,3 +179,4 @@ export function validateFarming(input: Record<string, unknown>, size: number, id
   for (const value of input.stockpiles as Record<string, unknown>[]) if (occupied.has((value.z as number) * (input.width as number) + (value.x as number))) errors.push('Storage overlaps growing zone.');
   return errors;
 }
+import {developerResearchPlacement381} from './developer-import-381.ts';

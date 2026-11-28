@@ -8,8 +8,10 @@
 import {readRwsSave} from './rws-save.ts';
 import {analyzeRwsSave,type RwsAnalysis} from './analyze.ts';
 import {convertRwsSave,type RwsConvertStage} from './convert.ts';
+import {captureDeveloperImport381} from './developer-test-import.ts';
 import {frenchReport} from './report-fr.ts';
 import {FAMILIES,FAMILY_LABELS,type DefTally,type Family,type ImportNotes,type Message} from './notes.ts';
+import {gapOrigin,type GapOrigin} from './gap-origin.ts';
 import {elsewhereTargetLabel} from './labels-fr.ts';
 import {validateWorld,serializeCampaignUnchecked,deserializeCampaign} from '../../sim/serialization.ts';
 
@@ -49,7 +51,7 @@ export function importProgress(stage:RwsImportStage,part=0):RwsImportProgress {
 export interface RwsFamilyCount {readonly family:Family;readonly label:string;readonly before?:number;readonly after?:number;readonly exact:number;readonly adapted:number;readonly dropped:number;readonly unknown:number}
 /** `toLabel` is the French name of the Elsewhere target (`to` keeps its id). */
 export interface RwsFamilyDetail {readonly family:Family;readonly label:string;readonly messages:readonly Message[];readonly rows:readonly (DefTally&{readonly toLabel?:string})[]}
-export interface RwsLoss {readonly family:Family;readonly label:string;readonly def:string;readonly count:number;readonly note?:string}
+export interface RwsLoss {readonly family:Family;readonly label:string;readonly def:string;readonly count:number;readonly note?:string;readonly origin?:GapOrigin}
 export type RwsImportFacts=RwsAnalysis['summary'];
 export type RwsPlanetMode='save'|'seed'|'none';
 
@@ -58,13 +60,13 @@ export type RwsImportOutcome=
  |{readonly status:'failed';readonly fileName:string;readonly message:string;readonly facts?:RwsImportFacts;readonly report?:string}
  |{readonly status:'converted';readonly fileName:string;readonly facts:RwsImportFacts;readonly planetMode:RwsPlanetMode;
    readonly colonists:number;readonly animals:number;readonly bytes:number;
-   readonly families:readonly RwsFamilyCount[];readonly details:readonly RwsFamilyDetail[];readonly losses:readonly RwsLoss[];
+   readonly families:readonly RwsFamilyCount[];readonly details:readonly RwsFamilyDetail[];readonly losses:readonly RwsLoss[];readonly warnings?:readonly string[];
    readonly report:string;/** The converted Elsewhere save (campaign text), the only thing kept. */readonly save:string};
 
 /** Message from the import Worker to the page. */
 export type RwsImportWorkerMessage={readonly type:'progress';readonly progress:RwsImportProgress}|{readonly type:'done';readonly outcome:RwsImportOutcome};
 /** Request from the page to the import Worker: the chosen file, read there. */
-export interface RwsImportWorkerRequest {readonly type:'import';readonly file:Blob&{readonly name?:string}}
+export interface RwsImportWorkerRequest {readonly type:'import';readonly file:Blob&{readonly name?:string};readonly developerTest?:true}
 
 const message=(error:unknown)=>error instanceof Error?error.message:String(error);
 const now=()=>typeof performance!=='undefined'?performance.now():0;
@@ -83,7 +85,7 @@ export function familyCounts(notes:ImportNotes):RwsFamilyCount[] {
 export function familyDetails(notes:ImportNotes):RwsFamilyDetail[] {
  const out:RwsFamilyDetail[]=[];
  for(const family of FAMILIES){
-  const rows=[...(notes.tallies.get(family)?.values()??[])].sort((a,b)=>b.count-a.count||a.def.localeCompare(b.def)).map(row=>({...row,...row.to!==undefined?{toLabel:elsewhereTargetLabel(family,row.to)}:{}}));
+  const rows=[...(notes.tallies.get(family)?.values()??[])].sort((a,b)=>b.count-a.count||a.def.localeCompare(b.def)).map(row=>({...row,...row.to!==undefined?{toLabel:elsewhereTargetLabel(family,row.to)}:{},...gapOrigin(family,row)?{origin:gapOrigin(family,row)}:{}}));
   const messages=notes.messages.filter(m=>m.family===family).map(m=>({...m}));
   if(rows.length||messages.length)out.push({family,label:FAMILY_LABELS[family],messages,rows});
  }
@@ -93,14 +95,14 @@ export function familyDetails(notes:ImportNotes):RwsFamilyDetail[] {
 export function mainLosses(notes:ImportNotes,limit=12):RwsLoss[] {
  const all:RwsLoss[]=[];
  for(const family of FAMILIES)for(const row of notes.tallies.get(family)?.values()??[])
-  if(row.status==='dropped'||row.status==='unknown')all.push({family,label:FAMILY_LABELS[family],def:row.def,count:row.count,...row.note?{note:row.note}:{}});
+  if(row.status==='dropped'||row.status==='unknown')all.push({family,label:FAMILY_LABELS[family],def:row.def,count:row.count,...row.note?{note:row.note}:{},origin:gapOrigin(family,row)});
  const order=(f:Family)=>FAMILIES.indexOf(f);
  return all.sort((a,b)=>b.count-a.count||order(a.family)-order(b.family)||a.def.localeCompare(b.def)).slice(0,limit);
 }
 
 /** Runs the whole import of one save text. Never throws: every failure is a
  * French outcome. `onProgress` is called at the start of each stage. */
-export function runRwsImport(source:string,fileName:string,onProgress:(progress:RwsImportProgress)=>void=()=>{}):RwsImportOutcome {
+export function runRwsImport(source:string,fileName:string,onProgress:(progress:RwsImportProgress)=>void=()=>{},developerTest=false):RwsImportOutcome {
  // Monotonic: a fallback planet repeats the colony stage without moving the bar back.
  let reached=-1,lastKey='';
  const started=now(),stage=(s:RwsImportStage,part?:number)=>{
@@ -114,7 +116,7 @@ export function runRwsImport(source:string,fileName:string,onProgress:(progress:
  const facts=analysis.summary;
  if(!analysis.compatible)return {status:'refused',fileName,reasons:analysis.refusals,facts,report:frenchReport({title:`Import de ${fileName} : refusé`,analysis})};
  let conversion:ReturnType<typeof convertRwsSave>;
- try{conversion=convertRwsSave(analysis.save,{onStage:stage});}
+ try{conversion=convertRwsSave(analysis.save,{onStage:stage,developerTest});if(developerTest===true)captureDeveloperImport381(conversion);}
  catch(error){return {status:'failed',fileName,facts,message:`La conversion a échoué : ${message(error)}`,report:frenchReport({title:`Import de ${fileName} : échec`,analysis})};}
  const w=conversion.world;
  stage('validate');
@@ -131,8 +133,8 @@ export function runRwsImport(source:string,fileName:string,onProgress:(progress:
  try{roundTrip=serializeCampaignUnchecked(deserializeCampaign(save))===save;}catch(error){reloadError=message(error);}
  if(!roundTrip)return {status:'failed',fileName,facts,message:reloadError?`La sauvegarde convertie ne se recharge pas : ${reloadError}`:'La sauvegarde convertie ne se recharge pas à l’identique.',report:failedReport(`Import de ${fileName} : échec`,{roundTrip:false,bytes:save.length})};
  const report=frenchReport({title:`Import de ${fileName} dans Elsewhere`,analysis,conversion,checks:{valid:true,errors:[],roundTrip:true,ticksRun:0,validAfterTicks:true,bytes:save.length,planetMode:conversion.planetMode,elapsedMs:now()-started}});
- return {status:'converted',fileName,facts,planetMode:conversion.planetMode,colonists:w.pawns.length,animals:w.wildlife?.animals.filter(a=>a.domestic).length??0,bytes:save.length,
-  families:familyCounts(conversion.notes),details:familyDetails(conversion.notes),losses:mainLosses(conversion.notes),report,save};
+ return {status:'converted',fileName,facts,planetMode:conversion.planetMode,colonists:w.pawns.filter(p=>p.state!=='dead'&&!p.health?.death).length,animals:w.wildlife?.animals.filter(a=>a.domestic).length??0,bytes:save.length,
+  families:familyCounts(conversion.notes),details:familyDetails(conversion.notes),losses:mainLosses(conversion.notes),...conversion.notes.warnings.length?{warnings:conversion.notes.warnings}:{},report,save};
 }
 function analyzeAfterRead(source:string,analysing:()=>void):RwsAnalysis {
  const save=readRwsSave(source);analysing();return analyzeRwsSave(save);
@@ -152,7 +154,7 @@ export async function handleRwsImportRequest(request:RwsImportWorkerRequest,post
   else{
    // The bar shows « Lecture » while the file is read, once.
    let last='';const send=(progress:RwsImportProgress)=>{const key=`${progress.stage}:${progress.fraction}`;if(key===last)return;last=key;post({type:'progress',progress});};
-   send(importProgress('read'));outcome=runRwsImport(await file.text(),fileName,send);
+   send(importProgress('read'));outcome=runRwsImport(await file.text(),fileName,send,request.developerTest===true);
   }
  }catch(error){outcome={status:'failed',fileName,message:`Lecture du fichier impossible : ${message(error)}`};}
  post({type:'done',outcome});

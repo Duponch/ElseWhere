@@ -1301,7 +1301,10 @@ const frontOptions:FrontMenuOptions = {
   onLoadTest: async save => replaceColony(() => session.loadExternal(() => readTestColony(save))),
   onImport: async file => replaceColony(() => session.loadExternal(() => readSaveFile(file))),
   // RimWorld save import: converted in its own Worker, then adopted like an imported save file.
-  startRimWorldImport: (file, onProgress) => startRimWorldImport(file, onProgress, () => new Worker(new URL('./import/rimworld/import.worker.ts', import.meta.url), { type: 'module' })),
+  startRimWorldImport: (file, onProgress, developerTest) => {
+    if(developerTest===true&&!developerMode.enabled())throw Error('Le mode développeur est requis pour cette carte de test.');
+    return startRimWorldImport(file,onProgress,()=>new Worker(new URL('./import/rimworld/import.worker.ts',import.meta.url),{type:'module'}),developerTest);
+  },
   onLoadConverted: async save => replaceColony(() => session.loadExternal(async () => save)),
   onResume: async () => {
     if (simulationStopped || waitingRequests.size > 0) throw new Error('Chargez une colonie validée pour reprendre.');

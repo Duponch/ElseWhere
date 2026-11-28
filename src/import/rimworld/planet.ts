@@ -89,7 +89,7 @@ export function rebuildPlanet(save:RwsSave,notes:ImportNotes):PlanetImport|undef
  const homeTile=colonyObject?.tile??-1;
  if(!(homeTile>=0&&homeTile<tiles.length)){notes.lost('world','Case de la colonie introuvable dans la sauvegarde.');return undefined;}
  const settlements:RwsSettlement[]=save.worldObjects.filter(o=>o.cls==='Settlement'&&o.faction!==playerFaction&&o.tile!==homeTile);
- const placed=new Set<number>();let nextSettlementId=1,keptSettlements=0,otherObjects=0;
+ const placed=new Set<number>();let nextSettlementId=1,keptSettlements=0;
  draftFactions.settlements=[];
  for(const s of settlements){
   const factionId=s.faction?factionIds.get(s.faction):undefined,faction=draftFactions.factions.find(fa=>fa.id===factionId);
@@ -97,9 +97,7 @@ export function rebuildPlanet(save:RwsSave,notes:ImportNotes):PlanetImport|undef
   draftFactions.settlements.push({id:nextSettlementId++,factionId:faction.id,tile:s.tile,name:(s.name??`Colonie ${nextSettlementId}`).slice(0,80),postId:null});placed.add(s.tile);keptSettlements++;
  }
  draftFactions.nextSettlementId=nextSettlementId;
- for(const o of save.worldObjects)if(o.cls!=='Settlement')otherObjects++;
  notes.mapped('factions',`${keptSettlements} colonies étrangères replacées sur leur case.`);
- if(otherObjects)notes.lost('world',`${otherObjects} autres objets du monde (sites de quête, épaves, vaisseau…) : non recréés.`);
  // Relations between foreign factions.
  const byId=new Map(save.factions.map(fa=>[fa.loadId,fa]));
  for(const rel of draftFactions.relations){

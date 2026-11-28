@@ -122,7 +122,7 @@ export function validDeepResearchTransport(world:World,version:number):boolean {
       return (!kinds.includes('deep-drill')||version>=215&&deepDrillingUnlocked(world))
         &&(!kinds.includes('ground-scanner')||version>=215&&groundScannerUnlocked(world));
     };
-    for(const s of world.structures)if(!allowed(s))return false;
+    for(const s of world.structures)if(!allowed(s)&&!developerResearchPlacement381(world,s))return false;
     for(const j of world.jobs)if(!allowed(j))return false;
     for(const p of world.packed??[])if(!allowed(p.building)||p.building.kind==='ground-scanner')return false;
     for(const departed of [world.visitors?.departed??[],world.podRescues?.departed??[]])for(const d of departed)for(const p of d.packed??[])
@@ -147,7 +147,7 @@ export function validHospitalSupportTransport(world:World,version:number,powerTo
     }
     const content=[...world.structures,...world.jobs,...(world.packed??[]).map(p=>p.building)];
     const monitorContent=content.filter(s=>s.kind==='vitals-monitor');
-    if(content.some(s=>s.kind==='vitals-monitor'||'furniture' in s&&s.furniture?.kind==='vitals-monitor'||'deconstruction' in s&&s.deconstruction?.kind==='vitals-monitor')&&!vitalsMonitorUnlocked(world))return false;
+    if(content.some(s=>(s.kind==='vitals-monitor'||'furniture' in s&&s.furniture?.kind==='vitals-monitor'||'deconstruction' in s&&s.deconstruction?.kind==='vitals-monitor')&&!(world.developerTest381===true&&developerResearchPlacement381(world,s)))&&!vitalsMonitorUnlocked(world))return false;
     for(const s of monitorContent)if(version<211||s.material!=='steel'||s.footprint!=='standard'||!int(s.orientation,0,3)
       ||Object.hasOwn(s,'quality')||Object.hasOwn(s,'breakdown')||Object.hasOwn(s,'emp'))return false;
     for(const j of world.jobs)if(j.kind==='vitals-monitor'&&(Object.hasOwn(j,'power')||Object.hasOwn(j,'battery')))return false;
@@ -191,8 +191,8 @@ export function validMedicineResearchTransport(world:World,version:number):boole
   }
   const content=[...world.structures,...world.jobs,...(world.packed??[]).map(p=>p.building)];
   if(project==='medicine-production'&&world.pawns.some(p=>p.research&&!world.structures.some(s=>s.id===p.research!.stationId&&s.kind==='hi-tech-research-bench')))return false;
-  if(!drugProductionUnlocked(world)&&content.some(s=>s.kind==='drug-lab'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='drug-lab'))return false;
-  if(!medicineProductionUnlocked(world)&&(content.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-medicine'))||world.pawns.some(p=>p.cooking?.recipe==='make-medicine'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-medicine'))))return false;
+  if(!drugProductionUnlocked(world)&&content.some(s=>(s.kind==='drug-lab'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='drug-lab')&&!(world.developerTest381===true&&developerResearchPlacement381(world,s))))return false;
+  if(!medicineProductionUnlocked(world)&&(content.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-medicine'))||world.pawns.some(p=>p.cooking?.recipe==='make-medicine'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-medicine'))))return false;
   return true;
 }
 export function validateResearch(world:World,version:number):string[]{
@@ -283,44 +283,45 @@ export function validateResearch(world:World,version:number):string[]{
   if(!validPemmicanResearchTransport(world,version))errors.push('Invalid or future pemmican research or production.');
   if(!validHospitalSupportTransport(world,version))errors.push('Invalid or future hospital support research or content.');
   if(!validDeepResearchTransport(world,version))errors.push('Invalid or future deep drilling research or content.');
-  if(!airConditioningUnlocked(world)&&[...world.structures,...world.jobs].some(s=>s.kind==='cooler'))errors.push('Locked cooler.');
+  if(!airConditioningUnlocked(world)&&[...world.structures,...world.jobs].some(s=>s.kind==='cooler'&&!(world.developerTest381===true&&developerResearchPlacement381(world,s))))errors.push('Locked cooler.');
   const electricalContent=[...world.structures,...world.jobs,...(world.packed??[]).map(p=>p.building)];
-  if(!biofuelRefiningUnlocked(world)&&electricalContent.some(s=>s.kind==='biofuel-refinery'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='biofuel-refinery'))errors.push('Locked biofuel refinery.');
-  if(!drugProductionUnlocked(world)&&electricalContent.some(s=>s.kind==='drug-lab'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='drug-lab'))errors.push('Locked drug lab.');
-  if(!medicineProductionUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-medicine'))||world.pawns.some(p=>p.cooking?.recipe==='make-medicine'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-medicine'))))errors.push('Locked medicine production.');
-  if(!hydroponicsUnlocked(world)&&electricalContent.some(s=>s.kind==='hydroponics-basin'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hydroponics-basin'))errors.push('Locked hydroponics basin.');
-  if(!batteriesUnlocked(world)&&electricalContent.some(s=>s.kind==='battery'))errors.push('Locked battery.');
-  if(!solarPowerUnlocked(world)&&electricalContent.some(s=>s.kind==='solar-generator'))errors.push('Locked solar generator.');
-  if(version>=90&&!complexFurnitureUnlocked(world)&&electricalContent.some(s=>['dining-chair','armchair','end-table','dresser',...(version>=244?['vent']:[]),...(version>=122?['chess-table']:[]),...(version>=354?['billiards-table','poker-table']:[]),...(isToolCabinetSchema355(version)?['tool-cabinet']:[]),...(version>=365?['couch']:[])].includes(s.kind)))errors.push('Locked complex furniture.');
-  if(!machiningUnlocked(world)&&electricalContent.some(s=>s.kind==='machining-table'))errors.push('Locked machining table.');
-  if(version>=123&&!microelectronicsUnlocked(world)&&electricalContent.some(s=>s.kind==='hi-tech-research-bench'))errors.push('Locked hi-tech research bench.');
-  if(version>=123&&!multiAnalyzerUnlocked(world)&&electricalContent.some(s=>s.kind==='multi-analyzer'))errors.push('Locked multi-analyzer.');
-  if(version>=123&&!fabricationUnlocked(world)&&electricalContent.some(s=>s.kind==='fabrication-bench'))errors.push('Locked fabrication bench.');
-  if(version>=143&&!autodoorsUnlocked(world)&&electricalContent.some(s=>s.kind==='autodoor'))errors.push('Locked autodoor.');
-  if(version>=193&&!gunTurretsUnlocked(world)&&electricalContent.some(s=>s.kind==='mini-turret'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='mini-turret'))errors.push('Locked gun turrets.');
-  if(version>=190&&!tubeTelevisionUnlocked(world)&&electricalContent.some(s=>s.kind==='tube-television'||'furniture' in s&&(s.furniture as {kind?:string}|undefined)?.kind==='tube-television'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='tube-television'))errors.push('Locked television.');
-  if(version>=187&&!hospitalBedUnlocked(world)&&electricalContent.some(s=>s.kind==='hospital-bed'||'furniture' in s&&(s.furniture as {kind?:string}|undefined)?.kind==='hospital-bed'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hospital-bed'))errors.push('Locked hospital bed.');
-  if(version>=188&&!packagedSurvivalMealsUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='cook-survival-meal'))||world.pawns.some(p=>p.cooking?.recipe==='cook-survival-meal'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='cook-survival-meal'))))errors.push('Locked packaged survival production.');
+  const placedContent=world.developerTest381===true?electricalContent.filter(s=>!developerResearchPlacement381(world,s)):electricalContent;
+  if(!biofuelRefiningUnlocked(world)&&placedContent.some(s=>s.kind==='biofuel-refinery'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='biofuel-refinery'))errors.push('Locked biofuel refinery.');
+  if(!drugProductionUnlocked(world)&&placedContent.some(s=>s.kind==='drug-lab'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='drug-lab'))errors.push('Locked drug lab.');
+  if(!medicineProductionUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-medicine'))||world.pawns.some(p=>p.cooking?.recipe==='make-medicine'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-medicine'))))errors.push('Locked medicine production.');
+  if(!hydroponicsUnlocked(world)&&placedContent.some(s=>s.kind==='hydroponics-basin'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hydroponics-basin'))errors.push('Locked hydroponics basin.');
+  if(!batteriesUnlocked(world)&&placedContent.some(s=>s.kind==='battery'))errors.push('Locked battery.');
+  if(!solarPowerUnlocked(world)&&placedContent.some(s=>s.kind==='solar-generator'))errors.push('Locked solar generator.');
+  if(version>=90&&!complexFurnitureUnlocked(world)&&placedContent.some(s=>['dining-chair','armchair','end-table','dresser',...(version>=244?['vent']:[]),...(version>=122?['chess-table']:[]),...(version>=354?['billiards-table','poker-table']:[]),...(isToolCabinetSchema355(version)?['tool-cabinet']:[]),...(version>=365?['couch']:[])].includes(s.kind)))errors.push('Locked complex furniture.');
+  if(!machiningUnlocked(world)&&placedContent.some(s=>s.kind==='machining-table'))errors.push('Locked machining table.');
+  if(version>=123&&!microelectronicsUnlocked(world)&&placedContent.some(s=>s.kind==='hi-tech-research-bench'))errors.push('Locked hi-tech research bench.');
+  if(version>=123&&!multiAnalyzerUnlocked(world)&&placedContent.some(s=>s.kind==='multi-analyzer'))errors.push('Locked multi-analyzer.');
+  if(version>=123&&!fabricationUnlocked(world)&&placedContent.some(s=>s.kind==='fabrication-bench'))errors.push('Locked fabrication bench.');
+  if(version>=143&&!autodoorsUnlocked(world)&&placedContent.some(s=>s.kind==='autodoor'))errors.push('Locked autodoor.');
+  if(version>=193&&!gunTurretsUnlocked(world)&&placedContent.some(s=>s.kind==='mini-turret'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='mini-turret'))errors.push('Locked gun turrets.');
+  if(version>=190&&!tubeTelevisionUnlocked(world)&&placedContent.some(s=>s.kind==='tube-television'||'furniture' in s&&(s.furniture as {kind?:string}|undefined)?.kind==='tube-television'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='tube-television'))errors.push('Locked television.');
+  if(version>=187&&!hospitalBedUnlocked(world)&&placedContent.some(s=>s.kind==='hospital-bed'||'furniture' in s&&(s.furniture as {kind?:string}|undefined)?.kind==='hospital-bed'||'deconstruction' in s&&(s.deconstruction as {kind?:string}|undefined)?.kind==='hospital-bed'))errors.push('Locked hospital bed.');
+  if(version>=188&&!packagedSurvivalMealsUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='cook-survival-meal'))||world.pawns.some(p=>p.cooking?.recipe==='cook-survival-meal'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='cook-survival-meal'))))errors.push('Locked packaged survival production.');
   // Tuque (245), T-shirt and jacket (312) are Complex clothing recipes.
   // Cowboy and bowler hats (353) too.
   const complexClothing=(recipe:unknown)=>recipe==='tuque'||recipe==='tshirt'||recipe==='jacket'||recipe==='cowboy-hat'||recipe==='bowler-hat';
-  if(version>=245&&!clothingUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>complexClothing(b.recipe)))
+  if(version>=245&&!clothingUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>complexClothing(b.recipe)))
     ||world.piles.some(p=>complexClothing(p.unfinished?.recipe))||world.pawns.some(p=>complexClothing(p.cooking?.recipe)||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&complexClothing(o.cooking.recipe)))))errors.push('Locked tuque production.');
   // Obtained weapons need no research; only the local fabrication chain does.
-  if(version>=101&&!gunsmithingUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>isGunRecipe(b.recipe)&&b.recipe!=='make-emp-launcher'))
+  if(version>=101&&!gunsmithingUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>isGunRecipe(b.recipe)&&b.recipe!=='make-emp-launcher'))
     ||world.piles.some(p=>p.gunWork&&p.gunWork.recipe!=='make-emp-launcher')||world.pawns.some(p=>p.cooking&&isGunRecipe(p.cooking.recipe)&&p.cooking.recipe!=='make-emp-launcher')))errors.push('Locked gunsmithing production.');
-  if((version<208||!microelectronicsUnlocked(world))&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-emp-launcher'))
+  if((version<208||!microelectronicsUnlocked(world))&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-emp-launcher'))
     ||world.piles.some(p=>p.gunWork?.recipe==='make-emp-launcher')||world.pawns.some(p=>p.cooking?.recipe==='make-emp-launcher'||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-emp-launcher'))))errors.push('Locked or future EMP production.');
-  if(version>=109&&!flakArmorUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-flak-vest'||b.recipe==='make-flak-pants'||b.recipe==='make-flak-helmet'))
+  if(version>=109&&!flakArmorUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-flak-vest'||b.recipe==='make-flak-pants'||b.recipe==='make-flak-helmet'))
     ||world.piles.some(p=>p.flakWork?.recipe==='make-flak-vest'||p.flakWork?.recipe==='make-flak-pants'||p.flakWork?.recipe==='make-flak-helmet')||world.pawns.some(p=>p.cooking&&(p.cooking.recipe==='make-flak-vest'||p.cooking.recipe==='make-flak-pants'||p.cooking.recipe==='make-flak-helmet'))))errors.push('Locked flak armor production.');
-  if(version>=148&&!reconArmorUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-recon-helmet'||b.recipe==='make-recon-armor'))
+  if(version>=148&&!reconArmorUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-recon-helmet'||b.recipe==='make-recon-armor'))
     ||world.piles.some(p=>p.flakWork?.recipe==='make-recon-helmet'||p.flakWork?.recipe==='make-recon-armor')||world.pawns.some(p=>p.cooking?.recipe==='make-recon-helmet'||p.cooking?.recipe==='make-recon-armor'||(p.orders?.queue??[]).some(o=>typeof o!=='number'&&typeof o==='object'&&o!==null&&'cooking' in o&&(o.cooking.recipe==='make-recon-helmet'||o.cooking.recipe==='make-recon-armor')))))errors.push('Locked recon helmet production.');
   if(version<141&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-flak-helmet'))
     ||world.piles.some(p=>p.item==='unfinished-flak-helmet'||p.flakWork?.recipe==='make-flak-helmet')
     ||world.pawns.some(p=>p.cooking?.recipe==='make-flak-helmet'||p.orders?.queue?.some(o=>typeof o!=='number'&&typeof o==='object'&&o!==null&&'cooking' in o&&o.cooking.recipe==='make-flak-helmet'))))errors.push('Future flak helmet production.');
-  if(version>=123&&!fabricationUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-component'))
+  if(version>=123&&!fabricationUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-component'))
     ||world.piles.some(p=>p.componentWork)||world.pawns.some(p=>p.cooking?.recipe==='make-component'||(p.orders?.queue??[]).some(order=>typeof order!=='number'&&'cooking' in order&&order.cooking.recipe==='make-component'))))errors.push('Locked component production.');
-  if(version>=139&&!advancedFabricationUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&s.bills?.some(b=>b.recipe==='make-advanced-component'))
+  if(version>=139&&!advancedFabricationUnlocked(world)&&(electricalContent.some(s=>'bills' in s&&unadmittedRecipeBill381(world,s,b=>b.recipe==='make-advanced-component'))
     ||world.piles.some(p=>p.componentWork?.recipe==='make-advanced-component')||world.pawns.some(p=>p.cooking?.recipe==='make-advanced-component'||(p.orders?.queue??[]).some(order=>typeof order!=='number'&&'cooking' in order&&order.cooking.recipe==='make-advanced-component'))))errors.push('Locked advanced component production.');
   const stations=new Set<number>();
   for(const pawn of world.pawns){
@@ -338,8 +339,8 @@ export function validateResearch(world:World,version:number):string[]{
     if(pawn.state==='working'&&(pawn.x!==task.spot.x||pawn.z!==task.spot.z||pawn.path.length))errors.push('Research working away from its station.');
     stations.add(task.stationId);
   }
-  if(version>=73&&!clothingUnlocked(world)&&[...world.structures,...world.jobs,...world.packed.map(p=>p.building)].some(s=>s.kind==='tailor-bench'))errors.push('Locked tailoring bench.');
-  if(version>=90&&!clothingUnlocked(world)&&[...world.structures,...world.jobs,...world.packed.map(p=>p.building)].some(s=>s.kind==='electric-tailor-bench'))errors.push('Locked electric tailoring bench.');
+  if(version>=73&&!clothingUnlocked(world)&&[...world.structures,...world.jobs,...world.packed.map(p=>p.building)].some(s=>s.kind==='tailor-bench'&&!(world.developerTest381===true&&developerResearchPlacement381(world,s))))errors.push('Locked tailoring bench.');
+  if(version>=90&&!clothingUnlocked(world)&&[...world.structures,...world.jobs,...world.packed.map(p=>p.building)].some(s=>s.kind==='electric-tailor-bench'&&!(world.developerTest381===true&&developerResearchPlacement381(world,s))))errors.push('Locked electric tailoring bench.');
   return errors;
 }
 
@@ -354,7 +355,7 @@ export function validPemmicanResearchTransport(world:World,version:number):boole
         ||(p.completedAt===undefined?p.points>=PEMMICAN_RESEARCH_COST:!int(p.completedAt,0,world.tick)||p.points!==PEMMICAN_RESEARCH_COST||project==='pemmican'))return false;
     }
     if(project==='pemmican'&&(version<PEMMICAN_SCHEMA_VERSION||!state?.pemmican))return false;
-    const content=world.structures.some(s=>s.bills?.some(b=>isPemmicanRecipe(b.recipe)))
+    const content=world.structures.some(s=>unadmittedRecipeBill381(world,s,b=>isPemmicanRecipe(b.recipe)))
       ||(world.packed??[]).some(p=>p.building.bills?.some(b=>isPemmicanRecipe(b.recipe)))
       ||world.pawns.some(p=>isPemmicanRecipe(p.cooking?.recipe)||(p.orders?.queue??[]).some(o=>typeof o==='object'&&o!==null&&'cooking' in o&&isPemmicanRecipe(o.cooking.recipe)));
     return !content||version>=PEMMICAN_SCHEMA_VERSION&&pemmicanUnlocked(world);
@@ -380,8 +381,8 @@ export function validGeothermalResearchTransport(world:World,version:number):boo
     const marked=(v:unknown):boolean=>record(v)&&(v.kind==='geothermal-generator'||Object.hasOwn(v,'geothermal'));
     const content=(v:unknown):boolean=>marked(v)||record(v)&&[v.furniture,v.deconstruction,v.repair,v.fixBreakdown].some(marked);
     const packed=(records:readonly {building:unknown}[]|undefined):boolean=>(records??[]).some(p=>content(p.building));
-    const local=(map:Pick<World,'structures'|'jobs'|'packed'|'visitors'|'podRescues'|'group'|'groupLosses'>):boolean=>
-      (map.structures??[]).some(content)||(map.jobs??[]).some(content)||packed(map.packed)
+    const local=(map:Pick<World,'structures'|'jobs'|'packed'|'visitors'|'podRescues'|'group'|'groupLosses'|'developerPlacements381'>):boolean=>
+      (map.structures??[]).some(s=>content(s)&&!(world.developerTest381===true&&developerResearchPlacement381({...map,schemaVersion:world.schemaVersion,developerTest381:world.developerTest381},s)))||(map.jobs??[]).some(content)||packed(map.packed)
       ||!!(map.group&&'packed' in map.group&&packed(map.group.packed))
       ||(map.groupLosses??[]).some(l=>packed(l.packed))
       ||[map.visitors?.departed??[],map.podRescues?.departed??[]].some(records=>records.some(d=>packed(d.packed)));
@@ -420,7 +421,7 @@ export function validBowResearchTransport326(world:World,version:number):boolean
    if(state?.project===project&&(!isBowSchema326(version)||!p))return false;
   }
   const blocked=(recipe:unknown)=>isBowRecipe326(recipe)&&!(isBowSchema326(version)&&bowRecipeUnlocked326(world,recipe));
-  const bill=(value:{bills?:readonly {recipe:string}[]})=>!!value.bills?.some(b=>blocked(b.recipe));
+  const bill=(value:{bills?:readonly {recipe:string}[]})=>unadmittedRecipeBill381(world,value,b=>blocked(b.recipe));
   return !(world.structures.some(bill)||(world.packed??[]).some(q=>bill(q.building))||world.piles.some(q=>blocked(q.smithingWork?.recipe))
    ||world.pawns.some(q=>blocked(q.cooking?.recipe)||q.orders.queue.some(o=>typeof o==='object'&&o!==null&&'cooking'in o&&blocked(o.cooking.recipe))));
  }catch{return false;}
@@ -428,7 +429,9 @@ export function validBowResearchTransport326(world:World,version:number):boolean
 /** Schema 337 PenoxycylineProduction record and selection, learned after
  * DrugProduction; a penoxycyline bill or task needs the completed research.
  * Obtained penoxycyline needs none. Older saves cannot hold either. */
-export function validPenoxycylineResearchTransport337(world:World,version:number):boolean {
+/** Shared scalar domain guard, also used by the pharmaceutical snapshot
+ * verifier whose existing station/pawn loops check the physical consumers. */
+export function validPenoxycylineResearchDomain337(world:Pick<World,'tick'|'research'>,version:number):boolean {
  try{
   const state=world.research,key='penoxycylineProduction',p=state?.[key],cost=PENOXYCYLINE_FACTS_337.research.points*1_000_000;
   if(state&&Object.hasOwn(state,key)){
@@ -439,10 +442,16 @@ export function validPenoxycylineResearchTransport337(world:World,version:number
    const parent=state.drugProduction;
    if(!record(parent)||!int(parent.completedAt,0,world.tick)||Object.hasOwn(p,'completedAt')&&Number(p.completedAt)<Number(parent.completedAt))return false;
   }
-  if(state?.project==='penoxycyline-production'&&(!isPenoxycyline337(version)||!p))return false;
+  return state?.project!=='penoxycyline-production'||isPenoxycyline337(version)&&!!p;
+ }catch{return false;}
+}
+export function validPenoxycylineResearchTransport337(world:World,version:number):boolean {
+ try{
+  if(!validPenoxycylineResearchDomain337(world,version))return false;
+  const state=world.research;
   const unlocked=isPenoxycyline337(version)&&state?.penoxycylineProduction?.completedAt!==undefined;
   const blocked=(recipe:unknown)=>isPenoxycylineRecipe337(recipe)&&!unlocked;
-  const bill=(value:{bills?:readonly {recipe:string}[]})=>!!value.bills?.some(b=>blocked(b.recipe));
+  const bill=(value:{bills?:readonly {recipe:string}[]})=>unadmittedRecipeBill381(world,value,b=>blocked(b.recipe));
   return !(world.structures.some(bill)||(world.packed??[]).some(q=>bill(q.building))
    ||world.pawns.some(q=>blocked(q.cooking?.recipe)||q.orders.queue.some(o=>typeof o==='object'&&o!==null&&'cooking'in o&&blocked(o.cooking.recipe))));
  }catch{return false;}
@@ -496,7 +505,7 @@ export function validDevilstrandResearchTransport358(world:World,version:number)
     ||(Object.hasOwn(p,'completedAt')?!int(p.completedAt,0,world.tick)||p.points!==facts.scaledCost||state.project===facts.project:p.points>=facts.scaledCost))return false;
   }
   if(state?.project===facts.project&&(!isDevilstrandSchema358(version)||!p))return false;
-  return !(world.growingZones??[]).some(z=>z.plant==='devilstrand'&&!devilstrandUnlocked358(world));
+  return !(world.growingZones??[]).some(z=>z.plant==='devilstrand'&&!devilstrandUnlocked358(world)&&!developerCropPlacement381(world,z));
  }catch{return false;}
 }
 export function validBlowbackResearchTransport340(world:World,version:number):boolean {
@@ -512,7 +521,7 @@ export function validBlowbackResearchTransport340(world:World,version:number):bo
   }
   if(state?.project===facts.project&&(!isBlowbackSchema340(version)||!p))return false;
   const blocked=(recipe:unknown)=>isBlowbackRecipe340(recipe)&&!(isBlowbackSchema340(version)&&blowbackUnlocked340(world));
-  const bill=(value:{bills?:readonly {recipe:string}[]})=>!!value.bills?.some(b=>blocked(b.recipe));
+  const bill=(value:{bills?:readonly {recipe:string}[]})=>unadmittedRecipeBill381(world,value,b=>blocked(b.recipe));
   return !(world.structures.some(bill)||(world.packed??[]).some(q=>bill(q.building))||world.piles.some(q=>blocked(q.gunWork?.recipe))
    ||world.pawns.some(q=>blocked(q.cooking?.recipe)||q.orders.queue.some(o=>typeof o==='object'&&o!==null&&'cooking'in o&&blocked(o.cooking.recipe))));
  }catch{return false;}
@@ -537,7 +546,7 @@ export function validGunsResearchTransport342(world:World,version:number):boolea
    if(state?.project===project&&(!isGunsSchema342(version)||!p))return false;
   }
   const blocked=(recipe:unknown)=>isGunRecipe342(recipe)&&!(isGunsSchema342(version)&&gunRecipeUnlocked342(world,recipe));
-  const bill=(value:{bills?:readonly {recipe:string}[]})=>!!value.bills?.some(b=>blocked(b.recipe));
+  const bill=(value:{bills?:readonly {recipe:string}[]})=>unadmittedRecipeBill381(world,value,b=>blocked(b.recipe));
   return !(world.structures.some(bill)||(world.packed??[]).some(q=>bill(q.building))||world.piles.some(q=>blocked(q.gunWork?.recipe))
    ||world.pawns.some(q=>blocked(q.cooking?.recipe)||q.orders.queue.some(o=>typeof o==='object'&&o!==null&&'cooking'in o&&blocked(o.cooking.recipe))));
  }catch{return false;}
@@ -554,7 +563,7 @@ export function validLongBladesResearchTransport270(world:World,version:number):
   }
   if(state?.project==='long-blades'&&(!isSchema270OrLater(version)||!p))return false;
   const usesRecipe=(accept:(recipe:unknown)=>boolean)=>{
-   const bill=(value:{bills?:readonly {recipe:string}[]})=>value.bills?.some(b=>accept(b.recipe));
+   const bill=(value:{bills?:readonly {recipe:string}[]})=>unadmittedRecipeBill381(world,value,b=>accept(b.recipe));
    return world.structures.some(bill)||(world.packed??[]).some(q=>bill(q.building))
     ||world.piles.some(q=>accept(q.smithingWork?.recipe))
     ||world.pawns.some(q=>accept(q.cooking?.recipe)||q.orders.queue.some(o=>typeof o==='object'&&o!==null&&'cooking'in o&&accept(o.cooking.recipe)));
@@ -603,3 +612,4 @@ export function validFirefoamResearchTransport290(world:World,version:number):bo
   return !world.jobs.some(j=>j.kind==='firefoam-popper')||(version===290||(version===291||(version===292||(version===293||(version===294||(version===295||(version===296||isCorePhysicalSchema297(version))))))))&&firefoamResearchUnlocked290(world);
  }catch{return false;}
 }
+import {developerResearchPlacement381,developerCropPlacement381,unadmittedRecipeBill381} from './developer-import-381.ts';

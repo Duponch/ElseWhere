@@ -68,7 +68,7 @@ export function validBiofuelTransport(w:World,version:number,powerTopology?:Powe
     const research:unknown=w.research?.biofuelRefining;
     if(Object.hasOwn(w.research??{},'biofuelRefining')&&(!obj(research)||!keys(research,['points'],['completedAt'])||!int(research.points,0,BIOFUEL_RESEARCH_COST)
       ||(Object.hasOwn(research,'completedAt')?!int(research.completedAt,0,w.tick)||research.points!==BIOFUEL_RESEARCH_COST||w.research?.project==='biofuel-refining':research.points===BIOFUEL_RESEARCH_COST)))return false;
-    if(w.research?.project==='biofuel-refining'&&!research||content.some(s=>s?.kind==='biofuel-refinery')&&!biofuelRefiningUnlocked(w))return false;
+    if(w.research?.project==='biofuel-refining'&&!research||content.some(s=>s?.kind==='biofuel-refinery'&&!(w.developerTest381===true&&developerResearchPlacement381(w,s)))&&!biofuelRefiningUnlocked(w))return false;
     for(const kind of kinds)if(validatePower(w,version,kind as Structure['kind'],powerTopology).length)return false;
     for(const s of [...w.structures,...w.jobs])if(kinds.includes(s.kind)){
       if(s.material!=='steel'||s.footprint!=='standard'||!int(s.orientation,0,s.kind==='chemfuel-generator'?0:3)
@@ -116,3 +116,4 @@ export function validBiofuelTransport(w:World,version:number,powerTopology?:Powe
     return validBiofuelProductionTransport(w,version,powerTopology!==undefined,indexStaging,geometry);
   }catch{return false;}
 }
+import {developerResearchPlacement381} from './developer-import-381.ts';

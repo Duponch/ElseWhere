@@ -58,9 +58,25 @@ const same=(w:World)=>{const copy=deserializeWorld(serializeWorld(w));expect(ser
 /** The public snapshot adopts the same state (marked task, held unit, record). */
 function published(w:World){
   const publicWorld=w.worldMaps?registeredMapPresentation(w):w;if(!publicWorld)throw Error('No selected map');
-  const expected=structuredClone(publicWorld),packet=new SnapshotDecoder().adopt(structuredClone(new SnapshotEncoder().encode(w,0,0,true)));
-  expect(packet.status).toBe('applied');if(packet.status==='applied')expect(packet.world).toEqual(expected);
+  const expected=structuredClone(publicWorld),encoded=structuredClone(new SnapshotEncoder().encode(w,0,0,true)),packet=new SnapshotDecoder().adopt(encoded);
+  expect(packet.status,packet.status==='resync'?JSON.stringify({reason:packet.reason,header:Object.keys(encoded.world).filter(k=>k.includes('developer')),source:Object.keys(publicWorld).filter(k=>k.includes('developer'))}):undefined).toBe('applied');if(packet.status==='applied')expect(packet.world).toEqual(expected);
 }
+
+test('a full Core stack of 150 penoxycyline doses is admitted by the original owner, save and checkpoint',()=>{
+  const w=medicalCamp();
+  w.piles=[];
+  addMaterial(w,'drug',150,{type:'ground',x:12,z:5},'penoxycyline');
+  const stack=w.piles.find(p=>p.item==='penoxycyline')!;
+  expect(stack.quantity).toBe(150);
+  expect(validateWorld(w)).toEqual([]);
+  expect(doses(same(w))).toBe(150);
+  published(w);
+  for(const version of [337,SCHEMA_VERSION]){
+    expect(validatePileRecordShape(stack as unknown as Record<string,unknown>,w,version)).toEqual([]);
+    expect(validatePileRecordShape({...stack,quantity:151},w,version)).not.toEqual([]);
+  }
+  expect(validatePileRecordShape(stack as unknown as Record<string,unknown>,w,336)).not.toEqual([]);
+});
 
 test('penoxycyline, its research and its two drug lab bills have the Core numbers',()=>{
   expect(ITEM_DEFINITIONS.penoxycyline).toMatchObject({label:'Pénoxycyline',kind:'drug',stackLimit:150,nutrition:0,maxIngest:1});
